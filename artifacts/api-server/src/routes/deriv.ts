@@ -39,6 +39,7 @@ import {
   DerivCredentialError,
   DerivCapacityError,
 } from "../lib/deriv";
+import { assertAccessSessionActive, AccessSessionRevokedError } from "../lib/access-keys";
 import { db, derivCredentialsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { decryptPat } from "../lib/pat-crypto";
@@ -245,7 +246,15 @@ router.post("/deriv/buy", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "Explicit live-trade confirmation is required" });
 
   try {
-    const result = BuyDerivContractResponse.parse(await withCredential(res.locals.userId, () => buyContract(parsed.data), true));
+    const assertAuthorized = () => assertAccessSessionActive(res.locals.accessSessionId, res.locals.accessKeyId);
+    const result = BuyDerivContractResponse.parse(await withCredential(
+      res.locals.userId,
+      async () => {
+        await assertAuthorized();
+        return buyContract(parsed.data, assertAuthorized);
+      },
+      true,
+    ));
     return res.status(202).json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Buy request failed";
@@ -254,6 +263,8 @@ router.post("/deriv/buy", async (req, res) => {
        ? 503
        : isCredentialError(error)
        ? credentialHttpStatus(error)
+        : error instanceof AccessSessionRevokedError
+        ? 403
       : message.includes("disabled") || message.includes("real account")
       ? 403
        : message.includes("still settling") || message.includes("checking open contracts") || message.includes("safety timeout")
@@ -298,7 +309,11 @@ router.post("/deriv/bulk-buy", async (req, res) => {
 
   try {
     const result = BulkBuyDerivContractsResponse.parse(
-      await withCredential(res.locals.userId, () => bulkBuyContracts(parsed.data), true),
+      await withCredential(res.locals.userId, async () => {
+        const assertAuthorized = () => assertAccessSessionActive(res.locals.accessSessionId, res.locals.accessKeyId);
+        await assertAuthorized();
+        return bulkBuyContracts(parsed.data, assertAuthorized);
+      }, true),
     );
     return res.status(202).json(result);
   } catch (error) {
@@ -308,6 +323,8 @@ router.post("/deriv/bulk-buy", async (req, res) => {
       ? 503
       : isCredentialError(error)
       ? credentialHttpStatus(error)
+        : error instanceof AccessSessionRevokedError
+        ? 403
       : message.includes("disabled") || message.includes("real account")
       ? 403
       : message.includes("still settling") || message.includes("checking open contracts") || message.includes("safety timeout")
@@ -327,7 +344,11 @@ router.post("/deriv/dual-buy", async (req, res) => {
 
   try {
     const result = BulkBuyDerivContractsResponse.parse(
-      await withCredential(res.locals.userId, () => dualBuyContracts(parsed.data), true),
+      await withCredential(res.locals.userId, async () => {
+        const assertAuthorized = () => assertAccessSessionActive(res.locals.accessSessionId, res.locals.accessKeyId);
+        await assertAuthorized();
+        return dualBuyContracts(parsed.data, assertAuthorized);
+      }, true),
     );
     return res.status(202).json(result);
   } catch (error) {
@@ -337,6 +358,8 @@ router.post("/deriv/dual-buy", async (req, res) => {
       ? 503
       : isCredentialError(error)
       ? credentialHttpStatus(error)
+        : error instanceof AccessSessionRevokedError
+        ? 403
       : message.includes("disabled") || message.includes("real account")
       ? 403
       : message.includes("still settling") || message.includes("checking open contracts") || message.includes("safety timeout")

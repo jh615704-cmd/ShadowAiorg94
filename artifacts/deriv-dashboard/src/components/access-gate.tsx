@@ -1,13 +1,21 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import {
   getGetAccessSessionQueryKey,
   useGetAccessSession,
-  useHeartbeatAccessSession,
   useLoginAccessKey,
+  useLogoutAccessSession,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { KeyRound, Loader2, MessageCircle, ShieldCheck } from "lucide-react";
+import { KeyRound, Loader2, LockKeyhole, MessageCircle, ShieldCheck } from "lucide-react";
+import {
+  ACCESS_ACTIVE_MARKER,
+  ACCESS_IDLE_LOCK_MS,
+  ACCESS_LAST_ACTIVITY,
+  clearAccessActivity,
+  isAccessAwayLockDue,
+  markAccessActivity,
+} from "@/lib/access-lock";
 
 const DEVICE_STORAGE_KEY = "jdy-edge-device-id";
 
@@ -24,18 +32,40 @@ function getErrorMessage(error: unknown) {
   return candidate.data?.error ?? candidate.message ?? "That access key could not be accepted.";
 }
 
+function getErrorStatus(error: unknown) {
+  const candidate = error as { status?: number };
+  return candidate.status;
+}
+
 export function AccessGate({ children }: { children: ReactNode }) {
   const [location, setLocation] = useLocation();
   const queryClient = useQueryClient();
+  const logoutAccess = useLogoutAccessSession();
+  const [accessRejected, setAccessRejected] = useState(() => isAccessAwayLockDue(
+    window.localStorage.getItem(ACCESS_ACTIVE_MARKER),
+    window.localStorage.getItem(ACCESS_LAST_ACTIVITY),
+  ));
+  const [lockReason, setLockReason] = useState("");
+  const [exitDeadline, setExitDeadline] = useState<number | null>(null);
+  const [exitCountdown, setExitCountdown] = useState(10);
+  const [logoutPending, setLogoutPending] = useState(false);
+  const accessRejectedRef = useRef(accessRejected);
+  const sessionWasActiveRef = useRef(false);
+  const forcedExitRef = useRef(false);
+  const initialAwayLockRef = useRef(accessRejected);
+  const logoutInFlightRef = useRef(false);
+  const hiddenAtRef = useRef<number | null>(null);
   const accessSession = useGetAccessSession({
     query: {
       retry: false,
-      refetchOnWindowFocus: false,
+      enabled: !accessRejected,
+      refetchOnWindowFocus: true,
+      refetchInterval: (query) => query.state.data && !accessRejected ? 2_000 : false,
+      refetchIntervalInBackground: true,
       queryKey: getGetAccessSessionQueryKey(),
     },
   });
   const login = useLoginAccessKey();
-  const heartbeat = useHeartbeatAccessSession();
   const [accessKey, setAccessKey] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [error, setError] = useState("");
@@ -44,12 +74,47 @@ export function AccessGate({ children }: { children: ReactNode }) {
   const deviceId = useMemo(() => getDeviceId(), []);
 
   useEffect(() => {
-    if (!accessSession.data) return;
-    const timer = window.setInterval(() => {
-      heartbeat.mutate();
-    }, 30_000);
-    return () => window.clearInterval(timer);
-  }, [accessSession.data, heartbeat]);
+    accessRejectedRef.current = accessRejected;
+  }, [accessRejected]);
+
+  const lockAfterAway = useCallback(() => {
+    if (accessRejectedRef.current || !sessionWasActiveRef.current) return;
+    accessRejectedRef.current = true;
+    sessionWasActiveRef.current = false;
+    setAccessRejected(true);
+    setLockReason("Workspace locked after 10 seconds away. Enter your access key again.");
+    setExitDeadline(null);
+    setLogoutPending(true);
+    // Keep a stale marker until the server confirms logout, so a reload during
+    // a network failure still fails closed and asks for the key again.
+    window.localStorage.setItem(ACCESS_ACTIVE_MARKER, "1");
+    window.localStorage.setItem(ACCESS_LAST_ACTIVITY, "0");
+    void queryClient.removeQueries();
+    if (logoutInFlightRef.current) return;
+    logoutInFlightRef.current = true;
+    logoutAccess.mutate(undefined, {
+      onSuccess: () => clearAccessActivity(),
+      onSettled: () => {
+        logoutInFlightRef.current = false;
+        setLogoutPending(false);
+        queryClient.clear();
+        setLocation("/");
+      },
+    });
+  }, [logoutAccess, queryClient, setLocation]);
+
+  const beginRevocationCountdown = useCallback((reason: string) => {
+    if (forcedExitRef.current) return;
+    forcedExitRef.current = true;
+    accessRejectedRef.current = true;
+    sessionWasActiveRef.current = false;
+    setAccessRejected(true);
+    setLockReason(`No more trades — ${reason}.`);
+    setExitCountdown(10);
+    setExitDeadline(Date.now() + ACCESS_IDLE_LOCK_MS);
+    clearAccessActivity();
+    void queryClient.removeQueries();
+  }, [queryClient]);
 
   useEffect(() => () => {
     if (unlockTimerRef.current !== null) {
@@ -58,13 +123,128 @@ export function AccessGate({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!initialAwayLockRef.current || logoutInFlightRef.current) return;
+    initialAwayLockRef.current = false;
+    logoutInFlightRef.current = true;
+    setLogoutPending(true);
+    logoutAccess.mutate(undefined, {
+      onSuccess: () => clearAccessActivity(),
+      onSettled: () => {
+        logoutInFlightRef.current = false;
+        setLogoutPending(false);
+        queryClient.clear();
+      },
+    });
+  }, [logoutAccess, queryClient]);
+
+  useEffect(() => {
+    if (!accessSession.data || accessRejected) return;
+    sessionWasActiveRef.current = true;
+    markAccessActivity();
+  }, [accessSession.data, accessRejected]);
+
+  useEffect(() => {
+    if (!sessionWasActiveRef.current || !accessSession.isError || accessRejected) return;
+    const status = getErrorStatus(accessSession.error);
+    if (status !== 401 && status !== 403) return;
+    beginRevocationCountdown(getErrorMessage(accessSession.error));
+  }, [accessRejected, accessSession.error, accessSession.isError, beginRevocationCountdown]);
+
+  useEffect(() => {
+    if (exitDeadline === null) return;
+    const updateCountdown = () => {
+      const remaining = Math.max(0, Math.ceil((exitDeadline - Date.now()) / 1_000));
+      setExitCountdown(remaining);
+      if (remaining === 0) {
+        setExitDeadline(null);
+        setLocation("/");
+      }
+    };
+    updateCountdown();
+    const timer = window.setInterval(updateCountdown, 250);
+    return () => window.clearInterval(timer);
+  }, [exitDeadline, setLocation]);
+
+  useEffect(() => {
+    if (!accessSession.data || accessRejected) return;
+    markAccessActivity();
+
+    const keepForegroundActivityFresh = window.setInterval(() => {
+      if (document.visibilityState === "visible") markAccessActivity();
+    }, 1_000);
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenAtRef.current = Date.now();
+        markAccessActivity(hiddenAtRef.current);
+        return;
+      }
+
+      const hiddenAt = hiddenAtRef.current;
+      hiddenAtRef.current = null;
+      if (hiddenAt !== null && Date.now() - hiddenAt >= ACCESS_IDLE_LOCK_MS) {
+        lockAfterAway();
+        return;
+      }
+      if (isAccessAwayLockDue(
+        window.localStorage.getItem(ACCESS_ACTIVE_MARKER),
+        window.localStorage.getItem(ACCESS_LAST_ACTIVITY),
+      )) {
+        lockAfterAway();
+        return;
+      }
+      markAccessActivity();
+      void queryClient.invalidateQueries({ queryKey: getGetAccessSessionQueryKey() });
+    };
+
+    const onPageHide = () => {
+      markAccessActivity();
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      window.clearInterval(keepForegroundActivityFresh);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pagehide", onPageHide);
+    };
+  }, [accessRejected, accessSession.data, lockAfterAway, queryClient]);
+
+  useEffect(() => {
+    const onManualLock = () => {
+      sessionWasActiveRef.current = false;
+      accessRejectedRef.current = true;
+      setAccessRejected(true);
+      setLockReason("Workspace locked. Enter your access key again.");
+      setExitDeadline(null);
+      clearAccessActivity();
+      void queryClient.removeQueries();
+    };
+    window.addEventListener("shadow-access-key-locked", onManualLock);
+    return () => window.removeEventListener("shadow-access-key-locked", onManualLock);
+  }, [queryClient]);
+
+  useEffect(() => {
     if (location.startsWith("/admin") && accessSession.data && !accessSession.data.is_admin) {
       setLocation("/app");
     }
   }, [accessSession.data, location, setLocation]);
 
   if (location === "/sign-in" || location.startsWith("/sign-in/")) return <>{children}</>;
-  if (accessSession.isLoading) {
+  if (exitDeadline !== null) {
+    return (
+      <div className="access-gate" role="alert" aria-live="assertive">
+        <div className="access-gate-orbit" aria-hidden="true" />
+        <div className="access-gate-card access-gate-revoked">
+          <div className="access-gate-lock access-gate-lock-revoked"><LockKeyhole size={25} /></div>
+          <strong>NO MORE TRADES</strong>
+          <p>{lockReason}</p>
+          <span>Returning to access-key login in <b>{exitCountdown}</b> seconds.</span>
+        </div>
+      </div>
+    );
+  }
+  if (!accessRejected && accessSession.isLoading) {
     return (
       <div className="access-gate">
         <div className="access-gate-card access-gate-loading">
@@ -75,7 +255,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
     );
   }
 
-  if (accessSession.data && !accessSession.isError) {
+  if (!accessRejected && accessSession.data) {
     return (
       <>
         {children}
@@ -104,6 +284,14 @@ export function AccessGate({ children }: { children: ReactNode }) {
       // can briefly race the cookie update in the browser.
       queryClient.clear();
       queryClient.setQueryData(getGetAccessSessionQueryKey(), session);
+      accessRejectedRef.current = false;
+      sessionWasActiveRef.current = true;
+      forcedExitRef.current = false;
+      setAccessRejected(false);
+      setLockReason("");
+      setExitDeadline(null);
+      clearAccessActivity();
+      markAccessActivity();
       setAccessKey("");
       setIsUnlocking(true);
       unlockTimerRef.current = window.setTimeout(() => {
@@ -130,6 +318,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
         <div className="access-gate-lock"><ShieldCheck size={25} /></div>
         <h1>Login to Shadow Ai</h1>
         <p className="access-gate-intro">Use your access key to open your private trading workspace.</p>
+        {lockReason && <div className="access-gate-locked-note" role="status">{lockReason}</div>}
         <a className="access-message-link" href="https://t.me/JDY_HATED" target="_blank" rel="noreferrer"><MessageCircle size={16} /> Message me now</a>
         {error && <div className="access-gate-error" role="alert">{error}</div>}
         <form onSubmit={handleSubmit} className="access-gate-form">
@@ -144,12 +333,12 @@ export function AccessGate({ children }: { children: ReactNode }) {
               placeholder="Enter your access key"
               autoComplete="off"
               autoFocus
-              disabled={login.isPending}
+              disabled={login.isPending || logoutPending}
             />
           </div>
           <label className="access-terms"><input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} disabled={login.isPending} /><span>I acknowledge and agree to the terms and conditions of Shadow Ai Trading.</span></label>
-          <button type="submit" disabled={login.isPending || !accessKey.trim() || !termsAccepted}>
-            {login.isPending ? <><Loader2 className="spin" size={16} /> Checking key…</> : "Unlock workspace"}
+          <button type="submit" disabled={login.isPending || logoutPending || !accessKey.trim() || !termsAccepted}>
+            {logoutPending ? <><Loader2 className="spin" size={16} /> Locking previous session…</> : login.isPending ? <><Loader2 className="spin" size={16} /> Checking key…</> : "Unlock workspace"}
           </button>
         </form>
       </div>

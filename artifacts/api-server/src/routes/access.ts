@@ -30,6 +30,8 @@ import {
   parseAccessCookie,
   syncConfiguredPrimaryAdminKey,
 } from "../lib/access-keys";
+import { disposeUser, withUserSerialized } from "../lib/deriv";
+import { logger } from "../lib/logger";
 import { requireAccess, requireAccessAdmin } from "../middlewares/requireAccess";
 
 const router: IRouter = Router();
@@ -72,6 +74,32 @@ function sessionResponse(session: {
   });
 }
 
+function disposeRevokedSession(sessionId: string) {
+  // Close this process's live Deriv socket immediately, then queue a final
+  // cleanup behind any in-flight user operation so it cannot recreate state.
+  disposeUser(sessionId);
+  void withUserSerialized(sessionId, async () => {
+    disposeUser(sessionId);
+  }).catch((error) => {
+    logger.warn({ err: error }, "Unable to finish cleanup for a revoked access session");
+  });
+}
+
+function disposeRevokedSessions(sessions: Array<{ id: string }>) {
+  for (const session of sessions) disposeRevokedSession(session.id);
+}
+
+async function revokeActiveSessions(accessKeyId: string) {
+  const sessions = await db.update(accessKeySessionsTable)
+    .set({ revokedAt: new Date() })
+    .where(and(
+      eq(accessKeySessionsTable.accessKeyId, accessKeyId),
+      isNull(accessKeySessionsTable.revokedAt),
+    ))
+    .returning({ id: accessKeySessionsTable.id });
+  disposeRevokedSessions(sessions);
+}
+
 router.post("/access/login", async (req, res): Promise<void> => {
   const parsed = LoginAccessKeyBody.safeParse(req.body);
   if (!parsed.success) {
@@ -80,51 +108,67 @@ router.post("/access/login", async (req, res): Promise<void> => {
   }
 
   await syncConfiguredPrimaryAdminKey();
-  const [key] = await db.select().from(accessKeysTable)
-    .where(eq(accessKeysTable.keyHash, hashSecret(parsed.data.access_key.trim())))
-    .limit(1);
-  if (!key) {
-    res.status(401).json({ error: "That access key is not recognized" });
-    return;
-  }
-  if (key.status !== "active") {
-    const message = key.status === "banned"
-      ? "This access key is permanently banned"
-      : key.status === "deleted"
-        ? "This access key has been deleted"
-      : `This access key is ${key.status}`;
-    res.status(403).json({ error: message });
-    return;
-  }
-
+  const accessKeyHash = hashSecret(parsed.data.access_key.trim());
   const fingerprint = deviceHash(parsed.data.device_id);
-  const sessions = await db.select().from(accessKeySessionsTable).where(and(
-    eq(accessKeySessionsTable.accessKeyId, key.id),
-    isNull(accessKeySessionsTable.revokedAt),
-  ));
-  const existingDevice = sessions.find((session) => session.deviceHash === fingerprint);
-  const deviceCount = new Set(sessions.map((session) => session.deviceHash)).size;
-  if (!existingDevice && key.maxDevices > 0 && deviceCount >= key.maxDevices) {
-    res.status(403).json({ error: `This access key is already in use on ${key.maxDevices} device${key.maxDevices === 1 ? "" : "s"}` });
-    return;
-  }
-
   const rawSession = generateSessionToken();
   const now = new Date();
-  if (existingDevice) {
-    await db.update(accessKeySessionsTable)
-      .set({ revokedAt: now })
-      .where(eq(accessKeySessionsTable.id, existingDevice.id));
+  const loginResult = await db.transaction(async (tx) => {
+    // Serialize login with administrator status/key changes. A key that was
+    // disabled while the login request was in flight must not mint a session.
+    const [key] = await tx.select().from(accessKeysTable)
+      .where(eq(accessKeysTable.keyHash, accessKeyHash))
+      .for("update")
+      .limit(1);
+    if (!key) return { error: { status: 401, message: "That access key is not recognized" } } as const;
+    if (key.status !== "active") {
+      const message = key.status === "banned"
+        ? "This access key is permanently banned"
+        : key.status === "deleted"
+          ? "This access key has been deleted"
+          : `This access key is ${key.status}`;
+      return { error: { status: 403, message } } as const;
+    }
+
+    const sessions = await tx.select().from(accessKeySessionsTable).where(and(
+      eq(accessKeySessionsTable.accessKeyId, key.id),
+      isNull(accessKeySessionsTable.revokedAt),
+    ));
+    const existingDevice = sessions.find((session) => session.deviceHash === fingerprint);
+    const deviceCount = new Set(sessions.map((session) => session.deviceHash)).size;
+    if (!existingDevice && key.maxDevices > 0 && deviceCount >= key.maxDevices) {
+      return {
+        error: {
+          status: 403,
+          message: `This access key is already in use on ${key.maxDevices} device${key.maxDevices === 1 ? "" : "s"}`,
+        },
+      } as const;
+    }
+
+    if (existingDevice) {
+      await tx.update(accessKeySessionsTable)
+        .set({ revokedAt: now })
+        .where(eq(accessKeySessionsTable.id, existingDevice.id));
+    }
+    const [session] = await tx.insert(accessKeySessionsTable).values({
+      accessKeyId: key.id,
+      tokenHash: hashSecret(rawSession),
+      deviceHash: fingerprint,
+      userAgent: req.get("user-agent")?.slice(0, 500) ?? null,
+      firstSeenAt: now,
+      lastSeenAt: now,
+    }).returning();
+    await tx.update(accessKeysTable)
+      .set({ lastSeenAt: now, updatedAt: now })
+      .where(eq(accessKeysTable.id, key.id));
+    return { key, session, replacedSessionId: existingDevice?.id ?? null } as const;
+  });
+  if ("error" in loginResult) {
+    res.status(loginResult.error.status).json({ error: loginResult.error.message });
+    return;
   }
-  const [session] = await db.insert(accessKeySessionsTable).values({
-    accessKeyId: key.id,
-    tokenHash: hashSecret(rawSession),
-    deviceHash: fingerprint,
-    userAgent: req.get("user-agent")?.slice(0, 500) ?? null,
-    firstSeenAt: now,
-    lastSeenAt: now,
-  }).returning();
-  await db.update(accessKeysTable).set({ lastSeenAt: now, updatedAt: now }).where(eq(accessKeysTable.id, key.id));
+
+  const { key, session } = loginResult;
+  if (loginResult.replacedSessionId) disposeRevokedSession(loginResult.replacedSessionId);
 
   res.append("Set-Cookie", accessCookie(rawSession, secureCookie(req.get("x-forwarded-proto"))));
   res.json(sessionResponse({
@@ -169,6 +213,7 @@ router.post("/access/logout", requireAccess, async (req, res): Promise<void> => 
   await db.update(accessKeySessionsTable)
     .set({ revokedAt: new Date() })
     .where(eq(accessKeySessionsTable.id, res.locals.accessSessionId));
+  disposeRevokedSession(res.locals.userId);
   res.append("Set-Cookie", clearAccessCookie(secureCookie(req.get("x-forwarded-proto"))));
   res.json({ success: true });
 });
@@ -312,9 +357,7 @@ router.delete("/access/keys/:id", async (req, res): Promise<void> => {
   await db.update(accessKeysTable)
     .set({ status: "deleted", encryptedKey: null, updatedAt: new Date() })
     .where(eq(accessKeysTable.id, id));
-  await db.update(accessKeySessionsTable)
-    .set({ revokedAt: new Date() })
-    .where(and(eq(accessKeySessionsTable.accessKeyId, id), isNull(accessKeySessionsTable.revokedAt)));
+  await revokeActiveSessions(id);
   res.json({ success: true });
 });
 
@@ -337,9 +380,7 @@ router.post("/access/keys/:id/reset", async (req, res): Promise<void> => {
     keyPrefix: rawKey.slice(0, 17),
     updatedAt: new Date(),
   }).where(eq(accessKeysTable.id, id)).returning();
-  await db.update(accessKeySessionsTable)
-    .set({ revokedAt: new Date() })
-    .where(and(eq(accessKeySessionsTable.accessKeyId, id), isNull(accessKeySessionsTable.revokedAt)));
+  await revokeActiveSessions(id);
 
   res.status(201).json(CreateAccessKeyResponse.parse({
     key_id: updated.id,
@@ -389,9 +430,8 @@ router.patch("/access/keys/:id", async (req, res): Promise<void> => {
     ...(parsed.data.features ? { features: featureList(parsed.data.features, current.kind) } : {}),
     updatedAt: new Date(),
   }).where(eq(accessKeysTable.id, id)).returning();
-  if (nextStatus === "blocked" || nextStatus === "banned") {
-    await db.update(accessKeySessionsTable).set({ revokedAt: new Date() })
-      .where(and(eq(accessKeySessionsTable.accessKeyId, id), isNull(accessKeySessionsTable.revokedAt)));
+  if (nextStatus !== "active") {
+    await revokeActiveSessions(id);
   }
   const onlineDevices = await onlineDeviceCount(updated.id);
   res.json(ListAccessKeysResponseItem.parse({

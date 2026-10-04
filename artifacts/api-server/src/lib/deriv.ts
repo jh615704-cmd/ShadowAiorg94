@@ -1274,7 +1274,10 @@ export async function selectSymbol(symbol: string) {
   return getStatus();
 }
 
-export async function buyContract(input: BuyInput) {
+type TradeAuthorizationCheck = () => Promise<void>;
+
+export async function buyContract(input: BuyInput, assertAuthorized?: TradeAuthorizationCheck) {
+  await assertAuthorized?.();
   const normalizedInput = { ...input, amount: roundCents(input.amount) };
   if (!getState().account) throw new Error("Select an account before buying a contract");
   if (getState().account.type === "real" && !liveTradingEnabled) {
@@ -1303,10 +1306,12 @@ export async function buyContract(input: BuyInput) {
     growth_rate: normalizedInput.growth_rate,
     symbol: normalizedInput.symbol,
   });
+  await assertAuthorized?.();
   const connected = await connect();
   if (!connected) {
     throw new Error("Deriv WebSocket is not ready");
   }
+  await assertAuthorized?.();
   const buy = await sendProposalBuy(proposal, normalizedInput);
   return {
     ok: true,
@@ -1359,7 +1364,8 @@ export async function bulkBuyContracts(input: {
   growth_rate?: number;
   count: number;
   confirm_live_trade: true;
-}) {
+}, assertAuthorized?: TradeAuthorizationCheck) {
+  await assertAuthorized?.();
   const amount = roundCents(input.amount);
   if (!Number.isInteger(input.count) || input.count < 1 || input.count > maxBulkCount) {
     throw new Error(`Bulk count must be between 1 and ${maxBulkCount}`);
@@ -1397,8 +1403,10 @@ export async function bulkBuyContracts(input: {
   const proposals = await Promise.all(
     Array.from({ length: input.count }, () => requestFreshProposal(proposalInput)),
   );
+  await assertAuthorized?.();
   const connected = await connect();
   if (!connected) throw new Error("Deriv WebSocket is not ready");
+  await assertAuthorized?.();
 
   // Direct parameter buys use the fresh quote as the maximum price and avoid
   // holding temporary proposal IDs until the whole batch is ready. Deriv can
@@ -1496,7 +1504,8 @@ export async function dualBuyContracts(input: {
   barrier: number;
   symbol?: string;
   confirm_live_trade: true;
-}) {
+}, assertAuthorized?: TradeAuthorizationCheck) {
+  await assertAuthorized?.();
   const normalizedAmount = roundCents(input.amount);
   const commonInput = {
     amount: normalizedAmount,
@@ -1524,6 +1533,7 @@ export async function dualBuyContracts(input: {
 
   const proposals: Array<{ proposal: DerivProposal; input: ProposalInput }> = [];
   for (const contract_type of ["DIGITOVER", "DIGITUNDER"] as const) {
+    await assertAuthorized?.();
     const proposal = await requestFreshProposal({
        amount: normalizedAmount,
       duration: input.duration,
@@ -1542,8 +1552,10 @@ export async function dualBuyContracts(input: {
     } satisfies ProposalInput;
      proposals.push({ proposal, input: buyInput });
   }
+  await assertAuthorized?.();
   const connected = await connect();
   if (!connected) throw new Error("Deriv WebSocket is not ready");
+  await assertAuthorized?.();
   const buyResults = await Promise.allSettled(
     proposals.map(({ proposal, input: buyInput }) => sendProposalBuy(proposal, buyInput)),
   );

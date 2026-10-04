@@ -1056,6 +1056,13 @@ html.dark { color-scheme: dark; }.dark body { background: #091419; }.dark .app-f
 .access-gate-unlocking { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; color: #8ce0ca; animation: access-gate-card-fade-out .42s ease forwards; }
 .access-gate-unlocking strong { color: #f3fbf9; font-size: 16px; }
 .access-gate-unlocking span { color: #8ba1a2; font-size: 11px; }
+.access-gate-revoked { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.access-gate-revoked > strong { color: #ff837e; font: 800 11px var(--app-font-mono); letter-spacing: .16em; }
+.access-gate-revoked > p { margin: 12px 0 18px; color: #d3e0df; }
+.access-gate-revoked > span { color: #8ba1a2; font-size: 11px; }
+.access-gate-revoked > span b { color: #ffb17c; font: 800 15px var(--app-font-mono); }
+.access-gate-lock-revoked { margin-top: 0; border-color: #754447; color: #ff837e; background: #3a2528; box-shadow: inset 0 0 25px rgba(236, 101, 93, .12); }
+.access-gate-locked-note { margin: 15px 0 0; padding: 10px 12px; border: 1px solid rgba(236, 101, 93, .32); border-radius: 7px; color: #ffc1bc; background: rgba(111, 37, 43, .2); font-size: 11px; line-height: 1.45; }
 .access-gate-brand { margin-bottom: 46px; color: #f3fbf9; }
 .access-gate-eyebrow { display: flex; align-items: center; gap: 7px; color: #35d6b6; font: 9px var(--app-font-mono); letter-spacing: .13em; }
 .access-gate-card h1 { margin: 14px 0 10px; font-size: 29px; letter-spacing: -.04em; }

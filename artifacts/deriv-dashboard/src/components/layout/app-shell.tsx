@@ -134,6 +134,7 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
                     onClick={() => {
                       logoutAccess.mutate(undefined, {
                         onSettled: () => {
+                          window.dispatchEvent(new Event('shadow-access-key-locked'));
                           queryClient.clear();
                           setLocation('/');
                         },

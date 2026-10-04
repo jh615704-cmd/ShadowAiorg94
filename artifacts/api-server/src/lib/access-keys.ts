@@ -148,15 +148,43 @@ export async function findSessionByToken(token: string) {
       maxDevices: accessKeysTable.maxDevices,
       features: accessKeysTable.features,
       sessionLastSeenAt: accessKeySessionsTable.lastSeenAt,
+      revokedAt: accessKeySessionsTable.revokedAt,
+    })
+    .from(accessKeySessionsTable)
+    .innerJoin(accessKeysTable, eq(accessKeySessionsTable.accessKeyId, accessKeysTable.id))
+    .where(eq(accessKeySessionsTable.tokenHash, token))
+    .limit(1);
+  return session ?? null;
+}
+
+export class AccessSessionRevokedError extends Error {
+  readonly status = 403;
+
+  constructor(status: AccessKeyStatus | null) {
+    super(status && status !== "active"
+      ? `This access key is ${status}; no new trades are allowed`
+      : "This access session has been revoked; no new trades are allowed");
+    this.name = "AccessSessionRevokedError";
+  }
+}
+
+export async function assertAccessSessionActive(sessionId: string, accessKeyId: string) {
+  const [session] = await db
+    .select({
+      status: accessKeysTable.status,
+      revokedAt: accessKeySessionsTable.revokedAt,
     })
     .from(accessKeySessionsTable)
     .innerJoin(accessKeysTable, eq(accessKeySessionsTable.accessKeyId, accessKeysTable.id))
     .where(and(
-      eq(accessKeySessionsTable.tokenHash, token),
-      isNull(accessKeySessionsTable.revokedAt),
+      eq(accessKeySessionsTable.id, sessionId),
+      eq(accessKeySessionsTable.accessKeyId, accessKeyId),
     ))
     .limit(1);
-  return session ?? null;
+
+  if (!session || session.revokedAt || session.status !== "active") {
+    throw new AccessSessionRevokedError(session?.status ?? null);
+  }
 }
 
 export async function activeDeviceCount(accessKeyId: string) {

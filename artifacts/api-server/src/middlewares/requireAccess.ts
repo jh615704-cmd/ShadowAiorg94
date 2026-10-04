@@ -1,6 +1,4 @@
 import type { RequestHandler } from "express";
-import { and, eq, isNull } from "drizzle-orm";
-import { db, accessKeySessionsTable, accessKeysTable } from "@workspace/db";
 import {
   findSessionByToken,
   featureList,
@@ -29,14 +27,10 @@ export const requireAccess: RequestHandler = async (req, res, next) => {
       res.status(403).json({ error: message });
       return;
     }
-
-    const now = new Date();
-    await db.update(accessKeySessionsTable)
-      .set({ lastSeenAt: now })
-      .where(and(eq(accessKeySessionsTable.id, session.sessionId), isNull(accessKeySessionsTable.revokedAt)));
-    await db.update(accessKeysTable)
-      .set({ lastSeenAt: now, updatedAt: now })
-      .where(eq(accessKeysTable.id, session.accessKeyId));
+    if (session.revokedAt) {
+      res.status(401).json({ error: "Access session expired. Enter your access key again." });
+      return;
+    }
 
     res.locals.accessKeyId = session.accessKeyId;
     res.locals.accessSessionId = session.sessionId;
