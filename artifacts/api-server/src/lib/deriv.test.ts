@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 process.env.DERIV_APP_ID = "test-app";
 process.env.DERIV_SYMBOL = "R_75";
 process.env.DERIV_CURRENCY = "USD";
+process.env.DERIV_ALLOW_LIVE_TRADING = "true";
 
 type SocketMessage = Record<string, any>;
 type BuyBehavior = "ack" | "reject" | "disconnect";
@@ -261,6 +262,29 @@ describe("Deriv per-process session capacity", { concurrency: false }, () => {
       fifthSessionRejected: true,
       tradeMessagesSent: 0,
     }));
+  });
+});
+
+describe("Deriv real-account trading capability", { concurrency: false }, () => {
+  test("allows an explicitly confirmed buy on a selected real account using mocked Deriv", async () => {
+    await inUser("real-account-confirmed-buy-user", async () => {
+      const status = await deriv.selectAccount("CR123");
+      assert.equal(status.account?.type, "real");
+      assert.equal(status.live_trading_enabled, true);
+
+      const result = await deriv.buyContract({
+        amount: 1,
+        duration: 1,
+        duration_unit: "t",
+        contract_type: "DIGITEVEN",
+        symbol: "R_75",
+        confirm_live_trade: true,
+      });
+
+      assert.equal(result.ok, true);
+      assert.match(result.message, /Live buy request sent/);
+      assert.ok(latestSocket().sent.some((message) => message.buy));
+    });
   });
 });
 

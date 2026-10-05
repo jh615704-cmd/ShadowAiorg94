@@ -5,6 +5,7 @@ import {
   Play,
   RefreshCw,
   RotateCcw,
+  ShieldAlert,
   Zap,
 } from "lucide-react";
 import AiScannerAction from "./ai-scanner-action";
@@ -53,6 +54,8 @@ export type DigitFlipPanelProps = {
   magicEnabled: boolean;
   clearTradesArmed: boolean;
   historyFading: boolean;
+  isReal?: boolean;
+  liveConfirmed?: boolean;
   isPlacingTrade?: boolean;
   entryBlocked?: boolean;
   disabled?: boolean;
@@ -72,6 +75,7 @@ export type DigitFlipPanelProps = {
   onRefreshSample: () => void;
   onAssaultChange: (value: boolean) => void;
   onMagicChange: (value: boolean) => void;
+  onLiveConfirm?: (value: boolean) => void;
   onGuide: () => void;
 };
 
@@ -175,6 +179,8 @@ export default function DigitFlipPanel({
   magicEnabled,
   clearTradesArmed,
   historyFading,
+  isReal = false,
+  liveConfirmed = false,
   isPlacingTrade = false,
   entryBlocked = false,
   disabled = false,
@@ -194,8 +200,10 @@ export default function DigitFlipPanel({
   onRefreshSample,
   onAssaultChange,
   onMagicChange,
+  onLiveConfirm,
   onGuide,
 }: DigitFlipPanelProps) {
+  const liveTradeBlocked = isReal && !liveConfirmed;
   const [marketPickerOpen, setMarketPickerOpen] = useState(false);
   const [preset, setPreset] = useState("custom");
   const [presetOpen, setPresetOpen] = useState(false);
@@ -351,6 +359,19 @@ export default function DigitFlipPanel({
         <Switch checked={assaultEnabled} onChange={onAssaultChange} disabled={disabled} label="Flip Switch" />
       </section>
 
+      {isReal && (
+        <label className="xt-live-warning">
+          <ShieldAlert size={18} />
+          <input
+            type="checkbox"
+            checked={liveConfirmed}
+            onChange={(event) => onLiveConfirm?.(event.target.checked)}
+            aria-label="Confirm real-money trading for DigitFlip"
+          />
+          <span><b>Live funds confirmation</b>I understand DigitFlip can place real-money contracts.</span>
+        </label>
+      )}
+
       <section className={`df-card df-toggle-card df-pair-card ${magicEnabled ? "active" : ""}`}>
         <div className="df-toggle-copy">
           <div className="df-title"><span className="df-spark" aria-hidden="true"><Zap size={14} fill="currentColor" /></span><b>Auto Switch Best Pair</b><PremiumPill /></div>
@@ -433,14 +454,14 @@ export default function DigitFlipPanel({
           <label><span>TAKE PROFIT</span><input type="number" min=".01" step=".01" value={takeProfit} onChange={(event) => onTakeProfitChange(Math.max(.01, Number(event.target.value) || .01))} disabled={disabled || running} /></label>
           <label><span>STOP LOSS</span><input type="number" min=".01" step=".01" value={stopLoss} onChange={(event) => onStopLossChange(Math.max(.01, Number(event.target.value) || .01))} disabled={disabled || running} /></label>
         </div>
-        <AiScannerAction onScan={onAiScan} disabled={disabled || isPlacingTrade || running || entryBlocked} />
+        <AiScannerAction onScan={onAiScan} disabled={disabled || liveTradeBlocked || isPlacingTrade || running || entryBlocked} />
         <div className="df-session-strip">
           <span><small>STAKE</small><b>{currentStake.toFixed(2)}</b></span>
           <span><small>SESSION P/L</small><b className={sessionPnl < 0 ? "loss" : ""}>{sessionPnl >= 0 ? "+" : ""}{sessionPnl.toFixed(2)}</b></span>
           <span><small>TRADES</small><b>{tradeCount}</b></span>
         </div>
         <div className="df-action-row">
-          <button type="button" className={running ? "df-stop" : "df-run"} onClick={onRunStop} disabled={disabled || isPlacingTrade || (!running && entryBlocked)}>{running ? <><CircleStop size={16} /> Stop DigitFlip</> : <><Play size={16} fill="currentColor" /> Run DigitFlip</>}</button>
+          <button type="button" className={running ? "df-stop" : "df-run"} onClick={onRunStop} disabled={disabled || isPlacingTrade || (!running && (entryBlocked || liveTradeBlocked))}>{running ? <><CircleStop size={16} /> Stop DigitFlip</> : <><Play size={16} fill="currentColor" /> Run DigitFlip</>}</button>
           <button type="button" className="df-reset" onClick={onReset} disabled={disabled}><RotateCcw size={15} /> Reset</button>
           <button type="button" className="df-guide" onClick={onGuide} disabled={disabled}>Guide</button>
         </div>

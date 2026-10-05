@@ -3389,6 +3389,11 @@ export default function XTraderPage() {
         {derivCapacityError && <p className="xt-inline-message error" role="alert">{derivCapacityError}</p>}
         {connectionMessage && <p className={`xt-inline-message ${connectionMessage.kind}${connectionMessageFading ? " fading" : ""}`} role="status" aria-live="polite">{connectionMessage.text}</p>}
         {tradeSlotMessage && <p className="xt-inline-message info" role="status" aria-live="polite">{tradeSlotMessage}</p>}
+        {isReal && status.data && !status.data.live_trading_enabled && (
+          <p className="xt-inline-message error" role="status">
+            Live-account trading is turned off for this workspace. Ask an administrator to enable it.
+          </p>
+        )}
       </section>
 
       <section className="xt-feature-card xt-feature-card-cash-grab" id="cash-grab-feature">
@@ -3562,6 +3567,8 @@ export default function XTraderPage() {
           currentStake={digitFlipCurrentStake}
           sessionPnl={digitFlipSessionPnl}
           tradeCount={digitFlipTradeCount}
+           isReal={isReal}
+           liveConfirmed={liveConfirmed}
           recentTrades={digitFlipRows}
             assaultEnabled={digitFlipAssault}
            magicEnabled={digitFlipMagic}
@@ -3597,6 +3604,7 @@ export default function XTraderPage() {
            onRefreshSample={refreshDigitFlipSample}
            onAssaultChange={toggleDigitFlipAssault}
            onMagicChange={toggleDigitFlipMagic}
+            onLiveConfirm={setLiveConfirmed}
           onGuide={() => { setGuideMode("digit-flip"); setGuidePage(0); setGuideOpen(true); }}
         />
       )}
@@ -3831,6 +3839,8 @@ export default function XTraderPage() {
             lastDigit={lastDigit}
             isPlacingTrade={bulkBuyMutation.isPending}
             isRefreshingAnalysis={analysisTickCount === 0 && !isConnected}
+            isReal={isReal}
+            liveConfirmed={liveConfirmed}
             disabled={running || !isConnected || tradeSlotBlocked}
             onMarketTypeChange={setTradeXMarketType}
             onSymbolChange={(next) => { setTradeXSymbol(next); void selectMarket(next); }}
@@ -3848,6 +3858,7 @@ export default function XTraderPage() {
                void executeTradeX(1, tradeXDuration, digit);
              }}
             onPlaceTrade={() => void executeTradeX(1)}
+            onLiveConfirm={setLiveConfirmed}
             onAiScan={runTradeXAiScanner}
             onRefreshAnalysis={refreshAnalysis}
           />

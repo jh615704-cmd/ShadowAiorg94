@@ -10,6 +10,7 @@
     "test": "../../scripts/node_modules/.bin/tsx --test --experimental-test-module-mocks src/lib/deriv.test.ts src/routes/deriv.test.ts",
     "capacity:demo": "../../scripts/node_modules/.bin/tsx scripts/deriv-demo-capacity.ts",
     "capacity:demo:smoke": "../../scripts/node_modules/.bin/tsx scripts/deriv-demo-capacity.ts --single-demo-smoke",
+    "capacity:api-db": "../../scripts/node_modules/.bin/tsx scripts/api-db-capacity.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
