@@ -26,3 +26,4 @@
 - [Replit multi-artifact deployment](replit-multi-artifact-deployment.md) — publishing deploys this project's artifacts together; deployment target changes apply to the whole project.
 - [Deriv capacity testing](deriv-capacity-testing.md) — load tests must use isolated demo-only sessions; never send live trade traffic.
 - [Workspace dependency audits](workspace-dependency-audits.md) — a clear production audit can miss vulnerable packages in another artifact's development dependency tree.
+- [Trading feature blue surfaces](trading-feature-blue-surfaces.md) — use Cash Grab’s smooth deep blue on feature shells and nested cards, not only outer wrappers.

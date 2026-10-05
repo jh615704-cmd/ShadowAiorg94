@@ -1,0 +1,120 @@
+/* Keep trading feature surfaces aligned with Cash Grab's deep-blue palette. */
+.xt-app {
+  --trading-blue-frame:
+    radial-gradient(ellipse at 88% 0%, rgba(48, 133, 223, .17), transparent 52%),
+    linear-gradient(135deg, #122d4e, #0c1e36 78%);
+  --trading-blue-card:
+    linear-gradient(135deg, rgba(255, 255, 255, .025), transparent 44%),
+    #102743;
+  --trading-blue-inset: linear-gradient(145deg, #102743, #0a1d34);
+  --trading-blue-line: rgba(105, 161, 222, .2);
+}
+
+.xt-app :is(
+  .tx-panel,
+  .bulk-trader-panel,
+  .money-bank-panel,
+  .edge-reference-layout,
+  .xt-cockpit,
+  .xt-history
+) {
+  border-color: var(--trading-blue-line) !important;
+  background: var(--trading-blue-frame) !important;
+}
+
+.xt-app .tx-panel :is(
+  .tx-header,
+  .tx-status-line,
+  .tx-section,
+  .tx-safe-panel,
+  .tx-smart,
+  .tx-digit,
+  .tx-rank-row,
+  .tx-signal-detail,
+  .tx-tick-hint,
+  .tx-distribution-readout
+) {
+  border-color: var(--trading-blue-line) !important;
+  background: var(--trading-blue-card) !important;
+}
+
+.xt-app .tx-panel :is(.tx-field select, .tx-input-prefix, .tx-segment, .tx-duration-button, .tx-mode-button, .tx-smart-control select) {
+  border-color: var(--trading-blue-line) !important;
+  background: #0c1e36 !important;
+  color: #eaf5ff !important;
+}
+
+.xt-app .df-panel:not(.cash-grab-df-panel) .df-card {
+  border-color: var(--trading-blue-line) !important;
+  background: var(--trading-blue-card) !important;
+}
+
+.xt-app .bulk-trader-panel :is(
+  .bulk-trader-head,
+  .bulk-trader-market,
+  .bulk-trader-tick-card,
+  .bulk-trader-controls
+) {
+  border-color: var(--trading-blue-line) !important;
+  background: var(--trading-blue-card) !important;
+}
+
+.xt-app .bulk-trader-panel .bulk-digit:not(.current) {
+  border-color: var(--trading-blue-line) !important;
+  background: var(--trading-blue-inset) !important;
+}
+
+.xt-app .money-bank-panel :is(
+  .money-bank-header,
+  .money-bank-card,
+  .money-bank-return-card,
+  .money-bank-footer,
+  .money-bank-select-wrap,
+  .money-bank-input-wrap,
+  .money-bank-ticks-box,
+  .money-bank-snapshot-row,
+  .money-bank-stat-grid span,
+  .money-bank-history-row,
+  .money-bank-snapshot-actions button,
+  .money-bank-history-actions button
+) {
+  border-color: var(--trading-blue-line) !important;
+  background: var(--trading-blue-card) !important;
+}
+
+.xt-app .money-bank-panel :is(
+  .money-bank-level.base,
+  .money-bank-snapshot-row.best
+) {
+  border-color: rgba(78, 165, 255, .52) !important;
+  background: linear-gradient(135deg, rgba(27, 117, 208, .24), rgba(16, 39, 67, .92)) !important;
+}
+
+.xt-app .money-bank-panel :is(.money-bank-rate-grid button, .money-bank-segmented button):not(.active) {
+  border-color: var(--trading-blue-line) !important;
+  background: #0c1e36 !important;
+}
+
+.xt-app .edge-reference-layout :is(
+  .edge-ref-card,
+  .edge-ref-input-card,
+  .edge-ref-session,
+  .edge-ref-history,
+  .edge-ref-disclaimer,
+  .edge-ref-feature,
+  .edge-ref-direction,
+  .edge-ref-digit-card,
+  .edge-ref-preset,
+  .edge-ref-outcome,
+  .edge-ref-setup,
+  .edge-ref-risk,
+  .edge-ref-quote
+) {
+  border-color: var(--trading-blue-line) !important;
+  background: var(--trading-blue-card) !important;
+}
+
+.xt-app .edge-reference-layout .edge-ref-session > div {
+  border-color: var(--trading-blue-line) !important;
+  background: #0c1e36 !important;
+}
