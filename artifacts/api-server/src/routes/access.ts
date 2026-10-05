@@ -162,7 +162,7 @@ router.post("/access/login", async (req, res): Promise<void> => {
       .where(eq(accessKeysTable.id, key.id));
     return { key, session, replacedSessionId: existingDevice?.id ?? null } as const;
   });
-  if ("error" in loginResult) {
+  if ("error" in loginResult && loginResult.error) {
     res.status(loginResult.error.status).json({ error: loginResult.error.message });
     return;
   }

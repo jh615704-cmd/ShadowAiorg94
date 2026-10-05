@@ -8,6 +8,7 @@ export function isAccessAwayLockDue(
   now = Date.now(),
 ) {
   if (activeMarker !== "1") return false;
+  if (lastActivity === null) return true;
   const lastActivityAt = Number(lastActivity);
   return !Number.isFinite(lastActivityAt) || now - lastActivityAt >= ACCESS_IDLE_LOCK_MS;
 }

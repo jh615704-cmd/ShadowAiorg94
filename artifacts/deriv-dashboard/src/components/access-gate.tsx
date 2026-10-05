@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import {
   getGetAccessSessionQueryKey,
   useGetAccessSession,
+  useHeartbeatAccessSession,
   useLoginAccessKey,
   useLogoutAccessSession,
 } from "@workspace/api-client-react";
@@ -65,6 +66,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
       queryKey: getGetAccessSessionQueryKey(),
     },
   });
+  const heartbeatAccess = useHeartbeatAccessSession().mutate;
   const login = useLoginAccessKey();
   const [accessKey, setAccessKey] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -144,6 +146,12 @@ export function AccessGate({ children }: { children: ReactNode }) {
   }, [accessSession.data, accessRejected]);
 
   useEffect(() => {
+    if (!accessSession.data || accessRejected) return;
+    const timer = window.setInterval(() => heartbeatAccess(), 30_000);
+    return () => window.clearInterval(timer);
+  }, [accessRejected, accessSession.data, heartbeatAccess]);
+
+  useEffect(() => {
     if (!sessionWasActiveRef.current || !accessSession.isError || accessRejected) return;
     const status = getErrorStatus(accessSession.error);
     if (status !== 401 && status !== 403) return;
@@ -170,22 +178,24 @@ export function AccessGate({ children }: { children: ReactNode }) {
     markAccessActivity();
 
     const keepForegroundActivityFresh = window.setInterval(() => {
-      if (document.visibilityState === "visible") markAccessActivity();
+      if (document.visibilityState === "visible") {
+        markAccessActivity();
+        return;
+      }
+      if (isAccessAwayLockDue(
+        window.localStorage.getItem(ACCESS_ACTIVE_MARKER),
+        window.localStorage.getItem(ACCESS_LAST_ACTIVITY),
+      )) {
+        lockAfterAway();
+      }
     }, 1_000);
 
     const onVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
-        hiddenAtRef.current = Date.now();
-        markAccessActivity(hiddenAtRef.current);
+        markAccessActivity();
         return;
       }
 
-      const hiddenAt = hiddenAtRef.current;
-      hiddenAtRef.current = null;
-      if (hiddenAt !== null && Date.now() - hiddenAt >= ACCESS_IDLE_LOCK_MS) {
-        lockAfterAway();
-        return;
-      }
       if (isAccessAwayLockDue(
         window.localStorage.getItem(ACCESS_ACTIVE_MARKER),
         window.localStorage.getItem(ACCESS_LAST_ACTIVITY),
@@ -194,21 +204,35 @@ export function AccessGate({ children }: { children: ReactNode }) {
         return;
       }
       markAccessActivity();
+      heartbeatAccess();
       void queryClient.invalidateQueries({ queryKey: getGetAccessSessionQueryKey() });
     };
 
     const onPageHide = () => {
       markAccessActivity();
     };
+    const onPageShow = () => {
+      if (isAccessAwayLockDue(
+        window.localStorage.getItem(ACCESS_ACTIVE_MARKER),
+        window.localStorage.getItem(ACCESS_LAST_ACTIVITY),
+      )) {
+        lockAfterAway();
+        return;
+      }
+      markAccessActivity();
+      heartbeatAccess();
+    };
 
     document.addEventListener("visibilitychange", onVisibilityChange);
     window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("pageshow", onPageShow);
     return () => {
       window.clearInterval(keepForegroundActivityFresh);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("pageshow", onPageShow);
     };
-  }, [accessRejected, accessSession.data, lockAfterAway, queryClient]);
+  }, [accessRejected, accessSession.data, heartbeatAccess, lockAfterAway, queryClient]);
 
   useEffect(() => {
     const onManualLock = () => {

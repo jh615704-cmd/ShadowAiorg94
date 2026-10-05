@@ -23,12 +23,19 @@ const sessionId = "admin-access-session";
 let forceCapacityError = false;
 let forcePermissionError = false;
 let forceInvalidCredentialError = false;
+let forceAccessRevoked = false;
+let buyInvocations = 0;
+let bulkBuyInvocations = 0;
+let dualBuyInvocations = 0;
 
 class MockDerivCapacityError extends Error {}
 class MockDerivCredentialError extends Error {
   constructor(readonly status: number) {
     super("PAT is missing a required permission");
   }
+}
+class MockAccessSessionRevokedError extends Error {
+  readonly status = 403;
 }
 
 const db = {
@@ -67,6 +74,17 @@ mock.module("@workspace/db", {
 mock.module("drizzle-orm", {
   namedExports: {
     eq: (_column: unknown, value: string): QueryCondition => ({ value }),
+  },
+});
+
+mock.module("../lib/access-keys", {
+  namedExports: {
+    AccessSessionRevokedError: MockAccessSessionRevokedError,
+    assertAccessSessionActive: async () => {
+      if (forceAccessRevoked) {
+        throw new MockAccessSessionRevokedError("This access key is blocked");
+      }
+    },
   },
 });
 
@@ -129,6 +147,7 @@ mock.module("../lib/deriv", {
     },
     buyContract: async () => {
       observePat();
+      buyInvocations += 1;
       return { ok: true, message: "contract bought", proposal: null, buy: null };
     },
     sellContract: async () => {
@@ -137,6 +156,7 @@ mock.module("../lib/deriv", {
     },
     bulkBuyContracts: async (input: { duration: number; contract_type: string }) => {
       observePat();
+      bulkBuyInvocations += 1;
       if (input.duration > 5 && input.contract_type !== "CALL" && input.contract_type !== "PUT") {
         throw new Error("Tick durations above 5 are only supported for Rise/Fall contracts.");
       }
@@ -144,6 +164,7 @@ mock.module("../lib/deriv", {
     },
     dualBuyContracts: async () => {
       observePat();
+      dualBuyInvocations += 1;
       return { ok: true, message: "contracts bought", count: 2, results: [] };
     },
     selectAccount: async () => {
@@ -287,6 +308,59 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
     assert.equal(digitBulkResponse.status, 400);
     assert.match(String((await readJson(digitBulkResponse)).error), /duration/);
     assert.deepEqual(observedPats, [enteredPat, enteredPat, enteredPat, enteredPat, enteredPat, enteredPat]);
+
+    const priorBuyInvocations = buyInvocations;
+    const priorBulkBuyInvocations = bulkBuyInvocations;
+    const priorDualBuyInvocations = dualBuyInvocations;
+    forceAccessRevoked = true;
+    const deniedBuy = await fetch(`${baseUrl}/deriv/buy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: 1,
+        duration: 1,
+        duration_unit: "t",
+        contract_type: "DIGITDIFF",
+        barrier: 5,
+        symbol: "R_75",
+        confirm_live_trade: true,
+      }),
+    });
+    assert.equal(deniedBuy.status, 403);
+    assert.equal(buyInvocations, priorBuyInvocations, "revoked sessions must not reach the Deriv buy handler");
+
+    const deniedBulkBuy = await fetch(`${baseUrl}/deriv/bulk-buy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: 1,
+        duration: 1,
+        duration_unit: "t",
+        contract_type: "DIGITDIFF",
+        barrier: 5,
+        symbol: "R_75",
+        count: 1,
+        confirm_live_trade: true,
+      }),
+    });
+    assert.equal(deniedBulkBuy.status, 403);
+    assert.equal(bulkBuyInvocations, priorBulkBuyInvocations, "revoked sessions must not reach the Deriv bulk-buy handler");
+
+    const deniedDualBuy = await fetch(`${baseUrl}/deriv/dual-buy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: 1,
+        duration: 1,
+        duration_unit: "t",
+        barrier: 5,
+        symbol: "R_75",
+        confirm_live_trade: true,
+      }),
+    });
+    assert.equal(deniedDualBuy.status, 403);
+    assert.equal(dualBuyInvocations, priorDualBuyInvocations, "revoked sessions must not reach the Deriv dual-buy handler");
+    forceAccessRevoked = false;
 
     const disconnectResponse = await fetch(`${baseUrl}/token`, { method: "DELETE" });
     assert.equal(disconnectResponse.status, 200);
