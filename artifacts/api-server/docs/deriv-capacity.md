@@ -45,11 +45,11 @@ The development-only synthetic API/database probe is `pnpm --filter @workspace/a
 ### Results to date
 
 - Current synthetic API/database probe (2026-10-05): stages of 1, 70, 350, and 700 clients completed with zero health or database errors and zero Deriv requests. At 700, health-check p95 was 666.8 ms; `SELECT 1` p95 was 160.5 ms and the probe's 20-connection pool peaked at 258 waiters; runner RSS reached 252 MiB. These are development-only plumbing measurements, not authenticated-app or production capacity.
-- Current workspace check (2026-10-05): no deployment is active, and no dedicated `DERIV_DEMO_TEST_PAT_1..4` secrets are configured. Therefore no external demo-socket test or production deployment load test was run for this verification pass. The older PAT/account result below describes a previous workspace state.
+- Current workspace check (2026-10-05): no deployment is active. The full 1/2/4-session probe stopped before making Deriv requests because the four configured PAT values are identical; the probe requires distinct test-user credentials.
 - The current development database reports `max_connections=112`. `DB_POOL_MAX` is unset, so each API process uses the code default of 20 connections. The development setting is not evidence of the production database's connection limit.
 - Mocked 1/2/4-session API test passed; the fifth session was rejected and no trade messages were sent. The latest test-runner observation was 29/2/4 ms per stage and 156.4 MiB baseline RSS to 169.7 MiB at four mock sessions. These measurements are from the test runner, not production.
-- One-account Deriv demo smoke passed with one authenticated session: 3.1 seconds mean session readiness, 13.1 seconds for connection and read-only setup, 138 ticks received, and RSS from 117.5 MiB baseline to 121.3 MiB. It sent no proposal, buy, or sell messages.
-- The full external 1/2/4 probe was not run: all four configured PATs resolved to one distinct demo account. It exited before opening test sockets. The single-session smoke does not validate concurrent Deriv capacity.
+- Current one-session Deriv demo smoke (2026-10-05) passed with one authenticated read-only session: 1.8 seconds mean session readiness, 11.8 seconds for the stage including its hold period, 156 ticks received, and RSS from 94.4 MiB baseline to 99 MiB. It sent no proposal, buy, or sell messages. This does not validate concurrent Deriv capacity.
+- Earlier full external probe attempt (prior workspace state): the supplied PATs exposed only one distinct demo account, so it exited before opening test sockets. The current full probe stopped earlier because the four configured PAT values are identical.
 
 ## Sources and assumptions
 
