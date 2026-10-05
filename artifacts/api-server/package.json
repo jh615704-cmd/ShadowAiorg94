@@ -8,9 +8,9 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "test": "../../scripts/node_modules/.bin/tsx --test --experimental-test-module-mocks src/lib/deriv.test.ts src/routes/deriv.test.ts",
-    "capacity:demo": "../../scripts/node_modules/.bin/tsx scripts/deriv-demo-capacity.ts",
-    "capacity:demo:smoke": "../../scripts/node_modules/.bin/tsx scripts/deriv-demo-capacity.ts --single-demo-smoke",
+    "capacity:demo:smoke": "../../scripts/node_modules/.bin/tsx scripts/deriv-demo-capacity.ts",
     "capacity:api-db": "../../scripts/node_modules/.bin/tsx scripts/api-db-capacity.ts",
+    "capacity:app-flow": "../../scripts/node_modules/.bin/tsx scripts/app-flow-capacity.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

@@ -3,14 +3,7 @@ import { performance } from "node:perf_hooks";
 
 const API_BASE = "https://api.derivws.com";
 const appId = process.env.DERIV_APP_ID;
-const demoPats = [
-  process.env.DERIV_DEMO_TEST_PAT_1,
-  process.env.DERIV_DEMO_TEST_PAT_2,
-  process.env.DERIV_DEMO_TEST_PAT_3,
-  process.env.DERIV_DEMO_TEST_PAT_4,
-];
-const singleSessionSmoke = process.argv.includes("--single-demo-smoke");
-const stageTargets = singleSessionSmoke ? [1] : [1, 2, 4];
+const demoPat = process.env.DERIV_DEMO_TEST_PAT_1;
 const stageHoldMs = 10_000;
 const symbols = [
   "R_10", "R_25", "R_50", "R_75", "R_100",
@@ -22,15 +15,9 @@ type DerivMessage = Record<string, any>;
 type DerivAccount = Record<string, any>;
 
 function requireDemoTestConfig() {
-  const requiredPats = singleSessionSmoke ? demoPats.slice(0, 1) : demoPats;
-  if (requiredPats.some((value) => !value)) {
-    throw new Error("Set the four dedicated DERIV_DEMO_TEST_PAT_1..4 secrets before running this probe.");
-  }
+  if (!demoPat) throw new Error("Set the dedicated DERIV_DEMO_TEST_PAT_1 secret before running this optional smoke test.");
   if (!appId) {
     throw new Error("Set DERIV_APP_ID before running this probe.");
-  }
-  if (!singleSessionSmoke && new Set(demoPats).size !== demoPats.length) {
-    throw new Error("Use four distinct demo PATs; the probe will not open multiple sessions for one PAT.");
   }
 }
 
@@ -71,32 +58,6 @@ async function getDemoAccounts(pat: string) {
     throw new Error("The supplied PAT has no identifiable demo Options account; no connection was opened.");
   }
   return uniqueAccountIds;
-}
-
-function assignDistinctDemoAccounts(accountOptions: string[][]): string[] | null {
-  const assignment: Array<string | undefined> = new Array(accountOptions.length);
-  const order = accountOptions
-    .map((options, index) => ({ index, options }))
-    .sort((left, right) => left.options.length - right.options.length)
-    .map(({ index }) => index);
-  const assignedIds = new Set<string>();
-
-  function assign(position: number): boolean {
-    if (position === order.length) return true;
-    const patIndex = order[position];
-    for (const accountId of accountOptions[patIndex]) {
-      if (assignedIds.has(accountId)) continue;
-      assignedIds.add(accountId);
-      assignment[patIndex] = accountId;
-      if (assign(position + 1)) return true;
-      assignedIds.delete(accountId);
-      assignment[patIndex] = undefined;
-    }
-    return false;
-  }
-
-  if (!assign(0)) return null;
-  return assignment as string[];
 }
 
 async function getOtpUrl(pat: string, accountId: string) {
@@ -262,54 +223,27 @@ function roundMiB(bytes: number) {
 
 async function run() {
   requireDemoTestConfig();
-  const pats = (singleSessionSmoke ? demoPats.slice(0, 1) : demoPats) as string[];
-  const accountOptions = await Promise.all(pats.map((pat) => getDemoAccounts(pat)));
-  const accountIds = assignDistinctDemoAccounts(accountOptions);
-  if (!accountIds) {
-    const uniqueAccountCount = new Set(accountOptions.flat()).size;
-    throw new Error(
-      `The four PATs expose only ${uniqueAccountCount} distinct demo account(s); no WebSocket sessions were opened.`,
-    );
-  }
+  const accountIds = await getDemoAccounts(demoPat!);
+  const accountId = accountIds[0];
   const sessions: DemoSession[] = [];
-  const report: Array<Record<string, number>> = [];
   const baseline = process.memoryUsage();
 
   try {
-    for (const target of stageTargets) {
-      const batchSize = target - sessions.length;
-      const firstNewSessionIndex = sessions.length;
-      const stageSessions: DemoSession[] = [];
-      const startedAt = performance.now();
-      await Promise.all(
-        Array.from({ length: batchSize }, (_, offset) => firstNewSessionIndex + offset)
-          .map(async (index) => {
-            const session = await openReadOnlySession(pats[index], accountIds[index]);
-            stageSessions.push(session);
-            sessions.push(session);
-          }),
-      );
-      await new Promise((resolve) => setTimeout(resolve, stageHoldMs));
-      const memory = process.memoryUsage();
-      report.push({
-        sessions: target,
-        stageConnectMs: Math.round(performance.now() - startedAt),
-        meanSessionReadyMs: Math.round(
-          stageSessions.reduce((sum, session) => sum + session.latencyMs, 0) / stageSessions.length,
-        ),
-        ticksReceived: sessions.reduce((sum, session) => sum + session.tickCount, 0),
-        rssMiB: roundMiB(memory.rss),
-        heapUsedMiB: roundMiB(memory.heapUsed),
-      });
-    }
+    const startedAt = performance.now();
+    const session = await openReadOnlySession(demoPat!, accountId);
+    sessions.push(session);
+    await new Promise((resolve) => setTimeout(resolve, stageHoldMs));
+    const memory = process.memoryUsage();
 
     console.log(JSON.stringify({
-      test: singleSessionSmoke
-        ? "deriv_demo_read_only_single_session_smoke"
-        : "deriv_demo_read_only_connection_capacity",
-      stages: report,
+      test: "deriv_demo_read_only_single_session_smoke",
+      sessions: 1,
+      elapsedMs: Math.round(performance.now() - startedAt),
+      sessionReadyMs: session.latencyMs,
+      ticksReceived: session.tickCount,
       baselineRssMiB: roundMiB(baseline.rss),
-      validatesConcurrentCapacity: !singleSessionSmoke,
+      rssMiB: roundMiB(memory.rss),
+      validatesConcurrentCapacity: false,
       tradeMessagesSent: 0,
       accountIdsLogged: false,
       credentialsLogged: false,
