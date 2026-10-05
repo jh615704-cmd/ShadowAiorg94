@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, Pause, Play, ShieldAlert } from "lucide-react";
+import { formatDerivQuote } from "../lib/format-deriv-quote";
 import {
   chooseBestEdgeSignal,
   type BestEdgeSignal,
@@ -258,7 +259,7 @@ export default function EdgeReferencePanel({
       return { value, label, score };
     }).sort((left, right) => right.score - left.score || left.label.localeCompare(right.label));
   }, [autoOverThreeFourFive, autoSelectBest, bestPairAnalyzer, marketSignals, markets, overThreeSniper]);
-  const quoteText = quote == null ? "—" : Number.isInteger(quote) ? String(quote) : quote.toFixed(2);
+  const quoteText = quote == null ? "—" : formatDerivQuote(quote);
   const payoutText = payoutPercent == null || !Number.isFinite(payoutPercent) ? "waiting" : `${payoutPercent.toFixed(1)}%`;
   const currency = currentAccount?.currency ?? "USD";
 

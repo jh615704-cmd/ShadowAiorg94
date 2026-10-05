@@ -8,6 +8,7 @@ import {
   ShieldAlert,
   Zap,
 } from "lucide-react";
+import { formatDerivQuote } from "../lib/format-deriv-quote";
 import AiScannerAction from "./ai-scanner-action";
 import DerivHistory, { type DerivHistoryRow } from "./deriv-history";
 import "./digit-flip-panel.css";
@@ -241,7 +242,7 @@ export default function DigitFlipPanel({
     ? Math.max(bestSignal.evenPercentage, bestSignal.oddPercentage)
     : Math.max(evenPercentage, oddPercentage);
   const lastParity = lastDigit == null ? null : lastDigit % 2 === 0 ? "Even" : "Odd";
-  const currentQuote = quote == null ? "—" : quote.toFixed(2);
+  const currentQuote = quote == null ? "—" : formatDerivQuote(quote);
   const runText = lastParity ? `Run: ${lastParity.toLowerCase()} · latest tick: ${lastDigit}` : "Waiting for live digit sample";
   const displayedSymbol = marketType === "auto" ? bestSignal?.symbol ?? symbol : symbol;
   const marketLabel = symbols.find((option) => option.value === displayedSymbol)?.label ?? displayedSymbol;

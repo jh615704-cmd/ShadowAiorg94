@@ -10,6 +10,7 @@ import {
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
+import { formatDerivQuote } from "../lib/format-deriv-quote";
 import DerivHistory, { type DerivHistoryRow } from "./deriv-history";
 import "./cash-grab-panel.css";
 
@@ -301,7 +302,7 @@ export default function CashGrabPanel({
 
       <section className="df-card df-quote-card" aria-live="polite">
         <div className="df-quote-value">
-          {quote == null ? "—" : quote.toLocaleString(undefined, { maximumFractionDigits: 4, useGrouping: false })}
+          {quote == null ? "—" : formatDerivQuote(quote)}
           <small>{currency}</small>
         </div>
         <div className="df-quote-run">

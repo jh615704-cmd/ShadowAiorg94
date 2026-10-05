@@ -44,6 +44,20 @@
   color: #eaf5ff !important;
 }
 
+.xt-app .tx-panel .tx-digit-market {
+  border-color: #7dffb6 !important;
+  background: linear-gradient(145deg, #22c982, #0c7047) !important;
+  box-shadow: 0 0 0 2px rgba(91, 242, 151, .27), 0 0 19px rgba(50, 222, 127, .5) !important;
+  color: #f2fff7 !important;
+}
+
+.xt-app .tx-panel .tx-digit-market .tx-digit-number,
+.xt-app .tx-panel .tx-digit-market .tx-digit-percent,
+.xt-app .tx-panel .tx-digit-market small,
+.xt-app .tx-panel .tx-market-touch.is-live {
+  color: #f2fff7 !important;
+}
+
 .xt-app .df-panel:not(.cash-grab-df-panel) .df-card {
   border-color: var(--trading-blue-line) !important;
   background: var(--trading-blue-card) !important;
