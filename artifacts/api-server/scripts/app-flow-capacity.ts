@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { inArray, like, and, eq, isNull, ne, sql } from "drizzle-orm";
 import { monitorEventLoopDelay, performance } from "node:perf_hooks";
 import type { Server } from "node:http";
+import type { PoolClient } from "pg";
 import {
   accessKeysTable,
   accessKeySessionsTable,
@@ -446,19 +447,44 @@ async function runUserFlow(
 function installPoolAcquisitionMeasurement(
   getActiveStage: () => StageStats | null,
 ) {
-  const poolInternals = pool as unknown as { connect: () => Promise<unknown> };
-  const originalConnect = poolInternals.connect.bind(pool);
-  poolInternals.connect = async () => {
+  type PoolConnectCallback = (
+    error: Error | undefined,
+    client: PoolClient | undefined,
+    release: (release?: any) => void,
+  ) => void;
+  type PoolConnect = {
+    (): Promise<PoolClient>;
+    (callback: PoolConnectCallback): void;
+  };
+  const poolInternals = pool as unknown as { connect: PoolConnect };
+  const originalConnect = poolInternals.connect.bind(pool) as PoolConnect;
+  poolInternals.connect = ((callback?: PoolConnectCallback) => {
     const startedAt = performance.now();
+    const recordAcquisition = () => {
+      getActiveStage()?.poolAcquisitionMs.push(performance.now() - startedAt);
+    };
+    if (callback) {
+      return originalConnect((error, client, release) => {
+        recordAcquisition();
+        callback(error, client, release);
+      });
+    }
     try {
-      const client = await originalConnect();
-      getActiveStage()?.poolAcquisitionMs.push(performance.now() - startedAt);
-      return client;
+      return originalConnect().then(
+        (client) => {
+          recordAcquisition();
+          return client;
+        },
+        (error: unknown) => {
+          recordAcquisition();
+          throw error;
+        },
+      );
     } catch (error) {
-      getActiveStage()?.poolAcquisitionMs.push(performance.now() - startedAt);
+      recordAcquisition();
       throw error;
     }
-  };
+  }) as PoolConnect;
   return () => {
     poolInternals.connect = originalConnect;
   };
