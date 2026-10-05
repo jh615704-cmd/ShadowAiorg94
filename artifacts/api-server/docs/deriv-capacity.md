@@ -1,8 +1,10 @@
 # Capacity targets and Deriv session capacity
 
-## User target and peak-concurrency estimate
+## Account/MAU targets (planning, not a guarantee)
 
 The confirmed planning target is **15,000 total registered users and 7,000 monthly active users (MAU)**. These are account and monthly-activity targets, not a measured simultaneous-user count.
+
+The targets cannot be presented as a capacity guarantee until the published deployment is tested with representative registration, authenticated dashboard, and database workloads. Demo PATs are not needed for account-count or MAU estimates; they are needed only for the separate external Deriv WebSocket concurrency probe.
 
 No production traffic or time-of-day usage telemetry is available yet. Until it is, use these explicit planning scenarios rather than promising a single concurrency figure:
 

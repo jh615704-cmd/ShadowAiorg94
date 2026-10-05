@@ -90,7 +90,7 @@ async function run() {
   const poolMax = Number.isFinite(configuredPoolMax)
     ? Math.max(5, Math.min(100, configuredPoolMax))
     : 20;
-  const results = [];
+  const results: Awaited<ReturnType<typeof runStage>>[] = [];
 
   try {
     for (const stage of stages) {
