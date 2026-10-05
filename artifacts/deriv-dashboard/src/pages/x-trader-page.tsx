@@ -87,6 +87,7 @@ import CashGrabPanel, {
 import DerivHistory from "../components/deriv-history";
 import { getAccountBalance } from "../lib/account-balance";
 import { buildCashGrabBulkBuyPayload } from "../lib/cash-grab-order";
+import { getCashGrabLimitReached } from "../lib/cash-grab-limits";
 import { readCachedHistorySnapshot } from "../lib/history-snapshot";
 
 const markets = [
@@ -442,6 +443,9 @@ export default function XTraderPage() {
   const [cashGrabDuration, setCashGrabDuration] = useState<CashGrabDuration>(1);
   const [cashGrabStakeMode, setCashGrabStakeMode] = useState<CashGrabStakeMode>("flat");
   const [cashGrabMultiplier, setCashGrabMultiplier] = useState(2);
+  const [cashGrabTakeProfit, setCashGrabTakeProfit] = useState(1);
+  const [cashGrabLossLimit, setCashGrabLossLimit] = useState(1);
+  const [cashGrabSessionPnl, setCashGrabSessionPnl] = useState(0);
   const [cashGrabAutoSelectBest, setCashGrabAutoSelectBest] = useState(false);
   const [cashGrabAutoSwitchSafestPair, setCashGrabAutoSwitchSafestPair] = useState(false);
   const [cashGrabAutoSwitchSafestPairStatus, setCashGrabAutoSwitchSafestPairStatus] = useState<CashGrabAiStatus>("off");
@@ -540,6 +544,7 @@ export default function XTraderPage() {
   const cashGrabActionLockRef = useRef(false);
   const cashGrabOpenContractIdsRef = useRef(new Set<string>());
   const cashGrabCurrentStakeRef = useRef(.35);
+  const cashGrabSessionPnlRef = useRef(0);
   const cashGrabSessionKnownIdsRef = useRef<Set<string> | null>(null);
   const cashGrabProcessedSettlementIdsRef = useRef(new Set<string>());
   const cashGrabConfigRef = useRef<CashGrabStartConfig | null>(null);
@@ -1050,6 +1055,8 @@ export default function XTraderPage() {
       duration: cashGrabDuration,
       stakeMode: cashGrabStakeMode,
       multiplier: Math.max(.01, cashGrabMultiplier),
+      takeProfit: Math.max(0, cashGrabTakeProfit),
+      lossLimit: Math.max(0, cashGrabLossLimit),
       autoSelectBest: cashGrabAutoSelectBest,
       autoSwitchSafestPair: cashGrabAutoSwitchSafestPair,
     };
@@ -1062,6 +1069,8 @@ export default function XTraderPage() {
     cashGrabStake,
     cashGrabSymbol,
     cashGrabMultiplier,
+    cashGrabTakeProfit,
+    cashGrabLossLimit,
   ]);
 
   useEffect(() => {
@@ -2023,9 +2032,26 @@ export default function XTraderPage() {
     if (!completed.length || !config) return;
     const currentStake = cashGrabCurrentStakeRef.current;
     const netSettledProfit = completed.reduce((total, trade) => total + trade.profit, 0);
+    cashGrabSessionPnlRef.current = Number((cashGrabSessionPnlRef.current + netSettledProfit).toFixed(2));
+    setCashGrabSessionPnl(cashGrabSessionPnlRef.current);
     cashGrabCurrentStakeRef.current = netSettledProfit < 0 && config.stakeMode === "multiply"
       ? Number((currentStake * Math.max(.01, config.multiplier)).toFixed(2))
       : Number(config.stake.toFixed(2));
+
+    const reachedLimit = getCashGrabLimitReached(
+      cashGrabSessionPnlRef.current,
+      config.takeProfit,
+      config.lossLimit,
+    );
+    if (reachedLimit) {
+      setConnectionMessage({
+        kind: "info",
+        text: reachedLimit === "take-profit"
+          ? `Cash Grab stopped at its ${config.takeProfit.toFixed(2)} ${currentAccount?.currency ?? "USD"} take-profit limit. No next contract was started.`
+          : `Cash Grab stopped at its ${config.lossLimit.toFixed(2)} ${currentAccount?.currency ?? "USD"} session loss limit. No next contract was started.`,
+      });
+      stopCashGrab();
+    }
   };
 
   const executeCashGrabTrade = async () => {
@@ -2298,6 +2324,8 @@ export default function XTraderPage() {
     cashGrabProcessedSettlementIdsRef.current = new Set(existingIds);
     cashGrabConfigRef.current = config;
     cashGrabCurrentStakeRef.current = Number(config.stake.toFixed(2));
+    cashGrabSessionPnlRef.current = 0;
+    setCashGrabSessionPnl(0);
     cashGrabAutoSwitchNextAtRef.current = config.autoSwitchSafestPair ? 0 : null;
     setCashGrabStopping(false);
     setCashGrabAutoSwitchSafestPairStatus(config.autoSwitchSafestPair ? "watching" : "off");
@@ -3952,6 +3980,9 @@ export default function XTraderPage() {
           stakeMode={cashGrabStakeMode}
           currency={currentAccount?.currency ?? "USD"}
           multiplier={cashGrabMultiplier}
+          takeProfit={cashGrabTakeProfit}
+          lossLimit={cashGrabLossLimit}
+          sessionPnl={cashGrabSessionPnl}
           autoSwitchSafestPair={cashGrabAutoSwitchSafestPair}
           autoSwitchSafestPairStatus={cashGrabAutoSwitchSafestPairStatus}
           autoSwitchSafestPairRecommendation={cashGrabAutoSwitchRecommendation}
@@ -3977,6 +4008,8 @@ export default function XTraderPage() {
           onDurationChange={setCashGrabDuration}
           onStakeModeChange={setCashGrabStakeMode}
           onMultiplierChange={setCashGrabMultiplier}
+          onTakeProfitChange={setCashGrabTakeProfit}
+          onLossLimitChange={setCashGrabLossLimit}
           onAutoSwitchSafestPairChange={(enabled) => {
             const currentConfig = cashGrabConfigRef.current;
             setCashGrabAutoSwitchSafestPair(enabled);

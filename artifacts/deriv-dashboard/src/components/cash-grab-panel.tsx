@@ -41,6 +41,8 @@ export interface CashGrabStartConfig {
   duration: CashGrabDuration;
   stakeMode: CashGrabStakeMode;
   multiplier: number;
+  takeProfit: number;
+  lossLimit: number;
   autoSelectBest: boolean;
   autoSwitchSafestPair: boolean;
 }
@@ -58,6 +60,9 @@ export interface CashGrabPanelProps {
   stakeMode: CashGrabStakeMode;
   currency?: string;
   multiplier: number;
+  takeProfit: number;
+  lossLimit: number;
+  sessionPnl: number;
   autoSwitchSafestPair: boolean;
   autoSwitchSafestPairStatus?: CashGrabAiStatus;
   autoSwitchSafestPairRecommendation?: {
@@ -83,6 +88,8 @@ export interface CashGrabPanelProps {
   onDurationChange: (duration: CashGrabDuration) => void;
   onStakeModeChange: (mode: CashGrabStakeMode) => void;
   onMultiplierChange: (multiplier: number) => void;
+  onTakeProfitChange: (amount: number) => void;
+  onLossLimitChange: (amount: number) => void;
   onLiveConfirmChange: (confirmed: boolean) => void;
   onMoneyStart: (config: CashGrabStartConfig) => void;
   onMoneyStop: () => void;
@@ -114,6 +121,9 @@ export default function CashGrabPanel({
   stakeMode,
   currency = "USD",
   multiplier,
+  takeProfit,
+  lossLimit,
+  sessionPnl,
   autoSwitchSafestPair,
   autoSwitchSafestPairStatus = "off",
   autoSwitchSafestPairRecommendation = null,
@@ -135,6 +145,8 @@ export default function CashGrabPanel({
   onDurationChange,
   onStakeModeChange,
   onMultiplierChange,
+  onTakeProfitChange,
+  onLossLimitChange,
   onLiveConfirmChange,
   onMoneyStart,
   onMoneyStop,
@@ -165,6 +177,8 @@ export default function CashGrabPanel({
       duration,
       stakeMode,
       multiplier: Math.max(0.01, multiplier),
+      takeProfit: Math.max(0, takeProfit),
+      lossLimit: Math.max(0, lossLimit),
       autoSelectBest,
       autoSwitchSafestPair,
     });
@@ -287,7 +301,7 @@ export default function CashGrabPanel({
 
       <section className="df-card df-quote-card" aria-live="polite">
         <div className="df-quote-value">
-          {quote == null ? "—" : quote.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+          {quote == null ? "—" : quote.toLocaleString(undefined, { maximumFractionDigits: 4, useGrouping: false })}
           <small>{currency}</small>
         </div>
         <div className="df-quote-run">
@@ -391,6 +405,39 @@ export default function CashGrabPanel({
             <small>Flat stake returns after a win. No maximum is set for the multiplier.</small>
           </label>
         )}
+
+        <div className="cash-grab-limits" aria-label="Cash Grab session profit and loss limits">
+          <label>
+            <span>TAKE PROFIT · {currency}</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={takeProfit}
+              onChange={(event) => onTakeProfitChange(Math.max(0, Number(event.target.value) || 0))}
+              disabled={interactionDisabled}
+              aria-label={`Cash Grab take-profit threshold in ${currency}`}
+              data-testid="input-cash-grab-take-profit"
+            />
+          </label>
+          <label>
+            <span>LOSS LIMIT · {currency}</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={lossLimit}
+              onChange={(event) => onLossLimitChange(Math.max(0, Number(event.target.value) || 0))}
+              disabled={interactionDisabled}
+              aria-label={`Cash Grab session loss limit in ${currency}`}
+              data-testid="input-cash-grab-loss-limit"
+            />
+          </label>
+          <p>Cash Grab stops before the next entry when settled session P/L reaches either limit. Set a limit to 0 to disable it.</p>
+          <output aria-live="polite">
+            Settled session P/L: {sessionPnl > 0 ? "+" : ""}{sessionPnl.toFixed(2)} {currency}
+          </output>
+        </div>
 
         {isReal && (
           <label className="cash-grab-live-confirm">

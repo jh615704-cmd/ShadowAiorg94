@@ -1656,7 +1656,7 @@ body { overflow-x: hidden; }
   .bulk-trader-actions.action-count-3 button span { font-size: 8px; }
 }
 
-/* Feature tabs share one ocean-blue identity. */
+/* Trading features share the same deep-blue surface as Cash Grab. */
 .xt-feature-card-edge2,
 .xt-feature-card-edge,
 .xt-feature-card-trade-x,
@@ -1672,21 +1672,31 @@ body { overflow-x: hidden; }
 .xt-feature-card-digit-flip svg,
 .xt-feature-card-bulk svg,
 .xt-feature-card-cash-grab svg { color: #71cfff; }
-.trade-x-panel {
-  background: linear-gradient(145deg, #0d3828, #061f16) !important;
-  border-color: rgba(66, 213, 142, .42) !important;
-}
-.digit-flip-panel {
-  background: linear-gradient(145deg, #0d3828, #061f16) !important;
-  border-color: rgba(66, 213, 142, .42) !important;
-}
+.trade-x-panel,
+.digit-flip-panel,
 .bulk-trader-panel,
 .tx-panel,
 .df-panel,
 .xt-cockpit,
-.xt-history {
-  background: linear-gradient(145deg, #0d3828, #061f16) !important;
-  border-color: rgba(66, 213, 142, .42) !important;
+.xt-history,
+.money-bank-panel,
+.edge-reference-panel {
+  --tx-ink: #edf5ff;
+  --tx-muted: #9bb0c9;
+  --tx-line: rgba(105, 161, 222, .28);
+  --tx-panel: #102743;
+  --tx-soft: #0c1e36;
+  --df-card: #102743;
+  --df-card-deep: #0a1d34;
+  --df-line: rgba(112, 163, 218, .2);
+  --mb-bg: #102743;
+  --mb-panel: #0c1e36;
+  --mb-panel-soft: #162f50;
+  --mb-line: rgba(112, 163, 218, .2);
+  --mb-line-strong: rgba(83, 164, 246, .42);
+  --mb-accent: #4ea5ff;
+  background: linear-gradient(145deg, #122d4e, #0c1e36) !important;
+  border-color: rgba(105, 161, 222, .32) !important;
 }
 
 /* Admin control room: the same deep, quiet green atmosphere as Money Bank. */

@@ -132,6 +132,43 @@
   line-height: 1.4;
 }
 
+.cash-grab-limits {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 13px;
+  padding: 11px;
+  border: 1px solid rgba(110, 164, 222, .2);
+  border-radius: 9px;
+  background: rgba(6, 22, 39, .38);
+}
+.cash-grab-limits label { display: grid; gap: 6px; min-width: 0; }
+.cash-grab-limits label span {
+  color: #a9bad0;
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: .04em;
+}
+.cash-grab-limits input {
+  width: 100%;
+  min-width: 0;
+  height: 33px;
+  padding: 0 8px;
+  border: 1px solid #315b82;
+  border-radius: 6px;
+  color: #f0f7ff;
+  background: #0c223b;
+}
+.cash-grab-limits p,
+.cash-grab-limits output {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #92a9c3;
+  font-size: 8px;
+  line-height: 1.45;
+}
+.cash-grab-limits output { color: #c0dcf7; font-weight: 700; }
+
 .cash-grab-df-panel .df-parity-toggle {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

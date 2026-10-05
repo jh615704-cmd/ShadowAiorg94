@@ -19,9 +19,10 @@
  *   app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
  */
 
-import type { IncomingHttpHeaders } from 'http';
+import type { IncomingHttpHeaders, OutgoingHttpHeaders } from 'node:http';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 import type { RequestHandler } from 'express';
-import { createProxyMiddleware } from 'http-proxy-middleware';
 
 const CLERK_FAPI = 'https://frontend-api.clerk.dev';
 export const CLERK_PROXY_PATH = '/api/__clerk';
@@ -52,8 +53,143 @@ export function getClerkProxyHost(req: {
   return firstHop || req.headers.host?.trim() || undefined;
 }
 
+export function createClerkProxyHandler(
+  target: string,
+  secretKey: string,
+): RequestHandler {
+  const targetUrl = new URL(target);
+  if (targetUrl.protocol !== 'http:' && targetUrl.protocol !== 'https:') {
+    throw new TypeError(`Unsupported Clerk proxy protocol: ${targetUrl.protocol}`);
+  }
+  const sendRequest = targetUrl.protocol === 'https:' ? httpsRequest : httpRequest;
+  const basePath = targetUrl.pathname.replace(/\/+$/, '');
+  const hopByHopHeaders = new Set([
+    'connection',
+    'keep-alive',
+    'proxy-authenticate',
+    'proxy-authorization',
+    'te',
+    'trailer',
+    'transfer-encoding',
+    'upgrade',
+  ]);
+
+  return (req, res) => {
+    const forwardedProtocol = req.headers['x-forwarded-proto'];
+    const protocol = (Array.isArray(forwardedProtocol)
+      ? forwardedProtocol[0]
+      : forwardedProtocol)?.split(',')[0]?.trim() || 'https';
+    const host = getClerkProxyHost(req) || '';
+    const xff = req.headers['x-forwarded-for'];
+    const clientIp =
+      (Array.isArray(xff) ? xff[0] : xff)?.split(',')[0]?.trim() ||
+      req.socket?.remoteAddress ||
+      '';
+
+    const headers: OutgoingHttpHeaders = {
+      ...req.headers,
+      host: targetUrl.host,
+      'clerk-proxy-url': `${protocol}://${host}${CLERK_PROXY_PATH}`,
+      'clerk-secret-key': secretKey,
+    };
+    if (clientIp) headers['x-forwarded-for'] = clientIp;
+
+    const connectionHeader = req.headers.connection;
+    const connectionTokens = (Array.isArray(connectionHeader)
+      ? connectionHeader.join(',')
+      : connectionHeader ?? '')
+      .split(',')
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean);
+    for (const header of [...hopByHopHeaders, ...connectionTokens]) {
+      delete headers[header];
+    }
+
+    const requestPath = req.url || '/';
+    const path = `${basePath}${requestPath.startsWith('/') ? requestPath : `/${requestPath}`}`;
+    const proxyRequest = sendRequest(
+      {
+        protocol: targetUrl.protocol,
+        hostname: targetUrl.hostname,
+        port: targetUrl.port || undefined,
+        method: req.method,
+        path,
+        headers,
+      },
+      (proxyResponse) => {
+        const responseHeaders: OutgoingHttpHeaders = { ...proxyResponse.headers };
+        const upstreamConnection = proxyResponse.headers.connection;
+        const upstreamConnectionTokens = (Array.isArray(upstreamConnection)
+          ? upstreamConnection.join(',')
+          : upstreamConnection ?? '')
+          .split(',')
+          .map((value) => value.trim().toLowerCase())
+          .filter(Boolean);
+        for (const header of [...hopByHopHeaders, ...upstreamConnectionTokens]) {
+          delete responseHeaders[header];
+        }
+
+        const status = proxyResponse.statusCode ?? 502;
+        if (status < 200 || status === 204) {
+          delete responseHeaders['content-length'];
+        }
+
+        const bodyless =
+          req.method === 'HEAD' ||
+          status < 200 ||
+          status === 204 ||
+          status === 304;
+        const failResponse = () => {
+          if (res.destroyed) return;
+          if (res.headersSent) {
+            res.destroy();
+            return;
+          }
+          res.writeHead(502, { 'content-length': '0' });
+          res.end();
+        };
+
+        if (responseHeaders['content-length'] !== undefined || bodyless) {
+          res.writeHead(status, responseHeaders);
+          proxyResponse.on('error', failResponse);
+          proxyResponse.pipe(res);
+          return;
+        }
+
+        const chunks: Buffer[] = [];
+        proxyResponse.on('data', (chunk: Buffer | string) => {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        });
+        proxyResponse.on('end', () => {
+          if (res.destroyed) return;
+          const body = Buffer.concat(chunks);
+          responseHeaders['content-length'] = String(body.length);
+          res.writeHead(status, responseHeaders);
+          res.end(body);
+        });
+        proxyResponse.on('error', failResponse);
+      },
+    );
+
+    proxyRequest.on('error', () => {
+      if (res.destroyed) return;
+      if (res.headersSent) {
+        res.destroy();
+        return;
+      }
+      res.writeHead(502, { 'content-length': '0' });
+      res.end();
+    });
+    req.on('aborted', () => proxyRequest.destroy());
+    res.on('close', () => {
+      if (!res.writableEnded) proxyRequest.destroy();
+    });
+    req.pipe(proxyRequest);
+  };
+}
+
 export function clerkProxyMiddleware(): RequestHandler {
-  // Only run proxy in production — Clerk proxying doesn't work for dev instances
+  // Only run proxy in production — Clerk proxying doesn't work for dev instances.
   if (process.env.NODE_ENV !== 'production') {
     return (_req, _res, next) => next();
   }
@@ -63,84 +199,5 @@ export function clerkProxyMiddleware(): RequestHandler {
     return (_req, _res, next) => next();
   }
 
-  return createProxyMiddleware({
-    target: CLERK_FAPI,
-    changeOrigin: true,
-    // Take over the response so it can be re-sent with a Content-Length (see
-    // proxyRes); the deployment edge rejects chunked proxied responses.
-    selfHandleResponse: true,
-    pathRewrite: (path: string) =>
-      path.replace(new RegExp(`^${CLERK_PROXY_PATH}`), ''),
-    on: {
-      proxyReq: (proxyReq, req) => {
-        const protocol = req.headers['x-forwarded-proto'] || 'https';
-        const host = getClerkProxyHost(req) || '';
-        const proxyUrl = `${protocol}://${host}${CLERK_PROXY_PATH}`;
-
-        proxyReq.setHeader('Clerk-Proxy-Url', proxyUrl);
-        proxyReq.setHeader('Clerk-Secret-Key', secretKey);
-
-        const xff = req.headers['x-forwarded-for'];
-        const clientIp =
-          (Array.isArray(xff) ? xff[0] : xff)?.split(',')[0]?.trim() ||
-          req.socket?.remoteAddress ||
-          '';
-        if (clientIp) {
-          proxyReq.setHeader('X-Forwarded-For', clientIp);
-        }
-      },
-      // Clerk's dynamic Frontend API responses (/v1/environment, /v1/client,
-      // JWKS, ...) arrive without a Content-Length, so relaying them would use
-      // Transfer-Encoding: chunked — which the deployment edge (Cloud Run)
-      // rejects, turning the app's 200 into a 500. Buffer only those so they can
-      // be re-sent with a Content-Length; the body is forwarded untouched so
-      // Content-Encoding is preserved. Length-known responses (e.g. /npm/*
-      // assets) and body-less responses stream through without buffering.
-      proxyRes: (proxyRes, req, res) => {
-        const headers = { ...proxyRes.headers };
-        // Transfer-Encoding/Connection are hop-by-hop (RFC 7230 §6.1).
-        delete headers['transfer-encoding'];
-        delete headers['connection'];
-        delete headers['keep-alive'];
-
-        const status = proxyRes.statusCode ?? 502;
-        // Content-Length is forbidden on 1xx/204; HEAD/304 may keep theirs.
-        if (status < 200 || status === 204) {
-          delete headers['content-length'];
-        }
-
-        const bodyless =
-          req.method === 'HEAD' ||
-          status < 200 ||
-          status === 204 ||
-          status === 304;
-        if (headers['content-length'] !== undefined || bodyless) {
-          res.writeHead(status, headers);
-          // Headers are already sent, so abort the response if the upstream
-          // stream errors mid-pipe (e.g. ECONNRESET) rather than leaving an
-          // unhandled 'error' or a hung client.
-          proxyRes.on('error', () => res.destroy());
-          proxyRes.pipe(res);
-          return;
-        }
-
-        const chunks: Buffer[] = [];
-        proxyRes.on('data', (chunk: Buffer) => chunks.push(chunk));
-        proxyRes.on('end', () => {
-          const body = Buffer.concat(chunks);
-          headers['content-length'] = String(body.length);
-          res.writeHead(status, headers);
-          res.end(body);
-        });
-        proxyRes.on('error', () => {
-          if (!res.headersSent) {
-            // Set a length so the empty 502 isn't sent chunked (which the
-            // deployment edge would reject just like the original response).
-            res.writeHead(502, { 'content-length': '0' });
-          }
-          res.end();
-        });
-      },
-    },
-  }) as RequestHandler;
+  return createClerkProxyHandler(CLERK_FAPI, secretKey);
 }
