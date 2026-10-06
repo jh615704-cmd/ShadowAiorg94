@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   chooseBestDigitSignal,
+  chooseBestEdgeDirectionForDigit,
   chooseBestEdgeSignal,
   digitForTick,
   findNewlySettledTrade,
@@ -41,6 +42,8 @@ describe("digit-distribution tick selection", () => {
     assert.equal(digitForTick(3, rankedDigits, 5), 9);
     assert.equal(digitForTick(4, rankedDigits, 5), 1);
     assert.equal(digitForTick(5, rankedDigits, 5), 4);
+    assert.equal(digitForTick(6, rankedDigits, 5), 0);
+    assert.equal(digitForTick(8, rankedDigits, 5), 0);
   });
 
   it("keeps the configured digit until a live ranking is available", () => {
@@ -115,6 +118,60 @@ describe("Auto Best Digit selection", () => {
 });
 
 describe("Percentage evidence selection", () => {
+  it("selects the better observed side for only the configured market and digit", () => {
+    assert.deepEqual(
+      chooseBestEdgeDirectionForDigit(
+        [
+          {
+            symbol: "R_75",
+            quote: 75.5,
+            sample_count: 25,
+            digit_streaks: [],
+            digit_outcomes: [
+              { digit: 4, over_percentage: 61, under_percentage: 29 },
+              { digit: 6, over_percentage: 37, under_percentage: 53 },
+            ],
+          },
+          {
+            symbol: "R_100",
+            quote: 100.1,
+            sample_count: 200,
+            digit_streaks: [],
+            digit_outcomes: [{ digit: 4, over_percentage: 89, under_percentage: 8 }],
+          },
+        ],
+        "R_75",
+        6,
+      ),
+      {
+        symbol: "R_75",
+        direction: "DIGITUNDER",
+        digit: 6,
+        score: 53,
+        sampleCount: 25,
+      },
+    );
+  });
+
+  it("waits for the minimum live sample and rejects ties", () => {
+    const signal: MarketSignal = {
+      symbol: "R_75",
+      quote: 75.5,
+      sample_count: 19,
+      digit_streaks: [],
+      digit_outcomes: [{ digit: 5, over_percentage: 52, under_percentage: 48 }],
+    };
+    assert.equal(chooseBestEdgeDirectionForDigit([signal], "R_75", 5), null);
+    assert.equal(
+      chooseBestEdgeDirectionForDigit(
+        [{ ...signal, sample_count: 20, digit_outcomes: [{ digit: 5, over_percentage: 50, under_percentage: 50 }] }],
+        "R_75",
+        5,
+      ),
+      null,
+    );
+  });
+
   it("recommends Dual from combined observed coverage", () => {
     assert.deepEqual(
       chooseBestEdgeSignal(

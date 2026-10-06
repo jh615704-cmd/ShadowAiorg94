@@ -413,7 +413,8 @@
 }
 
 .money-bank-return-card {
-  padding: 18px 19px 17px;
+  min-width: 0;
+  padding: 12px 15px 11px;
   background:
     radial-gradient(circle at 95% 5%, rgba(225, 76, 103, .2), transparent 34%),
     linear-gradient(140deg, #47121e, #260a12 76%);
@@ -429,8 +430,8 @@
 
 .money-bank-return-icon {
   display: grid;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   place-items: center;
   border: 1px solid rgba(240, 107, 123, .45);
   border-radius: 8px;
@@ -439,30 +440,16 @@
 
 .money-bank-return-card > strong {
   display: block;
-  margin-top: 7px;
+  margin-top: 4px;
   color: #fff5f4;
-  font-size: 2rem;
+  font-size: 1.65rem;
   letter-spacing: -.05em;
 }
 
 .money-bank-return-card p {
-  margin: 3px 0 12px;
+  margin: 2px 0 0;
   color: #e0aab0;
-  font-size: .7rem;
-}
-
-.money-bank-return-bar {
-  height: 5px;
-  overflow: hidden;
-  border-radius: 99px;
-  background: rgba(255, 222, 225, .12);
-}
-
-.money-bank-return-bar i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #cc405e, #ff9ba8);
+  font-size: .68rem;
 }
 
 .money-bank-risk-pill {
@@ -611,7 +598,6 @@
   transform: translateX(15px);
 }
 
-.money-bank-scanner-result,
 .money-bank-jdy-status,
 .money-bank-reinvest-details {
   margin: 0 0 9px;
@@ -620,26 +606,12 @@
   background: rgba(3, 25, 17, .58);
 }
 
-.money-bank-scanner-result {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px;
-}
-
-.money-bank-scanner-result > span,
 .money-bank-jdy-status,
 .money-bank-reinvest-details {
   display: grid;
   gap: 5px;
 }
 
-.money-bank-scanner-result span {
-  min-width: 0;
-}
-
-.money-bank-scanner-result small,
 .money-bank-jdy-status small,
 .money-bank-reinvest-details small {
   color: #78b393;
@@ -649,37 +621,10 @@
   text-transform: uppercase;
 }
 
-.money-bank-scanner-result b,
 .money-bank-jdy-status b {
   display: block;
   color: #d8fbe4;
   font-size: .68rem;
-}
-
-.money-bank-scanner-result em {
-  display: block;
-  margin-top: 2px;
-  color: #79af91;
-  font-size: .6rem;
-  font-style: normal;
-}
-
-.money-bank-scanner-result button {
-  flex: 0 0 auto;
-  min-height: 28px;
-  padding: 0 9px;
-  border: 1px solid rgba(95, 232, 161, .4);
-  border-radius: 7px;
-  background: rgba(23, 126, 78, .25);
-  color: #a9f5c4;
-  cursor: pointer;
-  font-size: .6rem;
-  font-weight: 800;
-}
-
-.money-bank-scanner-result button:disabled {
-  cursor: not-allowed;
-  opacity: .45;
 }
 
 .money-bank-jdy-status {
@@ -1060,7 +1005,6 @@
 .money-bank-rate-grid button.active,
 .money-bank-segmented button.active { border-color: rgba(95, 232, 161, .82); background: linear-gradient(145deg, rgba(19, 126, 78, .84), rgba(8, 74, 46, .9)); box-shadow: 0 5px 18px rgba(10, 98, 57, .24); }
 .money-bank-return-card { background: radial-gradient(circle at 95% 5%, rgba(40, 181, 106, .24), transparent 34%), linear-gradient(140deg, #116442, #082e20 76%); }
-.money-bank-return-bar i { background: linear-gradient(90deg, #22a96c, #90f3bd); }
 .money-bank-level.base { border-color: rgba(85, 226, 149, .48); background: rgba(66, 213, 142, .12); }
 .money-bank-toggle-list label { border-bottom-color: rgba(66, 213, 142, .14); }
 .money-bank-toggle-list label > i { background: #173e2b; }

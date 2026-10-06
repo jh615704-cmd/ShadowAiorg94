@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, Pause, Play, ShieldAlert } from "lucide-react";
 import { formatDerivQuote } from "../lib/format-deriv-quote";
+import AiScannerAction from "./ai-scanner-action";
 import {
   chooseBestEdgeSignal,
   type BestEdgeSignal,
@@ -50,16 +51,15 @@ type EdgeReferencePanelProps = {
   sessionPnl: number;
   sessionTrades: number;
   overThreeSniper: boolean;
-  autoOverThreeFourFive: boolean;
   bestPairAnalyzer: boolean;
   autoSelectBest: boolean;
   scannerMessage?: string | null;
+  onAiScan: () => Promise<string>;
   canTrade: boolean;
   onStart: () => void | Promise<void>;
   onStop: () => void;
   onReset: () => void;
   onOverThreeSniperChange: (value: boolean) => void;
-  onAutoOverThreeFourFiveChange: (value: boolean) => void;
   onBestPairAnalyzerChange: (value: boolean) => void;
   onAutoSelectBestChange: (value: boolean) => void;
   canViewHistory: boolean;
@@ -105,50 +105,6 @@ function chooseBestAnalyzerSignal(signals: MarketSignal[]): BestEdgeSignal | nul
     }));
   return candidates.sort((left, right) => right.score - left.score || right.sampleCount - left.sampleCount || left.digit - right.digit)[0] ?? null;
 }
-
-const presets = [
-  { value: "steady-over-4", name: "Steady | Over 4", risk: "12% RISK", detail: "2.2x ladder | 5 rungs | Over 4", note: "Small target: about 6 wins ends the session", tone: "teal" },
-  { value: "steady-over-3", name: "Steady | Over 3", risk: "12% RISK", detail: "2.8x ladder | 4 rungs | Over 3", note: "Small target: about 7 wins ends the session", tone: "teal" },
-  { value: "guarded-over-2", name: "Guarded | Over 2", risk: "10% RISK", detail: "3.8x ladder | 3 rungs | Over 2", note: "Hits often, recovers in one win, stops after 3 losses", tone: "teal" },
-  { value: "steady-under-5", name: "Steady | Under 5", risk: "12% RISK", detail: "2.2x ladder | 5 rungs | Under 5", note: "The Over 4 shape on the other side of the grid", tone: "teal" },
-  { value: "micro-over-4", name: "Micro | Over 4", risk: "6% RISK", detail: "2.2x ladder | 3 runs only | Over 4", note: "The smallest plan here: 4 wins ends the session", tone: "teal" },
-  { value: "9-loss-reset", name: "9-Loss Reset", risk: "$300+", detail: "$5.50 stake | 1.85x | TP: $50 | SL: $275", note: "", tone: "teal" },
-  { value: "aggressive", name: "Aggressive", risk: "FAST", detail: "$2 stake | 2.2x | TP: $50 | SL: $400", note: "", tone: "amber" },
-  { value: "over-4-max", name: "Over 4 | 7-Loss Max Profit", risk: "$1,500", detail: "$0.35→$77.60", note: "", tone: "teal" },
-  { value: "over-1-recovery", name: "Over 1 | 2-Loss Recovery", risk: "$713", detail: "$19.50 start | $713 2nd | 2 trades only", note: "", tone: "teal" },
-  { value: "over-3-loss", name: "Over 3 | 6-Loss", risk: "$750", detail: "$1.00 stake | 2.8x | TP: $50 | SL: $750", note: "", tone: "pink" },
-  { value: "over-2-loss", name: "Over 2 | 5-Loss", risk: "$800+", detail: "$0.35 start | 4.6x | TP: $20 | SL: $900", note: "", tone: "pink" },
-  { value: "over-1-safety", name: "Over 1 | Safety Recovery", risk: "SAFE", detail: "$20 stake | $400 recovery | 5-tick safety check", note: "", tone: "teal" },
-  { value: "over-2-dynamic", name: "Over 2 | 3-Loss Dynamic", risk: "$1,500", detail: "$46 start | dynamic | TP: $20→$30→$50 | SL: $1,500 | 3 trades", note: "", tone: "purple" },
-  { value: "over-3-dynamic", name: "Over 3 | 4-Loss Dynamic", risk: "$1,500", detail: "$22.43 start | dynamic | TP: $20→$30→$40→$50 | SL: $1,500 | 4 trades", note: "", tone: "purple" },
-] as const;
-
-const presetSettings: Record<string, {
-  strategy: EdgeStrategy;
-  duration: number;
-  stake: number;
-  martingale: number;
-  barrier: number;
-  direction: EdgeDirection;
-  takeProfit: number;
-  stopLoss: number;
-  maxStake: string;
-}> = {
-  "steady-over-4": { strategy: "martingale", duration: 5, stake: 1, martingale: 2.2, barrier: 4, direction: "DIGITOVER", takeProfit: 10, stopLoss: 10, maxStake: "No limit" },
-  "steady-over-3": { strategy: "martingale", duration: 5, stake: 1, martingale: 2.8, barrier: 3, direction: "DIGITOVER", takeProfit: 10, stopLoss: 10, maxStake: "No limit" },
-  "guarded-over-2": { strategy: "martingale", duration: 3, stake: 1, martingale: 3.8, barrier: 2, direction: "DIGITOVER", takeProfit: 10, stopLoss: 10, maxStake: "No limit" },
-  "steady-under-5": { strategy: "martingale", duration: 5, stake: 1, martingale: 2.2, barrier: 5, direction: "DIGITUNDER", takeProfit: 10, stopLoss: 10, maxStake: "No limit" },
-  "micro-over-4": { strategy: "martingale", duration: 3, stake: .5, martingale: 2.2, barrier: 4, direction: "DIGITOVER", takeProfit: 5, stopLoss: 5, maxStake: "No limit" },
-  "9-loss-reset": { strategy: "martingale", duration: 1, stake: 5.5, martingale: 1.85, barrier: 4, direction: "DIGITOVER", takeProfit: 50, stopLoss: 275, maxStake: "No limit" },
-  aggressive: { strategy: "martingale", duration: 1, stake: 2, martingale: 2.2, barrier: 4, direction: "DIGITOVER", takeProfit: 50, stopLoss: 400, maxStake: "No limit" },
-  "over-4-max": { strategy: "martingale", duration: 1, stake: .35, martingale: 4.6, barrier: 4, direction: "DIGITOVER", takeProfit: 50, stopLoss: 1500, maxStake: "77.60" },
-  "over-1-recovery": { strategy: "martingale", duration: 1, stake: 19.5, martingale: 2, barrier: 1, direction: "DIGITOVER", takeProfit: 50, stopLoss: 713, maxStake: "713" },
-  "over-3-loss": { strategy: "martingale", duration: 1, stake: 1, martingale: 2.8, barrier: 3, direction: "DIGITOVER", takeProfit: 50, stopLoss: 750, maxStake: "750" },
-  "over-2-loss": { strategy: "martingale", duration: 1, stake: .35, martingale: 4.6, barrier: 2, direction: "DIGITOVER", takeProfit: 20, stopLoss: 900, maxStake: "900" },
-  "over-1-safety": { strategy: "martingale", duration: 5, stake: 20, martingale: 20, barrier: 1, direction: "DIGITOVER", takeProfit: 50, stopLoss: 400, maxStake: "400" },
-  "over-2-dynamic": { strategy: "martingale", duration: 1, stake: 46, martingale: 1.6, barrier: 2, direction: "DIGITOVER", takeProfit: 20, stopLoss: 1500, maxStake: "1500" },
-  "over-3-dynamic": { strategy: "martingale", duration: 1, stake: 22.43, martingale: 1.6, barrier: 3, direction: "DIGITOVER", takeProfit: 20, stopLoss: 1500, maxStake: "1500" },
-};
 
 function EdgeToggle({ checked, onChange, disabled, label }: { checked: boolean; onChange: (value: boolean) => void; disabled: boolean; label: string }) {
   return (
@@ -198,16 +154,15 @@ export default function EdgeReferencePanel({
   sessionPnl,
   sessionTrades,
   overThreeSniper,
-  autoOverThreeFourFive,
   bestPairAnalyzer,
   autoSelectBest,
   scannerMessage = null,
+  onAiScan,
   canTrade,
   onStart,
   onStop,
   onReset,
   onOverThreeSniperChange,
-  onAutoOverThreeFourFiveChange,
   onBestPairAnalyzerChange,
   onAutoSelectBestChange,
   canViewHistory,
@@ -216,10 +171,18 @@ export default function EdgeReferencePanel({
   clearTradesArmed,
   onClearHistory,
 }: EdgeReferencePanelProps) {
-  const [preset, setPreset] = useState("custom");
-  const [presetOpen, setPresetOpen] = useState(false);
   const [marketPickerOpen, setMarketPickerOpen] = useState(false);
   const [maxStake, setMaxStake] = useState("No limit");
+  const canRunAiScanner = isConnected
+    && !running
+    && Number.isInteger(duration)
+    && duration >= 1
+    && duration <= 6
+    && Number.isFinite(stake)
+    && stake >= 0.35
+    && Number.isInteger(barrier)
+    && barrier >= 0
+    && barrier <= 9;
 
   const liveSignals = marketSignals as MarketSignal[];
   const liveAutomationSignal = useMemo(
@@ -238,7 +201,7 @@ export default function EdgeReferencePanel({
   const bestBarrier = bestSignal?.digit ?? barrier;
   const bestRate = bestSignal?.score ?? null;
   const bestMarket = markets.find(([value]) => value === (bestSignal?.symbol ?? symbol))?.[1] ?? "Volatility 100 Index";
-  const autoMarketEnabled = autoSelectBest || autoOverThreeFourFive || overThreeSniper || bestPairAnalyzer;
+  const autoMarketEnabled = autoSelectBest || overThreeSniper || bestPairAnalyzer;
   const displayedSymbol = autoMarketEnabled ? (bestSignal?.symbol ?? symbol) : symbol;
   const marketLabel = markets.find(([value]) => value === displayedSymbol)?.[1] ?? "Volatility 100 Index";
   const rankedMarkets = useMemo(() => {
@@ -247,9 +210,7 @@ export default function EdgeReferencePanel({
       const signal = signalMap.get(value);
       const outcomes = signal?.digit_outcomes?.filter((outcome) => outcome.digit > 0 && outcome.digit < 9) ?? [];
       const score = signal
-          ? autoOverThreeFourFive
-            ? Math.max(...[3, 4, 5].map((digit) => Number(outcomes.find((outcome) => outcome.digit === digit)?.over_percentage ?? 0)))
-            : overThreeSniper
+          ? overThreeSniper
           ? Number(outcomes.find((outcome) => outcome.digit === 3)?.over_percentage ?? 0)
           : Math.max(...outcomes.flatMap((outcome) => [
             Number(outcome.over_percentage),
@@ -258,26 +219,10 @@ export default function EdgeReferencePanel({
         : 0;
       return { value, label, score };
     }).sort((left, right) => right.score - left.score || left.label.localeCompare(right.label));
-  }, [autoOverThreeFourFive, autoSelectBest, bestPairAnalyzer, marketSignals, markets, overThreeSniper]);
+  }, [autoSelectBest, bestPairAnalyzer, marketSignals, markets, overThreeSniper]);
   const quoteText = quote == null ? "—" : formatDerivQuote(quote);
   const payoutText = payoutPercent == null || !Number.isFinite(payoutPercent) ? "waiting" : `${payoutPercent.toFixed(1)}%`;
   const currency = currentAccount?.currency ?? "USD";
-
-  const applyPreset = (value: string) => {
-    setPreset(value);
-    setPresetOpen(false);
-    const settings = presetSettings[value];
-    if (!settings) return;
-    onStrategyChange(settings.strategy);
-    onDurationChange(settings.duration);
-    onStakeChange(settings.stake);
-    onMartingaleChange(settings.martingale);
-    onBarrierChange(settings.barrier);
-    onDirectionChange(settings.direction);
-    onTakeProfitChange(settings.takeProfit);
-    onStopLossChange(settings.stopLoss);
-    setMaxStake(settings.maxStake);
-  };
 
   return (
     <section className="edge-reference-layout">
@@ -316,10 +261,6 @@ export default function EdgeReferencePanel({
       </section>
 
       <div className="edge-ref-feature-list">
-           <div className={`edge-ref-feature ${autoOverThreeFourFive ? "active" : ""}`}>
-           <div className="edge-ref-feature-main"><span><i aria-hidden="true" /> Auto over 3 4 and 5</span><EdgeToggle checked={autoOverThreeFourFive} onChange={onAutoOverThreeFourFiveChange} disabled={false} label="Auto over 3 4 and 5" /></div>
-           {autoOverThreeFourFive && <small className="edge-ref-feature-status">{scannerMessage ?? "Hunting the strongest observed Over signal across barriers 3, 4, and 5…"}</small>}
-         </div>
          <div className={`edge-ref-feature ${overThreeSniper ? "active" : ""}`}>
           <div className="edge-ref-feature-main"><span><i aria-hidden="true" /> Over 3 Best Pair</span><EdgeToggle checked={overThreeSniper} onChange={onOverThreeSniperChange} disabled={false} label="Over 3 Best Pair" /></div>
           {overThreeSniper && <small className="edge-ref-feature-status">{scannerMessage ?? "Hunting all Volatility and Jump pairs for the best observed Over 3 signal…"}</small>}
@@ -345,15 +286,12 @@ export default function EdgeReferencePanel({
         })}</div>
       </section>
 
-      <section className={`edge-ref-card edge-ref-preset ${presetOpen ? "open" : ""}`}>
-        <span className="edge-ref-field-label">Preset</span>
-        <button type="button" className="edge-ref-preset-trigger" onClick={() => setPresetOpen((open) => !open)} disabled={running}><b>{preset === "custom" ? "Select a Preset" : presets.find((item) => item.value === preset)?.name}</b><ChevronDown size={15} /></button>
-        {presetOpen && <div className="edge-ref-preset-menu">{presets.map((item) => <button type="button" className={`edge-ref-preset-option ${item.tone}`} key={item.value} onClick={() => applyPreset(item.value)}><strong>{item.name} <small>{item.risk}</small></strong><span>{item.detail}</span>{item.note && <em>{item.note}</em>}</button>)}</div>}
-        <p>Each preset is re-sized to your balance when applied. It sets the stake, ladder and stops — not the odds of a trade.</p>
-      </section>
-
-      <label className="edge-ref-input-card"><span>Duration</span><div><input type="number" min="1" max="5" value={duration} onChange={(event) => onDurationChange(Math.min(5, Math.max(1, Number(event.target.value) || 1)))} disabled={running} /><b>ticks</b></div></label>
+      <label className="edge-ref-input-card"><span>Duration</span><div><input type="number" min="1" max="6" step="1" value={duration} onChange={(event) => onDurationChange(Math.min(6, Math.max(1, Math.trunc(Number(event.target.value) || 1))))} disabled={running} /><b>ticks</b></div></label>
       <label className="edge-ref-input-card"><span>Initial stake</span><div><input type="number" min=".35" step=".01" value={stake} onChange={(event) => onStakeChange(Math.max(.35, Number(event.target.value) || .35))} disabled={running} /><b>{currency}</b></div></label>
+      <section className="edge-ref-ai-scanner">
+        <div><b>AI SCANNER</b><small>Ranks Over vs Under for this market and selected digit using at least 20 live samples. It only changes the direction; it never opens a trade.</small></div>
+        <AiScannerAction onScan={onAiScan} disabled={!canRunAiScanner} />
+      </section>
 
       <section className="edge-ref-card edge-ref-setup"><h2>Strategy parameters</h2>
         <label><span>Strategy</span><div><select value={strategy} onChange={(event) => onStrategyChange(event.target.value as EdgeStrategy)} disabled={running}><option value="martingale">Martingale</option><option value="flat">Flat stake</option></select><ChevronDown size={16} /></div></label>

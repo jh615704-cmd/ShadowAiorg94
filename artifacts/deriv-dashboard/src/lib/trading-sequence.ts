@@ -28,6 +28,10 @@ export type BestEdgeSignal = {
   sampleCount: number;
 };
 
+export type BestEdgeDirectionSignal = Omit<BestEdgeSignal, "direction"> & {
+  direction: "DIGITOVER" | "DIGITUNDER";
+};
+
 export type BestDigitSignal = {
   symbol: string;
   direction: DigitDirection;
@@ -74,7 +78,7 @@ export function digitForTick(
   rankedDigits: ReadonlyArray<number>,
   fallbackDigit: number,
 ): number {
-  const position = Math.min(5, Math.max(1, Math.trunc(tickDuration))) - 1;
+  const position = Math.min(6, Math.max(1, Math.trunc(tickDuration))) - 1;
   return rankedDigits[position] ?? fallbackDigit;
 }
 
@@ -166,6 +170,34 @@ export function chooseBestEdgeSignal(
       || Number(right.direction === "DUAL") - Number(left.direction === "DUAL")
       || left.digit - right.digit,
   )[0] ?? null;
+}
+
+export function chooseBestEdgeDirectionForDigit(
+  signals: readonly MarketSignal[],
+  symbol: string,
+  digit: number,
+  minimumSampleCount = 20,
+): BestEdgeDirectionSignal | null {
+  if (!symbol || !Number.isInteger(digit) || digit < 0 || digit > 9) return null;
+  if (!Number.isInteger(minimumSampleCount) || minimumSampleCount < 1) return null;
+
+  const signal = signals.find((candidate) => candidate.symbol === symbol);
+  if (!signal || signal.quote == null || signal.sample_count < minimumSampleCount) return null;
+
+  const outcome = signal.digit_outcomes?.find((candidate) => candidate.digit === digit);
+  if (!outcome) return null;
+  const over = Number(outcome.over_percentage);
+  const under = Number(outcome.under_percentage);
+  if (![over, under].every((percentage) => Number.isFinite(percentage) && percentage >= 0 && percentage <= 100)) return null;
+  if (over === under) return null;
+
+  return {
+    symbol,
+    direction: over > under ? "DIGITOVER" : "DIGITUNDER",
+    digit,
+    score: Math.max(over, under),
+    sampleCount: signal.sample_count,
+  };
 }
 
 export type StopReason = "take-profit" | "stop-loss";

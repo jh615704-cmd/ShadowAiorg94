@@ -62,7 +62,7 @@ type Props = {
   onClearHistory: () => void;
 };
 
-const durationOptions = [1, 2, 3, 4, 5];
+const durationOptions = [1, 2, 3, 4, 5, 6];
 const countOptions = [1, 2, 3, 4, 5, 6];
 
 const typeLabels: Record<BulkTraderType, string> = {

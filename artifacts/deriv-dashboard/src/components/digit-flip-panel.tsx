@@ -15,7 +15,7 @@ import "./digit-flip-panel.css";
 
 export type DigitFlipParity = "DIGITEVEN" | "DIGITODD";
 export type DigitFlipMarketType = "auto" | "volatility" | "jumps";
-export type DigitFlipDuration = 1 | 2 | 3 | 4 | 5;
+export type DigitFlipDuration = 1 | 2 | 3 | 4 | 5 | 6;
 export type DigitFlipStakeMode = "flat" | "martingale";
 
 export type DigitFlipMarketSignal = {
@@ -449,7 +449,7 @@ export default function DigitFlipPanel({
         </div>
         <div className="df-setup-grid">
           <label><span>STAKE</span><input type="number" min=".5" step=".01" value={stake} onChange={(event) => onStakeChange(Math.max(.5, Number(event.target.value) || .5))} disabled={disabled || running} /></label>
-          <label><span>DURATION</span><select value={duration} onChange={(event) => onDurationChange(Number(event.target.value) as DigitFlipDuration)} disabled={disabled || running}>{[1, 2, 3, 4, 5].map((tick) => <option value={tick} key={tick}>{tick} tick{tick > 1 ? "s" : ""}</option>)}</select></label>
+          <label><span>DURATION</span><select value={duration} onChange={(event) => onDurationChange(Number(event.target.value) as DigitFlipDuration)} disabled={disabled || running}>{[1, 2, 3, 4, 5, 6].map((tick) => <option value={tick} key={tick}>{tick} tick{tick > 1 ? "s" : ""}</option>)}</select></label>
           <label><span>STAKE MODE</span><select value={stakeMode} onChange={(event) => onStakeModeChange(event.target.value as DigitFlipStakeMode)} disabled={disabled || running}><option value="flat">Flat stake</option><option value="martingale">Martingale</option></select></label>
           <label><span>MULTIPLIER</span><input type="number" min="1" step=".1" value={multiplier} onChange={(event) => onMultiplierChange(Math.max(1, Number(event.target.value) || 1))} disabled={disabled || running || stakeMode === "flat"} /></label>
           <label><span>TAKE PROFIT</span><input type="number" min=".01" step=".01" value={takeProfit} onChange={(event) => onTakeProfitChange(Math.max(.01, Number(event.target.value) || .01))} disabled={disabled || running} /></label>

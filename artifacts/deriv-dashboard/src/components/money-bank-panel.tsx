@@ -19,7 +19,6 @@ export type MoneyBankStartConfig = {
   takeProfitTicks: number;
   strategy: MoneyBankStrategy;
   ladder: MoneyBankLadderLevel[];
-  autoSwitch: boolean;
   reinvestProfit: boolean;
   reinvestPercent: number;
   profitTarget: number | null;
@@ -39,7 +38,7 @@ export type MoneyBankTrade = DerivHistoryRow & {
   current_value: number;
 };
 
-export type MoneyBankScannerRecommendation = {
+export type MoneyBankObservedSetup = {
   symbol: string;
   growthRate: number;
   takeProfitTicks: number;
@@ -49,7 +48,7 @@ export type MoneyBankScannerRecommendation = {
   estimatedLosses: number;
 };
 
-export type MoneyBankJdyDecision = MoneyBankScannerRecommendation & {
+export type MoneyBankJdyDecision = MoneyBankObservedSetup & {
   safe: boolean;
   stake: number;
   predictedWinRate: number;
@@ -91,12 +90,6 @@ type MoneyBankPanelProps = {
   onProfitTargetChange: (value: number | null) => void;
   lossLimit: number | null;
   onLossLimitChange: (value: number | null) => void;
-  scannerEnabled: boolean;
-  scannerCountdown: number;
-  scannerBusy: boolean;
-  scannerRecommendation: MoneyBankScannerRecommendation | null;
-  onScannerChange: (value: boolean) => void;
-  onAdaptScannerSettings: () => void;
   closing?: boolean;
   marketSignals: readonly MoneyBankMarketSignal[];
   recentTrades: readonly MoneyBankTrade[];
@@ -177,12 +170,6 @@ export function MoneyBankPanel({
   onProfitTargetChange,
   lossLimit,
   onLossLimitChange,
-  scannerEnabled,
-  scannerCountdown,
-  scannerBusy,
-  scannerRecommendation,
-  onScannerChange,
-  onAdaptScannerSettings,
   closing = false,
   marketSignals,
   recentTrades,
@@ -217,8 +204,6 @@ export function MoneyBankPanel({
     return {
       symbol: marketSymbol,
       sampleCount: signal?.sample_count ?? 0,
-      risePercentage: signal?.rise_percentage ?? null,
-      fallPercentage: signal?.fall_percentage ?? null,
       quote: signal?.quote ?? null,
     };
   }), [marketSignals]);
@@ -236,7 +221,6 @@ export function MoneyBankPanel({
       takeProfitTicks,
       strategy,
       ladder,
-      autoSwitch: false,
       reinvestProfit,
       reinvestPercent,
       profitTarget,
@@ -426,7 +410,6 @@ export function MoneyBankPanel({
             </div>
             <strong>+{estimatedReturn.toFixed(1)}%</strong>
             <p>Recovery {recoveryStart}–{takeProfitTicks} ticks @ {growthRate}%</p>
-            <div className="money-bank-return-bar"><i style={{ width: `${clamp(estimatedReturn / 5, 8, 100)}%` }} /></div>
           </section>
 
           <section className="money-bank-card money-bank-ladder-card">
@@ -462,22 +445,6 @@ export function MoneyBankPanel({
                <label><span>Loss Limit ($)</span><div className="money-bank-input-wrap"><b>$</b><input type="number" min="0" step="1" placeholder="Optional" value={lossLimit ?? ""} onChange={(event) => onLossLimitChange(event.target.value === "" ? null : Math.max(0, Number(event.target.value) || 0))} disabled={running} /></div></label>
             </div>
             <div className="money-bank-toggle-list">
-                <label>
-                  <span><b>AI SCANNER</b><small>{scannerEnabled ? scannerBusy ? "Scanning supported markets and growth rates…" : scannerCountdown > 0 ? `Next scan in ${scannerCountdown}s` : "Refreshing every minute" : "Off"}</small></span>
-                  <input type="checkbox" checked={scannerEnabled} onChange={(event) => onScannerChange(event.target.checked)} disabled={running || !isConnected} /><i />
-                </label>
-                {scannerEnabled && (
-                  <div className="money-bank-scanner-result">
-                    {scannerRecommendation ? (
-                      <>
-                        <span><small>BEST CURRENT SETUP</small><b>{scannerRecommendation.symbol} · {scannerRecommendation.growthRate}% · {scannerRecommendation.takeProfitTicks} ticks</b><em>{scannerRecommendation.observedBalance.toFixed(1)}% observed balance · {scannerRecommendation.sampleCount} ticks sampled</em></span>
-                        <button type="button" onClick={onAdaptScannerSettings} disabled={running}>Adapt settings</button>
-                      </>
-                    ) : (
-                      <span><small>SCANNER STATUS</small><b>{scannerBusy ? "Scanning all supported setups…" : "Collecting enough live samples…"}</b></span>
-                    )}
-                  </div>
-                )}
                 <label><span><b>Reinvest profit</b><small>{reinvestProfit ? `${reinvestPercent}% of each win goes into the next BASE` : "Keep wins in the next BASE"}</small></span><input type="checkbox" checked={reinvestProfit} onChange={(event) => onReinvestProfitChange(event.target.checked)} disabled={running} /><i /></label>
                 {reinvestProfit && (
                   <div className="money-bank-reinvest-details">
@@ -501,9 +468,7 @@ export function MoneyBankPanel({
          <div className="money-bank-snapshot-grid">
            {snapshot.map((entry, index) => {
              const label = markets.find(([market]) => market === entry.symbol)?.[1]?.replace("Volatility ", "V") ?? entry.symbol;
-              const rise = entry.risePercentage == null ? "—" : `${entry.risePercentage.toFixed(1)}%`;
-              const fall = entry.fallPercentage == null ? "—" : `${entry.fallPercentage.toFixed(1)}%`;
-              return <div className={`money-bank-snapshot-row ${entry.symbol === symbol ? "best" : ""}`} key={entry.symbol}><b>{index + 1}</b><span>{label}</span><strong>{entry.sampleCount.toLocaleString()} ticks</strong><em>Rise {rise} · Fall {fall}</em></div>;
+              return <div className={`money-bank-snapshot-row ${entry.symbol === symbol ? "best" : ""}`} key={entry.symbol}><b>{index + 1}</b><span>{label}</span><strong>{entry.sampleCount.toLocaleString()} ticks</strong><em>Any rise or fall · Accumulator</em></div>;
            })}
          </div>
           <p className="money-bank-safest-copy">Selected market: <b>{selectedMarket}</b>{quote != null && <> · latest quote {quote.toFixed(2)}</>}</p>

@@ -42,7 +42,7 @@ export default function AppPage() {
   const hasToken = Boolean(tokenStatusQuery.data?.has_token);
 
   const accountsQuery = useGetDerivAccounts({ query: { queryKey: getGetDerivAccountsQueryKey(), refetchInterval: 5000, enabled: hasToken } });
-  const statusQuery = useGetDerivStatus({ query: { queryKey: getGetDerivStatusQueryKey(), refetchInterval: 1500, enabled: hasToken } });
+  const statusQuery = useGetDerivStatus({ query: { queryKey: getGetDerivStatusQueryKey(), refetchInterval: 500, enabled: hasToken } });
    const historyQuery = useGetDerivHistory({ query: { queryKey: getGetDerivHistoryQueryKey(), refetchInterval: 1000, enabled: hasToken } });
   const loadErrorMessage = [accountsQuery.error, statusQuery.error]
     .map((error) => (error as { data?: { error?: string } } | null)?.data?.error)
@@ -87,7 +87,7 @@ export default function AppPage() {
   const isTestPending = testConnection.isPending;
   const buyCooldownRemaining = Math.max(0, buyCooldownUntil - cooldownClock);
   const isBuyPending = buyContract.isPending;
-  const proposalReady = Boolean(status?.authorized && serverSelected && effectiveSymbol && Number(amount) > 0 && Number(duration) >= 1 && Number(duration) <= 5);
+  const proposalReady = Boolean(status?.authorized && serverSelected && effectiveSymbol && Number(amount) > 0 && Number(duration) >= 1 && Number(duration) <= 6);
 
   const refreshTradeResults = () => {
     void Promise.all([
@@ -290,7 +290,7 @@ export default function AppPage() {
           {!serverSelected && <div className="guardrail"><LockKeyhole size={16} /><span><b>Account switch in progress.</b> Wait for the selected session to connect.</span></div>}
           <div className="form-grid">
             <label className="field"><span>STAKE</span><div className="input-with-prefix"><i>{selectedAccount?.currency ?? '$'}</i><input type="number" min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} disabled={!serverSelected} data-testid="input-proposal-amount" /></div></label>
-            <div className="field"><span>DURATION / TICKS</span><div className="tick-choice-group" role="group" aria-label="Trade duration in ticks">{[1, 2, 3, 4, 5].map((tickCount) => <button type="button" key={tickCount} className={`tick-choice ${Number(duration) === tickCount ? 'tick-choice-selected' : ''}`} onClick={() => setDuration(String(tickCount))} disabled={!serverSelected} data-testid={`button-duration-${tickCount}`}>{tickCount}</button>)}</div></div>
+            <div className="field"><span>DURATION / TICKS</span><div className="tick-choice-group" role="group" aria-label="Trade duration in ticks">{[1, 2, 3, 4, 5, 6].map((tickCount) => <button type="button" key={tickCount} className={`tick-choice ${Number(duration) === tickCount ? 'tick-choice-selected' : ''}`} onClick={() => setDuration(String(tickCount))} disabled={!serverSelected} data-testid={`button-duration-${tickCount}`}>{tickCount}</button>)}</div></div>
             <label className="field field-wide"><span>SYMBOL</span><input value={effectiveSymbol} onChange={(event) => setSymbol(event.target.value)} placeholder={status?.symbol ?? 'Symbol from status'} disabled={!serverSelected} data-testid="input-proposal-symbol" /></label>
           </div>
           <div className="direction-label">DIGIT CONTRACT</div>

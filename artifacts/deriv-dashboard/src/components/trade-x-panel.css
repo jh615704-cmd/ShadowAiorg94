@@ -495,7 +495,7 @@
   gap: 18px;
   padding: 16px 18px 18px;
 }
-.tx-duration-list { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 8px; }
+.tx-duration-list { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
 .tx-duration-button {
   min-height: 42px;
   display: grid;
@@ -2078,3 +2078,52 @@
 .tx-signal-progress { background: #142e49; }
 .tx-signal-progress i { background: #27b8e8; }
 .tx-signal-detail p { color: #86a5c1; }
+
+.tx-panel .tx-digit-number,
+.tx-panel .tx-digit-percent,
+.tx-panel .tx-digit-meta {
+  opacity: 1 !important;
+  filter: none !important;
+  text-shadow: none !important;
+  -webkit-font-smoothing: antialiased;
+}
+.tx-panel .tx-digit-number {
+  color: #f5fbff !important;
+  font-size: 25px;
+  font-weight: 900;
+}
+.tx-panel .tx-digit-percent {
+  color: #72f2d8 !important;
+  font-size: 13px;
+  font-weight: 850;
+}
+.tx-panel .tx-digit-meta {
+  color: #e0edff !important;
+  font-size: 10px;
+  font-weight: 800;
+}
+.tx-panel .tx-rank-digit {
+  color: #fff !important;
+  font-size: 25px;
+  font-weight: 900;
+  text-shadow: none !important;
+}
+.tx-panel .tx-rank-metrics b {
+  color: #a7f2e2 !important;
+  font-size: 13px;
+  font-weight: 900;
+}
+.tx-panel .tx-rank-metrics b small {
+  color: #deebf7 !important;
+  font-size: 9px !important;
+  font-weight: 800;
+}
+.tx-panel .tx-rank-metrics > small {
+  display: block !important;
+  max-width: none;
+  color: #e0edff !important;
+  font-size: 9px !important;
+  font-weight: 800;
+  line-height: 1.45;
+  opacity: 1 !important;
+}

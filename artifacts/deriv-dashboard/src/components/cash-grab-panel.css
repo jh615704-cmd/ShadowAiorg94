@@ -204,6 +204,8 @@
 @keyframes cash-grab-spin { to { transform: rotate(360deg); } }
 
 .cash-grab-history {
+  width: 100%;
+  min-width: 0;
   overflow: hidden;
   padding: 0;
   background: #0d213a !important;

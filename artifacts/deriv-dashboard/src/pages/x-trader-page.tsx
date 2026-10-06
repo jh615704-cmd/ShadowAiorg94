@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import {
   chooseBestDigitSignal,
+  chooseBestEdgeDirectionForDigit,
   chooseBestEdgeSignal,
   digitForTick,
   nextStakeAfterSettlement,
@@ -150,7 +151,7 @@ const tradeXGuidePages = [
 const digitFlipGuidePages = [
   { title: "Welcome to DigitFlip", body: "DigitFlip trades Even or Odd contracts using a live parity sample. Estimates describe recent ticks and never guarantee the next contract result.", points: ["Start with a demo account.", "Only one of DigitFlip, Trade X, and EDGE can run at once.", "Auto Candidates reviews the strongest market every 10 seconds after settlement."] },
   { title: "Choose a market and parity", body: "DigitFlip starts with an automatically selected market, then lets you choose Volatility or Jump markets manually. Even and Odd have distinct selected states.", points: ["The quote and last digit are live telemetry.", "Recent percentages come from the selected market sample.", "The market selector does not predict the next digit."] },
-  { title: "Stake and duration", body: "Choose 1 to 5 ticks and begin with a flat stake of 0.50 or more. Martingale after loss is optional and can grow exposure quickly.", points: ["Decimals are supported for the multiplier.", "Use a small stake while evaluating a signal.", "There is no max-stake control in this workspace."] },
+  { title: "Stake and duration", body: "Choose 1 to 6 ticks and begin with a flat stake of 0.50 or more. Martingale after loss is optional and can grow exposure quickly.", points: ["Decimals are supported for the multiplier.", "Use a small stake while evaluating a signal.", "There is no max-stake control in this workspace."] },
   { title: "Run, stop, and reset", body: "Run starts the guarded loop. Stop prevents another entry after the active request. Reset clears only session P/L and current stake; it does not delete Deriv history.", points: ["Take Profit and Stop Loss stop the loop.", "Recent trades can be hidden from this dashboard.", "Hidden rows remain in Deriv."] },
   { title: "Reading the live parity", body: "DigitFlip uses the live Even and Odd percentages as market context. The percentages describe recent ticks and never guarantee the next contract result.", points: ["Wait for a meaningful live sample before trading.", "Use a small stake while evaluating a market.", "No condition is presented as a guaranteed win."] },
   { title: "Live account protection", body: "Real-money DigitFlip actions require a live-funds confirmation and the server's live-trading setting.", points: ["Use demo funds while learning.", "Check the selected account before every session.", "A confirmation is required again after switching accounts."] },
@@ -275,23 +276,6 @@ function chooseBestOverThreeSignal(signals: MarketSignal[], excludeSymbol?: stri
   return best ? { symbol: best.signal.symbol, direction: "DIGITOVER", digit: 3, score: best.score, sampleCount: best.signal.sample_count } : null;
 }
 
-function chooseBestAutoOver345Signal(signals: MarketSignal[], excludeSymbol?: string): BestEdgeSignal | null {
-  const candidates = signals
-    .filter((signal) => signal.sample_count >= EDGE_MIN_MARKET_SAMPLE && signal.quote != null && signal.symbol !== excludeSymbol)
-    .flatMap((signal) => (signal.digit_outcomes ?? [])
-      .filter((outcome) => outcome.digit >= 3 && outcome.digit <= 5)
-      .map((outcome) => ({
-        symbol: signal.symbol,
-        direction: "DIGITOVER" as const,
-        digit: outcome.digit,
-        score: Number(outcome.over_percentage),
-        sampleCount: signal.sample_count,
-      })))
-    .filter((candidate) => Number.isFinite(candidate.score))
-    .sort((left, right) => right.score - left.score || right.sampleCount - left.sampleCount);
-  return candidates[0] ?? null;
-}
-
 function chooseBestAnalyzerSignal(signals: MarketSignal[], excludeSymbol?: string): BestEdgeSignal | null {
   const available = signals.filter((signal) =>
     signal.sample_count >= EDGE_MIN_MARKET_SAMPLE
@@ -323,16 +307,6 @@ type MartingaleSettlementWatch = {
 type DigitFlipSettlementWatch = {
   knownIds: Set<string>;
   processedIds: Set<string>;
-};
-
-type MoneyBankScannerRecommendation = {
-  symbol: string;
-  growthRate: number;
-  takeProfitTicks: number;
-  score: number;
-  sampleCount: number;
-  observedBalance: number;
-  estimatedLosses: number;
 };
 
 type CashGrabAutoSwitchRecommendation = {
@@ -388,7 +362,6 @@ export default function XTraderPage() {
   const [edgePercentageMode, setEdgePercentageMode] = useState(false);
   const [edgeRecommendation, setEdgeRecommendation] = useState<BestEdgeSignal | null>(null);
   const [edgeOverThreeSniper, setEdgeOverThreeSniper] = useState(false);
-  const [edgeAutoOverThreeFourFive, setEdgeAutoOverThreeFourFive] = useState(false);
   const [edgeBestPairAnalyzer, setEdgeBestPairAnalyzer] = useState(false);
   const [edgeAutoSelectBest, setEdgeAutoSelectBest] = useState(false);
   const [edgeScannerMessage, setEdgeScannerMessage] = useState<string | null>(null);
@@ -415,11 +388,6 @@ export default function XTraderPage() {
   const [moneyBankLossLimit, setMoneyBankLossLimit] = useState<number | null>(null);
   const [moneyBankRunning, setMoneyBankRunning] = useState(false);
   const [moneyBankClosing, setMoneyBankClosing] = useState(false);
-  const [moneyBankSafestSymbol, setMoneyBankSafestSymbol] = useState("1HZ90V");
-  const [moneyBankScannerEnabled, setMoneyBankScannerEnabled] = useState(false);
-  const [moneyBankScannerCountdown, setMoneyBankScannerCountdown] = useState(0);
-  const [moneyBankScannerBusy, setMoneyBankScannerBusy] = useState(false);
-  const [moneyBankScannerRecommendation, setMoneyBankScannerRecommendation] = useState<MoneyBankScannerRecommendation | null>(null);
   const [moneyBankJdyEnabled, setMoneyBankJdyEnabled] = useState(false);
   const [moneyBankJdyState, setMoneyBankJdyState] = useState<"idle" | "scanning" | "safe" | "not-good">("idle");
   const [moneyBankJdyDecision, setMoneyBankJdyDecision] = useState<MoneyBankJdyDecision | null>(null);
@@ -514,7 +482,6 @@ export default function XTraderPage() {
   const autoSwitchRef = useRef(autoSwitch);
   const edgePercentageModeRef = useRef(edgePercentageMode);
   const edgeOverThreeSniperRef = useRef(edgeOverThreeSniper);
-  const edgeAutoOverThreeFourFiveRef = useRef(edgeAutoOverThreeFourFive);
   const edgeBestPairAnalyzerRef = useRef(edgeBestPairAnalyzer);
   const edgeAutoSelectBestRef = useRef(edgeAutoSelectBest);
   const edgeAutoSelectionKeyRef = useRef("");
@@ -532,12 +499,9 @@ export default function XTraderPage() {
   const aiScannerActionLockRef = useRef(false);
   const digitFlipRunningRef = useRef(false);
   const moneyBankRunningRef = useRef(false);
-  const moneyBankSafestSymbolRef = useRef("1HZ90V");
   const moneyBankActionLockRef = useRef(false);
   const moneyBankClosePromiseRef = useRef<Promise<void> | null>(null);
   const moneyBankOpenContractIdRef = useRef<string | null>(null);
-  const moneyBankScannerNextAtRef = useRef<number | null>(null);
-  const moneyBankScannerRotationRef = useRef(0);
   const moneyBankJdyScanInFlightRef = useRef(false);
   const cashGrabRunningRef = useRef(false);
   const cashGrabRunIdRef = useRef(0);
@@ -706,7 +670,6 @@ export default function XTraderPage() {
     : [];
   const moneyBankCompletedRows = moneyBankSessionRows.filter((trade) => trade.status !== "open");
   const moneyBankSignals = (status.data?.market_signals ?? []) as MoneyBankMarketSignal[];
-  const moneyBankScannerRecommendationRef = useRef<MoneyBankScannerRecommendation | null>(null);
   const fastSessionPnl = realizedProfit(edgeSessionRows);
   const moneyBankHistorySessionPnl = realizedProfit(moneyBankSessionRows);
   const streaks = status.data?.digit_streaks ?? [];
@@ -754,69 +717,6 @@ export default function XTraderPage() {
       .sort((left, right) => right.observedPercentage - left.observedPercentage || right.sampleCount - left.sampleCount)[0]?.symbol ?? null,
     [bulkTraderMarketSignals],
   );
-
-  const scanMoneyBank = async () => {
-    if (!isConnected || moneyBankScannerBusy) return;
-    setMoneyBankScannerBusy(true);
-    try {
-      const freshStatus = await status.refetch();
-      const freshSignals = (freshStatus.data?.market_signals ?? moneyBankSignals) as MoneyBankMarketSignal[];
-       const candidates: MoneyBankScannerRecommendation[] = [];
-      for (const [marketSymbol] of moneyBankMarkets) {
-        const signal = freshSignals.find((entry) => entry.symbol === marketSymbol);
-        if (!signal || signal.sample_count < 5) continue;
-        const observedBalance = Math.max(signal.rise_percentage ?? 50, signal.fall_percentage ?? 50);
-        for (let growthRate = 1; growthRate <= 5; growthRate += 1) {
-          for (let takeProfitTicks = 5; takeProfitTicks <= 50; takeProfitTicks += 1) {
-             const riskPenalty = growthRate * 1.35 + takeProfitTicks * 0.08;
-             const sampleConfidence = Math.min(signal.sample_count, 100) / 10;
-             const estimatedLosses = Math.max(0, Math.ceil((100 - observedBalance + riskPenalty) / 10));
-             candidates.push({
-               symbol: marketSymbol,
-               growthRate,
-               takeProfitTicks,
-               score: observedBalance * 0.9 + sampleConfidence - estimatedLosses * 2 - riskPenalty,
-               sampleCount: signal.sample_count,
-               observedBalance,
-               estimatedLosses,
-             });
-          }
-        }
-      }
-       const ranked = candidates.sort((left, right) =>
-         right.observedBalance - left.observedBalance
-         || left.estimatedLosses - right.estimatedLosses
-         || right.sampleCount - left.sampleCount
-         || right.score - left.score,
-       );
-       const bestByMarket = moneyBankMarkets
-         .map(([marketSymbol]) => ranked.find((candidate) => candidate.symbol === marketSymbol))
-         .filter((candidate): candidate is MoneyBankScannerRecommendation => Boolean(candidate))
-         .sort((left, right) =>
-           right.observedBalance - left.observedBalance
-           || left.estimatedLosses - right.estimatedLosses
-           || right.sampleCount - left.sampleCount
-           || right.score - left.score,
-         );
-       const rotationWindow = bestByMarket.length ? bestByMarket : ranked.slice(0, Math.min(24, ranked.length));
-       const rotationIndex = rotationWindow.length ? moneyBankScannerRotationRef.current++ % rotationWindow.length : 0;
-       const best = rotationWindow[rotationIndex] ?? null;
-      moneyBankScannerRecommendationRef.current = best;
-      setMoneyBankScannerRecommendation(best);
-      if (best) {
-        setConnectionMessage({
-          kind: "info",
-          text: `AI SCANNER recommends ${best.symbol} at ${best.growthRate}% growth for ${best.takeProfitTicks} ticks (${best.observedBalance.toFixed(1)}% observed market balance).`,
-        });
-      } else {
-        setConnectionMessage({ kind: "info", text: "AI SCANNER is collecting enough live samples across the supported Volatility markets." });
-      }
-    } catch (error) {
-      setConnectionMessage({ kind: "error", text: `AI SCANNER could not refresh: ${errorMessage(error)}` });
-    } finally {
-      setMoneyBankScannerBusy(false);
-    }
-  };
 
   const scanJdyMoneyBank = async (
     candidateConfig?: MoneyBankStartConfig,
@@ -890,25 +790,6 @@ export default function XTraderPage() {
       moneyBankJdyScanInFlightRef.current = false;
     }
   };
-
-  useEffect(() => {
-    if (!moneyBankScannerEnabled) {
-      moneyBankScannerNextAtRef.current = null;
-      setMoneyBankScannerCountdown(0);
-      return;
-    }
-    moneyBankScannerNextAtRef.current ??= Date.now() + 10_000;
-    const timer = window.setInterval(() => {
-      const nextAt = moneyBankScannerNextAtRef.current ?? Date.now();
-      const remaining = Math.max(0, Math.ceil((nextAt - Date.now()) / 1000));
-      setMoneyBankScannerCountdown(remaining);
-      if (remaining === 0 && !moneyBankScannerBusy) {
-        moneyBankScannerNextAtRef.current = Date.now() + 60_000;
-        void scanMoneyBank();
-      }
-    }, 250);
-    return () => window.clearInterval(timer);
-  }, [moneyBankScannerEnabled, moneyBankScannerBusy, isConnected, status.data?.market_signals]);
 
   useEffect(() => {
     if (sessionAccountIdRef.current === currentAccount?.id) return;
@@ -1107,10 +988,9 @@ export default function XTraderPage() {
 
   useEffect(() => {
     edgeOverThreeSniperRef.current = edgeOverThreeSniper;
-    edgeAutoOverThreeFourFiveRef.current = edgeAutoOverThreeFourFive;
     edgeBestPairAnalyzerRef.current = edgeBestPairAnalyzer;
     edgeAutoSelectBestRef.current = edgeAutoSelectBest;
-  }, [edgeAutoOverThreeFourFive, edgeAutoSelectBest, edgeBestPairAnalyzer, edgeOverThreeSniper]);
+  }, [edgeAutoSelectBest, edgeBestPairAnalyzer, edgeOverThreeSniper]);
 
   useEffect(() => {
     nextStakeRef.current = stake;
@@ -1309,9 +1189,7 @@ export default function XTraderPage() {
 
   const selectEdgeAutomation = async (excludeSymbol?: string) => {
     const signals = (status.data?.market_signals ?? []) as MarketSignal[];
-    const recommendation = edgeAutoOverThreeFourFiveRef.current
-      ? chooseBestAutoOver345Signal(signals, excludeSymbol)
-      : edgeOverThreeSniperRef.current
+    const recommendation = edgeOverThreeSniperRef.current
       ? chooseBestOverThreeSignal(signals, excludeSymbol)
       : (edgeBestPairAnalyzerRef.current || edgeAutoSelectBestRef.current)
         ? chooseBestAnalyzerSignal(signals, excludeSymbol)
@@ -1337,9 +1215,7 @@ export default function XTraderPage() {
       barrier: recommendation.digit,
     });
     setEdgeScannerMessage(
-      edgeAutoOverThreeFourFiveRef.current
-        ? `Hunting all Volatility and Jump pairs for the best observed Over ${recommendation.digit} · ${recommendation.symbol}`
-        : edgeOverThreeSniperRef.current
+      edgeOverThreeSniperRef.current
         ? `Hunting all Volatility and Jump pairs for the best observed Over 3 · ${recommendation.symbol}`
         : `Hunting all Volatility and Jump pairs for the best observed ${recommendation.direction === "DIGITOVER" ? "Over" : "Under"} ${recommendation.digit} · ${recommendation.symbol}`,
     );
@@ -1352,11 +1228,9 @@ export default function XTraderPage() {
   }, [barrier, direction, duration, isConnected, stake, symbol, xTraderEnabled]);
 
   useEffect(() => {
-    if (!isConnected || (!edgeAutoOverThreeFourFive && !edgeOverThreeSniper && !edgeBestPairAnalyzer && !edgeAutoSelectBest)) return;
+    if (!isConnected || (!edgeOverThreeSniper && !edgeBestPairAnalyzer && !edgeAutoSelectBest)) return;
     const signals = (status.data?.market_signals ?? []) as MarketSignal[];
-    const recommendation = edgeAutoOverThreeFourFive
-      ? chooseBestAutoOver345Signal(signals)
-      : edgeOverThreeSniper
+    const recommendation = edgeOverThreeSniper
       ? chooseBestOverThreeSignal(signals)
       : chooseBestAnalyzerSignal(signals);
     if (!recommendation) return;
@@ -1366,7 +1240,6 @@ export default function XTraderPage() {
     void selectEdgeAutomation();
   }, [
     edgeAutoSelectBest,
-    edgeAutoOverThreeFourFive,
     edgeBestPairAnalyzer,
     edgeOverThreeSniper,
     isConnected,
@@ -1578,7 +1451,7 @@ export default function XTraderPage() {
   const runLoop = async () => {
     while (runningRef.current) {
       try {
-        if (edgeAutoOverThreeFourFiveRef.current || edgeOverThreeSniperRef.current || edgeBestPairAnalyzerRef.current || edgeAutoSelectBestRef.current) {
+        if (edgeOverThreeSniperRef.current || edgeBestPairAnalyzerRef.current || edgeAutoSelectBestRef.current) {
           const recommendation = await selectEdgeAutomation();
           if (!recommendation) {
             await sleep(1500);
@@ -1736,46 +1609,13 @@ export default function XTraderPage() {
       if (config.lossLimit != null && config.lossLimit > 0 && nextSessionPnl <= -config.lossLimit) {
         throw new Error("Money Bank reached the session Loss limit.");
       }
-      if (moneyBankScannerEnabled) {
-        moneyBankScannerNextAtRef.current = Date.now() + 60_000;
-        void scanMoneyBank();
-      }
     }
 
     if (!moneyBankRunningRef.current) return;
-    let currentConfig = moneyBankConfigRef.current ?? config;
-    if (currentConfig.autoSwitch && Date.now() >= (moneyBankScannerNextAtRef.current ?? 0)) {
-      moneyBankScannerNextAtRef.current = Date.now() + 20_000;
-      await scanMoneyBank();
-      const recommendation = moneyBankScannerRecommendationRef.current;
-      if (recommendation) {
-        currentConfig = {
-          ...currentConfig,
-          symbol: recommendation.symbol,
-          growthRate: recommendation.growthRate,
-          takeProfitTicks: recommendation.takeProfitTicks,
-          ladder: calculateRecoveryLadder({
-            strategy: currentConfig.strategy,
-            budget: currentConfig.ladder.at(-1)?.cumulative ?? moneyBankBudget,
-            manualBase: currentConfig.ladder[0]?.stake ?? moneyBankManualBase,
-            growthRate: recommendation.growthRate,
-            takeProfitTicks: recommendation.takeProfitTicks,
-          }),
-        };
-        moneyBankConfigRef.current = currentConfig;
-        moneyBankSafestSymbolRef.current = recommendation.symbol;
-        setMoneyBankSafestSymbol(recommendation.symbol);
-        setMoneyBankSymbol(recommendation.symbol);
-        setMoneyBankGrowthRate(recommendation.growthRate);
-        setMoneyBankTakeProfitTicks(recommendation.takeProfitTicks);
-        if (recommendation.symbol !== symbol) await selectMarket(recommendation.symbol);
-      }
-    }
-    let tradeSymbol = currentConfig.autoSwitch ? moneyBankSafestSymbolRef.current : currentConfig.symbol;
+    const currentConfig = moneyBankConfigRef.current ?? config;
+    const tradeSymbol = currentConfig.symbol;
     if (moneyBankJdyEnabled) {
       // The Money Bank gate evaluates the market selected in the form.
-      // Auto-switch is intentionally ignored for this guarded entry.
-      tradeSymbol = currentConfig.symbol;
       const decision = await scanJdyMoneyBank(currentConfig, tradeSymbol);
       if (!decision?.safe) {
         moneyBankRunningRef.current = false;
@@ -1893,7 +1733,6 @@ export default function XTraderPage() {
        moneyBankOpenContractIdRef.current = existingOpenAccumulator?.contract_id ?? null;
       moneyBankLevelRef.current = 0;
       moneyBankConfigRef.current = config;
-      moneyBankSafestSymbolRef.current = moneyBankSafestSymbol;
       moneyBankSessionPnlRef.current = 0;
       setMoneyBankSessionPnl(0);
       setMoneyBankLastSettledProfit(null);
@@ -2379,9 +2218,6 @@ export default function XTraderPage() {
 
   const deactivateMoneyBank = () => {
     setEdge2Enabled(false);
-    setMoneyBankScannerEnabled(false);
-    setMoneyBankScannerRecommendation(null);
-    moneyBankScannerNextAtRef.current = null;
     setMoneyBankJdyEnabled(false);
     setMoneyBankJdyState("idle");
     setMoneyBankJdyDecision(null);
@@ -2598,6 +2434,49 @@ export default function XTraderPage() {
       tradeXActionLockRef.current = false;
     }
   };
+
+  const runEdgeAiScanner = () => withAiScannerLock(async () => {
+    if (!xTraderEnabled || !isConnected) throw new Error("Enable EDGE and connect Deriv before scanning.");
+    if (running) throw new Error("Stop the active EDGE run before changing its direction.");
+    if (!Number.isInteger(duration) || duration < 1 || duration > 6) {
+      throw new Error("Choose an EDGE duration from 1 to 6 ticks first.");
+    }
+    if (!Number.isFinite(stake) || stake < 0.35) throw new Error("Set an EDGE stake of at least 0.35 first.");
+    if (!Number.isInteger(barrier) || barrier < 0 || barrier > 9) {
+      throw new Error("Choose a digit from 0 to 9 before scanning.");
+    }
+
+    const freshStatus = await status.refetch();
+    const signals = (freshStatus.data?.market_signals ?? []) as MarketSignal[];
+    const selectedMarket = signals.find((signal) => signal.symbol === symbol);
+    if (!selectedMarket || selectedMarket.sample_count < EDGE_MIN_MARKET_SAMPLE) {
+      throw new Error(`EDGE needs at least ${EDGE_MIN_MARKET_SAMPLE} live samples for ${symbol}.`);
+    }
+    const outcome = selectedMarket.digit_outcomes?.find((entry) => entry.digit === barrier);
+    if (!outcome) throw new Error(`No live Over/Under sample is available for digit ${barrier} on ${symbol}.`);
+    const overRate = Number(outcome.over_percentage);
+    const underRate = Number(outcome.under_percentage);
+    if (![overRate, underRate].every((rate) => Number.isFinite(rate) && rate >= 0 && rate <= 100)) {
+      throw new Error(`The live Over/Under sample for digit ${barrier} is not usable yet.`);
+    }
+    if (overRate === underRate) {
+      return `Over and Under are tied at ${overRate.toFixed(1)}% for ${symbol} digit ${barrier}. No direction changed and no trade was placed.`;
+    }
+    const candidate = chooseBestEdgeDirectionForDigit(signals, symbol, barrier, EDGE_MIN_MARKET_SAMPLE);
+    if (!candidate) throw new Error("EDGE could not validate the current quote and sample. No trade was placed.");
+
+    setDirection(candidate.direction);
+    configRef.current = {
+      ...configRef.current,
+      symbol,
+      direction: candidate.direction,
+      barrier,
+      duration,
+      stake,
+    };
+    const side = candidate.direction === "DIGITOVER" ? "Over" : "Under";
+    return `Selected ${side} ${barrier} on ${symbol}: ${candidate.score.toFixed(1)}% observed across ${candidate.sampleCount} live samples (${duration} ticks, ${stake.toFixed(2)} ${currentAccount?.currency ?? "USD"} stake). This is historical evidence, not a win-rate guarantee. No trade was placed.`;
+  });
 
   const runTradeXAiScanner = () => withAiScannerLock(async () => {
     if (!tradeXEnabled || !isConnected) throw new Error("Enable Trade X and connect Deriv before scanning.");
@@ -3676,10 +3555,10 @@ export default function XTraderPage() {
           sessionPnl={sessionPnl}
           sessionTrades={sessionTrades}
           overThreeSniper={edgeOverThreeSniper}
-           autoOverThreeFourFive={edgeAutoOverThreeFourFive}
           bestPairAnalyzer={edgeBestPairAnalyzer}
           autoSelectBest={edgeAutoSelectBest}
           scannerMessage={edgeScannerMessage}
+          onAiScan={runEdgeAiScanner}
           canTrade={canTrade}
           onStart={start}
           onStop={stop}
@@ -3688,38 +3567,18 @@ export default function XTraderPage() {
             setEdgeOverThreeSniper(enabled);
             edgeOverThreeSniperRef.current = enabled;
             if (enabled) {
-               setEdgeAutoOverThreeFourFive(false);
-               edgeAutoOverThreeFourFiveRef.current = false;
               setEdgeAutoSelectBest(true);
               edgeAutoSelectBestRef.current = true;
               setEdgeBestPairAnalyzer(false);
               edgeBestPairAnalyzerRef.current = false;
               setEdgeScannerMessage("Hunting all Volatility and Jump pairs for the best observed Over 3 signal…");
               void selectEdgeAutomation();
-            } else if (!edgeBestPairAnalyzerRef.current && !edgeAutoOverThreeFourFiveRef.current) {
+            } else if (!edgeBestPairAnalyzerRef.current) {
               setEdgeAutoSelectBest(false);
               edgeAutoSelectBestRef.current = false;
               setEdgeScannerMessage(null);
             }
           }}
-           onAutoOverThreeFourFiveChange={(enabled) => {
-             setEdgeAutoOverThreeFourFive(enabled);
-             edgeAutoOverThreeFourFiveRef.current = enabled;
-             if (enabled) {
-               setEdgeAutoSelectBest(true);
-               edgeAutoSelectBestRef.current = true;
-               setEdgeOverThreeSniper(false);
-               edgeOverThreeSniperRef.current = false;
-               setEdgeBestPairAnalyzer(false);
-               edgeBestPairAnalyzerRef.current = false;
-               setEdgeScannerMessage("Hunting the strongest observed Over signal across barriers 3, 4, and 5…");
-               void selectEdgeAutomation();
-             } else if (!edgeOverThreeSniperRef.current && !edgeBestPairAnalyzerRef.current) {
-               setEdgeAutoSelectBest(false);
-               edgeAutoSelectBestRef.current = false;
-               setEdgeScannerMessage(null);
-             }
-           }}
           onBestPairAnalyzerChange={(enabled) => {
             setEdgeBestPairAnalyzer(enabled);
             edgeBestPairAnalyzerRef.current = enabled;
@@ -3728,11 +3587,9 @@ export default function XTraderPage() {
               edgeAutoSelectBestRef.current = true;
               setEdgeOverThreeSniper(false);
               edgeOverThreeSniperRef.current = false;
-               setEdgeAutoOverThreeFourFive(false);
-               edgeAutoOverThreeFourFiveRef.current = false;
               setEdgeScannerMessage("Hunting all Volatility and Jump pairs for the best observed Over or Under digit…");
               void selectEdgeAutomation();
-            } else if (!edgeOverThreeSniperRef.current && !edgeAutoOverThreeFourFiveRef.current) {
+            } else if (!edgeOverThreeSniperRef.current) {
               setEdgeAutoSelectBest(false);
               edgeAutoSelectBestRef.current = false;
               setEdgeScannerMessage(null);
@@ -3744,7 +3601,7 @@ export default function XTraderPage() {
             if (enabled) {
               setEdgeScannerMessage("Following the live best observed market and barrier…");
               void selectEdgeAutomation();
-            } else if (!edgeOverThreeSniperRef.current && !edgeAutoOverThreeFourFiveRef.current && !edgeBestPairAnalyzerRef.current) {
+            } else if (!edgeOverThreeSniperRef.current && !edgeBestPairAnalyzerRef.current) {
               setEdgeRecommendation(null);
               setEdgeScannerMessage(null);
             }
@@ -3800,7 +3657,7 @@ export default function XTraderPage() {
             </div>
 
             <div className="xt-form-grid">
-               <label><small>DURATION</small><div className="xt-ticks">{[1,2,3,4,5].map((tick) => <button key={tick} className={duration === tick ? "active" : ""} onClick={() => selectDuration(tick)} disabled={running}>{tick}</button>)}</div><b className="xt-field-help">Selected barrier {entryDigit} · contract runs for {duration} tick{duration === 1 ? "" : "s"}</b></label>
+               <label><small>DURATION</small><div className="xt-ticks">{[1,2,3,4,5,6].map((tick) => <button key={tick} className={duration === tick ? "active" : ""} onClick={() => selectDuration(tick)} disabled={running}>{tick}</button>)}</div><b className="xt-field-help">Selected barrier {entryDigit} · contract runs for {duration} tick{duration === 1 ? "" : "s"}</b></label>
                <label><small>STAKE · MIN 0.35</small><div className="xt-money"><span>{currentAccount?.currency ?? "USD"}</span><input type="number" min=".35" step=".01" value={stake} onChange={(event) => setStake(Math.max(.35, Number(event.target.value) || .35))} disabled={running} /></div><b className="xt-field-help">Up to the available account balance</b></label>
               <label><small>STRATEGY</small><select value={strategy} onChange={(event) => setStrategy(event.target.value as "flat" | "martingale")} disabled={running}><option value="flat">Flat stake</option><option value="martingale">Martingale after loss</option></select></label>
               <label><small>MARTINGALE MULTIPLIER</small><input type="number" min="1" max="10" step=".1" value={martingale} onChange={(event) => setMartingale(Number(event.target.value))} disabled={running || strategy === "flat"} /></label>
@@ -3931,30 +3788,6 @@ export default function XTraderPage() {
           onProfitTargetChange={setMoneyBankProfitTarget}
           lossLimit={moneyBankLossLimit}
           onLossLimitChange={setMoneyBankLossLimit}
-           scannerEnabled={moneyBankScannerEnabled}
-           scannerCountdown={moneyBankScannerCountdown}
-           scannerBusy={moneyBankScannerBusy}
-           scannerRecommendation={moneyBankScannerRecommendation}
-           onScannerChange={(enabled) => {
-             setMoneyBankScannerEnabled(enabled);
-             if (enabled) {
-               moneyBankScannerNextAtRef.current = Date.now() + 10_000;
-             } else {
-               moneyBankScannerNextAtRef.current = null;
-               setMoneyBankScannerCountdown(0);
-               setMoneyBankScannerRecommendation(null);
-               moneyBankScannerRecommendationRef.current = null;
-             }
-           }}
-           onAdaptScannerSettings={() => {
-             const recommendation = moneyBankScannerRecommendationRef.current;
-             if (!recommendation) return;
-             setMoneyBankSymbol(recommendation.symbol);
-             setMoneyBankGrowthRate(recommendation.growthRate);
-             setMoneyBankTakeProfitTicks(recommendation.takeProfitTicks);
-             void selectMarket(recommendation.symbol);
-             setConnectionMessage({ kind: "info", text: "Money Bank adapted to the latest AI SCANNER recommendation." });
-           }}
           marketSignals={moneyBankSignals}
           recentTrades={moneyBankRows}
           lastSettledProfit={moneyBankLastSettledProfit}
