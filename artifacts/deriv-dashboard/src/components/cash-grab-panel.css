@@ -204,6 +204,7 @@
 @keyframes cash-grab-spin { to { transform: rotate(360deg); } }
 
 .cash-grab-history {
+  grid-column: 1 / -1;
   width: 100%;
   min-width: 0;
   overflow: hidden;
@@ -211,6 +212,11 @@
   background: #0d213a !important;
 }
 .cash-grab-history .deriv-history { border: 0; background: transparent; }
+.cash-grab-history .deriv-history-list,
+.df-panel > .deriv-history .deriv-history-list {
+  max-height: none;
+  overflow: visible;
+}
 .cash-grab-history .deriv-history-head,
 .cash-grab-history .deriv-history-summary,
 .cash-grab-history .deriv-history-filters,

@@ -461,14 +461,14 @@ export function MoneyBankPanel({
 
        <section className="money-bank-card money-bank-snapshot-card">
          <div className="money-bank-card-head">
-            <div><small>LIVE MARKET SAMPLES</small><h3>Volatility pair context</h3></div>
+             <div><small>LIVE MARKET SAMPLES</small><h3>Accumulator tick samples</h3></div>
             <div className="money-bank-snapshot-actions"><span>Updated {capturedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span><button type="button" onClick={() => setCapturedAt(new Date())} disabled={running}><RefreshCw size={13} />Refresh</button></div>
          </div>
-          <p className="money-bank-helper"><Info size={14} /> These are live observed samples, not simulated sessions or trade predictions. This view does not change the selected market or open contracts.</p>
+           <p className="money-bank-helper"><Info size={14} /> Tick counts only: an Accumulator can move with any rise or fall. No Rise/Fall win percentages are shown here.</p>
          <div className="money-bank-snapshot-grid">
            {snapshot.map((entry, index) => {
              const label = markets.find(([market]) => market === entry.symbol)?.[1]?.replace("Volatility ", "V") ?? entry.symbol;
-              return <div className={`money-bank-snapshot-row ${entry.symbol === symbol ? "best" : ""}`} key={entry.symbol}><b>{index + 1}</b><span>{label}</span><strong>{entry.sampleCount.toLocaleString()} ticks</strong><em>Any rise or fall · Accumulator</em></div>;
+               return <div className={`money-bank-snapshot-row ${entry.symbol === symbol ? "best" : ""}`} key={entry.symbol}><b>{index + 1}</b><span>{label}</span><strong>{entry.sampleCount.toLocaleString()} ticks</strong><em>Any rise or fall · Accumulator</em></div>;
            })}
          </div>
           <p className="money-bank-safest-copy">Selected market: <b>{selectedMarket}</b>{quote != null && <> · latest quote {quote.toFixed(2)}</>}</p>

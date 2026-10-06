@@ -82,45 +82,6 @@ export type DigitFlipPanelProps = {
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-const digitFlipPresets = [
-  {
-    value: "quick",
-    name: "Quick demo",
-    detail: "0.50 stake · 1 tick · flat stake",
-    note: "Smallest practical test with a tight session guard.",
-    stake: 0.5,
-    duration: 1 as DigitFlipDuration,
-    stakeMode: "flat" as DigitFlipStakeMode,
-    multiplier: 1,
-    takeProfit: 2,
-    stopLoss: 2,
-  },
-  {
-    value: "steady",
-    name: "Steady",
-    detail: "1.00 stake · 3 ticks · flat stake",
-    note: "A measured baseline for a fresh sample.",
-    stake: 1,
-    duration: 3 as DigitFlipDuration,
-    stakeMode: "flat" as DigitFlipStakeMode,
-    multiplier: 1,
-    takeProfit: 5,
-    stopLoss: 5,
-  },
-  {
-    value: "recovery",
-    name: "Recovery",
-    detail: "0.50 stake · 1 tick · 1.8x after loss",
-    note: "Higher exposure after a loss; use only with a defined account balance.",
-    stake: 0.5,
-    duration: 1 as DigitFlipDuration,
-    stakeMode: "martingale" as DigitFlipStakeMode,
-    multiplier: 1.8,
-    takeProfit: 5,
-    stopLoss: 2.5,
-  },
-] as const;
-
 function PremiumPill() {
   return <span className="df-premium">PREMIUM</span>;
 }
@@ -206,8 +167,6 @@ export default function DigitFlipPanel({
 }: DigitFlipPanelProps) {
   const liveTradeBlocked = isReal && !liveConfirmed;
   const [marketPickerOpen, setMarketPickerOpen] = useState(false);
-  const [preset, setPreset] = useState("custom");
-  const [presetOpen, setPresetOpen] = useState(false);
 
   const activeSymbols = marketType === "auto"
     ? symbols
@@ -249,21 +208,6 @@ export default function DigitFlipPanel({
   const bestLabel = symbols.find((option) => option.value === bestSignal?.symbol)?.label
     ?? marketLabel
     ?? "Volatility 100 Index";
-  const selectedPreset = digitFlipPresets.find((item) => item.value === preset);
-
-  const selectPreset = (value: string) => {
-    setPreset(value);
-    setPresetOpen(false);
-    const selected = digitFlipPresets.find((item) => item.value === value);
-    if (!selected) return;
-    onStakeChange(selected.stake);
-    onDurationChange(selected.duration);
-    onStakeModeChange(selected.stakeMode);
-    onMultiplierChange(selected.multiplier);
-    onTakeProfitChange(selected.takeProfit);
-    onStopLossChange(selected.stopLoss);
-  };
-
   const renderMarketRate = (signal?: DigitFlipMarketSignal) => {
     if (!signal) return "—";
     const rate = selectedParity === "DIGITEVEN" ? signal.evenPercentage : signal.oddPercentage;
@@ -417,26 +361,6 @@ export default function DigitFlipPanel({
           <span>• Even <b>{evenPercentage.toFixed(0)}%</b></span>
           <span>o Odd <b>{oddPercentage.toFixed(0)}%</b></span>
         </div>
-      </section>
-
-      <section className="df-card df-preset-card">
-        <div className="df-section-label">Preset</div>
-        <button type="button" className="df-preset-trigger" onClick={() => setPresetOpen((open) => !open)} disabled={disabled || running} aria-expanded={presetOpen}>
-          <b>{selectedPreset?.name ?? "Select a Preset"}</b>
-          <ChevronDown size={15} />
-        </button>
-        {presetOpen && (
-          <div className="df-preset-menu">
-            {digitFlipPresets.map((item) => (
-              <button type="button" key={item.value} className={`df-preset-option ${preset === item.value ? "selected" : ""}`} onClick={() => selectPreset(item.value)} disabled={disabled || running}>
-                <strong>{item.name}</strong>
-                <span>{item.detail}</span>
-                <em>{item.note}</em>
-              </button>
-            ))}
-          </div>
-        )}
-        <p>Presets apply every DigitFlip setting together: stake, duration, staking mode, multiplier, take profit, and stop loss.</p>
       </section>
 
       <section className="df-card df-advanced-card">

@@ -414,7 +414,10 @@
 
 .money-bank-return-card {
   min-width: 0;
-  padding: 12px 15px 11px;
+  align-self: start;
+  height: fit-content;
+  min-height: 0;
+  padding: 8px 12px 7px;
   background:
     radial-gradient(circle at 95% 5%, rgba(225, 76, 103, .2), transparent 34%),
     linear-gradient(140deg, #47121e, #260a12 76%);
@@ -440,16 +443,16 @@
 
 .money-bank-return-card > strong {
   display: block;
-  margin-top: 4px;
+  margin-top: 2px;
   color: #fff5f4;
-  font-size: 1.65rem;
+  font-size: 1.35rem;
   letter-spacing: -.05em;
 }
 
 .money-bank-return-card p {
-  margin: 2px 0 0;
+  margin: 1px 0 0;
   color: #e0aab0;
-  font-size: .68rem;
+  font-size: .62rem;
 }
 
 .money-bank-risk-pill {

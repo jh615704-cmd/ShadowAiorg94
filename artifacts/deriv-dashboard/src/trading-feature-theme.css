@@ -209,4 +209,43 @@
   font-weight: 800;
   line-height: 1.45;
   opacity: 1 !important;
+  filter: none !important;
+  text-shadow: none !important;
+}
+
+.tx-panel .tx-digit-number,
+.tx-panel .tx-digit-percent,
+.tx-panel .tx-digit-meta,
+.tx-panel .tx-rank-digit,
+.tx-panel .tx-rank-metrics,
+.tx-panel .tx-rank-metrics b,
+.tx-panel .tx-rank-metrics small {
+  opacity: 1 !important;
+  filter: none !important;
+  text-shadow: none !important;
+  -webkit-font-smoothing: antialiased;
+  mix-blend-mode: normal;
+}
+
+.tx-panel .tx-digit-number,
+.tx-panel .tx-rank-digit {
+  color: #f5fbff !important;
+  -webkit-text-fill-color: #f5fbff;
+}
+
+.tx-panel .tx-digit-percent,
+.tx-panel .tx-rank-metrics b {
+  color: #83f5df !important;
+  -webkit-text-fill-color: #83f5df;
+}
+
+.tx-panel .tx-digit-meta,
+.tx-panel .tx-rank-metrics > small,
+.tx-panel .tx-rank-metrics b small {
+  color: #eff6ff !important;
+  -webkit-text-fill-color: #eff6ff;
+}
+
+.tx-panel .tx-rank-metrics b small {
+  display: inline !important;
 }

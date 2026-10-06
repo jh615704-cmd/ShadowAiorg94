@@ -1487,7 +1487,7 @@ export default function XTraderPage() {
         // executeBatch waits for the active contract to settle. Do not add a
         // duration-based cooldown after settlement; Deriv's tick duration is
         // the source of truth for how long the contract runs.
-        if (runningRef.current) await sleep(250);
+        if (runningRef.current) await sleep(50);
       } catch (error) {
         const message = errorMessage(error);
         if (message.includes("still settling")) {
@@ -2028,7 +2028,7 @@ export default function XTraderPage() {
             const waitForScan = Math.max(250, nextScanAt - Date.now());
             await sleep(waitForScan);
           } else {
-            await sleep(900);
+            await sleep(50);
           }
         }
       } catch (error) {
@@ -2712,7 +2712,7 @@ export default function XTraderPage() {
   const waitForMarketTicks = async (count: number, isActive: () => boolean) => {
     const target = liveTickSequenceRef.current + Math.max(1, Math.trunc(count));
     while (isActive() && liveTickSequenceRef.current < target) {
-      await sleep(50);
+      await sleep(20);
     }
   };
 
@@ -3554,58 +3554,11 @@ export default function XTraderPage() {
           nextStake={nextStake}
           sessionPnl={sessionPnl}
           sessionTrades={sessionTrades}
-          overThreeSniper={edgeOverThreeSniper}
-          bestPairAnalyzer={edgeBestPairAnalyzer}
-          autoSelectBest={edgeAutoSelectBest}
-          scannerMessage={edgeScannerMessage}
           onAiScan={runEdgeAiScanner}
           canTrade={canTrade}
           onStart={start}
           onStop={stop}
           onReset={reset}
-          onOverThreeSniperChange={(enabled) => {
-            setEdgeOverThreeSniper(enabled);
-            edgeOverThreeSniperRef.current = enabled;
-            if (enabled) {
-              setEdgeAutoSelectBest(true);
-              edgeAutoSelectBestRef.current = true;
-              setEdgeBestPairAnalyzer(false);
-              edgeBestPairAnalyzerRef.current = false;
-              setEdgeScannerMessage("Hunting all Volatility and Jump pairs for the best observed Over 3 signal…");
-              void selectEdgeAutomation();
-            } else if (!edgeBestPairAnalyzerRef.current) {
-              setEdgeAutoSelectBest(false);
-              edgeAutoSelectBestRef.current = false;
-              setEdgeScannerMessage(null);
-            }
-          }}
-          onBestPairAnalyzerChange={(enabled) => {
-            setEdgeBestPairAnalyzer(enabled);
-            edgeBestPairAnalyzerRef.current = enabled;
-            if (enabled) {
-              setEdgeAutoSelectBest(true);
-              edgeAutoSelectBestRef.current = true;
-              setEdgeOverThreeSniper(false);
-              edgeOverThreeSniperRef.current = false;
-              setEdgeScannerMessage("Hunting all Volatility and Jump pairs for the best observed Over or Under digit…");
-              void selectEdgeAutomation();
-            } else if (!edgeOverThreeSniperRef.current) {
-              setEdgeAutoSelectBest(false);
-              edgeAutoSelectBestRef.current = false;
-              setEdgeScannerMessage(null);
-            }
-          }}
-          onAutoSelectBestChange={(enabled) => {
-            edgeAutoSelectBestRef.current = enabled;
-            setEdgeAutoSelectBest(enabled);
-            if (enabled) {
-              setEdgeScannerMessage("Following the live best observed market and barrier…");
-              void selectEdgeAutomation();
-            } else if (!edgeOverThreeSniperRef.current && !edgeBestPairAnalyzerRef.current) {
-              setEdgeRecommendation(null);
-              setEdgeScannerMessage(null);
-            }
-          }}
           canViewHistory={canViewHistory}
           recentTrades={edgeRows}
           historyFading={historyFading}
