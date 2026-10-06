@@ -5,6 +5,8 @@ export type AiScannerMarketSignal = {
   sample_count: number;
   digit_even_percentage: number;
   digit_odd_percentage: number;
+  rise_percentage?: number | null;
+  fall_percentage?: number | null;
   digit_outcomes?: Array<{
     digit: number;
     over_percentage: number;
@@ -30,6 +32,13 @@ export type ParityScannerCandidate = {
 export type TradeXScannerCandidate = {
   symbol: string;
   digit: number;
+  observedRate: number;
+  sampleCount: number;
+};
+
+export type CashGrabScannerCandidate = {
+  symbol: string;
+  contractType: "CALL" | "PUT";
   observedRate: number;
   sampleCount: number;
 };
@@ -147,6 +156,34 @@ export function chooseTradeXScannerCandidate(
         sampleCount: signal.sample_count,
       });
     }
+  }
+  return strongest(candidates);
+}
+
+export function chooseCashGrabScannerCandidate(
+  signals: readonly AiScannerMarketSignal[],
+  symbols: readonly string[],
+  minimumSample = AI_SCANNER_MIN_SAMPLE,
+): CashGrabScannerCandidate | null {
+  const candidates: CashGrabScannerCandidate[] = [];
+  for (const signal of eligibleSignals(signals, symbols, minimumSample)) {
+    const riseRate = Number(signal.rise_percentage);
+    const fallRate = Number(signal.fall_percentage);
+    if (
+      !Number.isFinite(riseRate)
+      || !Number.isFinite(fallRate)
+      || riseRate < 0
+      || riseRate > 100
+      || fallRate < 0
+      || fallRate > 100
+      || riseRate === fallRate
+    ) continue;
+    candidates.push({
+      symbol: signal.symbol,
+      contractType: riseRate > fallRate ? "CALL" : "PUT",
+      observedRate: Math.max(riseRate, fallRate),
+      sampleCount: signal.sample_count,
+    });
   }
   return strongest(candidates);
 }

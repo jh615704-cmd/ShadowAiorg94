@@ -2139,7 +2139,8 @@ body { overflow-x: hidden; }
 }
 .xt-menu-button:hover { border-color:#48a0d4; background:#10385b; }
 .xt-menu-button:focus-visible,
-.xt-navigation-menu a:focus-visible { outline:2px solid #63bcff; outline-offset:2px; }
+.xt-navigation-menu a:focus-visible,
+.xt-navigation-menu button:focus-visible { outline:2px solid #63bcff; outline-offset:2px; }
 .xt-navigation-menu {
   position:absolute;
   top:calc(100% + 9px);
@@ -2154,19 +2155,28 @@ body { overflow-x: hidden; }
   background:#071b31;
   box-shadow:0 16px 40px rgba(0,0,0,.4);
 }
-.xt-navigation-menu a {
+.xt-navigation-menu a,
+.xt-navigation-menu button {
   display:flex;
   align-items:center;
   gap:9px;
   min-height:38px;
   padding:0 10px;
+  border:0;
   border-radius:7px;
   color:#d4e9fb;
+  background:transparent;
   font-size:11px;
+  font-family:inherit;
   text-decoration:none;
+  text-align:left;
+  cursor:pointer;
 }
-.xt-navigation-menu a:hover { color:#fff; background:#123b60; }
-.xt-navigation-menu a svg { color:#72bff0; }
+.xt-navigation-menu a:hover,
+.xt-navigation-menu button:hover:not(:disabled) { color:#fff; background:#123b60; }
+.xt-navigation-menu a svg,
+.xt-navigation-menu button svg { color:#72bff0; }
+.xt-navigation-menu button:disabled { opacity:.55; cursor:wait; }
 .xt-brand { align-items:center; }
 .xt-brand-copy { display:grid; }
 .xt-header-right {

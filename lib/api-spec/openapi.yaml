@@ -1192,7 +1192,7 @@ components:
           minLength: 1
     DerivBuyInput:
       type: object
-      required: [amount, duration, duration_unit, contract_type, confirm_live_trade]
+      required: [amount, duration, duration_unit, contract_type]
       properties:
         amount:
           type: number
@@ -1217,12 +1217,9 @@ components:
           maximum: 0.05
         symbol:
           type: string
-        confirm_live_trade:
-          type: boolean
-          const: true
     DerivBulkBuyInput:
       type: object
-      required: [amount, duration, duration_unit, contract_type, count, confirm_live_trade]
+      required: [amount, duration, duration_unit, contract_type, count]
       properties:
         amount:
           type: number
@@ -1252,12 +1249,9 @@ components:
           type: integer
           minimum: 1
           maximum: 6
-        confirm_live_trade:
-          type: boolean
-          const: true
     DerivDualBuyInput:
       type: object
-      required: [amount, duration, duration_unit, barrier, confirm_live_trade]
+      required: [amount, duration, duration_unit, barrier]
       properties:
         amount:
           type: number
@@ -1274,9 +1268,6 @@ components:
           maximum: 9
         symbol:
           type: string
-        confirm_live_trade:
-          type: boolean
-          const: true
     DerivBuy:
       type: object
       required: [contract_id, buy_price, payout]

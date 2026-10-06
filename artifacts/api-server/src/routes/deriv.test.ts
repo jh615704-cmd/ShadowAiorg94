@@ -271,7 +271,6 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
         contract_type: "DIGITDIFF",
         barrier: 5,
         symbol: "R_75",
-        confirm_live_trade: true,
       }),
     });
     assert.equal(buyResponse.status, 202);
@@ -286,7 +285,6 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
         contract_type: "CALL",
         symbol: "R_75",
         count: 1,
-        confirm_live_trade: true,
       }),
     });
     assert.equal(riseFallBulkResponse.status, 202);
@@ -302,7 +300,6 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
         barrier: 5,
         symbol: "R_75",
         count: 1,
-        confirm_live_trade: true,
       }),
     });
     assert.equal(digitBulkResponse.status, 400);
@@ -323,7 +320,6 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
         contract_type: "DIGITDIFF",
         barrier: 5,
         symbol: "R_75",
-        confirm_live_trade: true,
       }),
     });
     assert.equal(deniedBuy.status, 403);
@@ -340,7 +336,6 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
         barrier: 5,
         symbol: "R_75",
         count: 1,
-        confirm_live_trade: true,
       }),
     });
     assert.equal(deniedBulkBuy.status, 403);
@@ -355,7 +350,6 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
         duration_unit: "t",
         barrier: 5,
         symbol: "R_75",
-        confirm_live_trade: true,
       }),
     });
     assert.equal(deniedDualBuy.status, 403);

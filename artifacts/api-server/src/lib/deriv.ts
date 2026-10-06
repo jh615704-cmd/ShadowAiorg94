@@ -131,7 +131,6 @@ type BuyInput = {
   barrier?: number;
   growth_rate?: number;
   symbol?: string;
-  confirm_live_trade: true;
 };
 
 export type SellResult = {
@@ -1283,9 +1282,6 @@ export async function buyContract(input: BuyInput, assertAuthorized?: TradeAutho
   if (getState().account.type === "real" && !liveTradingEnabled) {
     throw new Error("Live trading is disabled on this server");
   }
-  if (getState().account.type === "real" && !input.confirm_live_trade) {
-    throw new Error("Explicit live-trade confirmation is required");
-  }
   if (normalizedInput.amount > getState().account.balance) {
     throw new Error("The selected stake exceeds the current account balance");
   }
@@ -1363,7 +1359,6 @@ export async function bulkBuyContracts(input: {
   symbol?: string;
   growth_rate?: number;
   count: number;
-  confirm_live_trade: true;
 }, assertAuthorized?: TradeAuthorizationCheck) {
   await assertAuthorized?.();
   const amount = roundCents(input.amount);
@@ -1376,9 +1371,6 @@ export async function bulkBuyContracts(input: {
   if (!getState().account) throw new Error("Select an account before buying contracts");
   if (getState().account.type === "real" && !liveTradingEnabled) {
     throw new Error("Live trading is disabled on this server");
-  }
-  if (getState().account.type === "real" && !input.confirm_live_trade) {
-    throw new Error("Explicit live-trade confirmation is required");
   }
   if (amount * input.count > getState().account.balance) {
     throw new Error("The selected bulk stake exceeds the current account balance");
@@ -1503,7 +1495,6 @@ export async function dualBuyContracts(input: {
   duration_unit: "t";
   barrier: number;
   symbol?: string;
-  confirm_live_trade: true;
 }, assertAuthorized?: TradeAuthorizationCheck) {
   await assertAuthorized?.();
   const normalizedAmount = roundCents(input.amount);
@@ -1519,9 +1510,6 @@ export async function dualBuyContracts(input: {
   if (!getState().account) throw new Error("Select an account before buying contracts");
   if (getState().account.type === "real" && !liveTradingEnabled) {
     throw new Error("Live trading is disabled on this server");
-  }
-  if (getState().account.type === "real" && !input.confirm_live_trade) {
-    throw new Error("Explicit live-trade confirmation is required");
   }
   if (normalizedAmount * 2 > getState().account.balance) {
     throw new Error("The selected dual stake exceeds the current account balance");

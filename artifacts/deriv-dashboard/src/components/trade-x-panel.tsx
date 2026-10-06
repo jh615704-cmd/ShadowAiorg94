@@ -7,7 +7,6 @@ import {
   Medal,
   Play,
   RefreshCw,
-  ShieldAlert,
   Target,
   TimerReset,
 } from "lucide-react";
@@ -49,8 +48,6 @@ export interface TradeXPanelProps {
   analysisTickCount?: number;
   analysisUpdatedAt?: string;
   lastDigit?: number | null;
-  isReal?: boolean;
-  liveConfirmed?: boolean;
   isPlacingTrade?: boolean;
   isRefreshingAnalysis?: boolean;
   disabled?: boolean;
@@ -63,7 +60,6 @@ export interface TradeXPanelProps {
   onManualSelectModeChange: (enabled: boolean) => void;
   onTradeSelect: (digit: number) => void;
   onPlaceTrade: () => void;
-  onLiveConfirm?: (value: boolean) => void;
   onAiScan: () => Promise<string>;
   onRefreshAnalysis: () => void;
 }
@@ -101,8 +97,6 @@ export default function TradeXPanel({
   analysisTickCount = 0,
   analysisUpdatedAt = "waiting for ticks",
   lastDigit = null,
-  isReal = false,
-  liveConfirmed = false,
   isPlacingTrade = false,
   isRefreshingAnalysis = false,
   disabled = false,
@@ -115,11 +109,9 @@ export default function TradeXPanel({
   onManualSelectModeChange,
   onTradeSelect,
   onPlaceTrade,
-  onLiveConfirm,
   onAiScan,
   onRefreshAnalysis,
 }: TradeXPanelProps) {
-  const liveTradeBlocked = isReal && !liveConfirmed;
   const activeSymbols = symbols.filter((option) => option.marketType === marketType);
   const digitData = Array.from({ length: 10 }, (_, digit) => {
     return distribution.find((item) => item.digit === digit) ?? {
@@ -177,19 +169,6 @@ export default function TradeXPanel({
         <span className="tx-status-muted">{analysisTickCount} ticks sampled</span>
         <span className="tx-status-muted">{analysisUpdatedAt}</span>
       </div>
-
-      {isReal && (
-        <label className="xt-live-warning">
-          <ShieldAlert size={18} />
-          <input
-            type="checkbox"
-            checked={liveConfirmed}
-            onChange={(event) => onLiveConfirm?.(event.target.checked)}
-            aria-label="Confirm real-money trading for Trade X"
-          />
-          <span><b>Live funds confirmation</b>I understand Trade X can place real-money contracts.</span>
-        </label>
-      )}
 
       <div className="tx-body">
         <section className="tx-settings tx-section">
@@ -367,7 +346,7 @@ export default function TradeXPanel({
                        <span className="tx-rank-digit">{digit}</span>
                      </button>
                       <span className="tx-rank-metrics"><b>{safetyScore.toFixed(1)} <small>score · {safetyLabel}</small></b><small>{item.percentage.toFixed(1)}% freq · {item.streak} absent</small></span>
-                    <button type="button" className="tx-tap-trade" onClick={() => onTradeSelect(digit)} disabled={disabled || liveTradeBlocked || isPlacingTrade || !enabled} data-testid={`button-trade-x-tap-${digit}`}>TAP TO TRADE</button>
+                    <button type="button" className="tx-tap-trade" onClick={() => onTradeSelect(digit)} disabled={disabled || isPlacingTrade || !enabled} data-testid={`button-trade-x-tap-${digit}`}>TAP TO TRADE</button>
                   </div>
                 );
               }) : <div className="tx-rank-empty">Collecting live ticks. Ranked safety scores appear after the first observations.</div>}
@@ -431,13 +410,13 @@ export default function TradeXPanel({
             </div>
           </div>
           <div className="tx-action-grid">
-            <button type="button" className="tx-action tx-action-primary" onClick={onPlaceTrade} disabled={disabled || liveTradeBlocked || isPlacingTrade || !enabled} data-testid="button-place-trade-x">
+            <button type="button" className="tx-action tx-action-primary" onClick={onPlaceTrade} disabled={disabled || isPlacingTrade || !enabled} data-testid="button-place-trade-x">
               <span className="tx-action-icon">{isPlacingTrade ? <RefreshCw size={17} className="tx-spin" /> : <Play size={17} fill="currentColor" />}</span>
               <span><b>{isPlacingTrade ? "Sending Trade X…" : "Place Trade X Trade"}</b><small>Digit {selectedDigit} · {duration} {duration === 1 ? "tick" : "ticks"} · ${stake.toFixed(2)}</small></span>
               <ChevronRight size={17} />
             </button>
           </div>
-          <AiScannerAction onScan={onAiScan} disabled={disabled || liveTradeBlocked || isPlacingTrade || !enabled} />
+          <AiScannerAction onScan={onAiScan} disabled={disabled || isPlacingTrade || !enabled} />
         </section>
 
       </div>

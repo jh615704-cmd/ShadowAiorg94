@@ -21,6 +21,5 @@ export function buildCashGrabBulkBuyPayload(input: CashGrabBulkBuyInput) {
     contract_type: input.direction,
     symbol: input.symbol,
     count: input.count,
-    confirm_live_trade: true as const,
   };
 }

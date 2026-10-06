@@ -18,7 +18,6 @@ test("Cash Grab Rise maps to a Deriv CALL payload", () => {
       contract_type: "CALL",
       symbol: "R_75",
       count: 2,
-      confirm_live_trade: true,
     },
   );
 });
@@ -39,7 +38,6 @@ test("Cash Grab Fall maps to a Deriv PUT payload", () => {
       contract_type: "PUT",
       symbol: "JD75",
       count: 1,
-      confirm_live_trade: true,
     },
   );
 });

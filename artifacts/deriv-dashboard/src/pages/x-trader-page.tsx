@@ -25,9 +25,10 @@ import {
 } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { DerivAccountSwitcher } from "@/components/deriv-account-switcher";
+import { useAccessSessionLogout } from "@/hooks/use-access-session-logout";
 import {
   Activity, BookOpen, Bot, ChevronDown, ChevronLeft, ChevronRight, Gauge, Link2, Loader2,
-  Menu, Pause, Play, Power, RefreshCw, RotateCcw, Settings, ShieldAlert, ShieldCheck, X, Zap,
+  LogOut, Menu, Pause, Play, Power, RefreshCw, RotateCcw, Settings, ShieldAlert, ShieldCheck, X, Zap,
 } from "lucide-react";
 import {
   chooseBestDigitSignal,
@@ -43,6 +44,7 @@ import {
 import {
   AI_SCANNER_MIN_SAMPLE,
   chooseBulkScannerCandidate,
+  chooseCashGrabScannerCandidate,
   chooseDigitFlipScannerCandidate,
   chooseTradeXScannerCandidate,
   type AiScannerMarketSignal,
@@ -108,7 +110,7 @@ const realizedProfit = (trades: readonly { status: string; profit: number }[]) =
 
 const guidePages = [
   { title: "Welcome to EDGE 🏔️", body: "EDGE is a digit-contract workspace for testing Over and Under ideas with a controlled stake, a selected market, and visible session results.", points: ["Use demo accounts while learning.", "Every trade uses the selected duration, stake, market, and barrier.", "The guide explains the controls before you start."] },
-  { title: "Connect and choose an account", body: "Connect a Deriv PAT with read and trade permissions, then select the account you want to use. The active balance is refreshed from Deriv.", points: ["Demo accounts are the safest place to validate a strategy.", "Real accounts require live-trading confirmation.", "Account changes clear the active market session state."] },
+  { title: "Connect and choose an account", body: "Connect a Deriv PAT with read and trade permissions, then select the account you want to use. The active balance is refreshed from Deriv.", points: ["Demo accounts are the safest place to validate a strategy.", "Selecting a real account routes trades to those funds; the server's live-trading permission and balance checks still apply.", "Account changes clear the active market session state."] },
   { title: "Markets and live ticks", body: "Each supported market streams live quotes. The final digit of each quote becomes the digit signal used by the streak display.", points: ["Switch markets from the Market selector.", "The last tick shows the current quote and final digit.", "Past ticks describe history; they do not control the next tick."] },
   { title: "What Over means", body: "An Over contract wins when the last digit at expiry is above the selected barrier. For example, Over 1 wins on digits 2 through 9.", points: ["Choose a barrier from the digit row.", "The button label always shows the current barrier.", "The result is decided by the contract expiry, not by the entry quote."] },
   { title: "What Under means", body: "An Under contract wins when the last digit at expiry is below the selected barrier. For example, Under 1 wins only on digit 0.", points: ["Over and Under have different winning ranges.", "Changing the barrier changes the winning range.", "Do not treat a visible streak as a promise about the next result."] },
@@ -123,7 +125,7 @@ const guidePages = [
   { title: "Auto Best Digit", body: "Auto Best Digit starts the repeating loop after selecting the strongest available signal. Stop ends the loop after the active request completes.", points: ["Review the account, market, direction, barrier, duration, and stake first.", "The loop uses the current strategy and risk limits.", "Turning off EDGE stops the loop and hides its controls."] },
   { title: "Take Profit", body: "Take Profit stops the repeating loop after the session reaches the configured positive P/L. It applies to the local session total, not to your entire Deriv account history.", points: ["Choose an amount you can accept as a session target.", "The target is checked as results settle.", "Take Profit does not close a contract early."] },
   { title: "Stop Loss", body: "Stop Loss stops the repeating loop after the session reaches the configured negative P/L. It is a guardrail, not a guarantee that losses cannot exceed the target.", points: ["Use a smaller loss limit while testing.", "Bulk trades can settle after the loop is stopped.", "Review the trade history before starting another session."] },
-  { title: "Live-money protection", body: "Real accounts require an explicit live-funds confirmation before Auto Best Digit or an immediate trade can send contracts.", points: ["Read the confirmation carefully.", "The server also enforces its live-trading configuration.", "If you are learning, switch back to a demo account."] },
+  { title: "Live-money protection", body: "Selecting a real account routes contracts to real funds. The server's live-trading permission, balance, and settlement checks remain in force.", points: ["Review the selected account before trading.", "A disabled live-trading setting blocks real orders.", "If you are learning, switch back to a demo account."] },
   { title: "Reading session results", body: "Session P/L and Trades Sent show only activity since the last Reset. Recent Trades contains the dashboard rows received from the Deriv stream.", points: ["Reset clears only Session P/L and Trades Sent.", "Reset does not change stake, duration, barrier, or strategy.", "Clear Recent Trades removes dashboard rows without deleting Deriv records."] },
   { title: "A careful pre-trade checklist", body: "Before sending anything, confirm the account, market, direction, barrier, duration, stake, strategy, and risk limits.", points: ["Start with a demo account.", "Martingale increases exposure after losses, so keep a reserve.", "Never rely on a claimed guaranteed outcome."] },
   { title: "Let's start trading", body: "You now know how the market selector, Over and Under contracts, Martingale, Auto Best Digit, and risk controls work.", points: ["Start with one small demo trade.", "Watch the settlement and confirm the history updates.", "Keep the guide available whenever you change strategy."] },
@@ -139,8 +141,8 @@ const tradeXGuidePages = [
   { title: "Manual selection", body: "Manual selection lets you choose the exact digit barrier rather than accepting the current ranked candidate.", points: ["Tap a digit to make it active.", "Confirm the selected digit before placing a trade.", "The barrier is sent with the contract request."] },
   { title: "Ranked candidates", body: "The ranked list orders digits from the observed distribution so you can compare the least frequent candidates for a Differs idea.", points: ["Ranking is based on the current sample.", "A low observed frequency is not a guarantee.", "Refresh the sample when the context changes."] },
   { title: "Observed percentages", body: "The distribution percentages summarize the selected sample and update as live ticks arrive.", points: ["Small samples can move sharply.", "Use sample count beside the percentage.", "Treat the number as context, not certainty."] },
-  { title: "Place a manual trade", body: "Place Trade X Trade uses the active market, stake, duration, and selected digit to send one Digit Differs contract.", points: ["Review every control before placing.", "Live accounts require explicit confirmation.", "The expiry result is decided by Deriv."] },
-  { title: "Live-money protection", body: "Real accounts require live-funds confirmation and the server's live-trading guard before Trade X can send contracts.", points: ["Switch to demo while learning.", "A disabled action indicates a missing guard.", "Reconfirm after an account switch."] },
+  { title: "Place a manual trade", body: "Place Trade X Trade uses the active market, stake, duration, and selected digit to send one Digit Differs contract.", points: ["Review every control before placing.", "Selecting a real account sends orders to that account when server live trading is enabled.", "The expiry result is decided by Deriv."] },
+  { title: "Live-money protection", body: "The server's live-trading setting and balance checks guard real-account orders; account selection determines where a trade is placed.", points: ["Switch to demo while learning.", "A disabled action can indicate the server live-trading setting is off.", "Check the selected account before trading."] },
   { title: "Reading open contracts", body: "An open row has been bought but does not yet have a final result. It remains visible while Deriv settles the contract.", points: ["Do not treat an open row as a win or loss.", "History refreshes as settlement arrives.", "New actions remain separate from open rows."] },
   { title: "Clearing Trade X history", body: "The Trade X clear control hides the dashboard rows after a second tap. It does not delete contracts or records from Deriv.", points: ["Use the two-step action intentionally.", "The fade confirms the rows were removed from view.", "Clearing does not stop automation."] },
   { title: "Reset the sample", body: "Refreshing analysis starts a new local sample window so the distribution reflects the next stream of ticks.", points: ["Wait for enough observations after refresh.", "Avoid making decisions from an empty sample.", "The account and contract history remain unchanged."] },
@@ -154,7 +156,7 @@ const digitFlipGuidePages = [
   { title: "Stake and duration", body: "Choose 1 to 6 ticks and begin with a flat stake of 0.50 or more. Martingale after loss is optional and can grow exposure quickly.", points: ["Decimals are supported for the multiplier.", "Use a small stake while evaluating a signal.", "There is no max-stake control in this workspace."] },
   { title: "Run, stop, and reset", body: "Run starts the guarded loop. Stop prevents another entry after the active request. Reset clears only session P/L and current stake; it does not delete Deriv history.", points: ["Take Profit and Stop Loss stop the loop.", "Recent trades can be hidden from this dashboard.", "Hidden rows remain in Deriv."] },
   { title: "Reading the live parity", body: "DigitFlip uses the live Even and Odd percentages as market context. The percentages describe recent ticks and never guarantee the next contract result.", points: ["Wait for a meaningful live sample before trading.", "Use a small stake while evaluating a market.", "No condition is presented as a guaranteed win."] },
-  { title: "Live account protection", body: "Real-money DigitFlip actions require a live-funds confirmation and the server's live-trading setting.", points: ["Use demo funds while learning.", "Check the selected account before every session.", "A confirmation is required again after switching accounts."] },
+  { title: "Live account protection", body: "Selecting a real account routes DigitFlip orders to real funds. The server's live-trading setting and balance checks still apply.", points: ["Use demo funds while learning.", "Check the selected account before every session.", "Deriv confirms each contract and its settlement."] },
   { title: "Reading the market label", body: "The market label identifies the stream currently used for the parity sample. A new market needs fresh observations before its percentages become useful.", points: ["Wait for the sample to refresh after switching.", "Do not mix observations from different markets.", "The quote is live context, not a promise."] },
   { title: "Auto Candidates", body: "Auto Candidates compares supported markets using the available parity sample and can select a stronger observed setup after settlement.", points: ["It is a selection aid, not an outcome guarantee.", "It can change the market between entries.", "Stop the loop before changing your risk settings."] },
   { title: "Assault mode", body: "Assault mode changes which parity direction is considered for the next entry after a settlement. It does not change Deriv's contract rules.", points: ["Review the active parity before starting.", "Keep the stake small while evaluating the mode.", "Use a stop limit for every live experiment."] },
@@ -173,7 +175,7 @@ const digitFlipGuidePages = [
 
 const bulkTraderGuidePages = [
   { title: "Welcome to Bulk Trader", body: "Bulk Trader is the fast multi-contract workspace for reading live digit context and sending one to six separate contracts from a single action.", points: ["Start on a demo account.", "The feature switch pauses the other trading surfaces.", "Percentages describe the current sample and do not guarantee an outcome."] },
-  { title: "Connect and choose an account", body: "Connect your Deriv account, then confirm the account shown in the trading account selector before opening Bulk Trader.", points: ["Demo funds are the safest place to learn.", "Real accounts require explicit live-funds confirmation.", "Account changes refresh the live session."] },
+  { title: "Connect and choose an account", body: "Connect your Deriv account, then review the account shown in the trading account selector before opening Bulk Trader.", points: ["Demo funds are the safest place to learn.", "Selecting a real account routes trades to those funds when server live trading is enabled.", "Account changes refresh the live session."] },
   { title: "Choose a market", body: "The market list includes Volatility and Jump pairs. Selecting a pair changes the live Deriv stream used by the current tick and digit sample.", points: ["Use the filter to focus on Volatility or Jump pairs.", "The right-side percentage is live observed context.", "Wait for fresh ticks after switching markets."] },
   { title: "Select a trade type", body: "Bulk Trader supports Over / Under and Differs. The rest of the panel changes to match the selected contract family.", points: ["Only the controls for the active type are shown.", "Differs uses one selected digit.", "Manual trade buttons remain available regardless of the observed signal."] },
   { title: "Live analysis", body: "Bulk Trader keeps a running count of observed ticks for the selected market. The digit percentages and markers update as new ticks arrive.", points: ["Refresh starts the counter again at 1.", "The counter has no fixed end value.", "Observed percentages provide context, not certainty."] },
@@ -185,7 +187,7 @@ const bulkTraderGuidePages = [
   { title: "Stake", body: "Stake starts at 0.35 and accepts decimals. The server and selected account remain the final authority over whether a contract can be bought.", points: ["Keep a reserve in the account.", "There is no artificial maximum in the control.", "A valid stake does not remove market risk."] },
   { title: "Number of bulk trades", body: "Choose 1 through 6 bulk trades. One action sends that many separate contracts and the history lists each returned contract independently.", points: ["Bulk count is not a single combined contract.", "Watch the account balance before increasing count.", "The request is blocked while another bulk request is pending."] },
   { title: "Trade buttons", body: "The action buttons change with the active trade type and show the current observed percentage beneath the label.", points: ["Over / Under show two buttons.", "Differs shows one action for the selected digit.", "Manual actions remain available when the observed signal is not ready."] },
-  { title: "Live-money confirmation", body: "Real accounts require the live-funds confirmation before Bulk Trader sends anything. The API also enforces its own live-trading guardrails.", points: ["Read the confirmation before enabling a live action.", "Switch to demo when learning.", "A disabled button means a required guard is not satisfied."] },
+  { title: "Live-money protection", body: "Bulk Trader uses the selected account. The API enforces server live-trading permission, account balance, and open-contract checks.", points: ["Switch to demo when learning.", "A disabled button means a required server or account guard is not satisfied.", "Review the selected stake and trade count before sending."] },
   { title: "Bulk trade history", body: "Each returned contract is shown with its type, symbol, account, buy amount, status, and settlement result.", points: ["Open contracts show no final result yet.", "Rows update as the Deriv stream settles.", "Bulk history is kept separate from the other feature panels."] },
   { title: "Clearing history", body: "The history bin uses a two-step clear. Tap once to arm it, then tap again within the short window; rows fade from the dashboard without deleting Deriv records.", points: ["The second tap confirms the action.", "The fade gives feedback before rows disappear.", "Clearing does not affect active contracts."] },
   { title: "A safe first bulk session", body: "Use one demo contract, one tick, a small stake, and a fresh sample before increasing the bulk count or duration.", points: ["Confirm market, type, prediction, ticks, and stake.", "Watch the first returned row settle.", "Treat every percentage and streak as observed context, never certainty."] },
@@ -194,7 +196,7 @@ const bulkTraderGuidePages = [
 
 const moneyBankGuidePages = [
   { title: "Welcome to Money Bank", body: "Money Bank is the Accumulator workspace for structured Volatility-index growth. It uses one open contract at a time and keeps the recovery state visible.", points: ["Start with a demo account while learning.", "Accumulator outcomes are not guaranteed.", "Read the full guide before using live funds."] },
-  { title: "Connect your Deriv account", body: "Connect your own PAT and select the account that Money Bank should use. The server validates the credential and the account balance before every entry.", points: ["Use a demo account first.", "Real accounts require explicit confirmation.", "Keep your PAT private."] },
+  { title: "Connect your Deriv account", body: "Connect your own PAT and select the account that Money Bank should use. The server validates the credential and the account balance before every entry.", points: ["Use a demo account first.", "Selecting a real account routes Accumulator contracts to it when live trading is enabled.", "Keep your PAT private."] },
   { title: "Choose a Volatility pair", body: "The market selector contains Volatility indices only, including 1-second V10, V15, V25, V30, V50, V75, V90, and V100 streams.", points: ["Switch markets before starting.", "Live quotes show the selected stream.", "Changing markets does not change the recovery ladder."] },
   { title: "Growth rate", body: "Growth rate is the Accumulator growth applied to each tick. Higher rates can increase the theoretical return while also changing the contract risk.", points: ["Available rates are 1% through 5%.", "The exact decimal rate is sent to Deriv.", "The rate is not a win probability."] },
   { title: "Take-profit ticks", body: "Take Profit ticks is the exact contract duration target used by Money Bank. The panel keeps it between 5 and 50 ticks because Deriv Accumulator contracts require at least five ticks.", points: ["Shorter contracts settle sooner.", "Longer contracts expose the position for more ticks.", "The selected tick target is sent unchanged to Deriv."] },
@@ -211,14 +213,14 @@ const moneyBankGuidePages = [
   { title: "Stop Accumulator", body: "Stop Accumulator immediately prevents another pending entry and then sends a close request for every open Accumulator contract found in the session history.", points: ["Wait for the closing state to finish.", "A pending buy is closed when Deriv acknowledges it.", "Stopping does not delete trade history."] },
   { title: "Trade history", body: "Money Bank history lists each returned Accumulator contract with its market, account, barrier, price, current value, payout, profit, status, and timestamps.", points: ["Open rows update with current value and profit.", "Rows update as Deriv settles or closes them.", "History is scoped visually to Accumulator contracts."] },
   { title: "Download and Reset", body: "Download exports the visible Money Bank rows as a CSV file. Reset uses a two-tap confirmation and fades the visible rows before clearing them from this panel.", points: ["Download does not alter account records.", "Reset does not cancel open contracts.", "A fresh run can add new rows again."] },
-  { title: "Live-money protection", body: "Real-money use requires the live-funds confirmation and the server's own live-trading guard. Never treat the snapshot as a guarantee.", points: ["Demo testing is strongly recommended.", "A disabled action means a required guard is missing.", "Keep an acceptable reserve in the account."] },
+  { title: "Live-money protection", body: "Selecting a real account routes Accumulator contracts to real funds. Server permission, balance, and settlement checks remain active. Never treat the snapshot as a guarantee.", points: ["Demo testing is strongly recommended.", "A disabled action means a required server or account guard is missing.", "Keep an acceptable reserve in the account."] },
   { title: "Final checklist", body: "Money Bank is ready when the account, Volatility pair, growth rate, ticks, BASE strategy, optional limits, reinvest state, and auto-switch state are intentional.", points: ["Start small.", "Watch every settlement.", "Stop if the session no longer matches your plan."] },
 ] as const;
 
 const cashGrabGuidePages = [
   { title: "Welcome to Cash Grab Rise/Fall", body: "Cash Grab is a controlled Rise/Fall workspace. It shows the selected market, direction, stake, duration, and trade history.", points: ["Start with a demo account.", "Recent market samples are not guarantees.", "Use the guide before risking live funds."] },
   { title: "Connect Deriv", body: "Connect your Deriv account with a Personal Access Token that has the permissions needed to read markets and trade.", points: ["Keep your token private.", "Check the active account and currency.", "Demo funds are the safest place to learn."] },
-  { title: "Choose an account", body: "The account selector shows the account Cash Grab will use and its latest available balance.", points: ["Confirm the account before every session.", "Account changes require a fresh live-funds confirmation.", "A server-side balance check still applies."] },
+  { title: "Choose an account", body: "The account selector shows the account Cash Grab will use and its latest available balance.", points: ["Review the account before every session.", "Selecting a real account routes contracts to it when server live trading is enabled.", "A server-side balance check still applies."] },
   { title: "Rise and Fall contracts", body: "Rise and Fall are directional contracts sent to Deriv as CALL and PUT. Cash Grab only offers these two contract types.", points: ["Rise uses CALL.", "Fall uses PUT.", "The contract result is decided by Deriv at expiry."] },
   { title: "What Rise means", body: "A Rise contract compares the exit quote with the entry quote according to the selected contract duration.", points: ["Choose Rise only when it matches your plan.", "The entry quote does not promise the exit quote.", "Check the contract details before starting."] },
   { title: "What Fall means", body: "A Fall contract uses the opposite quote direction from Rise for the same market and duration.", points: ["Choose Fall only when it matches your plan.", "A falling quote can reverse before expiry.", "Review the actual settlement in history."] },
@@ -319,6 +321,7 @@ type CashGrabAutoSwitchRecommendation = {
 export default function XTraderPage() {
   const accessSession = useGetAccessSession({ query: { retry: false, queryKey: getGetAccessSessionQueryKey() } });
   const queryClient = useQueryClient();
+  const { logout: logoutAccessSession, isLoggingOut } = useAccessSessionLogout();
   const isAdmin = accessSession.data?.is_admin === true;
   const canUseEdge = isAdmin || accessSession.data?.features.includes("edge") === true;
   const canUseDigitFlip = isAdmin || accessSession.data?.features.includes("digit-flip") === true;
@@ -361,10 +364,6 @@ export default function XTraderPage() {
   const [autoSwitch, setAutoSwitch] = useState(false);
   const [edgePercentageMode, setEdgePercentageMode] = useState(false);
   const [edgeRecommendation, setEdgeRecommendation] = useState<BestEdgeSignal | null>(null);
-  const [edgeOverThreeSniper, setEdgeOverThreeSniper] = useState(false);
-  const [edgeBestPairAnalyzer, setEdgeBestPairAnalyzer] = useState(false);
-  const [edgeAutoSelectBest, setEdgeAutoSelectBest] = useState(false);
-  const [edgeScannerMessage, setEdgeScannerMessage] = useState<string | null>(null);
   const [edgeAccountBalance, setEdgeAccountBalance] = useState("");
   const [xTraderEnabled, setXTraderEnabled] = useState(false);
   const [tradeXEnabled, setTradeXEnabled] = useState(false);
@@ -455,9 +454,6 @@ export default function XTraderPage() {
   const [historyFading, setHistoryFading] = useState(false);
   const [tradeXHistoryClearArmed, setTradeXHistoryClearArmed] = useState(false);
   const [tradeXHiddenHistoryIds, setTradeXHiddenHistoryIds] = useState<Set<string>>(new Set());
-  const [liveConfirmed, setLiveConfirmed] = useState(false);
-  const liveConfirmedRef = useRef(liveConfirmed);
-  liveConfirmedRef.current = liveConfirmed;
   const [sessionPnl, setSessionPnl] = useState(0);
   const [sessionTrades, setSessionTrades] = useState(0);
   const [analysisDigits, setAnalysisDigits] = useState<number[]>([]);
@@ -481,10 +477,6 @@ export default function XTraderPage() {
   const runningRef = useRef(false);
   const autoSwitchRef = useRef(autoSwitch);
   const edgePercentageModeRef = useRef(edgePercentageMode);
-  const edgeOverThreeSniperRef = useRef(edgeOverThreeSniper);
-  const edgeBestPairAnalyzerRef = useRef(edgeBestPairAnalyzer);
-  const edgeAutoSelectBestRef = useRef(edgeAutoSelectBest);
-  const edgeAutoSelectionKeyRef = useRef("");
   const edgeProposalRequestKeyRef = useRef("");
   const edgeProposalMutation = useRequestDerivProposal();
   const edgeLossStreakRef = useRef(0);
@@ -563,7 +555,6 @@ export default function XTraderPage() {
     strategy,
     martingale,
      symbol,
-    liveConfirmed,
     rankedDigits: [] as number[],
   });
   const tradeXConfigRef = useRef({
@@ -799,7 +790,6 @@ export default function XTraderPage() {
     bulkSessionKnownIdsRef.current = null;
     setEdgeAccountBalance(currentAccountBalance == null ? "" : currentAccountBalance.toFixed(2));
     setDigitFlipAccountBalance(currentAccountBalance == null ? "" : currentAccountBalance.toFixed(2));
-    setLiveConfirmed(false);
   }, [currentAccount?.id]);
 
   useEffect(() => {
@@ -924,8 +914,8 @@ export default function XTraderPage() {
   );
 
   useEffect(() => {
-    configRef.current = { direction, barrier, duration, stake, strategy, martingale, symbol, liveConfirmed, rankedDigits };
-  }, [direction, barrier, duration, stake, strategy, martingale, symbol, liveConfirmed, rankedDigits]);
+    configRef.current = { direction, barrier, duration, stake, strategy, martingale, symbol, rankedDigits };
+  }, [direction, barrier, duration, stake, strategy, martingale, symbol, rankedDigits]);
 
   useEffect(() => {
     cashGrabConfigRef.current = {
@@ -985,12 +975,6 @@ export default function XTraderPage() {
   useEffect(() => {
     edgePercentageModeRef.current = edgePercentageMode;
   }, [edgePercentageMode]);
-
-  useEffect(() => {
-    edgeOverThreeSniperRef.current = edgeOverThreeSniper;
-    edgeBestPairAnalyzerRef.current = edgeBestPairAnalyzer;
-    edgeAutoSelectBestRef.current = edgeAutoSelectBest;
-  }, [edgeAutoSelectBest, edgeBestPairAnalyzer, edgeOverThreeSniper]);
 
   useEffect(() => {
     nextStakeRef.current = stake;
@@ -1187,64 +1171,10 @@ export default function XTraderPage() {
     }
   };
 
-  const selectEdgeAutomation = async (excludeSymbol?: string) => {
-    const signals = (status.data?.market_signals ?? []) as MarketSignal[];
-    const recommendation = edgeOverThreeSniperRef.current
-      ? chooseBestOverThreeSignal(signals, excludeSymbol)
-      : (edgeBestPairAnalyzerRef.current || edgeAutoSelectBestRef.current)
-        ? chooseBestAnalyzerSignal(signals, excludeSymbol)
-        : null;
-    if (!recommendation) {
-      setEdgeScannerMessage("Hunting all Volatility and Jump pairs for enough observed ticks…");
-      return null;
-    }
-    if (recommendation.symbol !== configRef.current.symbol) await selectMarket(recommendation.symbol);
-    const nextDirection = recommendation.direction === "DIGITUNDER" ? "DIGITUNDER" : "DIGITOVER";
-    setDirection(nextDirection);
-    setBarrier(recommendation.digit);
-    configRef.current = {
-      ...configRef.current,
-      direction: nextDirection,
-      barrier: recommendation.digit,
-      symbol: recommendation.symbol,
-    };
-    setEdgeRecommendation(recommendation);
-    void requestEdgeQuote({
-      symbol: recommendation.symbol,
-      direction: nextDirection,
-      barrier: recommendation.digit,
-    });
-    setEdgeScannerMessage(
-      edgeOverThreeSniperRef.current
-        ? `Hunting all Volatility and Jump pairs for the best observed Over 3 · ${recommendation.symbol}`
-        : `Hunting all Volatility and Jump pairs for the best observed ${recommendation.direction === "DIGITOVER" ? "Over" : "Under"} ${recommendation.digit} · ${recommendation.symbol}`,
-    );
-    return recommendation;
-  };
-
   useEffect(() => {
     if (!isConnected || !xTraderEnabled) return;
     void requestEdgeQuote({ symbol, direction, barrier });
   }, [barrier, direction, duration, isConnected, stake, symbol, xTraderEnabled]);
-
-  useEffect(() => {
-    if (!isConnected || (!edgeOverThreeSniper && !edgeBestPairAnalyzer && !edgeAutoSelectBest)) return;
-    const signals = (status.data?.market_signals ?? []) as MarketSignal[];
-    const recommendation = edgeOverThreeSniper
-      ? chooseBestOverThreeSignal(signals)
-      : chooseBestAnalyzerSignal(signals);
-    if (!recommendation) return;
-    const key = `${recommendation.symbol}:${recommendation.direction}:${recommendation.digit}:${recommendation.score.toFixed(1)}:${recommendation.sampleCount}`;
-    if (edgeAutoSelectionKeyRef.current === key) return;
-    edgeAutoSelectionKeyRef.current = key;
-    void selectEdgeAutomation();
-  }, [
-    edgeAutoSelectBest,
-    edgeBestPairAnalyzer,
-    edgeOverThreeSniper,
-    isConnected,
-    status.data?.market_signals,
-  ]);
 
   const armMartingaleWatch = (latestRows: typeof rows, amount: number, expectedSettlements: number) => {
     if (configRef.current.strategy !== "martingale") {
@@ -1369,7 +1299,6 @@ export default function XTraderPage() {
         barrier: entryDigit,
         symbol: config.symbol,
         count: 1,
-        confirm_live_trade: true,
       },
     });
     result.buys.forEach((buy) => edgeClaimedHistoryIdsRef.current.add(buy.contract_id));
@@ -1425,7 +1354,6 @@ export default function XTraderPage() {
         duration_unit: "t",
         barrier: config.barrier,
         symbol: config.symbol,
-        confirm_live_trade: true,
       },
     });
     result.buys.forEach((buy) => edgeClaimedHistoryIdsRef.current.add(buy.contract_id));
@@ -1451,14 +1379,7 @@ export default function XTraderPage() {
   const runLoop = async () => {
     while (runningRef.current) {
       try {
-        if (edgeOverThreeSniperRef.current || edgeBestPairAnalyzerRef.current || edgeAutoSelectBestRef.current) {
-          const recommendation = await selectEdgeAutomation();
-          if (!recommendation) {
-            await sleep(1500);
-            continue;
-          }
-          await executeBatch();
-        } else if (edgePercentageModeRef.current) {
+        if (edgePercentageModeRef.current) {
           const recommendation = await applyPercentageRecommendation();
           if (!recommendation) {
             await sleep(1500);
@@ -1657,7 +1578,6 @@ export default function XTraderPage() {
           contract_type: "ACCU",
           growth_rate: currentConfig.growthRate / 100,
           symbol: tradeSymbol,
-          confirm_live_trade: true,
         },
       });
       const contractId = result.buy?.contract_id;
@@ -1697,10 +1617,6 @@ export default function XTraderPage() {
   const startMoneyBank = async (config: MoneyBankStartConfig) => {
     if (!isConnected) {
       setConnectionMessage({ kind: "error", text: "Connect Deriv before starting Money Bank." });
-      return;
-    }
-    if (isReal && !liveConfirmed) {
-      setConnectionMessage({ kind: "error", text: "Confirm live funds before starting Money Bank." });
       return;
     }
     if (!currentAccount || currentAccountBalance == null) {
@@ -1753,10 +1669,6 @@ export default function XTraderPage() {
     if (!isConnected) return;
     if (currentAccountBalance == null || currentAccountBalance <= 0) {
       setConnectionMessage({ kind: "error", text: "Sync the connected account balance before starting EDGE." });
-      return;
-    }
-    if (isReal && !liveConfirmed) {
-      setConnectionMessage({ kind: "error", text: "Confirm live-funds trading before starting." });
       return;
     }
     const declaredAccountBalance = Number(edgeAccountBalance);
@@ -2151,10 +2063,6 @@ export default function XTraderPage() {
       setConnectionMessage({ kind: "error", text: "Select a Deriv account before starting Cash Grab." });
       return;
     }
-    if (isReal && !liveConfirmed) {
-      setConnectionMessage({ kind: "error", text: "Confirm live funds before starting Cash Grab." });
-      return;
-    }
     const existingIds = rows
       .filter((trade) => cashGrabManagedContractTypes.includes(trade.contract_type as typeof cashGrabManagedContractTypes[number]))
       .map((trade) => trade.contract_id);
@@ -2288,10 +2196,6 @@ export default function XTraderPage() {
         setConnectionMessage({ kind: "error", text: "Connect Deriv before enabling Auto Best Digit." });
         return;
       }
-      if (isReal && !liveConfirmed) {
-        setConnectionMessage({ kind: "error", text: "Confirm live funds before enabling Auto Best Digit." });
-        return;
-      }
       autoSwitchRef.current = true;
       setAutoSwitch(true);
       if (!runningRef.current) void start();
@@ -2306,10 +2210,6 @@ export default function XTraderPage() {
     if (enabled) {
       if (!isConnected) {
         setConnectionMessage({ kind: "error", text: "Connect Deriv before enabling Percentage Scan." });
-        return;
-      }
-      if (isReal && !liveConfirmed) {
-        setConnectionMessage({ kind: "error", text: "Confirm live funds before enabling Percentage Scan." });
         return;
       }
       edgePercentageModeRef.current = true;
@@ -2363,9 +2263,6 @@ export default function XTraderPage() {
       aiScannerActionLockRef.current = false;
     }
   };
-  const hasCurrentLiveConfirmation = () =>
-    currentAccountRef.current?.type !== "real" || liveConfirmedRef.current;
-
   const executeTradeX = async (
     count = 1,
     durationOverride = tradeXConfigRef.current.duration,
@@ -2394,10 +2291,6 @@ export default function XTraderPage() {
       setTradeXMessage("Trade X is paused until the selected account balance is available.");
       return false;
     }
-    if (isReal && !liveConfirmed) {
-      setTradeXMessage("Confirm live funds before sending a Trade X contract.");
-      return false;
-    }
     if (!isTradingCalendarOpen()) {
       setTradeXMessage("Trade X is outside its configured trading calendar.");
       return false;
@@ -2418,7 +2311,6 @@ export default function XTraderPage() {
           barrier: entryDigit,
           symbol: symbolOverride ?? config.symbol,
           count,
-          confirm_live_trade: true,
         },
       });
       result.buys.forEach((buy) => tradeXClaimedHistoryIdsRef.current.add(buy.contract_id));
@@ -2438,6 +2330,9 @@ export default function XTraderPage() {
   const runEdgeAiScanner = () => withAiScannerLock(async () => {
     if (!xTraderEnabled || !isConnected) throw new Error("Enable EDGE and connect Deriv before scanning.");
     if (running) throw new Error("Stop the active EDGE run before changing its direction.");
+    if (edgeActionLockRef.current || edgeSettlementLockRef.current || bulkBuyMutation.isPending) {
+      throw new Error("EDGE is already sending or settling a contract.");
+    }
     if (!Number.isInteger(duration) || duration < 1 || duration > 6) {
       throw new Error("Choose an EDGE duration from 1 to 6 ticks first.");
     }
@@ -2447,6 +2342,16 @@ export default function XTraderPage() {
     }
 
     const freshStatus = await status.refetch();
+    if (!freshStatus.data?.open_contracts_ready || (freshStatus.data.active_contract_count ?? 0) > 0) {
+      throw new Error(tradeSlotMessage ?? "Deriv has not confirmed that the previous contract settled.");
+    }
+    if (isReal && !freshStatus.data.live_trading_enabled) {
+      throw new Error("Live trading is disabled for this workspace.");
+    }
+    const freshBalance = getAccountBalance(freshStatus.data.account) ?? currentAccountBalanceRef.current;
+    if (freshBalance == null || stake > freshBalance) {
+      throw new Error("The selected EDGE stake exceeds the available account balance.");
+    }
     const signals = (freshStatus.data?.market_signals ?? []) as MarketSignal[];
     const selectedMarket = signals.find((signal) => signal.symbol === symbol);
     if (!selectedMarket || selectedMarket.sample_count < EDGE_MIN_MARKET_SAMPLE) {
@@ -2460,10 +2365,10 @@ export default function XTraderPage() {
       throw new Error(`The live Over/Under sample for digit ${barrier} is not usable yet.`);
     }
     if (overRate === underRate) {
-      return `Over and Under are tied at ${overRate.toFixed(1)}% for ${symbol} digit ${barrier}. No direction changed and no trade was placed.`;
+      throw new Error(`Over and Under are tied at ${overRate.toFixed(1)}% for ${symbol} digit ${barrier}. No trade was sent.`);
     }
     const candidate = chooseBestEdgeDirectionForDigit(signals, symbol, barrier, EDGE_MIN_MARKET_SAMPLE);
-    if (!candidate) throw new Error("EDGE could not validate the current quote and sample. No trade was placed.");
+    if (!candidate) throw new Error("EDGE could not validate the current quote and sample. No trade was sent.");
 
     setDirection(candidate.direction);
     configRef.current = {
@@ -2474,8 +2379,92 @@ export default function XTraderPage() {
       duration,
       stake,
     };
+    const historySnapshot = await readHistorySnapshot();
+    if (!historySnapshot.fresh || historySnapshot.rows.some((trade) => trade.status === "open")) {
+      throw new Error("EDGE needs a fresh, settled history check before sending a scanned trade.");
+    }
+    if (edgeActionLockRef.current || edgeSettlementLockRef.current || bulkBuyMutation.isPending) {
+      throw new Error("EDGE is already sending or settling a contract.");
+    }
+    edgeActionLockRef.current = true;
+    edgeSettlementLockRef.current = true;
+    try {
+      armMartingaleWatch(historySnapshot.rows, stake, 1);
+      const result = await bulkBuyMutation.mutateAsync({
+        data: {
+          amount: stake,
+          duration,
+          duration_unit: "t",
+          contract_type: candidate.direction,
+          barrier,
+          symbol,
+          count: 1,
+        },
+      });
+      if (!result.buys.length) throw new Error("Deriv did not return a confirmed EDGE contract.");
+      result.buys.forEach((buy) => edgeClaimedHistoryIdsRef.current.add(buy.contract_id));
+      await claimFeatureRows(edgeClaimedHistoryIdsRef.current, historySnapshot.rows, ["DIGITOVER", "DIGITUNDER"]);
+      setSessionTrades((value) => value + result.buys.length);
+      await refreshTradeResults();
+    } finally {
+      edgeActionLockRef.current = false;
+      edgeSettlementLockRef.current = false;
+    }
     const side = candidate.direction === "DIGITOVER" ? "Over" : "Under";
-    return `Selected ${side} ${barrier} on ${symbol}: ${candidate.score.toFixed(1)}% observed across ${candidate.sampleCount} live samples (${duration} ticks, ${stake.toFixed(2)} ${currentAccount?.currency ?? "USD"} stake). This is historical evidence, not a win-rate guarantee. No trade was placed.`;
+    return `Sent one ${side} ${barrier} contract on ${symbol} for ${duration} ticks at ${stake.toFixed(2)} ${currentAccount?.currency ?? "USD"}. The selected side had ${candidate.score.toFixed(1)}% in ${candidate.sampleCount} observed samples; that is not a win-rate guarantee.`;
+  });
+
+  const runCashGrabAiScanner = () => withAiScannerLock(async () => {
+    if (!cashGrabEnabled || !isConnected) throw new Error("Enable Cash Grab and connect Deriv before scanning.");
+    if (cashGrabRunningRef.current || cashGrabActionLockRef.current || bulkBuyMutation.isPending) {
+      throw new Error("Cash Grab is already running or sending a contract.");
+    }
+    if (!Number.isInteger(cashGrabDuration) || cashGrabDuration < 1 || cashGrabDuration > 10) {
+      throw new Error("Choose a Cash Grab duration from 1 to 10 ticks first.");
+    }
+    const amount = Number(cashGrabStake.toFixed(2));
+    if (!Number.isFinite(amount) || amount < 0.35) throw new Error("Set a Cash Grab stake of at least 0.35 first.");
+
+    const freshStatus = await status.refetch();
+    if (!freshStatus.data?.open_contracts_ready || (freshStatus.data.active_contract_count ?? 0) > 0) {
+      throw new Error(tradeSlotMessage ?? "Deriv has not confirmed that the previous contract settled.");
+    }
+    if (isReal && !freshStatus.data.live_trading_enabled) {
+      throw new Error("Live trading is disabled for this workspace.");
+    }
+    const balance = getAccountBalance(freshStatus.data.account) ?? currentAccountBalanceRef.current;
+    if (balance == null || amount > balance) throw new Error("The Cash Grab stake exceeds the available account balance.");
+
+    const signals = (freshStatus.data.market_signals ?? []) as AiScannerMarketSignal[];
+    const candidate = chooseCashGrabScannerCandidate(signals, cashGrabSymbols.map((market) => market.value));
+    if (!candidate) {
+      throw new Error(`Cash Grab needs at least ${AI_SCANNER_MIN_SAMPLE} valid Rise/Fall samples on a supported market.`);
+    }
+    if (!await selectMarket(candidate.symbol)) throw new Error("Deriv could not select the scanned market. No contract was sent.");
+
+    setCashGrabSymbol(candidate.symbol);
+    setCashGrabDirection(candidate.contractType);
+    cashGrabActionLockRef.current = true;
+    try {
+      const beforeRows = queryClient.getQueryData<typeof rows>(getGetDerivHistoryQueryKey()) ?? [];
+      const result = await bulkBuyMutation.mutateAsync({
+        data: buildCashGrabBulkBuyPayload({
+          amount,
+          duration: cashGrabDuration,
+          direction: candidate.contractType,
+          symbol: candidate.symbol,
+          count: 1,
+        }),
+      });
+      if (!result.buys.length) throw new Error("Deriv did not return a confirmed Cash Grab contract.");
+      result.buys.forEach((buy) => cashGrabClaimedHistoryIdsRef.current.add(buy.contract_id));
+      await claimFeatureRows(cashGrabClaimedHistoryIdsRef.current, beforeRows, [candidate.contractType]);
+      await refreshTradeResults();
+    } finally {
+      cashGrabActionLockRef.current = false;
+    }
+    const side = candidate.contractType === "CALL" ? "Rise" : "Fall";
+    return `Sent one Cash Grab ${side} contract on ${candidate.symbol} for ${cashGrabDuration} ticks at ${amount.toFixed(2)} ${currentAccount?.currency ?? "USD"}. The selected side appeared in ${candidate.observedRate.toFixed(1)}% of ${candidate.sampleCount} observed moves; that sample is not a win-rate guarantee.`;
   });
 
   const runTradeXAiScanner = () => withAiScannerLock(async () => {
@@ -2497,7 +2486,6 @@ export default function XTraderPage() {
     setTradeXSelectedDigit(candidate.digit);
     setTradeXManualSelect(true);
     if (!await selectMarket(candidate.symbol)) throw new Error("Deriv could not select the scanned market. No trade was sent.");
-    if (!hasCurrentLiveConfirmation()) throw new Error("Confirm live funds before sending the scanned Trade X trade.");
     if (currentAccountBalanceRef.current == null || tradeXStake > currentAccountBalanceRef.current) {
       throw new Error("The selected Trade X stake exceeds the current account balance.");
     }
@@ -2591,10 +2579,6 @@ export default function XTraderPage() {
       setConnectionMessage({ kind: "info", text: tradeSlotMessage ?? "Deriv has not confirmed that the previous contract settled. No new trade was sent." });
       return false;
     }
-    if (isReal && !liveConfirmed) {
-      setConnectionMessage({ kind: "error", text: "Confirm live funds before sending a DigitFlip trade." });
-      return false;
-    }
     if (!isTradingCalendarOpen()) {
       setConnectionMessage({ kind: "info", text: "DigitFlip is outside its configured trading calendar." });
       return false;
@@ -2644,7 +2628,6 @@ export default function XTraderPage() {
           duration_unit: "t",
           contract_type: config.parity,
           symbol: config.symbol,
-          confirm_live_trade: true,
         },
       });
       // The buy acknowledgement is authoritative. Claim its contract id now,
@@ -2668,7 +2651,6 @@ export default function XTraderPage() {
     if (digitFlipRunningRef.current || digitFlipActionLockRef.current) {
       throw new Error("Stop the active DigitFlip run before using the one-shot scanner.");
     }
-    if (!hasCurrentLiveConfirmation()) throw new Error("Confirm live funds before sending a DigitFlip trade.");
     if (currentAccountBalance == null || currentAccountBalance <= 0) {
       throw new Error("The selected account balance must be available before scanning.");
     }
@@ -2697,7 +2679,6 @@ export default function XTraderPage() {
     setDigitFlipSymbol(candidate.symbol);
     setDigitFlipParity(candidate.parity);
     if (!await selectMarket(candidate.symbol)) throw new Error("Deriv could not select the scanned market. No trade was sent.");
-    if (!hasCurrentLiveConfirmation()) throw new Error("Confirm live funds before sending the scanned DigitFlip trade.");
     const currentDigitFlipStake = digitFlipStakeMode === "martingale"
       ? digitFlipNextStakeRef.current
       : digitFlipStake;
@@ -2797,10 +2778,6 @@ export default function XTraderPage() {
     }
     if (currentAccountBalance == null || currentAccountBalance <= 0) {
       setConnectionMessage({ kind: "error", text: "Sync the connected account balance before starting DigitFlip." });
-      return;
-    }
-    if (isReal && !liveConfirmed) {
-      setConnectionMessage({ kind: "error", text: "Confirm live funds before running DigitFlip." });
       return;
     }
     const declaredAccountBalance = Number(digitFlipAccountBalance);
@@ -2930,10 +2907,6 @@ export default function XTraderPage() {
       setConnectionMessage({ kind: "error", text: "Bulk Trader is paused until the selected account balance is available." });
       return false;
     }
-    if (isReal && !liveConfirmed) {
-      setConnectionMessage({ kind: "error", text: "Confirm live funds before sending a Bulk Trader contract." });
-      return false;
-    }
     const beforeRows = queryClient.getQueryData<typeof rows>(getGetDerivHistoryQueryKey()) ?? [];
     const send = (type: BulkTraderContractType) => bulkBuyMutation.mutateAsync({
       data: {
@@ -2944,7 +2917,6 @@ export default function XTraderPage() {
         ...(barrierOverride == null ? {} : { barrier: barrierOverride }),
         symbol: symbolOverride ?? bulkTraderSymbol,
         count: bulkTraderCount,
-        confirm_live_trade: true,
       },
     });
     bulkActionLockRef.current = true;
@@ -2966,7 +2938,6 @@ export default function XTraderPage() {
   const runBulkTraderAiScanner = () => withAiScannerLock(async () => {
     if (!bulkTraderEnabled || !isConnected) throw new Error("Enable Bulk Trader and connect Deriv before scanning.");
     if (bulkActionLockRef.current || bulkBuyMutation.isPending) throw new Error("Bulk Trader is already sending a batch.");
-    if (!hasCurrentLiveConfirmation()) throw new Error("Confirm live funds before sending the scanned Bulk Trader batch.");
     const freshStatus = await status.refetch();
     if (!freshStatus.data?.open_contracts_ready || (freshStatus.data.active_contract_count ?? 0) > 0) {
       throw new Error(tradeSlotMessage ?? "Deriv has not confirmed that the previous contract settled. No new batch was sent.");
@@ -2987,7 +2958,6 @@ export default function XTraderPage() {
     setBulkTraderType(nextType);
     setBulkTraderPrediction(candidate.barrier);
     if (!await selectMarket(candidate.symbol)) throw new Error("Deriv could not select the scanned market. No contracts were sent.");
-    if (!hasCurrentLiveConfirmation()) throw new Error("Confirm live funds before sending the scanned Bulk Trader batch.");
     if (
       currentAccountBalanceRef.current == null
       || bulkTraderStake * bulkTraderCount > currentAccountBalanceRef.current
@@ -3012,10 +2982,6 @@ export default function XTraderPage() {
     }
     if (currentAccountBalance == null) {
       setConnectionMessage({ kind: "error", text: "EDGE is paused until the selected account balance is available." });
-      return;
-    }
-    if (isReal && !liveConfirmed) {
-      setConnectionMessage({ kind: "error", text: "Confirm live funds before sending a trade." });
       return;
     }
     edgeActionLockRef.current = true;
@@ -3049,7 +3015,6 @@ export default function XTraderPage() {
           barrier: entryDigit,
           symbol: configRef.current.symbol,
           count: 1,
-          confirm_live_trade: true,
         },
       });
       result.buys.forEach((buy) => edgeClaimedHistoryIdsRef.current.add(buy.contract_id));
@@ -3085,10 +3050,6 @@ export default function XTraderPage() {
       setConnectionMessage({ kind: "error", text: "EDGE is paused until the selected account balance is available." });
       return;
     }
-    if (isReal && !liveConfirmed) {
-      setConnectionMessage({ kind: "error", text: "Confirm live funds before sending a trade." });
-      return;
-    }
     edgeActionLockRef.current = true;
     edgeSettlementLockRef.current = true;
     try {
@@ -3117,7 +3078,6 @@ export default function XTraderPage() {
           duration_unit: "t",
           barrier: configRef.current.barrier,
           symbol: configRef.current.symbol,
-          confirm_live_trade: true,
         },
       });
       result.buys.forEach((buy) => edgeClaimedHistoryIdsRef.current.add(buy.contract_id));
@@ -3216,7 +3176,7 @@ export default function XTraderPage() {
   const edgeBalanceReady = currentAccountBalance != null && currentAccountBalance > 0;
   const canTrade = isConnected && !running && edgeBalanceReady
     && !tradeSlotBlocked
-    && (!isReal || (Boolean(status.data?.live_trading_enabled) && liveConfirmed))
+    && (!isReal || Boolean(status.data?.live_trading_enabled))
     && Boolean(currentAccount) && stake <= Number(edgeAccountBalance)
     && stake <= (currentAccountBalance ?? 0);
 
@@ -3244,6 +3204,17 @@ export default function XTraderPage() {
                 {accessSession.data?.features.includes("settings") && (
                   <Link href="/settings" onClick={() => setNavigationOpen(false)}><Settings size={15} />Settings</Link>
                 )}
+                <button
+                  type="button"
+                  className="xt-navigation-logout"
+                  onClick={() => {
+                    setNavigationOpen(false);
+                    logoutAccessSession();
+                  }}
+                  disabled={isLoggingOut}
+                >
+                  <LogOut size={15} />Log out
+                </button>
               </nav>
             )}
           </div>
@@ -3264,7 +3235,6 @@ export default function XTraderPage() {
             enabled={canUseDeriv}
             disabled={anyFeatureRunning || bulkBuyMutation.isPending || digitFlipBuyMutation.isPending || moneyBankBuyMutation.isPending}
             onAccountSelected={() => {
-              setLiveConfirmed(false);
               void queryClient.invalidateQueries();
             }}
             onAccountSelectError={(message) => setConnectionMessage({ kind: "error", text: message })}
@@ -3421,8 +3391,6 @@ export default function XTraderPage() {
            autoSelectBest={bulkTraderAutoSelectBest}
           recentTrades={bulkRows}
           isConnected={isConnected}
-          isReal={Boolean(isReal)}
-          liveConfirmed={liveConfirmed}
           isPlacingTrade={bulkBuyMutation.isPending}
           tradeSlotMessage={tradeSlotMessage}
           historyFading={historyFading}
@@ -3443,7 +3411,6 @@ export default function XTraderPage() {
           onDurationChange={setBulkTraderDuration}
           onStakeChange={setBulkTraderStake}
           onTradeCountChange={setBulkTraderCount}
-          onLiveConfirmChange={setLiveConfirmed}
           onTrade={(contractType, selectedBarrier) => void executeBulkTrade(contractType, selectedBarrier)}
           onAiScan={runBulkTraderAiScanner}
           onRefreshAnalysis={refreshAnalysis}
@@ -3474,8 +3441,6 @@ export default function XTraderPage() {
           currentStake={digitFlipCurrentStake}
           sessionPnl={digitFlipSessionPnl}
           tradeCount={digitFlipTradeCount}
-           isReal={isReal}
-           liveConfirmed={liveConfirmed}
           recentTrades={digitFlipRows}
             assaultEnabled={digitFlipAssault}
            magicEnabled={digitFlipMagic}
@@ -3511,7 +3476,6 @@ export default function XTraderPage() {
            onRefreshSample={refreshDigitFlipSample}
            onAssaultChange={toggleDigitFlipAssault}
            onMagicChange={toggleDigitFlipMagic}
-            onLiveConfirm={setLiveConfirmed}
           onGuide={() => { setGuideMode("digit-flip"); setGuidePage(0); setGuideOpen(true); }}
         />
       )}
@@ -3520,9 +3484,6 @@ export default function XTraderPage() {
         <EdgeReferencePanel
           isConnected={isConnected}
           running={running}
-          isReal={isReal}
-          liveConfirmed={liveConfirmed}
-          onLiveConfirm={setLiveConfirmed}
           symbol={symbol}
           markets={markets}
           onSymbolChange={(next) => void selectMarket(next)}
@@ -3626,8 +3587,6 @@ export default function XTraderPage() {
                <label className="xt-chosen-digit"><small>CHOSEN DIGIT</small><div className="xt-digit-picker">{Array.from({ length: 10 }, (_, digit) => digit).map((digit) => <button type="button" key={digit} className={barrier === digit ? "active" : ""} onClick={() => setBarrier(digit)} disabled={running}>{digit}</button>)}</div><b>Trade {direction === "DIGITOVER" ? "Over" : "Under"} the selected digit</b></label>
             </div>
 
-            {isReal && <label className="xt-live-warning"><ShieldAlert size={18} /><input type="checkbox" checked={liveConfirmed} onChange={(event) => setLiveConfirmed(event.target.checked)} /><span><b>Live funds confirmation</b>I understand EDGE will place real-money contracts.</span></label>}
-
             <div className="xt-session">
               <div><small>SESSION P/L</small><strong className={sessionPnl < 0 ? "loss" : ""}>{sessionPnl >= 0 ? "+" : ""}{sessionPnl.toFixed(2)}</strong></div>
               <div><small>TRADES SENT</small><strong>{sessionTrades}</strong></div>
@@ -3677,8 +3636,6 @@ export default function XTraderPage() {
             lastDigit={lastDigit}
             isPlacingTrade={bulkBuyMutation.isPending}
             isRefreshingAnalysis={analysisTickCount === 0 && !isConnected}
-            isReal={isReal}
-            liveConfirmed={liveConfirmed}
             disabled={running || !isConnected || tradeSlotBlocked}
             onMarketTypeChange={setTradeXMarketType}
             onSymbolChange={(next) => { setTradeXSymbol(next); void selectMarket(next); }}
@@ -3696,7 +3653,6 @@ export default function XTraderPage() {
                void executeTradeX(1, tradeXDuration, digit);
              }}
             onPlaceTrade={() => void executeTradeX(1)}
-            onLiveConfirm={setLiveConfirmed}
             onAiScan={runTradeXAiScanner}
             onRefreshAnalysis={refreshAnalysis}
           />
@@ -3711,9 +3667,6 @@ export default function XTraderPage() {
           tradeSlotBlocked={tradeSlotBlocked}
           running={moneyBankRunning}
           closing={moneyBankClosing}
-          isReal={isReal}
-          liveConfirmed={liveConfirmed}
-          onLiveConfirm={setLiveConfirmed}
           symbol={moneyBankSymbol}
           markets={moneyBankMarkets}
           onSymbolChange={(next) => {
@@ -3775,8 +3728,6 @@ export default function XTraderPage() {
           running={cashGrabRunning}
           stopping={cashGrabStopping}
           isConnected={isConnected}
-          isReal={isReal}
-          liveConfirmed={liveConfirmed}
           isPlacingTrade={bulkBuyMutation.isPending}
           recentTrades={cashGrabRows}
           clearArmed={cashGrabClearArmed}
@@ -3826,7 +3777,7 @@ export default function XTraderPage() {
               if (!cashGrabRunning) void startCashGrab(nextConfig);
             }
           }}
-          onLiveConfirmChange={setLiveConfirmed}
+          onAiScan={runCashGrabAiScanner}
           onMoneyStart={(config) => void startCashGrab(config)}
           onMoneyStop={stopCashGrab}
           onClearHistory={() => void clearCashGrabHistory()}

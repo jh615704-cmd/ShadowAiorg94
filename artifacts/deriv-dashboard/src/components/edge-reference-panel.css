@@ -282,6 +282,33 @@
 .edge-ref-input-card b,
 .edge-ref-setup label b,
 .edge-ref-risk label b { color: #ffe48a; font-size: 10px; white-space: nowrap; }
+.edge-ref-duration-field {
+  display: grid;
+  gap: 7px;
+  padding: 14px 16px;
+  border: 1px solid rgba(190, 151, 57, .45);
+  border-radius: 15px;
+  background: linear-gradient(130deg, #182238, #1c2a39);
+}
+.edge-ref-duration-field > span { color: #ddc55b; font-size: 10px; }
+.edge-ref-duration-options { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.edge-ref-duration-options button {
+  min-height: 38px;
+  border: 1px solid rgba(211, 176, 77, .3);
+  border-radius: 8px;
+  color: #e4e7e9;
+  background: #182639;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+  transition: border-color .12s ease, background .12s ease, color .12s ease;
+}
+.edge-ref-duration-options button.active {
+  border-color: #45d9c5;
+  color: #eafffa;
+  background: linear-gradient(140deg, #0a756c, #104e56);
+  box-shadow: 0 0 0 1px rgba(69, 217, 197, .22);
+}
 
 .edge-ref-setup,
 .edge-ref-risk { padding: 16px; }
@@ -378,6 +405,8 @@
   .edge-ref-run-row { grid-template-columns: minmax(0, 1fr) 52px; gap: 8px; }
   .edge-ref-run,
   .edge-ref-session-reset { min-height: 52px; }
+  .edge-ref-duration-options { gap: 4px; }
+  .edge-ref-duration-options button { min-height: 44px; }
 }
 
 .edge-reference-layout .edge-ref-card,

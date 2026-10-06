@@ -65,7 +65,6 @@ export default function AppPage() {
   const [testMessage, setTestMessage] = useState<string | null>(null);
   const [testFailed, setTestFailed] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [confirmLiveTrade, setConfirmLiveTrade] = useState(false);
   const [clearHistoryArmed, setClearHistoryArmed] = useState(false);
 
   const selectedAccount = (status?.account ? accounts.find((account) => account.id === status.account?.id) ?? status.account : undefined)
@@ -108,10 +107,6 @@ export default function AppPage() {
   }, []);
 
   useEffect(() => {
-    setConfirmLiveTrade(false);
-  }, [selectedAccount?.id]);
-
-  useEffect(() => {
     if (status?.account) {
       const balance = getAccountBalance(status.account);
       if (balance == null) return;
@@ -143,7 +138,7 @@ export default function AppPage() {
   };
 
   const handleBuy = () => {
-    if (!proposalReady || buyCooldownRemaining > 0 || isBuyPending || (isReal && !confirmLiveTrade)) return;
+    if (!proposalReady || buyCooldownRemaining > 0 || isBuyPending || (isReal && !status?.live_trading_enabled)) return;
     setBuyCooldownUntil(Date.now() + 1000);
     buyContract.mutate(
       {
@@ -153,14 +148,12 @@ export default function AppPage() {
           duration_unit: 't',
           contract_type: contractType,
           symbol: effectiveSymbol,
-          confirm_live_trade: true,
         },
       },
       {
         onSuccess: (result) => {
           setTestFailed(false);
           setTestMessage(result.message);
-          setConfirmLiveTrade(false);
           if (result.proposal) {
             queryClient.setQueryData(getGetDerivStatusQueryKey(), (current: typeof status) =>
               current ? { ...current, last_proposal: result.proposal } : current,
@@ -295,8 +288,7 @@ export default function AppPage() {
           </div>
           <div className="direction-label">DIGIT CONTRACT</div>
           <div className="direction-group"><button type="button" className={`direction-button call ${contractType === 'DIGITEVEN' ? 'direction-selected' : ''}`} onClick={() => setContractType('DIGITEVEN')} disabled={!serverSelected} data-testid="button-contract-even"><ArrowUpRight size={16} /><span>EVEN</span><small>Last digit is even</small></button><button type="button" className={`direction-button put ${contractType === 'DIGITODD' ? 'direction-selected' : ''}`} onClick={() => setContractType('DIGITODD')} disabled={!serverSelected} data-testid="button-contract-odd"><ArrowDownRight size={16} /><span>ODD</span><small>Last digit is odd</small></button></div>
-          {isReal && <label className="live-confirm"><input type="checkbox" checked={confirmLiveTrade} onChange={(event) => setConfirmLiveTrade(event.target.checked)} /><span><b>I understand this can spend real funds.</b> Require explicit confirmation before buying this proposal.</span></label>}
-          <div className="buy-submit-row"><span className="proposal-hint">No configured max stake · Deriv and available balance decide what can be bought</span>{selectedAccount && <button type="button" className="live-buy-button" disabled={!proposalReady || buyCooldownRemaining > 0 || isBuyPending || (isReal && !confirmLiveTrade) || (isReal && !status?.live_trading_enabled)} onClick={handleBuy} data-testid="button-buy-contract">{isBuyPending ? <><RefreshCw className="spin" size={16} />Requesting quote + buying…</> : `Buy ${selectedAccount.currency} (${isReal ? 'LIVE' : 'DEMO'})`}</button>}<span className={`buy-cooldown ${buyCooldownRemaining > 0 ? 'buy-cooldown-active' : ''}`} aria-live="polite">{buyCooldownRemaining > 0 ? `Cooldown ${Math.ceil(buyCooldownRemaining / 100) / 10}s` : 'Ready — 1 second between buys'}</span></div>
+          <div className="buy-submit-row"><span className="proposal-hint">No configured max stake · Deriv and available balance decide what can be bought</span>{selectedAccount && <button type="button" className="live-buy-button" disabled={!proposalReady || buyCooldownRemaining > 0 || isBuyPending || (isReal && !status?.live_trading_enabled)} onClick={handleBuy} data-testid="button-buy-contract">{isBuyPending ? <><RefreshCw className="spin" size={16} />Requesting quote + buying…</> : `Buy ${selectedAccount.currency} (${isReal ? 'LIVE' : 'DEMO'})`}</button>}<span className={`buy-cooldown ${buyCooldownRemaining > 0 ? 'buy-cooldown-active' : ''}`} aria-live="polite">{buyCooldownRemaining > 0 ? `Cooldown ${Math.ceil(buyCooldownRemaining / 100) / 10}s` : 'Ready — 1 second between buys'}</span></div>
         </form>
       </section>
 

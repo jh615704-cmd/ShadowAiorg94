@@ -5,12 +5,12 @@ import {
   ChevronDown,
   Loader2,
   Play,
-  ShieldAlert,
   Square,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
 import { formatDerivQuote } from "../lib/format-deriv-quote";
+import AiScannerAction from "./ai-scanner-action";
 import DerivHistory, { type DerivHistoryRow } from "./deriv-history";
 import "./cash-grab-panel.css";
 
@@ -75,8 +75,6 @@ export interface CashGrabPanelProps {
   stopping?: boolean;
   isConnected: boolean;
   tradeSlotBlocked: boolean;
-  isReal: boolean;
-  liveConfirmed: boolean;
   isPlacingTrade: boolean;
   recentTrades: readonly CashGrabTrade[];
   clearArmed: boolean;
@@ -91,7 +89,7 @@ export interface CashGrabPanelProps {
   onMultiplierChange: (multiplier: number) => void;
   onTakeProfitChange: (amount: number) => void;
   onLossLimitChange: (amount: number) => void;
-  onLiveConfirmChange: (confirmed: boolean) => void;
+  onAiScan: () => Promise<string>;
   onMoneyStart: (config: CashGrabStartConfig) => void;
   onMoneyStop: () => void;
   onClearHistory: () => void;
@@ -132,8 +130,6 @@ export default function CashGrabPanel({
   stopping = false,
   isConnected,
   tradeSlotBlocked,
-  isReal,
-  liveConfirmed,
   isPlacingTrade,
   recentTrades,
   clearArmed,
@@ -148,7 +144,7 @@ export default function CashGrabPanel({
   onMultiplierChange,
   onTakeProfitChange,
   onLossLimitChange,
-  onLiveConfirmChange,
+  onAiScan,
   onMoneyStart,
   onMoneyStop,
   onClearHistory,
@@ -156,7 +152,8 @@ export default function CashGrabPanel({
 }: CashGrabPanelProps) {
   const [marketMenuOpen, setMarketMenuOpen] = useState(false);
   const interactionDisabled = running || isPlacingTrade;
-  const canStart = isConnected && !tradeSlotBlocked && (!isReal || liveConfirmed) && !isPlacingTrade && !stopping;
+  const canStart = isConnected && !tradeSlotBlocked && !isPlacingTrade && !stopping;
+  const canRunScanner = isConnected && !running && !tradeSlotBlocked && !isPlacingTrade && !stopping && stake >= minimumStake;
   const selectedSymbol = symbols.find((item) => item.value === symbol);
   const selectedSignal = marketSignals.find((item) => item.symbol === symbol);
   const liveRate = selectedSignal
@@ -367,14 +364,21 @@ export default function CashGrabPanel({
           </label>
           <label>
             <span>DURATION · TICKS</span>
-            <select
-              value={duration}
-              onChange={(event) => onDurationChange(Number(event.target.value) as CashGrabDuration)}
-              disabled={interactionDisabled}
-              aria-label="Cash Grab duration in ticks"
-            >
-              {durations.map((ticks) => <option key={ticks} value={ticks}>{ticks} {ticks === 1 ? "tick" : "ticks"}</option>)}
-            </select>
+            <div className="cash-grab-tick-options" role="group" aria-label="Cash Grab duration in ticks">
+              {durations.map((ticks) => (
+                <button
+                  type="button"
+                  key={ticks}
+                  className={duration === ticks ? "active" : ""}
+                  aria-pressed={duration === ticks}
+                  onClick={() => onDurationChange(ticks)}
+                  disabled={interactionDisabled}
+                  data-testid={`cash-grab-duration-${ticks}`}
+                >
+                  {ticks}
+                </button>
+              ))}
+            </div>
           </label>
           <label>
             <span>STAKE MODE</span>
@@ -440,12 +444,10 @@ export default function CashGrabPanel({
           </output>
         </div>
 
-        {isReal && (
-          <label className="cash-grab-live-confirm">
-            <input type="checkbox" checked={liveConfirmed} onChange={(event) => onLiveConfirmChange(event.target.checked)} disabled={running || isPlacingTrade} aria-label="Confirm real money trading" />
-            <span><b><ShieldAlert size={14} /> Confirm live funds</b><small>Trades use the selected real Deriv account.</small></span>
-          </label>
-        )}
+        <div className="cash-grab-ai-scanner">
+          <div><b>AI SCANNER</b><small>Chooses a supported market and Rise/Fall side from recent samples, then sends one contract using the stake and duration above. Samples are not a win-rate guarantee.</small></div>
+          <AiScannerAction onScan={onAiScan} disabled={!canRunScanner} />
+        </div>
 
         <div className="df-action-row">
           {running || stopping ? (
@@ -454,7 +456,7 @@ export default function CashGrabPanel({
               {stopping ? "STOPPING…" : "STOP CASH GRAB"}
             </button>
           ) : (
-            <button type="submit" className="df-run" disabled={!canStart || (isReal && !liveConfirmed)} data-testid="button-cash-grab-start">
+            <button type="submit" className="df-run" disabled={!canStart} data-testid="button-cash-grab-start">
               {isPlacingTrade ? <Loader2 size={14} className="cash-grab-spin" /> : <Play size={14} fill="currentColor" />}
               {isPlacingTrade ? "PLACING…" : "START CASH GRAB"}
             </button>
@@ -463,7 +465,6 @@ export default function CashGrabPanel({
         </div>
         {!isConnected && <p className="cash-grab-status-note">Connect Deriv to place a Rise/Fall contract.</p>}
         {tradeSlotBlocked && <p className="cash-grab-status-note" role="status">New entries stay paused until Deriv confirms that all open contracts have settled.</p>}
-        {isReal && !liveConfirmed && <p className="cash-grab-status-note">Confirm live funds before starting.</p>}
         <p className="cash-grab-status-note">Cash Grab runs one contract at a time until stopped. The account balance is checked before each entry.</p>
       </form>
 

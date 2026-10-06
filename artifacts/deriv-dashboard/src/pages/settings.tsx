@@ -11,21 +11,21 @@ import { AppShell } from '@/components/layout/app-shell';
 import { PatOnboarding } from '@/components/pat-onboarding';
 import { KeyRound, ShieldAlert, CheckCircle2, Clock, Trash2, LogOut, Settings2, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useClerk, useUser } from '@clerk/react';
+import { useUser } from '@clerk/react';
 import { useState } from 'react';
 import { useLocation } from 'wouter';
+import { useAccessSessionLogout } from '@/hooks/use-access-session-logout';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { signOut } = useClerk();
   const { user } = useUser();
   const [, setLocation] = useLocation();
+  const { logout } = useAccessSessionLogout();
   const tokenStatusQuery = useGetDerivTokenStatus();
   const deleteTokenMutation = useDeleteDerivToken();
   const [isDeleting, setIsDeleting] = useState(false);
-  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
   const hasToken = tokenStatusQuery.data?.has_token;
   const expiresAt = tokenStatusQuery.data?.expires_at ? new Date(tokenStatusQuery.data.expires_at) : null;
@@ -80,11 +80,11 @@ export default function SettingsPage() {
             </div>
             
             <button 
-              onClick={() => signOut({ redirectUrl: basePath || "/" })}
+              onClick={logout}
               className="flex items-center gap-2 px-4 py-2 rounded-lg border border-[var(--line)] dark:border-[#31545a] text-[var(--coral)] hover:bg-[#fff4f2] dark:hover:bg-[#3c2426] transition-colors text-sm font-semibold"
-              data-testid="button-sign-out"
+              data-testid="button-access-key-logout"
             >
-              <LogOut size={16} /> Sign out
+              <LogOut size={16} /> Log out
             </button>
           </div>
         </section>

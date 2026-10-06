@@ -2093,21 +2093,26 @@
   font-weight: 900;
 }
 .tx-panel .tx-digit-percent {
-  color: #72f2d8 !important;
-  font-size: 13px;
-  font-weight: 850;
+  color: #9dfff0 !important;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: .01em;
 }
 .tx-panel .tx-digit-meta {
-  color: #e0edff !important;
-  font-size: 10px;
-  font-weight: 800;
+  color: #f5f9ff !important;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .01em;
 }
 .tx-panel .tx-rank-digit {
   color: #fff !important;
-  font-size: 25px;
+  font-size: 27px;
   font-weight: 900;
   text-shadow: none !important;
 }
+.tx-panel .tx-rank-metrics { color: #d5e8f7; font-size: 11px; }
+.tx-panel .tx-rank-metrics b { color: #a3fff0; font-size: 12px; font-weight: 900; }
+.tx-panel .tx-rank-metrics b small { color: #e8f2ff; font-size: 9px; font-weight: 800; }
 .tx-panel .tx-rank-metrics b {
   color: #a7f2e2 !important;
   font-size: 13px;

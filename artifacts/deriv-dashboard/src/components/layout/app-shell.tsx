@@ -1,11 +1,9 @@
 import { ReactNode } from 'react';
 import { Link, useLocation } from 'wouter';
-import { useClerk, useUser } from '@clerk/react';
-import { getGetAccessSessionQueryKey, useGetAccessSession, useLogoutAccessSession } from '@workspace/api-client-react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useUser } from '@clerk/react';
+import { getGetAccessSessionQueryKey, useGetAccessSession } from '@workspace/api-client-react';
 import {
   Gauge,
-  LockKeyhole,
   ShieldCheck,
   Moon,
   Sun,
@@ -16,6 +14,7 @@ import {
 import { useTheme } from '@/components/theme-provider';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { DerivAccountSwitcher } from '@/components/deriv-account-switcher';
+import { useAccessSessionLogout } from '@/hooks/use-access-session-logout';
 
 interface AppShellProps {
   children: ReactNode;
@@ -27,11 +26,9 @@ interface AppShellProps {
 export function AppShell({ children, title, onRefresh, headerContent }: AppShellProps) {
   const [location, setLocation] = useLocation();
   const { theme, setTheme } = useTheme();
-  const { signOut } = useClerk();
-  const queryClient = useQueryClient();
   const { user } = useUser();
   const accessSession = useGetAccessSession({ query: { retry: false, queryKey: getGetAccessSessionQueryKey() } });
-  const logoutAccess = useLogoutAccessSession();
+  const { logout } = useAccessSessionLogout();
   const isAdmin = accessSession.data?.is_admin === true;
   const features = accessSession.data?.features ?? [];
   const canUseEdge = isAdmin || features.includes("edge");
@@ -42,7 +39,6 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
   const canUseMoneyBank = isAdmin || features.includes("money-bank");
   const canUseTrading = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseCashGrab || canUseMoneyBank;
   const canUseSettings = isAdmin || features.includes("settings");
-  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
   return (
     <div className="app-frame">
@@ -129,25 +125,8 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Settings</span>
                 </DropdownMenuItem>
-                {accessSession.data && (
-                  <DropdownMenuItem
-                    onClick={() => {
-                      logoutAccess.mutate(undefined, {
-                        onSettled: () => {
-                          window.dispatchEvent(new Event('shadow-access-key-locked'));
-                          queryClient.clear();
-                          setLocation('/');
-                        },
-                      });
-                    }}
-                    className="cursor-pointer text-[var(--ink-deep)] dark:text-[#d8ece9]"
-                  >
-                    <LockKeyhole className="mr-2 h-4 w-4" />
-                    <span>Lock EDGE</span>
-                  </DropdownMenuItem>
-                )}
                 <DropdownMenuItem 
-                  onClick={() => signOut({ redirectUrl: basePath || "/" })}
+                  onClick={logout}
                   className="cursor-pointer text-red-600 dark:text-red-400 focus:bg-red-50 dark:focus:bg-red-950/30"
                 >
                   <LogOut className="mr-2 h-4 w-4" />

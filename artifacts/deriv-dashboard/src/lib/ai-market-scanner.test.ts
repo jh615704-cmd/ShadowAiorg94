@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   chooseBulkScannerCandidate,
+  chooseCashGrabScannerCandidate,
   chooseDigitFlipScannerCandidate,
   chooseTradeXScannerCandidate,
   type AiScannerMarketSignal,
@@ -13,12 +14,16 @@ function signal(
   outcomes: Array<{ digit: number; over_percentage: number; under_percentage: number }>,
   even = 50,
   odd = 50,
+  rise = 50,
+  fall = 50,
 ): AiScannerMarketSignal {
   return {
     symbol,
     sample_count: sampleCount,
     digit_even_percentage: even,
     digit_odd_percentage: odd,
+    rise_percentage: rise,
+    fall_percentage: fall,
     digit_outcomes: outcomes,
   };
 }
@@ -74,6 +79,32 @@ test("Trade X ranks the least frequent observed digit across eligible markets", 
   assert.equal(candidate?.symbol, "JD25");
   assert.equal(candidate?.digit, 7);
   assert.equal(candidate?.observedRate, 96);
+});
+
+test("Cash Grab chooses the strongest valid Rise/Fall sample on a supported market", () => {
+  const candidate = chooseCashGrabScannerCandidate([
+    signal("R_10", 30, [], 50, 50, 48, 53),
+    signal("JD25", 80, [], 50, 50, 63, 35),
+    signal("R_25", 100, [], 50, 50, 51, 47),
+    signal("JD50", 100, [], 50, 50, 90, 5),
+  ], ["R_10", "JD25", "R_25"]);
+
+  assert.deepEqual(candidate, {
+    symbol: "JD25",
+    contractType: "CALL",
+    observedRate: 63,
+    sampleCount: 80,
+  });
+});
+
+test("Cash Grab ignores undersampled, equal, and invalid Rise/Fall readings", () => {
+  const candidate = chooseCashGrabScannerCandidate([
+    signal("R_10", 19, [], 50, 50, 99, 1),
+    signal("R_25", 40, [], 50, 50, 50, 50),
+    signal("JD25", 60, [], 50, 50, Number.NaN, 40),
+  ], ["R_10", "R_25", "JD25"]);
+
+  assert.equal(candidate, null);
 });
 
 test("all scanners ignore undersampled or unsupported markets", () => {

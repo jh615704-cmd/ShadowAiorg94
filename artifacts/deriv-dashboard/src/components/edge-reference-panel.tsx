@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, Pause, Play, ShieldAlert } from "lucide-react";
+import { ChevronDown, Pause, Play } from "lucide-react";
 import { formatDerivQuote } from "../lib/format-deriv-quote";
 import AiScannerAction from "./ai-scanner-action";
 import {
@@ -18,9 +18,6 @@ type EdgeTradeRow = DerivHistoryRow & { account_type: string };
 type EdgeReferencePanelProps = {
   isConnected: boolean;
   running: boolean;
-  isReal: boolean;
-  liveConfirmed: boolean;
-  onLiveConfirm: (value: boolean) => void;
   symbol: string;
   markets: readonly (readonly [string, string])[];
   onSymbolChange: (value: string) => void;
@@ -67,9 +64,6 @@ const EDGE_PERCENTAGE_SCAN_FLOOR = 90;
 export default function EdgeReferencePanel({
   isConnected,
   running,
-  isReal,
-  liveConfirmed,
-  onLiveConfirm,
   symbol,
   markets,
   onSymbolChange,
@@ -199,10 +193,27 @@ export default function EdgeReferencePanel({
         })}</div>
       </section>
 
-      <label className="edge-ref-input-card"><span>Duration</span><div><input type="number" min="1" max="6" step="1" value={duration} onChange={(event) => onDurationChange(Math.min(6, Math.max(1, Math.trunc(Number(event.target.value) || 1))))} disabled={running} /><b>ticks</b></div></label>
+      <div className="edge-ref-duration-field">
+        <span>Duration · ticks</span>
+        <div className="edge-ref-duration-options" role="group" aria-label="EDGE duration in ticks">
+          {[1, 2, 3, 4, 5, 6].map((ticks) => (
+            <button
+              type="button"
+              key={ticks}
+              className={duration === ticks ? "active" : ""}
+              aria-pressed={duration === ticks}
+              onClick={() => onDurationChange(ticks)}
+              disabled={running}
+              data-testid={`edge-duration-${ticks}`}
+            >
+              {ticks}
+            </button>
+          ))}
+        </div>
+      </div>
       <label className="edge-ref-input-card"><span>Initial stake</span><div><input type="number" min=".35" step=".01" value={stake} onChange={(event) => onStakeChange(Math.max(.35, Number(event.target.value) || .35))} disabled={running} /><b>{currency}</b></div></label>
       <section className="edge-ref-ai-scanner">
-        <div><b>AI SCANNER</b><small>Set duration, stake, and digit first. It compares Over vs Under for this market and digit using live samples, then selects the stronger observed side without placing a trade.</small></div>
+        <div><b>AI SCANNER</b><small>Set duration, stake, and digit first. It compares Over vs Under for this market and digit, then sends one contract on the stronger observed side. Samples are not a win-rate guarantee.</small></div>
         <AiScannerAction onScan={onAiScan} disabled={!canRunAiScanner} />
       </section>
 
@@ -218,8 +229,6 @@ export default function EdgeReferencePanel({
         <label><span>Loss threshold</span><div><input type="number" min=".01" step=".01" value={stopLoss} onChange={(event) => onStopLossChange(Math.max(.01, Number(event.target.value) || .01))} disabled={running} /><b>USD</b></div></label>
         <p className="edge-ref-callout danger"><b>Wipeout radar</b> — <b>22</b> losses in a row would exhaust your balance.</p>
       </section>
-
-      {isReal && <label className="xt-live-warning"><ShieldAlert size={18} /><input type="checkbox" checked={liveConfirmed} onChange={(event) => onLiveConfirm(event.target.checked)} /><span><b>Live funds confirmation</b>I understand EDGE will place real-money contracts.</span></label>}
 
       <section className="edge-ref-session"><div><span>Current Stake</span><b>${(strategy === "martingale" ? nextStake : stake).toFixed(2)}</b></div><div><span>Session P/L</span><b className={sessionPnl < 0 ? "loss" : ""}>{sessionPnl >= 0 ? "+" : ""}{sessionPnl.toFixed(2)}</b></div><div><span>Trades</span><b>{sessionTrades}</b></div><p>Runtime stop</p></section>
 

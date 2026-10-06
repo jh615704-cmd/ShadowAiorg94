@@ -63,9 +63,6 @@ type MoneyBankPanelProps = {
   isConnected: boolean;
   tradeSlotBlocked: boolean;
   running: boolean;
-  isReal: boolean;
-  liveConfirmed: boolean;
-  onLiveConfirm: (confirmed: boolean) => void;
   symbol: string;
   markets: readonly (readonly [string, string])[];
   onSymbolChange: (symbol: string) => void;
@@ -143,9 +140,6 @@ export function MoneyBankPanel({
   isConnected,
   tradeSlotBlocked,
   running,
-  isReal,
-  liveConfirmed,
-  onLiveConfirm,
   symbol,
   markets,
   onSymbolChange,
@@ -474,7 +468,16 @@ export function MoneyBankPanel({
           <p className="money-bank-safest-copy">Selected market: <b>{selectedMarket}</b>{quote != null && <> · latest quote {quote.toFixed(2)}</>}</p>
        </section>
 
-        <DerivHistory
+      <div className="money-bank-actions">
+        <button type="button" className={`money-bank-start ${running ? "stop" : ""}`} onClick={submitStart} disabled={!isConnected || (!running && tradeSlotBlocked)}>
+          {closing ? <><RefreshCw size={15} className="money-bank-spin" /> Closing contracts…</> : running ? <><Square size={15} /> Stop Accumulator</> : <><Play size={15} /> Start Accumulator</>}
+        </button>
+        <button type="button" className="money-bank-reset" onClick={() => { onGrowthRateChange(4); onTakeProfitTicksChange(5); onStrategyChange("budget"); }} disabled={running} title="Reset core settings">
+          <RotateCcw size={15} />
+        </button>
+      </div>
+
+      <DerivHistory
           title="Money Bank History"
           strategy="Money Bank Strategy"
           rows={visibleTrades}
@@ -494,15 +497,6 @@ export function MoneyBankPanel({
           <span><small>SESSION P/L</small><b className={sessionPnl >= 0 ? "positive" : "negative"}>{sessionPnl >= 0 ? "+" : ""}{money(sessionPnl, currency)}</b></span>
           <span><small>TRADES</small><b>{tradeCount}</b></span>
         </div>
-        {isReal && !liveConfirmed && (
-          <label className="money-bank-live-confirm"><input type="checkbox" checked={liveConfirmed} onChange={(event) => onLiveConfirm(event.target.checked)} /><span>Confirm live funds</span></label>
-        )}
-        <button type="button" className={`money-bank-start ${running ? "stop" : ""}`} onClick={submitStart} disabled={!isConnected || (!running && tradeSlotBlocked) || (isReal && !liveConfirmed)}>
-           {closing ? <><RefreshCw size={15} className="money-bank-spin" /> Closing contracts…</> : running ? <><Square size={15} /> Stop Accumulator</> : <><Play size={15} /> Start Accumulator</>}
-        </button>
-        <button type="button" className="money-bank-reset" onClick={() => { onGrowthRateChange(4); onTakeProfitTicksChange(5); onStrategyChange("budget"); }} disabled={running} title="Reset core settings">
-          <RotateCcw size={15} />
-        </button>
       </footer>
     </section>
   );

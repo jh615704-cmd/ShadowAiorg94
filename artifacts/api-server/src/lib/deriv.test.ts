@@ -278,7 +278,6 @@ describe("Deriv real-account trading capability", { concurrency: false }, () => 
         duration_unit: "t",
         contract_type: "DIGITEVEN",
         symbol: "R_75",
-        confirm_live_trade: true,
       });
 
       assert.equal(result.ok, true);
@@ -315,7 +314,6 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       contract_type: "ACCU",
       growth_rate: 0.04,
       symbol: "1HZ90V",
-      confirm_live_trade: true,
     }));
 
     assert.equal(result.buy.contract_id, "contract-proposal-1");
@@ -338,7 +336,6 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       contract_type: "ACCU",
       growth_rate: 0.04,
       symbol: "1HZ90V",
-      confirm_live_trade: true,
     }));
 
     assert.equal(result.buy.contract_id, "contract-proposal-1");
@@ -360,7 +357,6 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       contract_type: "ACCU",
       growth_rate: 0.04,
       symbol: "1HZ90V",
-      confirm_live_trade: true,
     }));
 
     const proposalRequest = latestSocket().sent.find((message) => message.proposal);
@@ -378,7 +374,6 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       growth_rate: 0.04,
       symbol: "1HZ90V",
       count: 1,
-      confirm_live_trade: true,
     }));
 
     assert.equal(result.count, 1);
@@ -403,7 +398,6 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       contract_type: "CALL",
       symbol: "R_75",
       count: 1,
-      confirm_live_trade: true,
     }));
 
     assert.equal(result.count, 1);
@@ -421,7 +415,6 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
         barrier: 5,
         symbol: "R_75",
         count: 1,
-        confirm_live_trade: true,
       })),
       /Tick durations above 5 are only supported for Rise\/Fall contracts/,
     );
@@ -435,7 +428,6 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       contract_type: "DIGITDIFF",
       barrier: 5,
       symbol: "R_75",
-      confirm_live_trade: true,
     }));
 
     assert.equal(result.proposal.id, "proposal-1");
@@ -514,7 +506,6 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       duration_unit: "t",
       contract_type: "DIGITEVEN",
       symbol: "R_75",
-      confirm_live_trade: true,
     }));
 
     assert.equal(result.proposal.payout, fullPayout);
@@ -589,7 +580,6 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
         duration_unit: "t",
         contract_type: "DIGITEVEN",
         symbol: "R_75",
-        confirm_live_trade: true,
       })),
       /buy rejected by Deriv/,
     );
@@ -602,7 +592,6 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       contract_type: "DIGITEVEN",
       symbol: "R_75",
       count: 1,
-      confirm_live_trade: true,
     }));
     assert.equal(result.count, 1);
   });
@@ -616,7 +605,6 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
         duration_unit: "t",
         contract_type: "DIGITODD",
         symbol: "R_75",
-        confirm_live_trade: true,
       })),
       /WebSocket disconnected before the contract purchase was acknowledged/,
     );
@@ -629,7 +617,6 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       contract_type: "DIGITODD",
       symbol: "R_75",
       count: 1,
-      confirm_live_trade: true,
     }));
     assert.equal(result.count, 1);
   });
@@ -643,7 +630,6 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       barrier: 3,
       symbol: "R_75",
       count: 2,
-      confirm_live_trade: true,
     }));
 
     assert.equal(result.count, 2);
@@ -664,7 +650,6 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
           barrier: 3,
           symbol: "R_75",
           count: 1,
-          confirm_live_trade: true,
         }),
         /previous contract is still settling/,
       );
@@ -679,7 +664,6 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       contract_type: "DIGITODD",
       symbol: "R_75",
       count: 1,
-      confirm_live_trade: true,
     }));
     const contractId = result.buys[0].contract_id;
 
@@ -723,7 +707,6 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
         contract_type: "DIGITODD",
         symbol: "R_75",
         count: 1,
-        confirm_live_trade: true,
       });
       assert.equal(nextBatch.count, 1, "a new entry is allowed after the prior contract is confirmed sold");
       assert.equal(deriv.getStatus().active_contract_count, 1);
@@ -740,7 +723,6 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
         contract_type: "DIGITODD",
         symbol: "R_75",
         count: 1,
-        confirm_live_trade: true,
       });
       contractId = result.buys[0].contract_id;
       mockPortfolioContracts = [{
@@ -797,7 +779,6 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       duration_unit: "t",
       barrier: 3,
       symbol: "R_75",
-      confirm_live_trade: true,
     }));
 
     assert.equal(result.count, 2);

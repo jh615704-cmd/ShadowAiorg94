@@ -417,7 +417,7 @@
   align-self: start;
   height: fit-content;
   min-height: 0;
-  padding: 8px 12px 7px;
+  padding: 6px 10px 5px;
   background:
     radial-gradient(circle at 95% 5%, rgba(225, 76, 103, .2), transparent 34%),
     linear-gradient(140deg, #47121e, #260a12 76%);
@@ -445,14 +445,23 @@
   display: block;
   margin-top: 2px;
   color: #fff5f4;
-  font-size: 1.35rem;
+  font-size: 1.15rem;
   letter-spacing: -.05em;
 }
 
 .money-bank-return-card p {
-  margin: 1px 0 0;
+  margin: 0;
   color: #e0aab0;
-  font-size: .62rem;
+  font-size: .6rem;
+  line-height: 1.2;
+}
+
+.money-bank-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+  padding: 0 0 12px;
 }
 
 .money-bank-risk-pill {
@@ -955,6 +964,9 @@
     justify-content: flex-start;
     padding-left: 26px;
   }
+
+  .money-bank-actions { justify-content: stretch; }
+  .money-bank-actions .money-bank-start { flex: 1 1 auto; }
 
   .money-bank-start {
     flex: 1;

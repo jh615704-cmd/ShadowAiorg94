@@ -13,6 +13,7 @@ function money(amount: number, currency?: string) {
 type Props = {
   title: string;
   strategy: string;
+  className?: string;
   rows: readonly DerivHistoryRow[];
   currency?: string;
   clearArmed?: boolean;
@@ -24,7 +25,7 @@ type Props = {
   actions?: ReactNode;
 };
 
-export default function DerivHistory({ title, strategy, rows, currency, clearArmed = false, fading = false, onClear, sessionPnl, sessionTradeCount, summaryMode = "full", actions }: Props) {
+export default function DerivHistory({ title, strategy, className, rows, currency, clearArmed = false, fading = false, onClear, sessionPnl, sessionTradeCount, summaryMode = "full", actions }: Props) {
   const [filter, setFilter] = useState<"all" | "win" | "loss">("all");
   const settled = rows.filter((row) => row.status.toLowerCase() !== "open");
   const wins = settled.filter((row) => row.profit > 0).length;
@@ -38,7 +39,7 @@ export default function DerivHistory({ title, strategy, rows, currency, clearArm
   }), [filter, rows]);
 
   return (
-    <section className={`deriv-history ${fading ? "is-fading" : ""}`} aria-label={`${title} Deriv history`}>
+    <section className={`deriv-history ${className ?? ""} ${fading ? "is-fading" : ""}`} aria-label={`${title} Deriv history`}>
       <header className="deriv-history-head">
         <div className="deriv-history-title"><Activity size={17} /><span><b>{title}</b><small>Deriv contracts · local feature view</small></span></div>
         <div className="deriv-history-actions">
