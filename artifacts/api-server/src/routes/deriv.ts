@@ -243,7 +243,7 @@ router.post("/deriv/select-symbol", async (req, res) => {
 
 router.post("/deriv/buy", async (req, res) => {
   const parsed = BuyDerivContractBody.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Explicit live-trade confirmation is required" });
+  if (!parsed.success) return res.status(400).json({ error: "Invalid trade request" });
 
   try {
     const assertAuthorized = () => assertAccessSessionActive(res.locals.accessSessionId, res.locals.accessKeyId);

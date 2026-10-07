@@ -77,6 +77,7 @@ export interface CashGrabPanelProps {
   tradeSlotBlocked: boolean;
   isPlacingTrade: boolean;
   recentTrades: readonly CashGrabTrade[];
+  sessionRows: readonly CashGrabTrade[];
   clearArmed: boolean;
   historyFading: boolean;
   onDirectionChange: (direction: CashGrabDirection) => void;
@@ -132,6 +133,7 @@ export default function CashGrabPanel({
   tradeSlotBlocked,
   isPlacingTrade,
   recentTrades,
+  sessionRows,
   clearArmed,
   historyFading,
   onDirectionChange,
@@ -473,7 +475,10 @@ export default function CashGrabPanel({
           title="Cash Grab History"
           strategy="Cash Grab Rise/Fall"
           rows={recentTrades}
+          sessionRows={sessionRows}
           currency={currency}
+          sessionPnl={sessionPnl}
+          sessionTradeCount={recentTrades.length}
           clearArmed={clearArmed}
           fading={historyFading}
           onClear={onClearHistory}

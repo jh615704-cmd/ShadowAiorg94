@@ -266,8 +266,8 @@ describe("Deriv per-process session capacity", { concurrency: false }, () => {
 });
 
 describe("Deriv real-account trading capability", { concurrency: false }, () => {
-  test("allows an explicitly confirmed buy on a selected real account using mocked Deriv", async () => {
-    await inUser("real-account-confirmed-buy-user", async () => {
+  test("allows a buy on a selected real account without a per-feature confirmation using mocked Deriv", async () => {
+    await inUser("real-account-buy-user", async () => {
       const status = await deriv.selectAccount("CR123");
       assert.equal(status.account?.type, "real");
       assert.equal(status.live_trading_enabled, true);

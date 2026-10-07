@@ -1,10 +1,10 @@
 ---
-name: Real-account balance inspection
-description: Selecting a real account for balance inspection must remain separate from permission to place live trades.
+name: Real-account order routing
+description: Selecting a real account routes trades there without per-feature confirmation checkboxes; server safeguards remain authoritative.
 ---
 
-Allow users to select a real account to inspect its balance even when live trading is disabled. Keep live-trading enablement and explicit confirmation checks on quote or buy execution paths.
+Selecting a real account routes feature orders directly to that account without an additional feature-level confirmation checkbox. Keep server live-trading permission, authenticated account binding, available-balance checks, open-contract and settlement checks, and existing risk guards authoritative for every order.
 
-**Why:** Account selection is a view/session change, not authorization to spend real funds.
+**Why:** The user asked that account selection be the only per-feature step for choosing real funds, while retaining server-side controls.
 
-**How to apply:** Do not reuse trade-permission flags to block account inspection; preserve the existing safeguards at every actual live-trade entry point.
+**How to apply:** Apply this to current and future features. Do not add per-feature live-funds checkboxes; continue to reject orders when server permission, account, balance, settlement, or risk checks fail.

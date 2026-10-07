@@ -35,5 +35,4 @@ export interface DerivBulkBuyInput {
      * @maximum 6
      */
   count: number;
-  confirm_live_trade: true;
 }

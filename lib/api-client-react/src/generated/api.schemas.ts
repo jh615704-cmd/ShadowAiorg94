@@ -480,7 +480,6 @@ export interface DerivBuyInput {
      */
   growth_rate?: number;
   symbol?: string;
-  confirm_live_trade: true;
 }
 
 export type DerivBulkBuyInputDurationUnit = typeof DerivBulkBuyInputDurationUnit[keyof typeof DerivBulkBuyInputDurationUnit];
@@ -531,7 +530,6 @@ export interface DerivBulkBuyInput {
      * @maximum 6
      */
   count: number;
-  confirm_live_trade: true;
 }
 
 export type DerivDualBuyInputDurationUnit = typeof DerivDualBuyInputDurationUnit[keyof typeof DerivDualBuyInputDurationUnit];
@@ -553,7 +551,6 @@ export interface DerivDualBuyInput {
      */
   barrier: number;
   symbol?: string;
-  confirm_live_trade: true;
 }
 
 export interface DerivBuyResponse {

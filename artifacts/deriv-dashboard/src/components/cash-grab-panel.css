@@ -183,22 +183,6 @@
   white-space: nowrap;
 }
 
-.cash-grab-live-confirm {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  margin-top: 13px;
-  padding: 10px 11px;
-  border: 1px solid rgba(229, 176, 85, .4);
-  border-radius: 8px;
-  color: #f4ddb2;
-  background: rgba(121, 76, 15, .15);
-  cursor: pointer;
-}
-.cash-grab-live-confirm input { margin: 2px 0 0; accent-color: #4ca5f4; }
-.cash-grab-live-confirm span { display: grid; gap: 3px; }
-.cash-grab-live-confirm b { display: flex; align-items: center; gap: 5px; font-size: 9px; }
-.cash-grab-live-confirm small { color: #b8a47f; font-size: 8px; }
 .cash-grab-status-note { margin: 8px 0 0; color: #a9bad0; font-size: 9px; text-align: center; }
 .cash-grab-spin { animation: cash-grab-spin .9s linear infinite; }
 @keyframes cash-grab-spin { to { transform: rotate(360deg); } }
@@ -218,16 +202,17 @@
   overflow: visible;
 }
 .cash-grab-history .deriv-history-head,
-.cash-grab-history .deriv-history-summary,
+.cash-grab-history .deriv-history-session,
 .cash-grab-history .deriv-history-filters,
 .cash-grab-history .deriv-history-row { border-color: rgba(112, 163, 218, .16); }
 .cash-grab-history .deriv-history-head { background: #102743; }
 .cash-grab-history .deriv-history-title { color: #91caff; }
 .cash-grab-history .deriv-history-title b,
-.cash-grab-history .deriv-history-summary b,
+.cash-grab-history .deriv-history-stat-grid b,
 .cash-grab-history .deriv-history-market b { color: #edf5ff; }
 .cash-grab-history .deriv-history-title small,
-.cash-grab-history .deriv-history-summary small,
+.cash-grab-history .deriv-history-run small,
+.cash-grab-history .deriv-history-stat-grid small,
 .cash-grab-history .deriv-history-account,
 .cash-grab-history .deriv-history-account-id { color: #95abc4; }
 .cash-grab-history .deriv-history-filters button.active { border-color: #4b94d7; color: #a8d5ff; background: rgba(37, 105, 168, .25); }
@@ -235,9 +220,8 @@
 .cash-grab-history .deriv-history-head { min-height: 64px; padding: 15px 18px; }
 .cash-grab-history .deriv-history-title b { font-size: 15px; }
 .cash-grab-history .deriv-history-title small { font-size: 10px; }
-.cash-grab-history .deriv-history-summary > div { min-height: 64px; padding: 11px 16px; }
-.cash-grab-history .deriv-history-summary small { font-size: 8px; }
-.cash-grab-history .deriv-history-summary b { font-size: 14px; }
+.cash-grab-history .deriv-history-run { min-height: 100px; }
+.cash-grab-history .deriv-history-stat-grid > div { min-height: 68px; }
 .cash-grab-history .deriv-history-row { padding: 14px 15px; }
 .cash-grab-history .deriv-history-market > b,
 .cash-grab-history .deriv-history-account,
@@ -248,9 +232,8 @@
 .digit-flip-history .deriv-history-head { min-height: 64px; padding: 15px 18px; }
 .digit-flip-history .deriv-history-title b { font-size: 15px; }
 .digit-flip-history .deriv-history-title small { font-size: 10px; }
-.digit-flip-history .deriv-history-summary > div { min-height: 64px; padding: 11px 16px; }
-.digit-flip-history .deriv-history-summary small { font-size: 8px; }
-.digit-flip-history .deriv-history-summary b { font-size: 14px; }
+.digit-flip-history .deriv-history-run { min-height: 100px; }
+.digit-flip-history .deriv-history-stat-grid > div { min-height: 68px; }
 .digit-flip-history .deriv-history-row { padding: 14px 15px; }
 .digit-flip-history .deriv-history-market > b,
 .digit-flip-history .deriv-history-account,

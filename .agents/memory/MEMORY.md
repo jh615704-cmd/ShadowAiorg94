@@ -22,7 +22,7 @@
 - [Access feature registry](access-feature-registry.md) — keep runtime access, API schemas, generated clients, route guards, UI history polling, and admin controls synchronized.
 - [Cash Grab auto-switch](cash-grab-auto-switch.md) — scan live evidence every 20 seconds, keep one contract open at a time, and retain immediate stop controls.
 - [Trading protection test isolation](trading-protection-test-isolation.md) — API trade tests must isolate persisted admin entry shields before asserting Deriv behavior.
-- [Real-account balance inspection](real-account-inspection.md) — account selection for inspection is separate from authorization to place live trades.
+- [Real-account order routing](real-account-inspection.md) — selecting a real account routes trades directly; server-side live-trading and funds checks remain authoritative.
 - [Replit multi-artifact deployment](replit-multi-artifact-deployment.md) — publishing deploys this project's artifacts together; deployment target changes apply to the whole project.
 - [Deriv capacity testing](deriv-capacity-testing.md) — load tests must use isolated demo-only sessions; never send live trade traffic.
 - [Workspace dependency audits](workspace-dependency-audits.md) — a clear production audit can miss vulnerable packages in another artifact's development dependency tree.

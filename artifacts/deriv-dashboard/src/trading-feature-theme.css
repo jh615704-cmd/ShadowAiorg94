@@ -171,10 +171,13 @@
 
 .deriv-history-title b { font-size: 14px !important; }
 .deriv-history-title small { color: #9bb7d1 !important; font-size: 10px !important; }
-.deriv-history-summary > div { min-height: 62px; }
-.deriv-history-summary small,
+.deriv-history-run { min-height: 100px; }
+.deriv-history-stat-grid > div { min-height: 72px; }
+.deriv-history-stat-grid small,
 .deriv-history-details small { color: #9bb5cd !important; font-size: 9px !important; }
-.deriv-history-summary b { color: #e8f3ff !important; font-size: 14px !important; }
+.deriv-history-stat-grid b { color: #e8f3ff !important; font-size: 15px !important; }
+.deriv-history-run.positive b { color: #49e59f !important; }
+.deriv-history-run.negative b { color: #ff7c85 !important; }
 .deriv-history-filters button { min-height: 30px; color: #b2c8dd; font-size: 9px; }
 .deriv-history-list { max-height: min(700px, 72vh); padding: 12px; gap: 9px; }
 .deriv-history-row { padding: 12px 14px; }

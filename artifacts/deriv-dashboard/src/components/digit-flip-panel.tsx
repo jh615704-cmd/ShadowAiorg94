@@ -49,6 +49,7 @@ export type DigitFlipPanelProps = {
   sessionPnl: number;
   tradeCount: number;
   recentTrades: readonly DigitFlipTradeRow[];
+  sessionRows: readonly DigitFlipTradeRow[];
   currency?: string;
   assaultEnabled: boolean;
   magicEnabled: boolean;
@@ -132,6 +133,7 @@ export default function DigitFlipPanel({
   sessionPnl,
   tradeCount,
   recentTrades,
+  sessionRows,
   currency,
   assaultEnabled,
   magicEnabled,
@@ -352,7 +354,24 @@ export default function DigitFlipPanel({
         </div>
         <div className="df-setup-grid">
           <label><span>STAKE</span><input type="number" min=".5" step=".01" value={stake} onChange={(event) => onStakeChange(Math.max(.5, Number(event.target.value) || .5))} disabled={disabled || running} /></label>
-          <label><span>DURATION</span><select value={duration} onChange={(event) => onDurationChange(Number(event.target.value) as DigitFlipDuration)} disabled={disabled || running}>{[1, 2, 3, 4, 5, 6].map((tick) => <option value={tick} key={tick}>{tick} tick{tick > 1 ? "s" : ""}</option>)}</select></label>
+          <label className="df-duration-field">
+            <span>DURATION / TICKS</span>
+            <div className="df-duration-options" role="group" aria-label="DigitFlip duration">
+              {[1, 2, 3, 4, 5, 6].map((tick) => (
+                <button
+                  type="button"
+                  key={tick}
+                  className={duration === tick ? "active" : ""}
+                  onClick={() => onDurationChange(tick as DigitFlipDuration)}
+                  disabled={disabled || running}
+                  aria-pressed={duration === tick}
+                  data-testid={`digit-flip-duration-${tick}`}
+                >
+                  {tick}<small>T</small>
+                </button>
+              ))}
+            </div>
+          </label>
           <label><span>STAKE MODE</span><select value={stakeMode} onChange={(event) => onStakeModeChange(event.target.value as DigitFlipStakeMode)} disabled={disabled || running}><option value="flat">Flat stake</option><option value="martingale">Martingale</option></select></label>
           <label><span>MULTIPLIER</span><input type="number" min="1" step=".1" value={multiplier} onChange={(event) => onMultiplierChange(Math.max(1, Number(event.target.value) || 1))} disabled={disabled || running || stakeMode === "flat"} /></label>
           <label><span>TAKE PROFIT</span><input type="number" min=".01" step=".01" value={takeProfit} onChange={(event) => onTakeProfitChange(Math.max(.01, Number(event.target.value) || .01))} disabled={disabled || running} /></label>
@@ -371,7 +390,7 @@ export default function DigitFlipPanel({
         </div>
       </section>
 
-      <DerivHistory className="digit-flip-history" title="DigitFlip History" strategy="DigitFlip Strategy" rows={recentTrades} currency={currency} sessionPnl={sessionPnl} sessionTradeCount={tradeCount} clearArmed={clearTradesArmed} fading={historyFading} onClear={onClearTrades} />
+      <DerivHistory className="digit-flip-history" title="DigitFlip History" strategy="DigitFlip Strategy" rows={recentTrades} sessionRows={sessionRows} currency={currency} sessionPnl={sessionPnl} sessionTradeCount={tradeCount} clearArmed={clearTradesArmed} fading={historyFading} onClear={onClearTrades} />
     </section>
   );
 }

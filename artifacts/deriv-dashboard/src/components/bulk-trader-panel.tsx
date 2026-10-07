@@ -41,6 +41,7 @@ type Props = {
   analysisTickCount: number;
   autoSelectBest: boolean;
   recentTrades: readonly BulkTraderHistoryRow[];
+  sessionRows: readonly BulkTraderHistoryRow[];
   isConnected: boolean;
   isPlacingTrade: boolean;
   tradeSlotMessage: string | null;
@@ -88,6 +89,7 @@ export default function BulkTraderPanel({
   analysisTickCount,
   autoSelectBest,
   recentTrades,
+  sessionRows,
   isConnected,
   isPlacingTrade,
   tradeSlotMessage,
@@ -234,7 +236,7 @@ export default function BulkTraderPanel({
         </aside>
       </div>
 
-      <DerivHistory title="Bulk Trader History" strategy="Bulk Trader Strategy" rows={recentTrades} currency={currency} clearArmed={clearArmed} fading={historyFading} onClear={onClearHistory} />
+      <DerivHistory title="Bulk Trader History" strategy="Bulk Trader Strategy" rows={recentTrades} sessionRows={sessionRows} currency={currency} clearArmed={clearArmed} fading={historyFading} onClear={onClearHistory} />
     </section>
   );
 }

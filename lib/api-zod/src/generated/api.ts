@@ -939,7 +939,7 @@ export const SelectDerivSymbolResponse = zod.object({
 
 
 /**
- * Requests a fresh proposal for the selected duration and digit contract, then buys it immediately. Real accounts require explicit confirmation and the live-trading server flag.
+ * Requests a fresh proposal for the selected duration and digit contract, then buys it immediately. Real-account orders require the live-trading server flag and account-level funds checks.
  * @summary Request a fresh proposal and buy immediately
  */
 export const buyDerivContractBodyAmountExclusiveMin = 0;
@@ -961,8 +961,7 @@ export const BuyDerivContractBody = zod.object({
   "contract_type": zod.enum(['DIGITEVEN', 'DIGITODD', 'DIGITOVER', 'DIGITUNDER', 'DIGITDIFF', 'CALL', 'PUT', 'ACCU']),
   "barrier": zod.number().int().min(buyDerivContractBodyBarrierMin).max(buyDerivContractBodyBarrierMax).optional(),
   "growth_rate": zod.number().min(buyDerivContractBodyGrowthRateMin).max(buyDerivContractBodyGrowthRateMax).optional(),
-  "symbol": zod.string().optional(),
-  "confirm_live_trade": zod.literal(true)
+  "symbol": zod.string().optional()
 })
 
 export const BuyDerivContractResponse = zod.object({
@@ -1010,8 +1009,7 @@ export const BulkBuyDerivContractsBody = zod.object({
   "barrier": zod.number().int().min(bulkBuyDerivContractsBodyBarrierMin).max(bulkBuyDerivContractsBodyBarrierMax).optional(),
   "growth_rate": zod.number().min(bulkBuyDerivContractsBodyGrowthRateMin).max(bulkBuyDerivContractsBodyGrowthRateMax).optional(),
   "symbol": zod.string().optional(),
-  "count": zod.number().int().min(1).max(bulkBuyDerivContractsBodyCountMax),
-  "confirm_live_trade": zod.literal(true)
+  "count": zod.number().int().min(1).max(bulkBuyDerivContractsBodyCountMax)
 })
 
 export const BulkBuyDerivContractsResponse = zod.object({
@@ -1068,8 +1066,7 @@ export const DualBuyDerivContractsBody = zod.object({
   "duration": zod.number().int().min(1),
   "duration_unit": zod.enum(['t']),
   "barrier": zod.number().int().min(dualBuyDerivContractsBodyBarrierMin).max(dualBuyDerivContractsBodyBarrierMax),
-  "symbol": zod.string().optional(),
-  "confirm_live_trade": zod.literal(true)
+  "symbol": zod.string().optional()
 })
 
 export const DualBuyDerivContractsResponse = zod.object({

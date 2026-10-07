@@ -19,5 +19,4 @@ export interface DerivDualBuyInput {
      */
   barrier: number;
   symbol?: string;
-  confirm_live_trade: true;
 }

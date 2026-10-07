@@ -41,8 +41,7 @@
 .money-bank-market-meta,
 .money-bank-helper,
 .money-bank-return-top,
-.money-bank-safety-copy,
-.money-bank-live-confirm {
+.money-bank-safety-copy {
   display: flex;
   align-items: center;
 }
@@ -322,6 +321,37 @@
   height: 6px;
   accent-color: var(--mb-accent);
   cursor: pointer;
+}
+
+.money-bank-tick-quick {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.money-bank-tick-quick button {
+  min-height: 38px;
+  border: 1px solid rgba(66, 213, 142, .28);
+  border-radius: 8px;
+  color: #a9cabb;
+  background: rgba(4, 23, 16, .65);
+  cursor: pointer;
+  font-size: .72rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.money-bank-tick-quick button.active {
+  border-color: rgba(66, 213, 142, .78);
+  color: #e2fff0;
+  background: rgba(17, 91, 54, .42);
+  box-shadow: 0 0 12px rgba(66, 213, 142, .12);
+}
+
+.money-bank-tick-quick button:disabled {
+  cursor: not-allowed;
+  opacity: .5;
 }
 
 .money-bank-range-track-label {
@@ -860,16 +890,6 @@
 
 .money-bank-session-stats b.negative {
   color: #ff9da9;
-}
-
-.money-bank-live-confirm {
-  gap: 7px;
-  color: #f0c9cc;
-  font-size: .7rem;
-}
-
-.money-bank-live-confirm input {
-  accent-color: var(--mb-accent);
 }
 
 .money-bank-start,

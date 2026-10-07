@@ -54,6 +54,7 @@ type EdgeReferencePanelProps = {
   onReset: () => void;
   canViewHistory: boolean;
   recentTrades: readonly EdgeTradeRow[];
+  sessionRows: readonly EdgeTradeRow[];
   historyFading: boolean;
   clearTradesArmed: boolean;
   onClearHistory: () => void | Promise<void>;
@@ -100,6 +101,7 @@ export default function EdgeReferencePanel({
   onReset,
   canViewHistory,
   recentTrades,
+  sessionRows,
   historyFading,
   clearTradesArmed,
   onClearHistory,
@@ -234,7 +236,7 @@ export default function EdgeReferencePanel({
 
       <div className="edge-ref-run-row"><button className={`edge-ref-run ${running ? "running" : ""}`} onClick={() => void (running ? onStop() : onStart())} disabled={!isConnected || (!running && !canTrade)}>{running ? <><Pause size={16} fill="currentColor" /> Stop</> : <><Play size={15} fill="currentColor" /> Run</>}</button><button type="button" className="edge-ref-session-reset" onClick={onReset} aria-label="Reset session P/L, trades, and stake to base" title="Reset session"><span aria-hidden="true" /></button></div>
 
-      {canViewHistory && <DerivHistory title="EDGE History" strategy="EDGE Strategy" rows={recentTrades} currency={currentAccount?.currency} fading={historyFading} clearArmed={clearTradesArmed} onClear={() => void onClearHistory()} />}
+      {canViewHistory && <DerivHistory title="EDGE History" strategy="EDGE Strategy" rows={recentTrades} sessionRows={sessionRows} currency={currentAccount?.currency} sessionPnl={sessionPnl} sessionTradeCount={sessionTrades} fading={historyFading} clearArmed={clearTradesArmed} onClear={() => void onClearHistory()} />}
 
       <section className="edge-ref-disclaimer"><b>RISK DISCLAIMER</b><p>Deriv offers complex derivatives, such as options and contracts for difference (“CFDs”). These products may not be suitable for all clients, and trading them puts you at risk. Please make sure that you understand the following risks before trading Deriv products: a) you may lose some or all of the money you invest in the trade, b) if your trade involves currency conversion, exchange rates will affect your profit or loss.</p></section>
     </section>

@@ -610,7 +610,7 @@ paths:
       operationId: buyDerivContract
       tags: [deriv]
       summary: Request a fresh proposal and buy immediately
-      description: Requests a fresh proposal for the selected duration and digit contract, then buys it immediately. Real accounts require explicit confirmation and the live-trading server flag.
+      description: Requests a fresh proposal for the selected duration and digit contract, then buys it immediately. Real-account orders require the live-trading server flag and account-level funds checks.
       requestBody:
         required: true
         content:

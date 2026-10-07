@@ -41,8 +41,37 @@ export function historyRowsForAccount<T extends Pick<DerivHistoryRow, "account_i
   return rows.filter((row) => row.account_id === accountId);
 }
 
+export type DerivHistorySessionSummary = {
+  pnl: number;
+  trades: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  staked: number;
+};
+
+export function summarizeDerivHistorySession(
+  rows: readonly DerivHistoryRow[],
+  sessionPnl?: number,
+  sessionTradeCount?: number,
+): DerivHistorySessionSummary {
+  const settled = rows.filter((row) => row.status.toLowerCase() !== "open");
+  const wins = settled.filter((row) => row.profit > 0).length;
+  const losses = settled.filter((row) => row.profit < 0).length;
+  return {
+    pnl: sessionPnl ?? settled.reduce((total, row) => total + row.profit, 0),
+    trades: sessionTradeCount ?? rows.length,
+    wins,
+    losses,
+    winRate: wins + losses ? (wins / (wins + losses)) * 100 : 0,
+    staked: Math.round(rows.reduce((total, row) => total + Math.max(0, row.buy_price), 0) * 100) / 100,
+  };
+}
+
 function money(amount: number, currency?: string) {
-  return `${currency ? `${currency} ` : ""}${amount.toFixed(2)}`;
+  return currency === "USD"
+    ? `US$${amount.toFixed(2)}`
+    : `${currency ? `${currency} ` : ""}${amount.toFixed(2)}`;
 }
 
 function timeLabel(epoch?: number | null) {
@@ -79,7 +108,7 @@ export function createDerivHistoryRowView(
     barrier,
     outcome: isOpen ? "OPEN" : row.profit > 0 ? "WON" : row.profit < 0 ? "LOST" : status.toUpperCase(),
     outcomeClass: isOpen ? "open" : row.profit < 0 ? "loss" : "win",
-    profit: `${row.profit >= 0 ? "+" : ""}${money(row.profit, rowCurrency)}`,
+    profit: `${row.profit < 0 ? "-" : "+"}${money(Math.abs(row.profit), rowCurrency)}`,
     profitClass: row.profit < 0 ? "negative" : "positive",
     details: [
       { label: "OPENED", value: timeLabel(row.buy_time) },

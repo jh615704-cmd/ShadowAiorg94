@@ -90,6 +90,7 @@ type MoneyBankPanelProps = {
   closing?: boolean;
   marketSignals: readonly MoneyBankMarketSignal[];
   recentTrades: readonly MoneyBankTrade[];
+  sessionRows: readonly MoneyBankTrade[];
   lastSettledProfit: number | null;
   onStart: (config: MoneyBankStartConfig) => void;
   onStop: () => void;
@@ -167,6 +168,7 @@ export function MoneyBankPanel({
   closing = false,
   marketSignals,
   recentTrades,
+  sessionRows,
   lastSettledProfit,
   onStart,
   onStop,
@@ -353,6 +355,20 @@ export function MoneyBankPanel({
               disabled={running}
               aria-label="Take Profit ticks"
             />
+            <div className="money-bank-tick-quick" role="group" aria-label="Quick Accumulator tick targets">
+              {[5, 6].map((ticks) => (
+                <button
+                  type="button"
+                  key={ticks}
+                  className={takeProfitTicks === ticks ? "active" : ""}
+                  onClick={() => onTakeProfitTicksChange(ticks)}
+                  disabled={running}
+                  aria-pressed={takeProfitTicks === ticks}
+                >
+                  {ticks} ticks
+                </button>
+              ))}
+            </div>
             <div className="money-bank-range-track-label">Take profit target updates the return and every recovery level.</div>
           </section>
 
@@ -481,7 +497,10 @@ export function MoneyBankPanel({
           title="Money Bank History"
           strategy="Money Bank Strategy"
           rows={visibleTrades}
+          sessionRows={sessionRows}
           currency={currency}
+          sessionPnl={sessionPnl}
+          sessionTradeCount={tradeCount}
           clearArmed={historyClearArmed}
           fading={historyFading}
           onClear={clearHistory}

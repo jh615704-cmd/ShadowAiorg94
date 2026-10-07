@@ -1854,7 +1854,7 @@ export const getBuyDerivContractUrl = () => {
 }
 
 /**
- * Requests a fresh proposal for the selected duration and digit contract, then buys it immediately. Real accounts require explicit confirmation and the live-trading server flag.
+ * Requests a fresh proposal for the selected duration and digit contract, then buys it immediately. Real-account orders require the live-trading server flag and account-level funds checks.
  * @summary Request a fresh proposal and buy immediately
  */
 export const buyDerivContract = async (derivBuyInput: DerivBuyInput, options?: Parameters<typeof customFetch>[1]): Promise<DerivBuyResponse> => {

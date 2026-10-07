@@ -147,7 +147,7 @@ const tradeXGuidePages = [
   { title: "Clearing Trade X history", body: "The Trade X clear control hides the dashboard rows after a second tap. It does not delete contracts or records from Deriv.", points: ["Use the two-step action intentionally.", "The fade confirms the rows were removed from view.", "Clearing does not stop automation."] },
   { title: "Reset the sample", body: "Refreshing analysis starts a new local sample window so the distribution reflects the next stream of ticks.", points: ["Wait for enough observations after refresh.", "Avoid making decisions from an empty sample.", "The account and contract history remain unchanged."] },
   { title: "Safe first session", body: "Start with one small demo Digit Differs contract, a fresh sample, and manual selection.", points: ["Confirm market, digit, duration, and stake.", "Watch the returned row settle.", "Stop if the signal no longer matches your plan."] },
-  { title: "Final checklist", body: "Trade X is ready when the market, sample, digit, duration, stake, and automation state are all intentional.", points: ["Start small.", "Keep live confirmation explicit.", "Use observed data as context, never as certainty."] },
+  { title: "Final checklist", body: "Trade X is ready when the market, sample, digit, duration, stake, and automation state are all intentional.", points: ["Start small.", "Check the selected account before trading.", "Use observed data as context, never as certainty."] },
 ] as const;
 
 const digitFlipGuidePages = [
@@ -160,7 +160,7 @@ const digitFlipGuidePages = [
   { title: "Reading the market label", body: "The market label identifies the stream currently used for the parity sample. A new market needs fresh observations before its percentages become useful.", points: ["Wait for the sample to refresh after switching.", "Do not mix observations from different markets.", "The quote is live context, not a promise."] },
   { title: "Auto Candidates", body: "Auto Candidates compares supported markets using the available parity sample and can select a stronger observed setup after settlement.", points: ["It is a selection aid, not an outcome guarantee.", "It can change the market between entries.", "Stop the loop before changing your risk settings."] },
   { title: "Assault mode", body: "Assault mode changes which parity direction is considered for the next entry after a settlement. It does not change Deriv's contract rules.", points: ["Review the active parity before starting.", "Keep the stake small while evaluating the mode.", "Use a stop limit for every live experiment."] },
-  { title: "Magic mode", body: "Magic mode applies the configured parity decision from the live sample and session state. It remains subject to the same account and balance guards.", points: ["The mode never bypasses live confirmation.", "The mode does not change contract expiry.", "Turn it off when you want manual control."] },
+  { title: "Magic mode", body: "Magic mode applies the configured parity decision from the live sample and session state. It remains subject to the same account and balance guards.", points: ["Server-side permissions and balance checks still apply.", "The mode does not change contract expiry.", "Turn it off when you want manual control."] },
   { title: "Take Profit and Stop Loss", body: "Session limits stop the local loop when the configured positive or negative result is reached. They do not close an already-open contract.", points: ["A limit is a guardrail, not a guarantee.", "Open contracts may settle after stopping.", "Review history before restarting."] },
   { title: "Martingale caution", body: "If Martingale is enabled, the next stake can increase after a losing settlement and reset after a profitable one.", points: ["Losses can grow exposure quickly.", "Keep a reserve in the selected account.", "Demo-test before considering real funds."] },
   { title: "History and session state", body: "The session counter and P/L describe the active DigitFlip run. History rows remain separate from other feature histories.", points: ["Reset does not delete Deriv records.", "Clear hides rows from this dashboard only.", "Open contracts show as unsettled until Deriv responds."] },
@@ -209,7 +209,7 @@ const moneyBankGuidePages = [
   { title: "Safest pair snapshot", body: "The snapshot compares the live samples for supported Volatility pairs. It is advisory and does not change your selected market or settings.", points: ["Wait for samples before comparing markets.", "The snapshot is descriptive, not a prediction.", "Select any market manually before starting."] },
   { title: "Live pair samples", body: "The snapshot lists observed tick counts, rise and fall percentages, and the latest quote for each supported pair.", points: ["It shows observed market data, not simulated sessions.", "Refresh updates the capture time.", "Select a market manually before starting."] },
   { title: "Account and session", body: "The selected account and live balance appear in the workspace header. Money Bank session P/L and trade count remain in the footer.", points: ["Open contracts remain unsettled until Deriv responds.", "Session values reset when a new Money Bank run starts.", "The account balance is supplied by Deriv."] },
-  { title: "Start Accumulator", body: "Start Accumulator validates the connection, account, balance, live confirmation, and calculated BASE before starting the guarded loop.", points: ["Check the selected pair and ladder first.", "The loop waits for settlement before its next entry.", "Only one Money Bank action runs at a time."] },
+  { title: "Start Accumulator", body: "Start Accumulator validates the connection, account, balance, and calculated BASE before starting the guarded loop.", points: ["Check the selected pair and ladder first.", "The loop waits for settlement before its next entry.", "Only one Money Bank action runs at a time."] },
   { title: "Stop Accumulator", body: "Stop Accumulator immediately prevents another pending entry and then sends a close request for every open Accumulator contract found in the session history.", points: ["Wait for the closing state to finish.", "A pending buy is closed when Deriv acknowledges it.", "Stopping does not delete trade history."] },
   { title: "Trade history", body: "Money Bank history lists each returned Accumulator contract with its market, account, barrier, price, current value, payout, profit, status, and timestamps.", points: ["Open rows update with current value and profit.", "Rows update as Deriv settles or closes them.", "History is scoped visually to Accumulator contracts."] },
   { title: "Download and Reset", body: "Download exports the visible Money Bank rows as a CSV file. Reset uses a two-tap confirmation and fades the visible rows before clearing them from this panel.", points: ["Download does not alter account records.", "Reset does not cancel open contracts.", "A fresh run can add new rows again."] },
@@ -233,7 +233,7 @@ const cashGrabGuidePages = [
   { title: "Set duration and stake mode", body: "Rise/Fall duration can be set from one to ten ticks. Choose Flat for the same stake each time, or Multiply to apply your entered multiplier after a loss.", points: ["Cash Grab waits for each contract to settle before the next entry.", "A win restores the base stake.", "A larger multiplier can increase exposure quickly."] },
   { title: "Custom multiplier", body: "In Multiply mode, enter any positive multiplier for the next contract after a settled loss. A win returns the stake to the configured base amount.", points: ["The multiplier has no app-imposed maximum.", "The available account balance is checked before every entry.", "Multiplying does not guarantee recovery."] },
   { title: "Auto-switch safety", body: "Auto-switch reviews fresh market samples on its scan schedule and changes markets only when the observed direction rate, sample, and balance checks pass.", points: ["It can change markets between entries.", "It does not alter your selected stake mode or multiplier.", "It may wait rather than send when no setup qualifies."] },
-  { title: "Run Cash Grab", body: "Start checks the connection, selected account, available balance, and live confirmation, then sends one Rise/Fall contract at a time until you stop it.", points: ["Review market, direction, stake, mode, and duration.", "Each request waits for the current contract to settle before the next.", "If a check or request fails, Cash Grab stops and reports the reason."] },
+  { title: "Run Cash Grab", body: "Start checks the connection, selected account, and available balance, then sends one Rise/Fall contract at a time until you stop it.", points: ["Review market, direction, stake, mode, and duration.", "Each request waits for the current contract to settle before the next.", "If a check or request fails, Cash Grab stops and reports the reason."] },
   { title: "Stop Cash Grab", body: "Stop prevents Cash Grab from starting another batch and requests closure for open contracts claimed by the active session.", points: ["Wait until the stopping state finishes.", "A contract can settle while a close request is being handled.", "Already settled contracts remain in history."] },
   { title: "Cash Grab history", body: "Cash Grab history shows the contracts sent by this feature. Open contracts are not final results, and the rows remain visible after stopping.", points: ["Check each returned contract and direction.", "Clearing dashboard rows does not delete Deriv records.", "Observed rates describe past samples only."] },
   { title: "Final Rise/Fall checklist", body: "Before a session, confirm the selected account, market, Rise or Fall direction, stake, Flat or Multiply mode, multiplier, and one-to-ten-tick duration.", points: ["Use demo funds while testing.", "Keep the Stop control available.", "Treat all observed rates as historical context, not certainty."] },
@@ -264,40 +264,6 @@ const errorMessage = (error: unknown) => {
   const candidate = error as { data?: { error?: string }; message?: string };
   return candidate.data?.error ?? candidate.message ?? "Request failed";
 };
-
-function chooseBestOverThreeSignal(signals: MarketSignal[], excludeSymbol?: string): BestEdgeSignal | null {
-  const candidates = signals
-    .filter((signal) => signal.sample_count >= EDGE_MIN_MARKET_SAMPLE && signal.quote != null && signal.symbol !== excludeSymbol)
-    .map((signal) => {
-      const outcome = signal.digit_outcomes?.find((item) => item.digit === 3);
-      return outcome ? { signal, score: Number(outcome.over_percentage) } : null;
-    })
-    .filter((candidate): candidate is { signal: MarketSignal; score: number } => candidate !== null && Number.isFinite(candidate.score))
-    .sort((left, right) => right.score - left.score || right.signal.sample_count - left.signal.sample_count);
-  const best = candidates[0];
-  return best ? { symbol: best.signal.symbol, direction: "DIGITOVER", digit: 3, score: best.score, sampleCount: best.signal.sample_count } : null;
-}
-
-function chooseBestAnalyzerSignal(signals: MarketSignal[], excludeSymbol?: string): BestEdgeSignal | null {
-  const available = signals.filter((signal) =>
-    signal.sample_count >= EDGE_MIN_MARKET_SAMPLE
-    && signal.quote != null
-    && signal.symbol !== excludeSymbol,
-  );
-  const candidates = available.flatMap((signal) => (signal.digit_outcomes ?? []).flatMap((outcome) => {
-    // Barriers 0 and 9 make one side tautological, so they are not useful
-    // scanner candidates even when a short sample makes them look perfect.
-    if (outcome.digit <= 0 || outcome.digit >= 9) return [];
-    const over = Number(outcome.over_percentage);
-    const under = Number(outcome.under_percentage);
-    if (!Number.isFinite(over) || !Number.isFinite(under)) return [];
-    return [
-      { symbol: signal.symbol, direction: "DIGITOVER" as const, digit: outcome.digit, score: over, sampleCount: signal.sample_count },
-      { symbol: signal.symbol, direction: "DIGITUNDER" as const, digit: outcome.digit, score: under, sampleCount: signal.sample_count },
-    ];
-  })).filter((candidate) => candidate.sampleCount >= 5 && candidate.score >= 0);
-  return candidates.sort((left, right) => right.score - left.score || right.sampleCount - left.sampleCount)[0] ?? null;
-}
 
 type MartingaleSettlementWatch = {
   knownIds: Set<string>;
@@ -625,6 +591,7 @@ export default function XTraderPage() {
   ));
   const edgeRows = edgeAllRows.filter((trade) => edgeClaimedHistoryIdsRef.current.has(trade.contract_id) && !edgeHiddenHistoryIds.has(trade.contract_id));
   const tradeXRows = tradeXAllRows.filter((trade) => tradeXClaimedHistoryIdsRef.current.has(trade.contract_id) && !tradeXHiddenHistoryIds.has(trade.contract_id));
+  const tradeXSessionRows = tradeXAllRows.filter((trade) => tradeXClaimedHistoryIdsRef.current.has(trade.contract_id));
   const digitFlipRows = digitFlipAllRows.filter((trade) => digitFlipClaimedHistoryIdsRef.current.has(trade.contract_id) && !digitFlipHiddenHistoryIds.has(trade.contract_id));
   const bulkRows = bulkAllRows.filter((trade) => bulkClaimedHistoryIdsRef.current.has(trade.contract_id) && !bulkTraderHiddenHistoryIds.has(trade.contract_id));
   const moneyBankRows = moneyBankAllRows
@@ -659,10 +626,19 @@ export default function XTraderPage() {
       .filter((trade) => !cashGrabClaimedHistoryIdsRef.current.has(trade.contract_id))
       .filter((trade) => !moneyBankSessionKnownIdsRef.current?.has(trade.contract_id))
     : [];
+  const cashGrabSessionRows = cashGrabSessionKnownIdsRef.current
+    ? cashGrabAllRows.filter((trade) => (
+      cashGrabClaimedHistoryIdsRef.current.has(trade.contract_id)
+      && !cashGrabSessionKnownIdsRef.current?.has(trade.contract_id)
+    ))
+    : [];
   const moneyBankCompletedRows = moneyBankSessionRows.filter((trade) => trade.status !== "open");
   const moneyBankSignals = (status.data?.market_signals ?? []) as MoneyBankMarketSignal[];
   const fastSessionPnl = realizedProfit(edgeSessionRows);
   const moneyBankHistorySessionPnl = realizedProfit(moneyBankSessionRows);
+  const cashGrabHistorySessionPnl = cashGrabSessionRows.length
+    ? realizedProfit(cashGrabSessionRows)
+    : cashGrabSessionPnl;
   const streaks = status.data?.digit_streaks ?? [];
   const lastDigit = status.data?.last_digit;
   const digitFlipEvenPercentage = digitFlipSampleCount ? (digitFlipEvenCount / digitFlipSampleCount) * 100 : 50;
@@ -2181,7 +2157,6 @@ export default function XTraderPage() {
     setNextStake(stake);
     martingaleWatchRef.current = null;
     edgeLossStreakRef.current = 0;
-    setEdgeScannerMessage(null);
   };
 
   const refreshAnalysis = () => {
@@ -2441,12 +2416,18 @@ export default function XTraderPage() {
       throw new Error(`Cash Grab needs at least ${AI_SCANNER_MIN_SAMPLE} valid Rise/Fall samples on a supported market.`);
     }
     if (!await selectMarket(candidate.symbol)) throw new Error("Deriv could not select the scanned market. No contract was sent.");
+    const historySnapshot = await readHistorySnapshot();
+    if (!historySnapshot.fresh || historySnapshot.rows.some((trade) => trade.status === "open")) {
+      throw new Error("Cash Grab needs a fresh, settled history check before sending a scanned contract.");
+    }
+    if (cashGrabSessionKnownIdsRef.current == null) {
+      cashGrabSessionKnownIdsRef.current = new Set(historySnapshot.rows.map((trade) => trade.contract_id));
+    }
 
     setCashGrabSymbol(candidate.symbol);
     setCashGrabDirection(candidate.contractType);
     cashGrabActionLockRef.current = true;
     try {
-      const beforeRows = queryClient.getQueryData<typeof rows>(getGetDerivHistoryQueryKey()) ?? [];
       const result = await bulkBuyMutation.mutateAsync({
         data: buildCashGrabBulkBuyPayload({
           amount,
@@ -2458,7 +2439,7 @@ export default function XTraderPage() {
       });
       if (!result.buys.length) throw new Error("Deriv did not return a confirmed Cash Grab contract.");
       result.buys.forEach((buy) => cashGrabClaimedHistoryIdsRef.current.add(buy.contract_id));
-      await claimFeatureRows(cashGrabClaimedHistoryIdsRef.current, beforeRows, [candidate.contractType]);
+      await claimFeatureRows(cashGrabClaimedHistoryIdsRef.current, historySnapshot.rows, [candidate.contractType]);
       await refreshTradeResults();
     } finally {
       cashGrabActionLockRef.current = false;
@@ -2592,6 +2573,11 @@ export default function XTraderPage() {
     // Use the newest cached snapshot; the API serializes buys and rejects one
     // while an earlier contract is still open.
     const latestRows = queryClient.getQueryData<typeof rows>(getGetDerivHistoryQueryKey()) ?? [];
+    if (digitFlipSessionKnownIdsRef.current == null) {
+      digitFlipSessionKnownIdsRef.current = new Set(latestRows
+        .filter((trade) => trade.contract_type === "DIGITEVEN" || trade.contract_type === "DIGITODD")
+        .map((trade) => trade.contract_id));
+    }
     applyDigitFlipAssaultSettlements(latestRows);
     const config = digitFlipConfigRef.current;
     const selectedRate = config.parity === "DIGITEVEN" ? digitFlipRatesRef.current.even : digitFlipRatesRef.current.odd;
@@ -2908,6 +2894,9 @@ export default function XTraderPage() {
       return false;
     }
     const beforeRows = queryClient.getQueryData<typeof rows>(getGetDerivHistoryQueryKey()) ?? [];
+    if (bulkSessionKnownIdsRef.current == null) {
+      bulkSessionKnownIdsRef.current = new Set(beforeRows.map((trade) => trade.contract_id));
+    }
     const send = (type: BulkTraderContractType) => bulkBuyMutation.mutateAsync({
       data: {
         amount: bulkTraderStake,
@@ -3390,6 +3379,7 @@ export default function XTraderPage() {
            analysisTickCount={analysisTickCount}
            autoSelectBest={bulkTraderAutoSelectBest}
           recentTrades={bulkRows}
+          sessionRows={bulkSessionRows}
           isConnected={isConnected}
           isPlacingTrade={bulkBuyMutation.isPending}
           tradeSlotMessage={tradeSlotMessage}
@@ -3442,6 +3432,7 @@ export default function XTraderPage() {
           sessionPnl={digitFlipSessionPnl}
           tradeCount={digitFlipTradeCount}
           recentTrades={digitFlipRows}
+          sessionRows={digitFlipSessionRows}
             assaultEnabled={digitFlipAssault}
            magicEnabled={digitFlipMagic}
            clearTradesArmed={digitFlipClearArmed}
@@ -3522,6 +3513,7 @@ export default function XTraderPage() {
           onReset={reset}
           canViewHistory={canViewHistory}
           recentTrades={edgeRows}
+          sessionRows={edgeSessionRows}
           historyFading={historyFading}
           clearTradesArmed={clearHistoryArmed}
           onClearHistory={clearHistory}
@@ -3657,7 +3649,7 @@ export default function XTraderPage() {
             onRefreshAnalysis={refreshAnalysis}
           />
           {tradeXMessage && <p className="tx-parent-message" role="status">{tradeXMessage}</p>}
-          {canViewHistory && <DerivHistory title="Trade X History" strategy="Trade X Strategy" rows={tradeXRows} currency={currentAccount?.currency} clearArmed={tradeXHistoryClearArmed} fading={historyFading} onClear={clearTradeXHistory} />}
+          {canViewHistory && <DerivHistory title="Trade X History" strategy="Trade X Strategy" rows={tradeXRows} sessionRows={tradeXSessionRows} currency={currentAccount?.currency} clearArmed={tradeXHistoryClearArmed} fading={historyFading} onClear={clearTradeXHistory} />}
         </section>
       )}
 
@@ -3696,6 +3688,7 @@ export default function XTraderPage() {
           onLossLimitChange={setMoneyBankLossLimit}
           marketSignals={moneyBankSignals}
           recentTrades={moneyBankRows}
+          sessionRows={moneyBankSessionRows}
           lastSettledProfit={moneyBankLastSettledProfit}
            sessionPnl={moneyBankHistorySessionPnl}
           tradeCount={moneyBankCompletedRows.length}
@@ -3721,7 +3714,7 @@ export default function XTraderPage() {
           multiplier={cashGrabMultiplier}
           takeProfit={cashGrabTakeProfit}
           lossLimit={cashGrabLossLimit}
-          sessionPnl={cashGrabSessionPnl}
+          sessionPnl={cashGrabHistorySessionPnl}
           autoSwitchSafestPair={cashGrabAutoSwitchSafestPair}
           autoSwitchSafestPairStatus={cashGrabAutoSwitchSafestPairStatus}
           autoSwitchSafestPairRecommendation={cashGrabAutoSwitchRecommendation}
@@ -3730,6 +3723,7 @@ export default function XTraderPage() {
           isConnected={isConnected}
           isPlacingTrade={bulkBuyMutation.isPending}
           recentTrades={cashGrabRows}
+          sessionRows={cashGrabSessionRows}
           clearArmed={cashGrabClearArmed}
           historyFading={historyFading}
           onDirectionChange={setCashGrabDirection}
