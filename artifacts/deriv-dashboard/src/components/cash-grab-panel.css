@@ -198,8 +198,7 @@
 .cash-grab-history .deriv-history { border: 0; background: transparent; }
 .cash-grab-history .deriv-history-list,
 .df-panel > .deriv-history .deriv-history-list {
-  max-height: none;
-  overflow: visible;
+  overflow-y: auto;
 }
 .cash-grab-history .deriv-history-head,
 .cash-grab-history .deriv-history-session,
@@ -228,7 +227,7 @@
 .cash-grab-history .deriv-history-account-id,
 .cash-grab-history .deriv-history-outcome { font-size: 10px; }
 .cash-grab-history .deriv-history-market > strong { font-size: 14px; }
-.digit-flip-history .deriv-history-list { max-height: none; overflow: visible; }
+.digit-flip-history .deriv-history-list { overflow-y: auto; }
 .digit-flip-history .deriv-history-head { min-height: 64px; padding: 15px 18px; }
 .digit-flip-history .deriv-history-title b { font-size: 15px; }
 .digit-flip-history .deriv-history-title small { font-size: 10px; }
