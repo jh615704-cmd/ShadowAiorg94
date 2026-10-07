@@ -1072,7 +1072,7 @@ components:
           minimum: 0
     DerivMarketSignal:
       type: object
-      required: [symbol, quote, last_digit, sample_count, digit_even_percentage, digit_odd_percentage, rise_percentage, fall_percentage, digit_streaks, digit_outcomes]
+      required: [symbol, quote, last_digit, tick_sequence, sample_count, digit_even_percentage, digit_odd_percentage, rise_percentage, fall_percentage, digit_streaks, digit_outcomes]
       properties:
         symbol:
           type: string
@@ -1084,6 +1084,10 @@ components:
           type: [integer, "null"]
           minimum: 0
           maximum: 9
+        tick_sequence:
+          type: integer
+          minimum: 0
+          description: Monotonically increasing count of ticks observed for this market in the active Deriv session.
         sample_count:
           type: integer
           minimum: 0

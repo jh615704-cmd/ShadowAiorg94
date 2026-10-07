@@ -17,6 +17,11 @@ export interface DerivMarketSignal {
      * @nullable
      */
   last_digit: number | null;
+  /**
+     * Monotonically increasing count of ticks observed for this market in the active Deriv session.
+     * @minimum 0
+     */
+  tick_sequence: number;
   /** @minimum 0 */
   sample_count: number;
   /**

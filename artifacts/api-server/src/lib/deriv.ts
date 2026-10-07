@@ -104,6 +104,7 @@ export type DerivStatus = {
     symbol: string;
     quote: number | null;
     last_digit: number | null;
+    tick_sequence: number;
     sample_count: number;
     digit_even_percentage: number;
     digit_odd_percentage: number;
@@ -211,6 +212,7 @@ return {
   marketHistory: new Map<string, {
     quote: number | null;
     epoch: number;
+    tickSequence: number;
     digitHistory: number[];
     movementHistory: Array<"rise" | "fall" | "flat">;
   }>(),
@@ -482,7 +484,7 @@ function recordMarketTick(symbol: string, quote: unknown, epoch: number, pipSize
       : "";
   const digits = rawQuote.replace(/\D/g, "");
   const lastDigit = digits.at(-1);
-  const market = runtime.marketHistory.get(symbol) ?? { quote: null, epoch: 0, digitHistory: [], movementHistory: [] };
+  const market = runtime.marketHistory.get(symbol) ?? { quote: null, epoch: 0, tickSequence: 0, digitHistory: [], movementHistory: [] };
   const nextQuote = Number(quote ?? 0);
   if (market.quote != null && Number.isFinite(market.quote) && Number.isFinite(nextQuote)) {
     market.movementHistory.push(nextQuote > market.quote ? "rise" : nextQuote < market.quote ? "fall" : "flat");
@@ -490,6 +492,7 @@ function recordMarketTick(symbol: string, quote: unknown, epoch: number, pipSize
   }
   market.quote = nextQuote;
   market.epoch = epoch;
+  market.tickSequence += 1;
   if (lastDigit !== undefined) market.digitHistory.push(Number(lastDigit));
   market.digitHistory = market.digitHistory.slice(-1000);
   runtime.marketHistory.set(symbol, market);
@@ -518,6 +521,7 @@ function getMarketSignals() {
       symbol,
       quote: market?.quote ?? null,
       last_digit: digits.at(-1) ?? null,
+      tick_sequence: market?.tickSequence ?? 0,
       sample_count: sampleCount,
       digit_even_percentage: sampleCount ? Number(((evenCount / sampleCount) * 100).toFixed(1)) : 50,
       digit_odd_percentage: sampleCount ? Number((((sampleCount - evenCount) / sampleCount) * 100).toFixed(1)) : 50,

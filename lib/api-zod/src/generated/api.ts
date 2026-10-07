@@ -365,6 +365,8 @@ export const getDerivStatusResponseDigitStreaksItemUnderMin = 0;
 export const getDerivStatusResponseMarketSignalsItemLastDigitMin = 0;
 export const getDerivStatusResponseMarketSignalsItemLastDigitMax = 9;
 
+export const getDerivStatusResponseMarketSignalsItemTickSequenceMin = 0;
+
 export const getDerivStatusResponseMarketSignalsItemSampleCountMin = 0;
 
 export const getDerivStatusResponseMarketSignalsItemDigitEvenPercentageMin = 0;
@@ -458,6 +460,7 @@ export const GetDerivStatusResponse = zod.object({
   "symbol": zod.string(),
   "quote": zod.union([zod.number(),zod.null()]),
   "last_digit": zod.number().int().min(getDerivStatusResponseMarketSignalsItemLastDigitMin).max(getDerivStatusResponseMarketSignalsItemLastDigitMax).nullable(),
+  "tick_sequence": zod.number().int().min(getDerivStatusResponseMarketSignalsItemTickSequenceMin).describe('Monotonically increasing count of ticks observed for this market in the active Deriv session.'),
   "sample_count": zod.number().int().min(getDerivStatusResponseMarketSignalsItemSampleCountMin),
   "digit_even_percentage": zod.number().min(getDerivStatusResponseMarketSignalsItemDigitEvenPercentageMin).max(getDerivStatusResponseMarketSignalsItemDigitEvenPercentageMax),
   "digit_odd_percentage": zod.number().min(getDerivStatusResponseMarketSignalsItemDigitOddPercentageMin).max(getDerivStatusResponseMarketSignalsItemDigitOddPercentageMax),
@@ -499,6 +502,8 @@ export const testDerivConnectionResponseStatusDigitStreaksItemUnderMin = 0;
 
 export const testDerivConnectionResponseStatusMarketSignalsItemLastDigitMin = 0;
 export const testDerivConnectionResponseStatusMarketSignalsItemLastDigitMax = 9;
+
+export const testDerivConnectionResponseStatusMarketSignalsItemTickSequenceMin = 0;
 
 export const testDerivConnectionResponseStatusMarketSignalsItemSampleCountMin = 0;
 
@@ -603,6 +608,7 @@ export const TestDerivConnectionResponse = zod.object({
   "symbol": zod.string(),
   "quote": zod.union([zod.number(),zod.null()]),
   "last_digit": zod.number().int().min(testDerivConnectionResponseStatusMarketSignalsItemLastDigitMin).max(testDerivConnectionResponseStatusMarketSignalsItemLastDigitMax).nullable(),
+  "tick_sequence": zod.number().int().min(testDerivConnectionResponseStatusMarketSignalsItemTickSequenceMin).describe('Monotonically increasing count of ticks observed for this market in the active Deriv session.'),
   "sample_count": zod.number().int().min(testDerivConnectionResponseStatusMarketSignalsItemSampleCountMin),
   "digit_even_percentage": zod.number().min(testDerivConnectionResponseStatusMarketSignalsItemDigitEvenPercentageMin).max(testDerivConnectionResponseStatusMarketSignalsItemDigitEvenPercentageMax),
   "digit_odd_percentage": zod.number().min(testDerivConnectionResponseStatusMarketSignalsItemDigitOddPercentageMin).max(testDerivConnectionResponseStatusMarketSignalsItemDigitOddPercentageMax),
@@ -683,6 +689,8 @@ export const selectDerivAccountResponseDigitStreaksItemUnderMin = 0;
 
 export const selectDerivAccountResponseMarketSignalsItemLastDigitMin = 0;
 export const selectDerivAccountResponseMarketSignalsItemLastDigitMax = 9;
+
+export const selectDerivAccountResponseMarketSignalsItemTickSequenceMin = 0;
 
 export const selectDerivAccountResponseMarketSignalsItemSampleCountMin = 0;
 
@@ -777,6 +785,7 @@ export const SelectDerivAccountResponse = zod.object({
   "symbol": zod.string(),
   "quote": zod.union([zod.number(),zod.null()]),
   "last_digit": zod.number().int().min(selectDerivAccountResponseMarketSignalsItemLastDigitMin).max(selectDerivAccountResponseMarketSignalsItemLastDigitMax).nullable(),
+  "tick_sequence": zod.number().int().min(selectDerivAccountResponseMarketSignalsItemTickSequenceMin).describe('Monotonically increasing count of ticks observed for this market in the active Deriv session.'),
   "sample_count": zod.number().int().min(selectDerivAccountResponseMarketSignalsItemSampleCountMin),
   "digit_even_percentage": zod.number().min(selectDerivAccountResponseMarketSignalsItemDigitEvenPercentageMin).max(selectDerivAccountResponseMarketSignalsItemDigitEvenPercentageMax),
   "digit_odd_percentage": zod.number().min(selectDerivAccountResponseMarketSignalsItemDigitOddPercentageMin).max(selectDerivAccountResponseMarketSignalsItemDigitOddPercentageMax),
@@ -825,6 +834,8 @@ export const selectDerivSymbolResponseDigitStreaksItemUnderMin = 0;
 
 export const selectDerivSymbolResponseMarketSignalsItemLastDigitMin = 0;
 export const selectDerivSymbolResponseMarketSignalsItemLastDigitMax = 9;
+
+export const selectDerivSymbolResponseMarketSignalsItemTickSequenceMin = 0;
 
 export const selectDerivSymbolResponseMarketSignalsItemSampleCountMin = 0;
 
@@ -919,6 +930,7 @@ export const SelectDerivSymbolResponse = zod.object({
   "symbol": zod.string(),
   "quote": zod.union([zod.number(),zod.null()]),
   "last_digit": zod.number().int().min(selectDerivSymbolResponseMarketSignalsItemLastDigitMin).max(selectDerivSymbolResponseMarketSignalsItemLastDigitMax).nullable(),
+  "tick_sequence": zod.number().int().min(selectDerivSymbolResponseMarketSignalsItemTickSequenceMin).describe('Monotonically increasing count of ticks observed for this market in the active Deriv session.'),
   "sample_count": zod.number().int().min(selectDerivSymbolResponseMarketSignalsItemSampleCountMin),
   "digit_even_percentage": zod.number().min(selectDerivSymbolResponseMarketSignalsItemDigitEvenPercentageMin).max(selectDerivSymbolResponseMarketSignalsItemDigitEvenPercentageMax),
   "digit_odd_percentage": zod.number().min(selectDerivSymbolResponseMarketSignalsItemDigitOddPercentageMin).max(selectDerivSymbolResponseMarketSignalsItemDigitOddPercentageMax),
