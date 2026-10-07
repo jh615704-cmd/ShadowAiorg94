@@ -3204,6 +3204,7 @@ export default function XTraderPage() {
                 >
                   <LogOut size={15} />Log out
                 </button>
+                <Link href="/auto-trader" onClick={() => setNavigationOpen(false)}><Bot size={15} />Auto Trader</Link>
               </nav>
             )}
           </div>

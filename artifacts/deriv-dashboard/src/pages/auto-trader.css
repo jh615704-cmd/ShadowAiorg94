@@ -1,0 +1,41 @@
+.auto-trader-placeholder {
+  max-width: 760px;
+  margin: 32px auto;
+  padding: clamp(24px, 5vw, 48px);
+  border-radius: 16px;
+  background: linear-gradient(145deg, #fff, #f3faf9);
+}
+
+.auto-trader-placeholder h1 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 8px;
+  color: var(--ink-deep);
+  font-size: clamp(22px, 4vw, 30px);
+  letter-spacing: -.04em;
+}
+
+.auto-trader-placeholder h1 svg {
+  color: #148b86;
+}
+
+.auto-trader-placeholder p {
+  margin: 0;
+  color: #668285;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.dark .auto-trader-placeholder {
+  border-color: #24434a;
+  background: linear-gradient(145deg, #10262d, #0c2026);
+}
+
+.dark .auto-trader-placeholder h1 {
+  color: #dcebea;
+}
+
+.dark .auto-trader-placeholder p {
+  color: #91acab;
+}
