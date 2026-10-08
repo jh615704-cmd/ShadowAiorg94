@@ -13,6 +13,16 @@ export const ACCESS_FEATURES = Object.values(AccessFeatureValues) as Array<
   (typeof AccessFeatureValues)[keyof typeof AccessFeatureValues]
 >;
 export type AccessFeature = typeof ACCESS_FEATURES[number];
+export const TRADING_ACCESS_FEATURES = [
+  "edge",
+  "digit-flip",
+  "trade-x",
+  "bulk-trader",
+  "cash-grab",
+  "money-bank",
+  "jdy-ai-3",
+  "auto-trader",
+] as const satisfies readonly AccessFeature[];
 export type AccessKeyStatus = "active" | "paused" | "blocked" | "banned" | "deleted";
 
 export const PRESENCE_STALE_MS = 90_000;

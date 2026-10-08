@@ -5,12 +5,13 @@ import tokenRouter from "./token";
 import adminRouter from "./admin";
 import accessRouter from "./access";
 import { requireAccess, requireAccessFeature, requireAnyAccessFeature } from "../middlewares/requireAccess";
+import { TRADING_ACCESS_FEATURES } from "../lib/access-keys";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(accessRouter);
-const tradingFeatures = ["edge", "digit-flip", "trade-x", "bulk-trader", "cash-grab", "money-bank", "jdy-ai-3", "auto-trader"] as const;
+const tradingFeatures = TRADING_ACCESS_FEATURES;
 const tokenFeatures = [...tradingFeatures, "settings"] as const;
 
 router.use("/token", requireAccess, requireAnyAccessFeature(...tokenFeatures));

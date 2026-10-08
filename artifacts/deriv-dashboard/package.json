@@ -7,6 +7,7 @@
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
     "build": "vite build --config vite.config.ts",
     "test": "node --experimental-strip-types --test src/lib/trading-sequence.test.ts src/lib/money-bank-math.test.ts src/lib/account-balance.test.ts src/lib/history-snapshot.test.ts src/lib/deriv-history.test.ts src/lib/cash-grab-order.test.ts src/lib/cash-grab-limits.test.ts src/lib/ai-market-scanner.test.ts src/lib/deriv-credential-warning.test.ts src/lib/access-lock.test.ts",
+    "test:e2e": "node --test src/e2e/access-trading-responsive.test.mjs",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
@@ -59,6 +60,7 @@
     "input-otp": "^1.4.2",
     "lucide-react": "catalog:",
     "next-themes": "^0.4.6",
+    "playwright-core": "^1.63.0",
     "react": "catalog:",
     "react-day-picker": "^9.11.1",
     "react-dom": "catalog:",
