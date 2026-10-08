@@ -3,8 +3,8 @@ name: Trade X distribution visual language
 description: The durable visual direction for the Trade X digit distribution and safest-digit ranking.
 ---
 
-Trade X’s distribution surface should use a deep navy textured panel with crisp, high-contrast pill-shaped digit tiles and a three-card safest-digit ranking beneath it. The visual hierarchy should make the selected digit, high-frequency warning, observed frequency, and absence streak immediately distinguishable.
+Trade X’s digit distribution, selected-digit context, and three-card safest-digit ranking should stay together in one compact deep-navy surface, with crisp high-contrast pill-shaped digits.
 
-**Why:** The reference layout is optimized for fast scanning during a live tick stream; dense rows and soft, low-contrast surfaces made the signal harder to read.
+**Why:** The supplied reference presents the full analysis as one continuous panel; separate distribution and ranking cards feel disconnected and take up too much space.
 
-**How to apply:** Preserve the existing live distribution and trading behavior while keeping the presentation sharp, responsive, and free of blur-heavy effects. Keep the current-market digit highlighted green for visibility, even though the rest of the feature uses the shared blue palette. Use clear labels for observed frequency and streak so visual safety cues are not confused with probability guarantees.
+**How to apply:** Preserve live analysis and trading behavior while keeping the panel compact and responsive. Avoid separate outer cards for the distribution and ranking; keep inner content on one shared surface. Keep the current-market digit highlighted green for visibility, and label observed frequency and streak without implying probability guarantees.

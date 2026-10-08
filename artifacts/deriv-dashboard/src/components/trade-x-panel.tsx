@@ -239,13 +239,18 @@ export default function TradeXPanel({
           </div>
         </section>
 
-        <div className="tx-main-grid">
+        <div
+          className="tx-main-grid tx-analysis-surface"
+          role="group"
+          aria-label="Digit distribution and safest differ digits"
+          data-testid="trade-x-analysis-surface"
+        >
           <section className="tx-distribution tx-section">
             <div className="tx-section-heading">
               <div>
                 <span className="tx-index">02</span>
                 <div>
-                    <h3>Digit Distribution</h3>
+                    <h3>Digit Distribution &amp; Safe Entry</h3>
                    <p>Recent frequency and live market touch.</p>
                 </div>
               </div>

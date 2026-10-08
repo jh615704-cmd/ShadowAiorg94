@@ -2234,3 +2234,32 @@
     padding: 9px;
   }
 }
+
+/* The full live analysis is one compact surface; inner groups stay visually joined. */
+.tx-panel .tx-analysis-surface {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid rgba(126, 146, 197, .3);
+  border-radius: 17px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(65, 121, 190, .16), transparent 32%),
+    radial-gradient(circle at 96% 90%, rgba(42, 76, 135, .17), transparent 34%),
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, .016) 0 1px, transparent 1px 13px),
+    linear-gradient(145deg, rgba(25, 35, 64, .99), rgba(16, 27, 51, .99));
+  box-shadow: 0 16px 34px rgba(0, 0, 0, .2), inset 0 1px 0 rgba(255, 255, 255, .04);
+}
+.tx-panel .tx-analysis-surface > .tx-distribution,
+.tx-panel .tx-analysis-surface > .tx-safe-panel {
+  min-width: 0;
+  overflow: visible;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.tx-panel .tx-analysis-surface > .tx-safe-panel {
+  border-top: 1px solid rgba(132, 151, 195, .18);
+}
