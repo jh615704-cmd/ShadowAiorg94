@@ -329,6 +329,7 @@ export default function XTraderPage() {
   const [stopLoss, setStopLoss] = useState(10);
   const [autoSwitch, setAutoSwitch] = useState(false);
   const [edgePercentageMode, setEdgePercentageMode] = useState(false);
+  const [edgeSniperOverUnder, setEdgeSniperOverUnder] = useState(false);
   const [edgeRecommendation, setEdgeRecommendation] = useState<BestEdgeSignal | null>(null);
   const [edgeAccountBalance, setEdgeAccountBalance] = useState("");
   const [xTraderEnabled, setXTraderEnabled] = useState(false);
@@ -381,6 +382,7 @@ export default function XTraderPage() {
   const [cashGrabSessionPnl, setCashGrabSessionPnl] = useState(0);
   const [cashGrabAutoSelectBest, setCashGrabAutoSelectBest] = useState(false);
   const [cashGrabAutoSwitchSafestPair, setCashGrabAutoSwitchSafestPair] = useState(false);
+  const [cashGrabAutoDirection, setCashGrabAutoDirection] = useState(false);
   const [cashGrabAutoSwitchSafestPairStatus, setCashGrabAutoSwitchSafestPairStatus] = useState<CashGrabAiStatus>("off");
   const [cashGrabAutoSwitchRecommendation, setCashGrabAutoSwitchRecommendation] = useState<CashGrabAutoSwitchRecommendation | null>(null);
   const [cashGrabRunning, setCashGrabRunning] = useState(false);
@@ -520,7 +522,8 @@ export default function XTraderPage() {
     stake,
     strategy,
     martingale,
-     symbol,
+    symbol,
+    sniperOverUnder: edgeSniperOverUnder,
     rankedDigits: [] as number[],
   });
   const tradeXConfigRef = useRef({
@@ -890,8 +893,18 @@ export default function XTraderPage() {
   );
 
   useEffect(() => {
-    configRef.current = { direction, barrier, duration, stake, strategy, martingale, symbol, rankedDigits };
-  }, [direction, barrier, duration, stake, strategy, martingale, symbol, rankedDigits]);
+    configRef.current = {
+      direction,
+      barrier,
+      duration,
+      stake,
+      strategy,
+      martingale,
+      symbol,
+      sniperOverUnder: edgeSniperOverUnder,
+      rankedDigits,
+    };
+  }, [direction, barrier, duration, stake, strategy, martingale, symbol, edgeSniperOverUnder, rankedDigits]);
 
   useEffect(() => {
     cashGrabConfigRef.current = {
@@ -906,10 +919,12 @@ export default function XTraderPage() {
       lossLimit: Math.max(0, cashGrabLossLimit),
       autoSelectBest: cashGrabAutoSelectBest,
       autoSwitchSafestPair: cashGrabAutoSwitchSafestPair,
+      autoDirection: cashGrabAutoDirection,
     };
   }, [
     cashGrabAutoSelectBest,
     cashGrabAutoSwitchSafestPair,
+    cashGrabAutoDirection,
     cashGrabDirection,
     cashGrabDuration,
     cashGrabStakeMode,
@@ -1231,6 +1246,54 @@ export default function XTraderPage() {
     throw new Error("EDGE stopped because the previous trade did not settle in time.");
   };
 
+  const waitForEdgeSniperConfirmation = async () => {
+    const config = configRef.current;
+    const side = config.direction === "DIGITOVER" ? "Over" : "Under";
+    setConnectionMessage({
+      kind: "info",
+      text: `Sniper ${side} ${config.barrier} is working. Waiting for two fresh matching ticks before entry.`,
+    });
+
+    let initial = await status.refetch();
+    if (initial.data?.last_tick?.symbol !== config.symbol) {
+      if (!await selectMarket(config.symbol)) {
+        throw new Error(`Sniper could not select ${config.symbol}. No trade was sent.`);
+      }
+      initial = await status.refetch();
+    }
+    let lastEpoch = initial.data?.last_tick?.symbol === config.symbol
+      ? initial.data.last_tick.epoch
+      : null;
+    let streak = 0;
+
+    for (let attempt = 0; attempt < 240 && runningRef.current; attempt += 1) {
+      await sleep(300);
+      if (!runningRef.current) return false;
+      const fresh = await status.refetch();
+      const tick = fresh.data?.last_tick;
+      if (tick?.symbol !== config.symbol || tick.epoch == null || (lastEpoch != null && tick.epoch <= lastEpoch)) continue;
+      lastEpoch = tick.epoch;
+      const digit = fresh.data?.last_digit;
+      if (digit == null || digit < 0 || digit > 9) continue;
+      const matches = config.direction === "DIGITOVER" ? digit > config.barrier : digit < config.barrier;
+      streak = matches ? streak + 1 : 0;
+      if (streak >= 2) {
+        setConnectionMessage({
+          kind: "info",
+          text: `Sniper confirmed two fresh ${side} ticks around digit ${config.barrier}. Sending the configured EDGE entry.`,
+        });
+        return true;
+      }
+    }
+    if (runningRef.current) {
+      setConnectionMessage({
+        kind: "info",
+        text: "Sniper is still working; no trade was sent because it did not confirm two fresh matching ticks.",
+      });
+    }
+    return false;
+  };
+
   const executeBatch = async () => {
     if (edgeSettlementLockRef.current) return;
     edgeSettlementLockRef.current = true;
@@ -1264,6 +1327,10 @@ export default function XTraderPage() {
     }
     if (amount > declaredAccountBalance || (currentAccountBalance != null && amount > currentAccountBalance)) {
       throw new Error(`EDGE stopped before the next trade because the ${amount.toFixed(2)} ${currentAccount?.currency ?? "USD"} stake exceeds the connected balance. Lower the stake or Martingale multiplier.`);
+    }
+    if (config.sniperOverUnder) {
+      if (!await waitForEdgeSniperConfirmation()) return;
+      if (!runningRef.current) return;
     }
     armMartingaleWatch(latestRows, amount, 1);
     const result = await bulkBuyMutation.mutateAsync({
@@ -1355,7 +1422,9 @@ export default function XTraderPage() {
   const runLoop = async () => {
     while (runningRef.current) {
       try {
-        if (edgePercentageModeRef.current) {
+        if (configRef.current.sniperOverUnder) {
+          await executeBatch();
+        } else if (edgePercentageModeRef.current) {
           const recommendation = await applyPercentageRecommendation();
           if (!recommendation) {
             await sleep(1500);
@@ -1781,6 +1850,54 @@ export default function XTraderPage() {
     }
   };
 
+  const confirmCashGrabDirection = async (marketSymbol: string): Promise<CashGrabDirection | null> => {
+    const initial = await status.refetch();
+    const signal = initial.data?.market_signals?.find((entry) => entry.symbol === marketSymbol);
+    if (!signal || signal.sample_count < 1) {
+      setConnectionMessage({ kind: "info", text: `Auto Direction is waiting for live Rise/Fall samples on ${marketSymbol}. No trade was sent.` });
+      return null;
+    }
+    const rise = Number(signal.rise_percentage);
+    const fall = Number(signal.fall_percentage);
+    if (!Number.isFinite(rise) || !Number.isFinite(fall) || rise === fall) {
+      setConnectionMessage({ kind: "info", text: `Auto Direction is waiting for a clear Rise or Fall leader on ${marketSymbol}. No trade was sent.` });
+      return null;
+    }
+    const selectedDirection: CashGrabDirection = rise > fall ? "CALL" : "PUT";
+    let lastSequence = signal.tick_sequence;
+    let freshTicks = 0;
+
+    setConnectionMessage({
+      kind: "info",
+      text: `Auto Direction is checking the leading ${selectedDirection === "CALL" ? "Rise" : "Fall"} sample on ${marketSymbol}; waiting for two fresh ticks.`,
+    });
+    for (let attempt = 0; attempt < 240 && cashGrabRunningRef.current; attempt += 1) {
+      await sleep(300);
+      if (!cashGrabRunningRef.current) return null;
+      const latest = await status.refetch();
+      const latestSignal = latest.data?.market_signals?.find((entry) => entry.symbol === marketSymbol);
+      if (!latestSignal || latestSignal.tick_sequence <= lastSequence) continue;
+      freshTicks += latestSignal.tick_sequence - lastSequence;
+      lastSequence = latestSignal.tick_sequence;
+      if (freshTicks < 2) continue;
+
+      const latestRise = Number(latestSignal.rise_percentage);
+      const latestFall = Number(latestSignal.fall_percentage);
+      if (selectedDirection === "CALL" ? latestRise > latestFall : latestFall > latestRise) {
+        return selectedDirection;
+      }
+      setConnectionMessage({
+        kind: "info",
+        text: `Auto Direction found that ${selectedDirection === "CALL" ? "Rise" : "Fall"} no longer leads after two fresh ticks. It will check the live sample again; no trade was sent.`,
+      });
+      return null;
+    }
+    if (cashGrabRunningRef.current) {
+      setConnectionMessage({ kind: "info", text: "Auto Direction did not receive two fresh ticks. No trade was sent; it will check again." });
+    }
+    return null;
+  };
+
   const executeCashGrabTrade = async () => {
     let config = cashGrabConfigRef.current;
     if (!config || !cashGrabRunningRef.current || cashGrabActionLockRef.current) return;
@@ -1837,6 +1954,17 @@ export default function XTraderPage() {
       cashGrabRunningRef.current = false;
       setCashGrabRunning(false);
       return;
+    }
+    if (config.autoDirection) {
+      const selectedDirection = await confirmCashGrabDirection(config.symbol);
+      if (!cashGrabRunningRef.current) return;
+      if (!selectedDirection) {
+        await sleep(500);
+        return;
+      }
+      config = { ...config, direction: selectedDirection };
+      cashGrabConfigRef.current = config;
+      setCashGrabDirection(selectedDirection);
     }
     let contractConfirmed = false;
     cashGrabActionLockRef.current = true;
@@ -3468,7 +3596,6 @@ export default function XTraderPage() {
            onRefreshSample={refreshDigitFlipSample}
            onAssaultChange={toggleDigitFlipAssault}
            onMagicChange={toggleDigitFlipMagic}
-          onGuide={() => { setGuideMode("digit-flip"); setGuidePage(0); setGuideOpen(true); }}
         />
       )}
 
@@ -3476,6 +3603,8 @@ export default function XTraderPage() {
         <EdgeReferencePanel
           isConnected={isConnected}
           running={running}
+          sniperOverUnder={edgeSniperOverUnder}
+          onSniperOverUnderChange={setEdgeSniperOverUnder}
           symbol={symbol}
           markets={markets}
           onSymbolChange={(next) => void selectMarket(next)}
@@ -3687,7 +3816,6 @@ export default function XTraderPage() {
           onProfitTargetChange={setMoneyBankProfitTarget}
           lossLimit={moneyBankLossLimit}
           onLossLimitChange={setMoneyBankLossLimit}
-          marketSignals={moneyBankSignals}
           recentTrades={moneyBankRows}
           sessionRows={moneyBankSessionRows}
           lastSettledProfit={moneyBankLastSettledProfit}
@@ -3717,6 +3845,7 @@ export default function XTraderPage() {
           lossLimit={cashGrabLossLimit}
           sessionPnl={cashGrabHistorySessionPnl}
           autoSwitchSafestPair={cashGrabAutoSwitchSafestPair}
+          autoDirection={cashGrabAutoDirection}
           autoSwitchSafestPairStatus={cashGrabAutoSwitchSafestPairStatus}
           autoSwitchSafestPairRecommendation={cashGrabAutoSwitchRecommendation}
           running={cashGrabRunning}
@@ -3729,6 +3858,11 @@ export default function XTraderPage() {
           historyFading={historyFading}
           onDirectionChange={setCashGrabDirection}
           onSymbolChange={(next) => { setCashGrabSymbol(next); void selectMarket(next); }}
+          onAutoDirectionChange={(enabled) => {
+            setCashGrabAutoDirection(enabled);
+            const currentConfig = cashGrabConfigRef.current;
+            if (currentConfig) cashGrabConfigRef.current = { ...currentConfig, autoDirection: enabled };
+          }}
           onAutoSelectBestChange={(enabled) => {
             setCashGrabAutoSelectBest(enabled);
             if (enabled && cashGrabBestSymbol) {
@@ -3776,7 +3910,6 @@ export default function XTraderPage() {
           onMoneyStart={(config) => void startCashGrab(config)}
           onMoneyStop={stopCashGrab}
           onClearHistory={() => void clearCashGrabHistory()}
-          onOpenGuide={() => { setGuideMode("cash-grab"); setGuidePage(0); setGuideOpen(true); }}
         />
       )}
 

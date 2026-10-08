@@ -9,6 +9,27 @@ afterEach(() => {
 });
 
 describe("customFetch transport recovery", () => {
+  it("replaces the Replit preview HTML fallback with a clear API-routing error", async () => {
+    globalThis.fetch = (async () => new Response(
+      '<!doctype html><style>@font-face { font-family: "Replit Diatype"; }</style>Run this app to see the results here.',
+      { status: 404, statusText: "Not Found", headers: { "content-type": "text/html" } },
+    )) as typeof fetch;
+
+    await assert.rejects(
+      customFetch("/api/deriv/buy", {
+        method: "POST",
+        body: JSON.stringify({ amount: 1 }),
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /dashboard preview page was returned instead of the trading API/i);
+        assert.doesNotMatch(error.message, /@font-face|Replit Diatype/);
+        assert.match(error.message, /check Deriv history before retrying/i);
+        return true;
+      },
+    );
+  });
+
   it("retries a safe read once with the same request reference", async () => {
     let calls = 0;
     const requestIds: string[] = [];

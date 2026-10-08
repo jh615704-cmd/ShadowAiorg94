@@ -153,6 +153,14 @@ function buildErrorMessage(response: Response, data: unknown): string {
 
   if (typeof data === "string") {
     const text = data.trim();
+    const mediaType = getMediaType(response.headers);
+    if (
+      response.status === 404
+      && mediaType === "text/html"
+      && /run this app to see the results here|replit diatype/i.test(text)
+    ) {
+      return `${prefix}: The dashboard preview page was returned instead of the trading API. Check that the API service is running with the dashboard. No trade confirmation was received; check Deriv history before retrying.`;
+    }
     return text ? `${prefix}: ${truncate(text)}` : prefix;
   }
 

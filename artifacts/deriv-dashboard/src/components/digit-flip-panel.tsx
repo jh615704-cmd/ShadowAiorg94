@@ -74,7 +74,6 @@ export type DigitFlipPanelProps = {
   onRefreshSample: () => void;
   onAssaultChange: (value: boolean) => void;
   onMagicChange: (value: boolean) => void;
-  onGuide: () => void;
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -158,7 +157,6 @@ export default function DigitFlipPanel({
   onRefreshSample,
   onAssaultChange,
   onMagicChange,
-  onGuide,
 }: DigitFlipPanelProps) {
   const [marketPickerOpen, setMarketPickerOpen] = useState(false);
 
@@ -386,7 +384,6 @@ export default function DigitFlipPanel({
         <div className="df-action-row">
           <button type="button" className={running ? "df-stop" : "df-run"} onClick={onRunStop} disabled={disabled || isPlacingTrade || (!running && entryBlocked)}>{running ? <><CircleStop size={16} /> Stop DigitFlip</> : <><Play size={16} fill="currentColor" /> Run DigitFlip</>}</button>
           <button type="button" className="df-reset" onClick={onReset} disabled={disabled}><RotateCcw size={15} /> Reset</button>
-          <button type="button" className="df-guide" onClick={onGuide} disabled={disabled}>Guide</button>
         </div>
       </section>
 

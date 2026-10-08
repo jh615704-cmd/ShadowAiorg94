@@ -53,6 +53,8 @@
 
 .cash-grab-df-panel .df-toggle-card.active { border-color: rgba(71, 154, 235, .38); }
 .cash-grab-df-panel .df-toggle-control:has(input:checked) { color: #8bcaff; }
+.cash-grab-df-panel .df-direction-card.active { border-color: rgba(76, 213, 141, .5); background: linear-gradient(135deg, rgba(18, 68, 51, .58), rgba(16, 35, 54, .97)); }
+.cash-grab-df-panel .df-direction-card .df-toggle-state.working { color: #62e39e; }
 .cash-grab-df-panel .df-toggle i { border-color: #395a7f; background: #294767; }
 .cash-grab-df-panel .df-toggle i::after { background: #8aa8c8; }
 .cash-grab-df-panel .df-toggle input:checked + i {

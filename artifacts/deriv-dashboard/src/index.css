@@ -2284,3 +2284,68 @@ body { overflow-x: hidden; }
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
+
+/* Keep the trading surfaces readable at dashboard scale. */
+.auto-trader-page,
+.df-panel,
+.money-bank-panel,
+.edge-reference-layout,
+.bulk-trader-panel,
+.xt-guide {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.df-panel small,
+.money-bank-panel small,
+.edge-reference-layout small,
+.bulk-trader-panel small,
+.auto-trader-page small {
+  font-size: max(10px, 1em);
+}
+
+.df-panel p,
+.money-bank-panel p,
+.edge-reference-layout p,
+.bulk-trader-panel p {
+  font-size: max(11px, 1em);
+}
+
+.edge-reference-layout .edge-ref-field-label,
+.edge-reference-layout .edge-ref-best-copy > span,
+.edge-reference-layout .edge-ref-live,
+.edge-reference-layout .edge-toggle-control {
+  font-size: max(10px, 1em);
+}
+
+.bulk-trader-panel .bulk-digit small,
+.bulk-trader-panel .bulk-market-ranking strong,
+.bulk-trader-panel .bulk-analysis-badge b {
+  font-size: 10px;
+}
+
+.xt-guide-button {
+  width: auto;
+  min-width: 66px;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 10px;
+}
+
+.xt-guide-header b { font-size: 15px; }
+.xt-guide-header small,
+.xt-guide-kicker,
+.xt-guide-footer > span { font-size: 10px; }
+.xt-guide-nav,
+.xt-guide-start { font-size: 11px; }
+
+.xt-app {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.xt-app small { font-size: max(10px, 1em) !important; }
+.xt-app p { font-size: max(11px, 1em) !important; }
+.xt-app .xt-digits button small { font-size: 10px !important; }

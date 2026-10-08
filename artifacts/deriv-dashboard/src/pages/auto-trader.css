@@ -337,15 +337,16 @@
   background: linear-gradient(145deg, #102945, #0b2039);
   transition: border-color .15s ease, background .15s ease, transform .15s ease;
 }
-.at-market-card:hover { border-color: #3b5e82; transform: translateY(-1px); }
+.at-market-card:hover { border-color: #3b5e82; }
 .at-market-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
-.at-market-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #d8e7f8; font-size: 11px; font-weight: 700; }
+.at-market-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #e3edf9; font-size: 13px; font-weight: 750; }
 .at-symbol { flex-shrink: 0; color: #7792b1; font: 9px "DM Mono", monospace; }
+.at-market-tick-count { flex: 0 0 auto; padding: 4px 7px; border: 1px solid rgba(235, 195, 91, .28); border-radius: 5px; background: rgba(140, 105, 37, .16); color: #f0cd70; font: 700 10px "DM Mono", monospace; font-variant-numeric: tabular-nums; }
 .at-market-meta { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; color: #7188a5; font-size: 9px; }
 .at-market-meta span:first-child { display: inline-flex; align-items: center; gap: 4px; }
 .at-market-live { color: #8ca1ba; font: 800 8px "DM Mono", monospace; letter-spacing: .06em; }
@@ -353,27 +354,24 @@
 .at-frequencies { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 3px; margin-top: 11px; }
 .at-digit-column {
   min-width: 0;
-  padding: 5px 2px 4px;
-  border: 1px solid #234160;
-  border-radius: 5px;
-  background: #0a1e35;
+  padding: 2px 0 4px;
   display: grid;
   align-items: center;
   justify-items: center;
   gap: 4px;
 }
-.at-digit-label { color: #c3d3e7; font: 700 10px "DM Mono", monospace; }
-.at-digit-count { color: #d9e5f3; font: 9px "DM Mono", monospace; font-variant-numeric: tabular-nums; }
-.at-digit-count.zero { color: #7ee29b; }
+.at-digit-label { color: #b7c5d7; font: 700 10px "DM Mono", monospace; }
+.at-digit-count { display: grid; place-items: center; width: clamp(27px, 3vw, 38px); aspect-ratio: 1; border: 1px solid #34485f; border-radius: 50%; background: #172538; color: #dce5ef; font: 700 10px "DM Mono", monospace; font-variant-numeric: tabular-nums; }
+.at-digit-count.zero { border-color: #41c68a; background: rgba(20, 117, 79, .3); color: #80f2ad; box-shadow: 0 0 0 2px rgba(45, 208, 132, .1), 0 0 12px rgba(45, 208, 132, .16); }
 .at-digit-trades { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px; width: 100%; }
 .at-digit-trades button {
   min-width: 0;
   min-height: 19px;
   padding: 1px 0;
-  border: 1px solid #31516f;
-  border-radius: 3px;
-  background: #122e49;
-  color: #d3e2f3;
+  border: 1px solid #615532;
+  border-radius: 4px;
+  background: #302a1c;
+  color: #f1d47f;
   font: 800 8px "DM Mono", monospace;
   line-height: 1;
   cursor: pointer;
@@ -618,12 +616,12 @@
   .at-market-group { padding: 12px 10px 2px; }
   .at-market-grid { gap: 8px; }
   .at-market-card { padding: 11px 9px 8px; }
-  .at-market-name { font-size: 10px; }
+  .at-market-name { font-size: 12px; }
   .at-symbol { font-size: 8px; }
   .at-frequencies { gap: 2px; }
-   .at-digit-column { padding: 4px 1px 3px; gap: 3px; }
+   .at-digit-column { padding: 3px 0; gap: 3px; }
    .at-digit-label { font-size: 9px; }
-   .at-digit-count { font-size: 8px; }
+   .at-digit-count { width: 27px; font-size: 9px; }
    .at-digit-trades { gap: 1px; }
    .at-digit-trades button { min-height: 18px; font-size: 7px; }
   .at-scan-status { flex-wrap: wrap; gap: 6px 12px; padding: 9px 12px; }

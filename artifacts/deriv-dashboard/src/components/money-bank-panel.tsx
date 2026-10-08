@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ChevronDown, Download, Info, Play, RefreshCw, RotateCcw, ShieldCheck, Square, TrendingUp } from "lucide-react";
 import { estimateAccumulatorReturnRate } from "../lib/money-bank-math";
 import DerivHistory, { type DerivHistoryRow } from "./deriv-history";
@@ -88,7 +88,6 @@ type MoneyBankPanelProps = {
   lossLimit: number | null;
   onLossLimitChange: (value: number | null) => void;
   closing?: boolean;
-  marketSignals: readonly MoneyBankMarketSignal[];
   recentTrades: readonly MoneyBankTrade[];
   sessionRows: readonly MoneyBankTrade[];
   lastSettledProfit: number | null;
@@ -166,7 +165,6 @@ export function MoneyBankPanel({
   lossLimit,
   onLossLimitChange,
   closing = false,
-  marketSignals,
   recentTrades,
   sessionRows,
   lastSettledProfit,
@@ -191,18 +189,9 @@ export function MoneyBankPanel({
   const profitBasis = lastSettledProfit != null && lastSettledProfit > 0 ? lastSettledProfit : projectedProfit;
   const reinvestedProfit = roundCents(profitBasis * reinvestPercent / 100);
   const retainedProfit = roundCents(Math.max(0, profitBasis - reinvestedProfit));
-  const [capturedAt, setCapturedAt] = useState(() => new Date());
   const [historyHidden, setHistoryHidden] = useState<Set<string>>(new Set());
   const [historyClearArmed, setHistoryClearArmed] = useState(false);
   const [historyFading, setHistoryFading] = useState(false);
-  const snapshot = useMemo(() => MONEY_BANK_AUTO_SYMBOLS.map((marketSymbol) => {
-    const signal = marketSignals.find((entry) => entry.symbol === marketSymbol);
-    return {
-      symbol: marketSymbol,
-      sampleCount: signal?.sample_count ?? 0,
-      quote: signal?.quote ?? null,
-    };
-  }), [marketSignals]);
   const visibleTrades = recentTrades.filter((trade) => !historyHidden.has(trade.contract_id));
 
   const submitStart = () => {
@@ -469,21 +458,6 @@ export function MoneyBankPanel({
         </aside>
       </div>
 
-       <section className="money-bank-card money-bank-snapshot-card">
-         <div className="money-bank-card-head">
-             <div><small>LIVE MARKET SAMPLES</small><h3>Accumulator tick samples</h3></div>
-            <div className="money-bank-snapshot-actions"><span>Updated {capturedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span><button type="button" onClick={() => setCapturedAt(new Date())} disabled={running}><RefreshCw size={13} />Refresh</button></div>
-         </div>
-           <p className="money-bank-helper"><Info size={14} /> Tick counts only: an Accumulator can move with any rise or fall. No Rise/Fall win percentages are shown here.</p>
-         <div className="money-bank-snapshot-grid">
-           {snapshot.map((entry, index) => {
-             const label = markets.find(([market]) => market === entry.symbol)?.[1]?.replace("Volatility ", "V") ?? entry.symbol;
-               return <div className={`money-bank-snapshot-row ${entry.symbol === symbol ? "best" : ""}`} key={entry.symbol}><b>{index + 1}</b><span>{label}</span><strong>{entry.sampleCount.toLocaleString()} ticks</strong><em>Any rise or fall · Accumulator</em></div>;
-           })}
-         </div>
-          <p className="money-bank-safest-copy">Selected market: <b>{selectedMarket}</b>{quote != null && <> · latest quote {quote.toFixed(2)}</>}</p>
-       </section>
-
       <div className="money-bank-actions">
         <button type="button" className={`money-bank-start ${running ? "stop" : ""}`} onClick={submitStart} disabled={!isConnected || (!running && tradeSlotBlocked)}>
           {closing ? <><RefreshCw size={15} className="money-bank-spin" /> Closing contracts…</> : running ? <><Square size={15} /> Stop Accumulator</> : <><Play size={15} /> Start Accumulator</>}
@@ -508,10 +482,6 @@ export function MoneyBankPanel({
         />
 
       <footer className="money-bank-footer">
-        <div className="money-bank-safety-copy">
-          <ShieldCheck size={17} />
-           <span><b>Accumulator is bounded</b><small>It stops at L6, optional session limits, or Stop Accumulator.</small></span>
-        </div>
         <div className="money-bank-session-stats">
           <span><small>SESSION P/L</small><b className={sessionPnl >= 0 ? "positive" : "negative"}>{sessionPnl >= 0 ? "+" : ""}{money(sessionPnl, currency)}</b></span>
           <span><small>TRADES</small><b>{tradeCount}</b></span>

@@ -63,7 +63,7 @@ const guideCopy = [
   ["Go Live", "Go Live starts a fresh count from the next real ticks observed from Deriv.", "There are no simulated ticks or starting sample counts."],
   ["Stop and Rescan", "Stop pauses the scanner. Rescan resets the count baseline to the latest live tick sequence.", "Stopping does not cancel an order already accepted by Deriv."],
   ["Live digit counts", "Each digit column shows its observed count since this scan began.", "A zero count is shown in green; other counts use standard text."],
-  ["Tick counts", "Tick counts are synchronized across cards within each market family.", "The count advances from Deriv tick sequences."],
+  ["Tick counts", "Each market has its own count, starting at one when its first new tick arrives after Go Live.", "The count advances only from new Deriv ticks."],
   ["Missed updates", "Recent tick digits let the scanner recover sequence updates between polls.", "If a market is disconnected, its counts wait for real ticks to resume."],
   ["Digit Differs", "A Digit Differs contract wins if its final digit at expiry is different from the selected barrier.", "Deriv determines the contract result at expiry."],
   ["Trade Now", "Trade Now places one contract on the currently least-observed digit from the live scanner.", "It is a single independent contract."],
@@ -125,7 +125,7 @@ function AutoTraderContent() {
   const [strategy, setStrategy] = useState("flat");
   const [message, setMessage] = useState<{ tone: "success" | "error" | "info"; text: string } | null>(null);
   const [frequencies, setFrequencies] = useState<Frequencies>({});
-  const [groupTicks, setGroupTicks] = useState<Record<MarketGroup, number>>({ regular: 0, jump: 0, "one-sec": 0 });
+  const [marketTicks, setMarketTicks] = useState<TickMap>({});
   const seenTicks = useRef<TickMap>({});
   const baselineTicks = useRef<TickMap>({});
   const account = status.data?.account ?? null;
@@ -151,7 +151,7 @@ function AutoTraderContent() {
     // A sequence cursor belongs to one active Deriv account only.
     setScanning(false);
     setFrequencies({});
-    setGroupTicks({ regular: 0, jump: 0, "one-sec": 0 });
+    setMarketTicks({});
     seenTicks.current = {};
     baselineTicks.current = {};
   }, [accountId]);
@@ -159,7 +159,7 @@ function AutoTraderContent() {
   useEffect(() => {
     if (!scanning) return;
     const arrivals: Array<{ symbol: string; digit: number }> = [];
-    const progress: Record<MarketGroup, number> = { regular: 0, jump: 0, "one-sec": 0 };
+    const progress: TickMap = {};
     for (const market of markets) {
       const signal = currentSignals.find((candidate) => candidate.symbol === market.symbol);
       if (!signal || (signal.tick_sequence === 0 && signal.recent_digits.length === 0)) continue;
@@ -185,10 +185,7 @@ function AutoTraderContent() {
       }
 
       const baseline = baselineTicks.current[market.symbol] ?? previous;
-      progress[market.group] = Math.max(
-        progress[market.group],
-        Math.max(0, signal.tick_sequence - baseline),
-      );
+      progress[market.symbol] = Math.max(0, signal.tick_sequence - baseline);
     }
     if (arrivals.length) {
       setFrequencies((old) => {
@@ -201,7 +198,7 @@ function AutoTraderContent() {
         return next;
       });
     }
-    setGroupTicks(progress);
+    setMarketTicks((current) => ({ ...current, ...progress }));
   }, [scanning, currentSignals]);
 
   const startScan = async () => {
@@ -224,7 +221,7 @@ function AutoTraderContent() {
     seenTicks.current = { ...baseline };
     baselineTicks.current = { ...baseline };
     setFrequencies(Object.fromEntries(markets.map((market) => [market.symbol, Array(10).fill(0)])));
-    setGroupTicks({ regular: 0, jump: 0, "one-sec": 0 });
+    setMarketTicks(Object.fromEntries(markets.map((market) => [market.symbol, 0])));
     setScanning(true);
     setMessage({ tone: "info", text: "Scanner live. Counts begin with the next real tick observed from Deriv." });
   };
@@ -328,7 +325,7 @@ function AutoTraderContent() {
   const renderMarket = (market: Market) => {
     const signal = signalBySymbol.get(market.symbol);
     const digits = frequencies[market.symbol] ?? Array(10).fill(0);
-    const ticks = groupTicks[market.group];
+    const ticks = marketTicks[market.symbol] ?? 0;
     const hasMarketTicksThisScan = digits.some((count) => count > 0);
     return (
       <article
@@ -337,12 +334,8 @@ function AutoTraderContent() {
         data-testid={`card-market-${market.symbol}`}
       >
         <div className="at-market-heading">
-          <span className="at-market-name">{market.name}</span>
-          <span className="at-symbol">{market.symbol}</span>
-        </div>
-        <div className="at-market-meta">
-          <span><Activity size={12} /> {ticks > 0 ? `${ticks.toLocaleString()} ${ticks === 1 ? "tick" : "ticks"}` : "Waiting for first tick"}</span>
-          <span className={`at-market-live${scanning && signal ? " is-live" : ""}`}>{scanning && signal ? "LIVE" : scanning ? "WAITING" : "PAUSED"}</span>
+          <span className="at-market-name">{market.name.replace("Volatility ", "V").replace(" · 1s", " 1s")}</span>
+          <span className="at-market-tick-count">{ticks} {ticks === 1 ? "tick" : "ticks"}</span>
         </div>
         <div className="at-frequencies" aria-label={`Digit frequency and trade controls for ${market.name}`}>
           {digits.map((count, digit) => (
@@ -371,9 +364,6 @@ function AutoTraderContent() {
           </div>
           <div className="at-heading-actions">
             <DerivAccountSwitcher variant="cockpit" enabled={hasToken} />
-            <button type="button" className="at-guide-button" onClick={() => { setGuidePage(0); setGuideOpen(true); }} data-testid="button-open-guide">
-              <BookOpen size={15} /> GUIDE <span>20</span>
-            </button>
           </div>
         </section>
 
@@ -422,6 +412,9 @@ function AutoTraderContent() {
                 <p>Live last-digit distribution · Deriv market signals</p>
               </div>
               <div className="at-scan-actions">
+                <button type="button" className="at-guide-button" onClick={() => { setGuidePage(0); setGuideOpen(true); }} data-testid="button-open-guide">
+                  <BookOpen size={15} /> Guide
+                </button>
                 <button type="button" className="at-icon-button" onClick={() => void startScan()} disabled={!connected || status.isFetching} aria-label="Rescan markets" data-testid="button-rescan"><RefreshCw size={15} /> Rescan</button>
                 {scanning ? (
                   <button type="button" className="at-stop-button" onClick={() => { setScanning(false); setMessage({ tone: "info", text: "Scan paused. No further digit counts will be added." }); }} data-testid="button-stop-scan"><Pause size={14} /> Stop</button>

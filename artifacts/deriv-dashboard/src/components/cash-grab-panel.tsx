@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   Activity,
-  BookOpen,
   ChevronDown,
   Loader2,
   Play,
@@ -46,6 +45,7 @@ export interface CashGrabStartConfig {
   lossLimit: number;
   autoSelectBest: boolean;
   autoSwitchSafestPair: boolean;
+  autoDirection: boolean;
 }
 
 export interface CashGrabPanelProps {
@@ -65,6 +65,7 @@ export interface CashGrabPanelProps {
   lossLimit: number;
   sessionPnl: number;
   autoSwitchSafestPair: boolean;
+  autoDirection: boolean;
   autoSwitchSafestPairStatus?: CashGrabAiStatus;
   autoSwitchSafestPairRecommendation?: {
     symbol: string;
@@ -84,6 +85,7 @@ export interface CashGrabPanelProps {
   onSymbolChange: (symbol: string) => void;
   onAutoSelectBestChange: (enabled: boolean) => void;
   onAutoSwitchSafestPairChange: (enabled: boolean) => void;
+  onAutoDirectionChange: (enabled: boolean) => void;
   onStakeChange: (stake: number) => void;
   onDurationChange: (duration: CashGrabDuration) => void;
   onStakeModeChange: (mode: CashGrabStakeMode) => void;
@@ -94,7 +96,6 @@ export interface CashGrabPanelProps {
   onMoneyStart: (config: CashGrabStartConfig) => void;
   onMoneyStop: () => void;
   onClearHistory: () => void;
-  onOpenGuide: () => void;
 }
 
 const minimumStake = 0.35;
@@ -125,6 +126,7 @@ export default function CashGrabPanel({
   lossLimit,
   sessionPnl,
   autoSwitchSafestPair,
+  autoDirection,
   autoSwitchSafestPairStatus = "off",
   autoSwitchSafestPairRecommendation = null,
   running,
@@ -140,6 +142,7 @@ export default function CashGrabPanel({
   onSymbolChange,
   onAutoSelectBestChange,
   onAutoSwitchSafestPairChange,
+  onAutoDirectionChange,
   onStakeChange,
   onDurationChange,
   onStakeModeChange,
@@ -150,7 +153,6 @@ export default function CashGrabPanel({
   onMoneyStart,
   onMoneyStop,
   onClearHistory,
-  onOpenGuide,
 }: CashGrabPanelProps) {
   const [marketMenuOpen, setMarketMenuOpen] = useState(false);
   const interactionDisabled = running || isPlacingTrade;
@@ -181,6 +183,7 @@ export default function CashGrabPanel({
       lossLimit: Math.max(0, lossLimit),
       autoSelectBest,
       autoSwitchSafestPair,
+      autoDirection,
     });
   };
 
@@ -239,6 +242,26 @@ export default function CashGrabPanel({
               onChange={(event) => onAutoSwitchSafestPairChange(event.target.checked)}
               disabled={!isConnected || stopping}
               aria-label="Auto-switch Cash Grab to guarded Rise/Fall markets"
+            />
+            <i />
+          </span>
+        </label>
+      </div>
+
+      <div className={`df-card df-toggle-card df-direction-card ${autoDirection ? "active" : ""}`}>
+        <div className="df-toggle-copy">
+          <span className="df-section-label">AUTO DIRECTION</span>
+          <p>Uses the leading Rise/Fall sample, then checks two fresh ticks before each entry. This switch alone never starts or places a trade.</p>
+        </div>
+        <label className="df-toggle-control">
+          <span className={`df-toggle-state${autoDirection ? " working" : ""}`}>{autoDirection ? "WORKING" : "OFF"}</span>
+          <span className="df-toggle">
+            <input
+              type="checkbox"
+              checked={autoDirection}
+              onChange={(event) => onAutoDirectionChange(event.target.checked)}
+              disabled={!isConnected || stopping}
+              aria-label="Auto Direction for Cash Grab"
             />
             <i />
           </span>
@@ -348,7 +371,6 @@ export default function CashGrabPanel({
       <form className="df-card df-advanced-card" onSubmit={(event) => { event.preventDefault(); submitStart(); }}>
         <div className="df-advanced-head">
           <div><span className="df-section-label">RISE/FALL CONTRACT</span><h3>Trade setup</h3></div>
-          <button type="button" className="df-refresh" onClick={onOpenGuide}><BookOpen size={13} /> Guide</button>
         </div>
         <div className="df-setup-grid">
           <label>
@@ -463,7 +485,6 @@ export default function CashGrabPanel({
               {isPlacingTrade ? "PLACING…" : "START CASH GRAB"}
             </button>
           )}
-          <button type="button" className="df-guide" onClick={onOpenGuide}><BookOpen size={13} /> Guide</button>
         </div>
         {!isConnected && <p className="cash-grab-status-note">Connect Deriv to place a Rise/Fall contract.</p>}
         {tradeSlotBlocked && <p className="cash-grab-status-note" role="status">New entries stay paused until Deriv confirms that all open contracts have settled.</p>}

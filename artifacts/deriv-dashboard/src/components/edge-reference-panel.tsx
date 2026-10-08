@@ -18,6 +18,8 @@ type EdgeTradeRow = DerivHistoryRow & { account_type: string };
 type EdgeReferencePanelProps = {
   isConnected: boolean;
   running: boolean;
+  sniperOverUnder: boolean;
+  onSniperOverUnderChange: (enabled: boolean) => void;
   symbol: string;
   markets: readonly (readonly [string, string])[];
   onSymbolChange: (value: string) => void;
@@ -65,6 +67,8 @@ const EDGE_PERCENTAGE_SCAN_FLOOR = 90;
 export default function EdgeReferencePanel({
   isConnected,
   running,
+  sniperOverUnder,
+  onSniperOverUnderChange,
   symbol,
   markets,
   onSymbolChange,
@@ -168,6 +172,25 @@ export default function EdgeReferencePanel({
           <ChevronDown size={18} className="edge-ref-market-chevron" />
         </button>
         <p>{marketPickerOpen ? "Choose the market to use with your selected digit." : "Select a market and digit, then scan its live Over/Under samples."}</p>
+        <label className={`edge-sniper-toggle${sniperOverUnder ? " active" : ""}`}>
+          <span className="edge-sniper-copy">
+            <b>Sniper over/under</b>
+            <small>When Run is active, waits for two fresh ticks on your selected side of the barrier. It does not start trades by itself.</small>
+          </span>
+          <span className="edge-sniper-control">
+            <span className={`edge-sniper-state${sniperOverUnder ? " working" : ""}`}>{sniperOverUnder ? "WORKING" : "OFF"}</span>
+            <span className="edge-toggle">
+              <input
+                type="checkbox"
+                checked={sniperOverUnder}
+                onChange={(event) => onSniperOverUnderChange(event.target.checked)}
+                disabled={!isConnected || running}
+                aria-label="Sniper over/under"
+              />
+              <i />
+            </span>
+          </span>
+        </label>
         {marketPickerOpen && (
           <div className="edge-ref-market-menu">
             {rankedMarkets.map((option, index) => (
