@@ -10,6 +10,7 @@
 - [Runtime scaling boundary](runtime-scaling-boundary.md) — distinguish the 15k-user/7k-MAU starter target from measured concurrent Deriv-session capacity.
 - [Digit zero response schema](deriv-digit-zero-schema.md) — Deriv streak payloads include digit 0; keep OpenAPI and generated Zod minimums at zero.
 - [Trade contract selection](trade-contract-selection.md) — Digit Differs uses the selected barrier only at expiry; keep manual, ranked, and open-settlement states explicit.
+- [Auto Trader history clearing](auto-trader-history-clearing.md) — clear only local rows for the selected account; keep Deriv’s authoritative account history intact.
 - [DigitFlip scanner isolation](digitflip-scanner-isolation.md) — parity samples and visible history must remain separate from EDGE and Trade X.
 - [Trade X distribution visual language](trade-x-distribution-style.md) — keep the digit distribution dark, textured, crisp, and pill-based with three clear safest-digit cards.
 - [EDGE visual verification](edge-visual-verification.md) — the access gate blocks authenticated cockpit screenshots unless a valid access-key session is available.

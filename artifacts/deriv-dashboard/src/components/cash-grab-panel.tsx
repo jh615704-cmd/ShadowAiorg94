@@ -225,7 +225,6 @@ export default function CashGrabPanel({
       <div className={`df-card df-toggle-card df-pair-card ${autoSwitchSafestPair ? "active" : ""}`}>
         <div className="df-toggle-copy">
           <span className="df-section-label">AUTO-SWITCH SAFEGUARD</span>
-          <p>Scan live Rise/Fall samples and switch markets only when the balance and sample checks pass.</p>
           {autoSwitchSafestPairRecommendation && (
             <p className="df-running-note">
               <i />
@@ -251,7 +250,6 @@ export default function CashGrabPanel({
       <div className={`df-card df-toggle-card df-direction-card ${autoDirection ? "active" : ""}`}>
         <div className="df-toggle-copy">
           <span className="df-section-label">AUTO DIRECTION</span>
-          <p>Uses the leading Rise/Fall sample, then checks two fresh ticks before each entry. This switch alone never starts or places a trade.</p>
         </div>
         <label className="df-toggle-control">
           <span className={`df-toggle-state${autoDirection ? " working" : ""}`}>{autoDirection ? "WORKING" : "OFF"}</span>
@@ -284,11 +282,6 @@ export default function CashGrabPanel({
           </span>
           <ChevronDown className="df-market-chevron" size={16} />
         </button>
-        <p className="df-market-note">
-          {autoSelectBest
-            ? `Using the strongest observed ${direction === "CALL" ? "Rise" : "Fall"} rate${bestMarketLabel ? ` · ${bestMarketLabel}` : ""}.`
-            : "Choose a supported Volatility or Jump market for this Rise/Fall entry."}
-        </p>
         {marketMenuOpen && (
           <div className="df-market-menu" role="listbox" aria-label="Cash Grab markets">
             <button
@@ -469,7 +462,7 @@ export default function CashGrabPanel({
         </div>
 
         <div className="cash-grab-ai-scanner">
-          <div><b>AI SCANNER</b><small>Chooses a supported market and Rise/Fall side from recent samples, then sends one contract using the stake and duration above. Samples are not a win-rate guarantee.</small></div>
+          <div><b>AI SCANNER</b></div>
           <AiScannerAction onScan={onAiScan} disabled={!canRunScanner} />
         </div>
 

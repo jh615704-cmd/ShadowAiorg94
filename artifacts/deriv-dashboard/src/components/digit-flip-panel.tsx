@@ -244,9 +244,6 @@ export default function DigitFlipPanel({
           </span>
           <ChevronDown size={18} className="df-market-chevron" />
         </button>
-        <p className="df-market-note">
-          {marketPickerOpen ? "Choose a market or let the scanner pick the strongest pair." : "Choose Even or Odd — the best-performing pair is picked automatically."}
-        </p>
         {marketPickerOpen && (
           <div className="df-market-menu">
             <button
@@ -299,7 +296,6 @@ export default function DigitFlipPanel({
       <section className={`df-card df-toggle-card df-pair-card ${magicEnabled ? "active" : ""}`}>
         <div className="df-toggle-copy">
           <div className="df-title"><span className="df-spark" aria-hidden="true"><Zap size={14} fill="currentColor" /></span><b>Auto Switch Best Pair</b><PremiumPill /></div>
-          <p>ON: hop to the best-paying pair between trades. OFF: lock one pair to target — the Ramping way.</p>
           {magicEnabled && <p className="df-running-note"><i /> Hunting the best pair between trades — never mid-trade…</p>}
         </div>
         <Switch checked={magicEnabled} onChange={onMagicChange} disabled={disabled} label="Auto Switch Best Pair" />

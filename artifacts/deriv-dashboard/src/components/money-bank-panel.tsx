@@ -322,7 +322,6 @@ export function MoneyBankPanel({
                 </button>
               ))}
             </div>
-             <p className="money-bank-helper"><Info size={14} /> Higher growth increases theoretical payout but tightens risk. <b>4% is a common balance setting.</b></p>
           </section>
 
           <section className="money-bank-card money-bank-ticks-card">
@@ -444,12 +443,11 @@ export function MoneyBankPanel({
                <label><span>Loss Limit ($)</span><div className="money-bank-input-wrap"><b>$</b><input type="number" min="0" step="1" placeholder="Optional" value={lossLimit ?? ""} onChange={(event) => onLossLimitChange(event.target.value === "" ? null : Math.max(0, Number(event.target.value) || 0))} disabled={running} /></div></label>
             </div>
             <div className="money-bank-toggle-list">
-                <label><span><b>Reinvest profit</b><small>{reinvestProfit ? `${reinvestPercent}% of each win goes into the next BASE` : "Keep wins in the next BASE"}</small></span><input type="checkbox" checked={reinvestProfit} onChange={(event) => onReinvestProfitChange(event.target.checked)} disabled={running} /><i /></label>
+                 <label><span><b>Reinvest profit</b></span><input type="checkbox" checked={reinvestProfit} onChange={(event) => onReinvestProfitChange(event.target.checked)} disabled={running} /><i /></label>
                 {reinvestProfit && (
                   <div className="money-bank-reinvest-details">
                     <label><span>Profit to reinvest</span><select value={reinvestPercent} onChange={(event) => onReinvestPercentChange(Number(event.target.value))} disabled={running}>{[10, 25, 45, 50, 65, 75, 85, 95, 100].map((percent) => <option key={percent} value={percent}>{percent}%</option>)}</select></label>
                     <div><span><small>REINVESTED</small><b>{money(reinvestedProfit, currency)}</b></span><span><small>LEFT BACK</small><b>{money(retainedProfit, currency)}</b></span></div>
-                    <p>Based on {lastSettledProfit != null && lastSettledProfit > 0 ? "your last settled win" : "the projected BASE win"} of {money(profitBasis, currency)}.</p>
                   </div>
                 )}
             </div>

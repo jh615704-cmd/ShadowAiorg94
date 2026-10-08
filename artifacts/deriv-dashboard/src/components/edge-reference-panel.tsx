@@ -171,11 +171,9 @@ export default function EdgeReferencePanel({
           <span className="edge-ref-market-copy"><small>Market (manual)</small><b>{marketLabel}</b></span>
           <ChevronDown size={18} className="edge-ref-market-chevron" />
         </button>
-        <p>{marketPickerOpen ? "Choose the market to use with your selected digit." : "Select a market and digit, then scan its live Over/Under samples."}</p>
         <label className={`edge-sniper-toggle${sniperOverUnder ? " active" : ""}`}>
           <span className="edge-sniper-copy">
             <b>Sniper over/under</b>
-            <small>When Run is active, waits for two fresh ticks on your selected side of the barrier. It does not start trades by itself.</small>
           </span>
           <span className="edge-sniper-control">
             <span className={`edge-sniper-state${sniperOverUnder ? " working" : ""}`}>{sniperOverUnder ? "WORKING" : "OFF"}</span>
@@ -238,7 +236,7 @@ export default function EdgeReferencePanel({
       </div>
       <label className="edge-ref-input-card"><span>Initial stake</span><div><input type="number" min=".35" step=".01" value={stake} onChange={(event) => onStakeChange(Math.max(.35, Number(event.target.value) || .35))} disabled={running} /><b>{currency}</b></div></label>
       <section className="edge-ref-ai-scanner">
-        <div><b>AI SCANNER</b><small>Set duration, stake, and digit first. It compares Over vs Under for this market and digit, then sends one contract on the stronger observed side. Samples are not a win-rate guarantee.</small></div>
+        <div><b>AI SCANNER</b></div>
         <AiScannerAction onScan={onAiScan} disabled={!canRunAiScanner} />
       </section>
 

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  Activity, AlertCircle, ArrowDownRight, ArrowUpRight, BookOpen, Check,
-  ChevronLeft, ChevronRight, CircleHelp, Clock3, Crosshair,
-  Pause, Play, Radar, RefreshCw, Settings2, ShieldAlert, Signal, Target, X,
+  AlertCircle, ArrowDownRight, ArrowUpRight, BookOpen, Check,
+  ChevronLeft, ChevronRight, CircleHelp, Clock3,
+  Pause, Play, Radar, RefreshCw, Settings2, ShieldAlert, Signal, Trash2, X,
 } from "lucide-react";
 import {
   getGetAccessSessionQueryKey,
@@ -55,7 +55,7 @@ const groupLabels: Record<MarketGroup, string> = {
 };
 const storagePrefix = "deriv-auto-trader-contracts:";
 const guideCopy = [
-  ["Welcome to Auto Trader", "Read live last-digit counts and place one-tick Digit Differs contracts from the scanner.", "Signals describe observed ticks. They do not predict or guarantee the next result."],
+  ["Welcome to Auto Trader", "Read live last-digit counts and place Digit Differs contracts from the scanner.", "Signals describe observed ticks. They do not predict or guarantee the next result."],
   ["Connect a Deriv account", "The selected account is shown in the header with its live balance and account type.", "Use a demo account while familiarizing yourself with the controls."],
   ["Real and demo accounts", "Real-account orders use real funds. Demo orders use virtual funds.", "Confirm the account badge before every trade."],
   ["Scanner markets", "The scanner shows 7 regular Volatility markets, 5 Jump markets and 5 Volatility 1s markets.", "Category buttons filter the cards; there is no separate market-selection list."],
@@ -66,13 +66,10 @@ const guideCopy = [
   ["Tick counts", "Each market has its own count, starting at one when its first new tick arrives after Go Live.", "The count advances only from new Deriv ticks."],
   ["Missed updates", "Recent tick digits let the scanner recover sequence updates between polls.", "If a market is disconnected, its counts wait for real ticks to resume."],
   ["Digit Differs", "A Digit Differs contract wins if its final digit at expiry is different from the selected barrier.", "Deriv determines the contract result at expiry."],
-  ["Trade Now", "Trade Now places one contract on the currently least-observed digit from the live scanner.", "It is a single independent contract."],
-  ["3× and 6× buttons", "Each digit column has buttons for three or six separate one-tick contracts.", "Separate contracts can settle differently; the batch is not all-or-none."],
+  ["3× and 6× buttons", "Each digit column has buttons for three or six separate contracts using the duration in Settings.", "Separate contracts can settle differently; the batch is not all-or-none."],
   ["Order confirmations", "Check the result message and account history after placing a trade.", "If the connection drops during an order, its outcome may be unknown. Check Deriv history before retrying."],
   ["Stake", "Stake is the requested amount for each contract in a batch.", "The total requested exposure grows with the batch size. Check your balance first."],
   ["Risk settings", "Take-profit and stop-loss values are planning fields for the manual session.", "Automatic stopping is not active in this workspace."],
-  ["Start is deferred", "Start remains visible while strategy automation is being defined.", "It does not place trades or run in the background."],
-  ["5m Auto is deferred", "The 5m Auto control is reserved for a future strategy workflow.", "It is intentionally inactive and will not trade."],
   ["Daily stats and history", "Daily metrics only include contract IDs placed from this page in the selected account.", "Trades from other Deriv features are excluded."],
   ["A considered workflow", "Review account, market, digit, stake and batch size before each manual order.", "No frequency pattern guarantees an outcome. Trade within your own risk limits."],
 ] as const;
@@ -99,6 +96,8 @@ function AutoTraderContent() {
   const token = useGetDerivTokenStatus({ query: { queryKey: getGetDerivTokenStatusQueryKey(), retry: false } });
   const hasToken = token.data?.has_token === true;
   const [scanning, setScanning] = useState(false);
+  const [scanResetPending, setScanResetPending] = useState(false);
+  const scanRestartLockRef = useRef(false);
   const accounts = useGetDerivAccounts({
     query: { queryKey: getGetDerivAccountsQueryKey(), enabled: hasToken, retry: false, refetchInterval: 10_000 },
   });
@@ -117,13 +116,15 @@ function AutoTraderContent() {
 
   const [filter, setFilter] = useState<FilterKey>("all");
   const [stake, setStake] = useState("1.00");
+  const [durationTicks, setDurationTicks] = useState("1");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [guidePage, setGuidePage] = useState(0);
   const [takeProfit, setTakeProfit] = useState("10");
   const [stopLoss, setStopLoss] = useState("10");
-  const [strategy, setStrategy] = useState("flat");
   const [message, setMessage] = useState<{ tone: "success" | "error" | "info"; text: string } | null>(null);
+  const [historyClearArmed, setHistoryClearArmed] = useState(false);
+  const clearHistoryTimer = useRef<number | null>(null);
   const [frequencies, setFrequencies] = useState<Frequencies>({});
   const [marketTicks, setMarketTicks] = useState<TickMap>({});
   const seenTicks = useRef<TickMap>({});
@@ -150,11 +151,20 @@ function AutoTraderContent() {
   useEffect(() => {
     // A sequence cursor belongs to one active Deriv account only.
     setScanning(false);
+    setHistoryClearArmed(false);
+    if (clearHistoryTimer.current !== null) {
+      window.clearTimeout(clearHistoryTimer.current);
+      clearHistoryTimer.current = null;
+    }
     setFrequencies({});
     setMarketTicks({});
     seenTicks.current = {};
     baselineTicks.current = {};
   }, [accountId]);
+
+  useEffect(() => () => {
+    if (clearHistoryTimer.current !== null) window.clearTimeout(clearHistoryTimer.current);
+  }, []);
 
   useEffect(() => {
     if (!scanning) return;
@@ -206,24 +216,64 @@ function AutoTraderContent() {
       setMessage({ tone: "error", text: "Connect and select an authorized Deriv account before starting the scanner." });
       return;
     }
+    if (scanRestartLockRef.current) return;
+    scanRestartLockRef.current = true;
+    setScanResetPending(true);
     setScanning(false);
     setMessage(null);
-    const result = await status.refetch();
-    if (result.error || !result.data) {
+    try {
+      const result = await status.refetch();
+      if (result.error || !result.data) {
+        setMessage({
+          tone: "error",
+          text: result.error instanceof Error ? result.error.message : "Live Deriv status could not be refreshed.",
+        });
+        return;
+      }
+      const startingSignals = result.data.market_signals ?? [];
+      const baseline = Object.fromEntries(startingSignals.map((signal) => [signal.symbol, signal.tick_sequence]));
+      seenTicks.current = { ...baseline };
+      baselineTicks.current = { ...baseline };
+      setFrequencies(Object.fromEntries(markets.map((market) => [market.symbol, Array(10).fill(0)])));
+      setMarketTicks(Object.fromEntries(markets.map((market) => [market.symbol, 0])));
+      setScanning(true);
+      setMessage({ tone: "info", text: "Scanner live. Counts begin with the next real tick observed from Deriv." });
+    } catch (error) {
       setMessage({
         tone: "error",
-        text: result.error instanceof Error ? result.error.message : "Live Deriv status could not be refreshed.",
+        text: error instanceof Error ? error.message : "Live Deriv status could not be refreshed.",
       });
+    } finally {
+      scanRestartLockRef.current = false;
+      setScanResetPending(false);
+    }
+  };
+
+  const clearTodayTrades = () => {
+    if (!accountId) return;
+    if (!historyClearArmed) {
+      setHistoryClearArmed(true);
+      setMessage({ tone: "info", text: "Tap the bin again to clear today's Auto Trader trades for this account." });
+      if (clearHistoryTimer.current !== null) window.clearTimeout(clearHistoryTimer.current);
+      clearHistoryTimer.current = window.setTimeout(() => {
+        setHistoryClearArmed(false);
+        clearHistoryTimer.current = null;
+      }, 2500);
       return;
     }
-    const startingSignals = result.data.market_signals ?? [];
-    const baseline = Object.fromEntries(startingSignals.map((signal) => [signal.symbol, signal.tick_sequence]));
-    seenTicks.current = { ...baseline };
-    baselineTicks.current = { ...baseline };
-    setFrequencies(Object.fromEntries(markets.map((market) => [market.symbol, Array(10).fill(0)])));
-    setMarketTicks(Object.fromEntries(markets.map((market) => [market.symbol, 0])));
-    setScanning(true);
-    setMessage({ tone: "info", text: "Scanner live. Counts begin with the next real tick observed from Deriv." });
+
+    setHistoryClearArmed(false);
+    if (clearHistoryTimer.current !== null) {
+      window.clearTimeout(clearHistoryTimer.current);
+      clearHistoryTimer.current = null;
+    }
+    setLocalContracts([]);
+    try {
+      localStorage.removeItem(`${storagePrefix}${accountId}`);
+      setMessage({ tone: "success", text: "Auto Trader trades were cleared from this account-scoped view. Deriv's account history is unchanged." });
+    } catch {
+      setMessage({ tone: "error", text: "The trades were cleared from this view, but this browser could not save the change." });
+    }
   };
 
   const filteredMarkets = useMemo(
@@ -234,20 +284,6 @@ function AutoTraderContent() {
     () => new Map(currentSignals.map((signal) => [signal.symbol, signal])),
     [currentSignals],
   );
-  const tradeNowTarget = useMemo(() => {
-    let best: { market: Market; digit: number; share: number } | null = null;
-    for (const market of markets) {
-      const counts = frequencies[market.symbol] ?? [];
-      const total = counts.reduce((sum, count) => sum + count, 0);
-      if (!total) continue;
-      for (let digit = 0; digit < counts.length; digit += 1) {
-        const count = counts[digit];
-        const share = count / total;
-        if (!best || share < best.share) best = { market, digit, share };
-      }
-    }
-    return best;
-  }, [frequencies]);
   const todayIds = useMemo(() => new Set(
     localContracts.filter((contract) => contract.placedAt >= todayStart()).map((contract) => contract.id),
   ), [localContracts]);
@@ -272,6 +308,7 @@ function AutoTraderContent() {
 
   const placeTrade = async (market: Market, digit: number, count: 1 | 3 | 6) => {
     const amount = Number(stake);
+    const duration = Number(durationTicks);
     if (!accountId || !connected) {
       setMessage({ tone: "error", text: "Connect and select a Deriv account before trading." });
       return;
@@ -280,13 +317,17 @@ function AutoTraderContent() {
       setMessage({ tone: "error", text: "Enter a valid stake greater than zero." });
       return;
     }
+    if (!Number.isInteger(duration) || duration < 1 || duration > 5) {
+      setMessage({ tone: "error", text: "Enter a whole-number duration from 1 to 5 ticks." });
+      return;
+    }
     setMessage(null);
     let result: Awaited<ReturnType<typeof bulkBuy.mutateAsync>>;
     try {
       result = await bulkBuy.mutateAsync({
         data: {
           amount,
-          duration: 1,
+          duration,
           duration_unit: "t",
           contract_type: "DIGITDIFF",
           barrier: digit,
@@ -311,7 +352,7 @@ function AutoTraderContent() {
     }
     setMessage({
       tone: "success",
-      text: `${result.buys.length} contract${result.buys.length === 1 ? "" : "s"} accepted for ${market.name}, digit ${digit}. Separate contracts can settle differently.${trackingNote}`,
+      text: `${result.buys.length} contract${result.buys.length === 1 ? "" : "s"} accepted for ${market.name}, digit ${digit}, ${duration} tick${duration === 1 ? "" : "s"}. Separate contracts can settle differently.${trackingNote}`,
     });
     void Promise.all([
       queryClient.invalidateQueries({ queryKey: getGetDerivStatusQueryKey() }),
@@ -415,11 +456,11 @@ function AutoTraderContent() {
                 <button type="button" className="at-guide-button" onClick={() => { setGuidePage(0); setGuideOpen(true); }} data-testid="button-open-guide">
                   <BookOpen size={15} /> Guide
                 </button>
-                <button type="button" className="at-icon-button" onClick={() => void startScan()} disabled={!connected || status.isFetching} aria-label="Rescan markets" data-testid="button-rescan"><RefreshCw size={15} /> Rescan</button>
+                <button type="button" className="at-icon-button" onClick={() => void startScan()} disabled={!connected || scanResetPending} aria-label="Rescan markets" data-testid="button-rescan"><RefreshCw size={15} className={scanResetPending ? "at-spin" : ""} /> Rescan</button>
                 {scanning ? (
-                  <button type="button" className="at-stop-button" onClick={() => { setScanning(false); setMessage({ tone: "info", text: "Scan paused. No further digit counts will be added." }); }} data-testid="button-stop-scan"><Pause size={14} /> Stop</button>
+                  <button type="button" className="at-stop-button" onClick={() => { setScanning(false); setMessage(null); }} data-testid="button-stop-scan"><Pause size={14} /> Stop</button>
                 ) : (
-                  <button type="button" className="at-live-button" onClick={() => void startScan()} disabled={!connected || status.isFetching} data-testid="button-go-live"><Play size={14} /> Go Live</button>
+                  <button type="button" className="at-live-button" onClick={() => void startScan()} disabled={!connected || scanResetPending} data-testid="button-go-live"><Play size={14} /> Go Live</button>
                 )}
               </div>
             </header>
@@ -474,58 +515,41 @@ function AutoTraderContent() {
           </section>
 
           <aside className="at-order-column">
-            <section className="at-order-panel" aria-labelledby="order-title">
-              <div className="at-order-topline"><span><Crosshair size={14} /> MANUAL EXECUTION</span><span className="at-contract-tag">DIGIT DIFFERS</span></div>
-              <h2 id="order-title">Trade Now</h2>
-              <p className="at-order-description">One contract on the least-observed digit in the live scan. Use each digit's 3× or 6× buttons for batches.</p>
-              <div className="at-order-selection">
-                <div><span>LIVE SCAN TARGET</span><strong>{tradeNowTarget?.market.name ?? "Start the scanner first"}</strong><small>{tradeNowTarget?.market.symbol ?? "No digit data yet"}</small></div>
-                <div className="at-order-digit"><span>DIGIT</span><strong>{tradeNowTarget?.digit ?? "—"}</strong></div>
-              </div>
-              <label className="at-field-label" htmlFor="at-stake">Stake per contract <span>{currency}</span></label>
-              <div className="at-stake-input"><span>{currency}</span><input id="at-stake" type="number" min="0.01" step="0.01" value={stake} onChange={(event) => setStake(event.target.value)} aria-label="Stake per contract" data-testid="input-stake" /></div>
-              <div className="at-duration-row"><span>Duration</span><strong>1 tick</strong><span className="at-fixed-duration">FIXED</span></div>
-              <button
-                type="button"
-                className="at-trade-button"
-                disabled={!connected || !scanning || !tradeNowTarget || bulkBuy.isPending}
-                onClick={() => tradeNowTarget && void placeTrade(tradeNowTarget.market, tradeNowTarget.digit, 1)}
-                data-testid="button-trade-now"
-              >
-                {bulkBuy.isPending ? <RefreshCw size={16} className="at-spin" /> : <Target size={16} />}
-                {bulkBuy.isPending ? "Sending order…" : "Trade Now"}
-                <span>1 contract</span>
+            <section className="at-order-panel" aria-label="Auto Trader settings">
+              <div className="at-order-topline"><span><Settings2 size={14} /> ORDER SETTINGS</span><span className="at-contract-tag">DIGIT DIFFERS</span></div>
+              <button type="button" className={`at-settings-toggle${settingsOpen ? " open" : ""}`} aria-expanded={settingsOpen} onClick={() => setSettingsOpen((open) => !open)} data-testid="button-settings">
+                <Settings2 size={15} /> Settings <span>{settingsOpen ? "HIDE" : "STAKE & RISK"}</span><ChevronRight size={15} />
               </button>
-              <p className="at-batch-disclaimer">Each 3× or 6× action sends separate one-tick contracts from that market and digit. Contracts may settle differently.</p>
+              {settingsOpen && (
+                <div className="at-settings-fields" data-testid="panel-settings">
+                  <label htmlFor="at-stake">Stake per contract<div className="at-stake-input"><span>{currency}</span><input id="at-stake" type="number" min="0.01" step="0.01" value={stake} onChange={(event) => setStake(event.target.value)} aria-label="Stake per contract" data-testid="input-stake" /></div></label>
+                  <label htmlFor="at-duration-ticks">Duration (ticks)<div className="at-inline-input"><input id="at-duration-ticks" type="number" min="1" max="5" step="1" value={durationTicks} onChange={(event) => setDurationTicks(event.target.value)} aria-label="Duration in ticks" data-testid="input-duration-ticks" /><span>1–5</span></div></label>
+                  <label>Take profit target<div className="at-inline-input"><input type="number" min="0" step="0.01" value={takeProfit} onChange={(event) => setTakeProfit(event.target.value)} data-testid="input-take-profit" /><span>{currency}</span></div></label>
+                  <label>Stop loss limit<div className="at-inline-input"><input type="number" min="0" step="0.01" value={stopLoss} onChange={(event) => setStopLoss(event.target.value)} data-testid="input-stop-loss" /><span>{currency}</span></div></label>
+                  <div className="at-deferred-note"><ShieldAlert size={14} /> Take-profit and stop-loss are reference targets only.</div>
+                </div>
+              )}
               {message && <div className={`at-action-message ${message.tone}`} role={message.tone === "error" ? "alert" : "status"} data-testid="status-trade-message">
                 {message.tone === "error" ? <AlertCircle size={15} /> : <Check size={15} />}<span>{message.text}</span>
                 <button type="button" aria-label="Dismiss message" onClick={() => setMessage(null)} data-testid="button-dismiss-message"><X size={13} /></button>
               </div>}
-              <button type="button" className={`at-settings-toggle${settingsOpen ? " open" : ""}`} aria-expanded={settingsOpen} onClick={() => setSettingsOpen((open) => !open)} data-testid="button-settings">
-                <Settings2 size={15} /> Settings <span>{settingsOpen ? "HIDE" : "RISK & STRATEGY"}</span><ChevronRight size={15} />
-              </button>
-              {settingsOpen && (
-                <div className="at-settings-fields" data-testid="panel-settings">
-                  <label>Take profit target<div className="at-inline-input"><input type="number" min="0" step="0.01" value={takeProfit} onChange={(event) => setTakeProfit(event.target.value)} data-testid="input-take-profit" /><span>{currency}</span></div></label>
-                  <label>Stop loss limit<div className="at-inline-input"><input type="number" min="0" step="0.01" value={stopLoss} onChange={(event) => setStopLoss(event.target.value)} data-testid="input-stop-loss" /><span>{currency}</span></div></label>
-                  <label>Stake strategy<select value={strategy} onChange={(event) => setStrategy(event.target.value)} data-testid="select-strategy"><option value="flat">Flat stake</option><option value="step">Step-up after loss</option></select></label>
-                  <div className="at-deferred-note"><ShieldAlert size={14} /> Risk fields are planning values only. Automated strategy execution is not defined.</div>
-                </div>
-              )}
-            </section>
-
-            <section className="at-deferred-card" aria-label="Deferred automation controls">
-              <div className="at-deferred-header"><span><Activity size={14} /> AUTOMATION</span><span>DEFERRED</span></div>
-              <button type="button" className="at-deferred-button" disabled aria-disabled="true" data-testid="button-start-deferred">
-                <Play size={15} /> Start <span>Inactive</span>
-              </button>
-              <p>Strategy execution is not defined yet. Start will not place trades.</p>
-              <button type="button" className="at-5m-control" disabled aria-disabled="true" data-testid="button-5m-auto"><span><Clock3 size={14} /> 5m Auto</span><span className="at-5m-badge">DEFERRED</span></button>
-              <small>The 5-minute automation workflow is not active.</small>
             </section>
 
             <section className="at-history-panel" aria-labelledby="history-title">
-              <div className="at-history-heading"><div><div className="at-section-label">ACCOUNT-SCOPED</div><h2 id="history-title">Today's trades <span>{visibleContracts.length}</span></h2></div><span className="at-history-icon"><Clock3 size={15} /></span></div>
+              <div className="at-history-heading">
+                <div><div className="at-section-label">ACCOUNT-SCOPED</div><h2 id="history-title">Today's trades <span>{visibleContracts.length}</span></h2></div>
+                <button
+                  type="button"
+                  className={`at-history-icon${historyClearArmed ? " armed" : ""}`}
+                  onClick={clearTodayTrades}
+                  disabled={!accountId || history.isLoading || visibleContracts.length === 0}
+                  aria-label={historyClearArmed ? "Tap again to clear today's Auto Trader trades" : "Clear today's Auto Trader trades"}
+                  title={historyClearArmed ? "Tap again to clear today's Auto Trader trades" : "Clear today's Auto Trader trades"}
+                  data-testid="button-clear-auto-trader-history"
+                >
+                  <Trash2 size={15} />{historyClearArmed && <span>Tap again</span>}
+                </button>
+              </div>
               <div className="at-history-list" data-testid="list-trade-history">
                 {history.isLoading && <div className="at-history-state skeleton-line" aria-label="Loading trade history" />}
                 {!history.isLoading && visibleContracts.length === 0 && <div className="at-history-state" data-testid="empty-trade-history">No Auto Trader contracts today.<small>Trades from other features are excluded.</small></div>}
@@ -551,7 +575,7 @@ function AutoTraderContent() {
         <Dialog open={guideOpen} onOpenChange={setGuideOpen}>
           <DialogContent className="at-guide-dialog" data-testid="dialog-auto-trader-guide">
             <DialogHeader>
-              <div className="at-guide-overline"><BookOpen size={14} /> FIELD GUIDE <span>{String(guidePage + 1).padStart(2, "0")} / 20</span></div>
+              <div className="at-guide-overline"><BookOpen size={14} /> FIELD GUIDE <span>{String(guidePage + 1).padStart(2, "0")} / {String(guideCopy.length).padStart(2, "0")}</span></div>
               <DialogTitle>{guideCopy[guidePage][0]}</DialogTitle>
               <DialogDescription>{guideCopy[guidePage][1]}</DialogDescription>
             </DialogHeader>
