@@ -67,6 +67,14 @@ export default defineConfig({
     strictPort: true,
     host: '0.0.0.0',
     allowedHosts: true,
+    proxy: {
+      // Also route API calls correctly when the dashboard is opened directly
+      // from its Vite port instead of through the workspace artifact router.
+      '/api': {
+        target: 'http://127.0.0.1:8080',
+        changeOrigin: false,
+      },
+    },
     fs: {
       strict: true,
     },

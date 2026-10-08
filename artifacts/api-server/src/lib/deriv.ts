@@ -14,7 +14,7 @@ const proposalAttempts = 3;
 const buyAckTimeoutMs = 12_000;
 const maxBulkCount = 6;
 const supportedSymbols = new Set([
-  "R_10", "R_25", "R_50", "R_75", "R_100",
+  "R_10", "R_25", "R_50", "R_75", "R_100", "R_150", "R_250",
   "1HZ10V", "1HZ15V", "1HZ25V", "1HZ30V", "1HZ50V", "1HZ75V", "1HZ90V", "1HZ100V",
   "JD10", "JD25", "JD50", "JD75", "JD100",
 ]);
@@ -105,6 +105,7 @@ export type DerivStatus = {
     quote: number | null;
     last_digit: number | null;
     tick_sequence: number;
+    recent_digits: number[];
     sample_count: number;
     digit_even_percentage: number;
     digit_odd_percentage: number;
@@ -522,6 +523,7 @@ function getMarketSignals() {
       quote: market?.quote ?? null,
       last_digit: digits.at(-1) ?? null,
       tick_sequence: market?.tickSequence ?? 0,
+      recent_digits: digits,
       sample_count: sampleCount,
       digit_even_percentage: sampleCount ? Number(((evenCount / sampleCount) * 100).toFixed(1)) : 50,
       digit_odd_percentage: sampleCount ? Number((((sampleCount - evenCount) / sampleCount) * 100).toFixed(1)) : 50,

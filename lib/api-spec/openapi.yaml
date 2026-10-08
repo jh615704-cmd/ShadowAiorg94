@@ -1072,7 +1072,7 @@ components:
           minimum: 0
     DerivMarketSignal:
       type: object
-      required: [symbol, quote, last_digit, tick_sequence, sample_count, digit_even_percentage, digit_odd_percentage, rise_percentage, fall_percentage, digit_streaks, digit_outcomes]
+      required: [symbol, quote, last_digit, tick_sequence, recent_digits, sample_count, digit_even_percentage, digit_odd_percentage, rise_percentage, fall_percentage, digit_streaks, digit_outcomes]
       properties:
         symbol:
           type: string
@@ -1088,6 +1088,14 @@ components:
           type: integer
           minimum: 0
           description: Monotonically increasing count of ticks observed for this market in the active Deriv session.
+        recent_digits:
+          type: array
+          maxItems: 100
+          items:
+            type: integer
+            minimum: 0
+            maximum: 9
+          description: Most recent final digits, in arrival order, for recovering missed ticks in the live scanner.
         sample_count:
           type: integer
           minimum: 0

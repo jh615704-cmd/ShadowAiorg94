@@ -310,6 +310,13 @@ export interface DerivMarketSignal {
      * @minimum 0
      */
   tick_sequence: number;
+  /**
+     * Most recent final digits, in arrival order, for recovering missed ticks in the live scanner.
+     * @maxItems 100
+     * @items.minimum 0
+     * @items.maximum 9
+     */
+  recent_digits: number[];
   /** @minimum 0 */
   sample_count: number;
   /**

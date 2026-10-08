@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Activity, AlertCircle, ArrowDownRight, ArrowUpRight, BookOpen, Check,
-  ChevronLeft, ChevronRight, CircleHelp, Clock3, Crosshair, Layers3,
+  ChevronLeft, ChevronRight, CircleHelp, Clock3, Crosshair,
   Pause, Play, Radar, RefreshCw, Settings2, ShieldAlert, Signal, Target, X,
 } from "lucide-react";
 import {
@@ -18,7 +18,7 @@ import {
   useGetDerivStatus,
   useGetDerivTokenStatus,
 } from "@workspace/api-client-react";
-import type { DerivHistoryItem, DerivMarketSignal } from "@workspace/api-client-react";
+import type { DerivHistoryItem } from "@workspace/api-client-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { DerivAccountSwitcher } from "@/components/deriv-account-switcher";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -34,18 +34,17 @@ const markets: Market[] = [
   { symbol: "R_50", name: "Volatility 50", group: "regular" },
   { symbol: "R_75", name: "Volatility 75", group: "regular" },
   { symbol: "R_100", name: "Volatility 100", group: "regular" },
+  { symbol: "R_150", name: "Volatility 150", group: "regular" },
+  { symbol: "R_250", name: "Volatility 250", group: "regular" },
   { symbol: "JD10", name: "Jump 10", group: "jump" },
   { symbol: "JD25", name: "Jump 25", group: "jump" },
   { symbol: "JD50", name: "Jump 50", group: "jump" },
   { symbol: "JD75", name: "Jump 75", group: "jump" },
   { symbol: "JD100", name: "Jump 100", group: "jump" },
   { symbol: "1HZ10V", name: "Volatility 10 · 1s", group: "one-sec" },
-  { symbol: "1HZ15V", name: "Volatility 15 · 1s", group: "one-sec" },
   { symbol: "1HZ25V", name: "Volatility 25 · 1s", group: "one-sec" },
-  { symbol: "1HZ30V", name: "Volatility 30 · 1s", group: "one-sec" },
   { symbol: "1HZ50V", name: "Volatility 50 · 1s", group: "one-sec" },
   { symbol: "1HZ75V", name: "Volatility 75 · 1s", group: "one-sec" },
-  { symbol: "1HZ90V", name: "Volatility 90 · 1s", group: "one-sec" },
   { symbol: "1HZ100V", name: "Volatility 100 · 1s", group: "one-sec" },
 ];
 
@@ -56,22 +55,22 @@ const groupLabels: Record<MarketGroup, string> = {
 };
 const storagePrefix = "deriv-auto-trader-contracts:";
 const guideCopy = [
-  ["Welcome to Auto Trader", "A live market workspace for reading last-digit frequency and placing explicitly selected Digit Differs contracts.", "Signals describe observed ticks. They do not predict or guarantee the next result."],
+  ["Welcome to Auto Trader", "Read live last-digit counts and place one-tick Digit Differs contracts from the scanner.", "Signals describe observed ticks. They do not predict or guarantee the next result."],
   ["Connect a Deriv account", "The selected account is shown in the header with its live balance and account type.", "Use a demo account while familiarizing yourself with the controls."],
   ["Real and demo accounts", "Real-account orders use real funds. Demo orders use virtual funds.", "Confirm the account badge before every trade."],
-  ["Choose a market", "The scanner includes regular Volatility, Jump and Volatility 1s indices supported by this workspace.", "Market cards only show quotes received from Deriv."],
-  ["Market groups", "Use the category filters to focus the scanner without changing its live data source.", "All markets shows all 18 supported symbols."],
-  ["Go Live", "Go Live begins polling Deriv status for live market signals.", "Digit counters start at zero each time a new scan starts."],
-  ["Stop and Rescan", "Stop pauses the scanner. Rescan clears the local frequency window and starts a fresh scan.", "No simulated ticks are used."],
-  ["Read a quote", "The quote and last digit come from the latest status.market_signals entry for that symbol.", "A quote may not arrive for every market at the same instant."],
-  ["Tick counts", "Tick counts are synchronized across cards within a market family.", "Counts reflect sequence advances reported by Deriv."],
-  ["Digit frequency", "The counter beneath each digit tracks observed last digits since this scan began.", "Missed sequence history is not reconstructed from generated data."],
-  ["Select a digit", "Choose one digit from 0–9. The selected state is highlighted and used as the exact barrier.", "Confirm the selected digit before sending an order."],
-  ["Digit Differs", "A Digit Differs contract wins if the final digit at expiry is different from its selected barrier.", "The contract result is determined by Deriv at expiry."],
-  ["Trade Now", "Trade Now sends one Digit Differs contract for the selected market, stake and digit.", "It is a single independent contract."],
-  ["3× and 6× batches", "Batch controls request three or six separate contracts through the bulk-buy API.", "Deriv quotes the complete batch before buys are sent; separate contracts can settle differently."],
+  ["Scanner markets", "The scanner shows 7 regular Volatility markets, 5 Jump markets and 5 Volatility 1s markets.", "Category buttons filter the cards; there is no separate market-selection list."],
+  ["Market groups", "Use the category filters to focus the scanner without changing its live data source.", "All markets shows the same 17 symbols."],
+  ["Go Live", "Go Live starts a fresh count from the next real ticks observed from Deriv.", "There are no simulated ticks or starting sample counts."],
+  ["Stop and Rescan", "Stop pauses the scanner. Rescan resets the count baseline to the latest live tick sequence.", "Stopping does not cancel an order already accepted by Deriv."],
+  ["Live digit counts", "Each digit column shows its observed count since this scan began.", "A zero count is shown in green; other counts use standard text."],
+  ["Tick counts", "Tick counts are synchronized across cards within each market family.", "The count advances from Deriv tick sequences."],
+  ["Missed updates", "Recent tick digits let the scanner recover sequence updates between polls.", "If a market is disconnected, its counts wait for real ticks to resume."],
+  ["Digit Differs", "A Digit Differs contract wins if its final digit at expiry is different from the selected barrier.", "Deriv determines the contract result at expiry."],
+  ["Trade Now", "Trade Now places one contract on the currently least-observed digit from the live scanner.", "It is a single independent contract."],
+  ["3× and 6× buttons", "Each digit column has buttons for three or six separate one-tick contracts.", "Separate contracts can settle differently; the batch is not all-or-none."],
+  ["Order confirmations", "Check the result message and account history after placing a trade.", "If the connection drops during an order, its outcome may be unknown. Check Deriv history before retrying."],
   ["Stake", "Stake is the requested amount for each contract in a batch.", "The total requested exposure grows with the batch size. Check your balance first."],
-  ["Risk settings", "Take-profit and stop-loss values are visible planning limits for your manual session.", "Automatic stopping is not active in this workspace."],
+  ["Risk settings", "Take-profit and stop-loss values are planning fields for the manual session.", "Automatic stopping is not active in this workspace."],
   ["Start is deferred", "Start remains visible while strategy automation is being defined.", "It does not place trades or run in the background."],
   ["5m Auto is deferred", "The 5m Auto control is reserved for a future strategy workflow.", "It is intentionally inactive and will not trade."],
   ["Daily stats and history", "Daily metrics only include contract IDs placed from this page in the selected account.", "Trades from other Deriv features are excluded."],
@@ -112,13 +111,11 @@ function AutoTraderContent() {
     },
   });
   const history = useGetDerivHistory({
-    query: { queryKey: getGetDerivHistoryQueryKey(), enabled: hasToken, retry: false, refetchInterval: 1_000 },
+    query: { queryKey: getGetDerivHistoryQueryKey(), enabled: hasToken, retry: false, refetchInterval: hasToken ? 2_000 : false },
   });
   const bulkBuy = useBulkBuyDerivContracts();
 
   const [filter, setFilter] = useState<FilterKey>("all");
-  const [selectedSymbol, setSelectedSymbol] = useState("R_10");
-  const [selectedDigit, setSelectedDigit] = useState(0);
   const [stake, setStake] = useState("1.00");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
@@ -130,6 +127,7 @@ function AutoTraderContent() {
   const [frequencies, setFrequencies] = useState<Frequencies>({});
   const [groupTicks, setGroupTicks] = useState<Record<MarketGroup, number>>({ regular: 0, jump: 0, "one-sec": 0 });
   const seenTicks = useRef<TickMap>({});
+  const baselineTicks = useRef<TickMap>({});
   const account = status.data?.account ?? null;
   const accountId = account?.id ?? "";
   const currentSignals = status.data?.market_signals ?? [];
@@ -150,27 +148,49 @@ function AutoTraderContent() {
   }, [accountId]);
 
   useEffect(() => {
+    // A sequence cursor belongs to one active Deriv account only.
+    setScanning(false);
+    setFrequencies({});
+    setGroupTicks({ regular: 0, jump: 0, "one-sec": 0 });
+    seenTicks.current = {};
+    baselineTicks.current = {};
+  }, [accountId]);
+
+  useEffect(() => {
     if (!scanning) return;
-    const latest: TickMap = { ...seenTicks.current };
     const arrivals: Array<{ symbol: string; digit: number }> = [];
-    const deltas: Record<MarketGroup, number> = { regular: 0, jump: 0, "one-sec": 0 };
-    for (const signal of currentSignals) {
-      const market = markets.find((candidate) => candidate.symbol === signal.symbol);
-      if (!market) continue;
-      const previous = latest[signal.symbol];
+    const progress: Record<MarketGroup, number> = { regular: 0, jump: 0, "one-sec": 0 };
+    for (const market of markets) {
+      const signal = currentSignals.find((candidate) => candidate.symbol === market.symbol);
+      if (!signal || (signal.tick_sequence === 0 && signal.recent_digits.length === 0)) continue;
+
+      let previous = seenTicks.current[market.symbol];
       if (previous == null) {
-        latest[signal.symbol] = signal.tick_sequence;
-        continue;
+        // If a market first appears after Go Live, count its first newly
+        // observed tick rather than importing its pre-scan history.
+        previous = signal.tick_sequence - 1;
+        seenTicks.current[market.symbol] = previous;
+        baselineTicks.current[market.symbol] = previous;
       }
+
+      const firstSequence = signal.tick_sequence - signal.recent_digits.length + 1;
       if (signal.tick_sequence > previous) {
-        const delta = signal.tick_sequence - previous;
-        latest[signal.symbol] = signal.tick_sequence;
-        deltas[market.group] += delta;
-        if (signal.last_digit != null) arrivals.push({ symbol: market.symbol, digit: signal.last_digit });
+        for (let index = 0; index < signal.recent_digits.length; index += 1) {
+          const sequence = firstSequence + index;
+          if (sequence <= previous) continue;
+          const digit = signal.recent_digits[index];
+          if (digit >= 0 && digit <= 9) arrivals.push({ symbol: market.symbol, digit });
+        }
+        seenTicks.current[market.symbol] = signal.tick_sequence;
       }
+
+      const baseline = baselineTicks.current[market.symbol] ?? previous;
+      progress[market.group] = Math.max(
+        progress[market.group],
+        Math.max(0, signal.tick_sequence - baseline),
+      );
     }
-    seenTicks.current = latest;
-    if (arrivals.length || deltas.regular || deltas.jump || deltas["one-sec"]) {
+    if (arrivals.length) {
       setFrequencies((old) => {
         const next = { ...old };
         for (const arrival of arrivals) {
@@ -180,23 +200,33 @@ function AutoTraderContent() {
         }
         return next;
       });
-      setGroupTicks((old) => ({
-        regular: old.regular + deltas.regular,
-        jump: old.jump + deltas.jump,
-        "one-sec": old["one-sec"] + deltas["one-sec"],
-      }));
     }
+    setGroupTicks(progress);
   }, [scanning, currentSignals]);
 
-  const startScan = (reset: boolean) => {
-    if (reset) {
-      setFrequencies({});
-      setGroupTicks({ regular: 0, jump: 0, "one-sec": 0 });
+  const startScan = async () => {
+    if (!connected) {
+      setMessage({ tone: "error", text: "Connect and select an authorized Deriv account before starting the scanner." });
+      return;
     }
-    seenTicks.current = Object.fromEntries(currentSignals.map((signal) => [signal.symbol, signal.tick_sequence]));
+    setScanning(false);
+    setMessage(null);
+    const result = await status.refetch();
+    if (result.error || !result.data) {
+      setMessage({
+        tone: "error",
+        text: result.error instanceof Error ? result.error.message : "Live Deriv status could not be refreshed.",
+      });
+      return;
+    }
+    const startingSignals = result.data.market_signals ?? [];
+    const baseline = Object.fromEntries(startingSignals.map((signal) => [signal.symbol, signal.tick_sequence]));
+    seenTicks.current = { ...baseline };
+    baselineTicks.current = { ...baseline };
+    setFrequencies(Object.fromEntries(markets.map((market) => [market.symbol, Array(10).fill(0)])));
+    setGroupTicks({ regular: 0, jump: 0, "one-sec": 0 });
     setScanning(true);
-    setMessage({ tone: "info", text: "Live scan started. Digit counters begin at zero for this scan." });
-    void status.refetch();
+    setMessage({ tone: "info", text: "Scanner live. Counts begin with the next real tick observed from Deriv." });
   };
 
   const filteredMarkets = useMemo(
@@ -207,6 +237,20 @@ function AutoTraderContent() {
     () => new Map(currentSignals.map((signal) => [signal.symbol, signal])),
     [currentSignals],
   );
+  const tradeNowTarget = useMemo(() => {
+    let best: { market: Market; digit: number; share: number } | null = null;
+    for (const market of markets) {
+      const counts = frequencies[market.symbol] ?? [];
+      const total = counts.reduce((sum, count) => sum + count, 0);
+      if (!total) continue;
+      for (let digit = 0; digit < counts.length; digit += 1) {
+        const count = counts[digit];
+        const share = count / total;
+        if (!best || share < best.share) best = { market, digit, share };
+      }
+    }
+    return best;
+  }, [frequencies]);
   const todayIds = useMemo(() => new Set(
     localContracts.filter((contract) => contract.placedAt >= todayStart()).map((contract) => contract.id),
   ), [localContracts]);
@@ -222,7 +266,6 @@ function AutoTraderContent() {
   const wins = settled.filter((item) => item.profit > 0).length;
   const losses = settled.filter((item) => item.profit < 0).length;
   const dailyProfit = settled.reduce((total, item) => total + item.profit, 0);
-  const selectedMarket = markets.find((market) => market.symbol === selectedSymbol) ?? markets[0];
   const currency = account?.currency ?? status.data?.currency ?? "USD";
   const accountBalance = getAccountBalance(account);
   const visibleContracts = todaysHistory
@@ -230,7 +273,7 @@ function AutoTraderContent() {
     .sort((a, b) => (b.buy_time ?? 0) - (a.buy_time ?? 0));
   const connected = Boolean(status.data?.connected && status.data?.authorized && hasToken);
 
-  const placeTrade = async (count: 1 | 3 | 6) => {
+  const placeTrade = async (market: Market, digit: number, count: 1 | 3 | 6) => {
     const amount = Number(stake);
     if (!accountId || !connected) {
       setMessage({ tone: "error", text: "Connect and select a Deriv account before trading." });
@@ -241,89 +284,77 @@ function AutoTraderContent() {
       return;
     }
     setMessage(null);
+    let result: Awaited<ReturnType<typeof bulkBuy.mutateAsync>>;
     try {
-      const result = await bulkBuy.mutateAsync({
+      result = await bulkBuy.mutateAsync({
         data: {
           amount,
           duration: 1,
           duration_unit: "t",
           contract_type: "DIGITDIFF",
-          barrier: selectedDigit,
-          symbol: selectedSymbol,
+          barrier: digit,
+          symbol: market.symbol,
           count,
         },
       });
-      const placedAt = Date.now();
-      const fresh = result.buys.map((buy) => ({ id: String(buy.contract_id), placedAt }));
-      const updated = [...localContracts.filter((item) => !fresh.some((entry) => entry.id === item.id)), ...fresh];
-      setLocalContracts(updated);
-      localStorage.setItem(`${storagePrefix}${accountId}`, JSON.stringify(updated));
-      setMessage({
-        tone: "success",
-        text: `${result.buys.length} contract${result.buys.length === 1 ? "" : "s"} accepted for ${selectedMarket.name}, digit ${selectedDigit}. Separate contracts can settle differently.`,
-      });
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: getGetDerivStatusQueryKey() }),
-        queryClient.invalidateQueries({ queryKey: getGetDerivHistoryQueryKey() }),
-        queryClient.invalidateQueries({ queryKey: getGetDerivAccountsQueryKey() }),
-      ]);
     } catch (error) {
       setMessage({ tone: "error", text: error instanceof Error ? error.message : "The order could not be placed." });
+      return;
     }
+
+    const placedAt = Date.now();
+    const fresh = result.buys.map((buy) => ({ id: String(buy.contract_id), placedAt }));
+    const updated = [...localContracts.filter((item) => !fresh.some((entry) => entry.id === item.id)), ...fresh];
+    setLocalContracts(updated);
+    let trackingNote = "";
+    try {
+      localStorage.setItem(`${storagePrefix}${accountId}`, JSON.stringify(updated));
+    } catch {
+      trackingNote = " The order was accepted, but this browser could not save its local daily-stat tracking; check Deriv history.";
+    }
+    setMessage({
+      tone: "success",
+      text: `${result.buys.length} contract${result.buys.length === 1 ? "" : "s"} accepted for ${market.name}, digit ${digit}. Separate contracts can settle differently.${trackingNote}`,
+    });
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: getGetDerivStatusQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getGetDerivHistoryQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getGetDerivAccountsQueryKey() }),
+    ]).catch((error: unknown) => {
+      console.warn("Could not refresh Auto Trader data after an accepted order.", error);
+    });
   };
 
-  const formatQuote = (signal?: DerivMarketSignal) =>
-    signal?.quote == null ? "—" : String(signal.quote);
   const renderMarket = (market: Market) => {
     const signal = signalBySymbol.get(market.symbol);
-    const selected = selectedSymbol === market.symbol;
     const digits = frequencies[market.symbol] ?? Array(10).fill(0);
+    const ticks = groupTicks[market.group];
+    const hasMarketTicksThisScan = digits.some((count) => count > 0);
     return (
       <article
         key={market.symbol}
-        className={`at-market-card${selected ? " is-selected" : ""}`}
+        className="at-market-card"
         data-testid={`card-market-${market.symbol}`}
       >
-        <button
-          className="at-market-select"
-          type="button"
-          onClick={() => setSelectedSymbol(market.symbol)}
-          aria-pressed={selected}
-          aria-label={`Select ${market.name}`}
-          data-testid={`button-select-market-${market.symbol}`}
-        >
+        <div className="at-market-heading">
           <span className="at-market-name">{market.name}</span>
           <span className="at-symbol">{market.symbol}</span>
-          {selected && <span className="at-selected-mark"><Check size={12} /> ACTIVE</span>}
-        </button>
-        <div className="at-quote-line">
-          <span className="at-quote" data-testid={`text-quote-${market.symbol}`}>{formatQuote(signal)}</span>
-          <span className={`at-last-digit${signal?.last_digit == null ? "" : " has-digit"}`}>
-            <small>LAST</small>{signal?.last_digit ?? "—"}
-          </span>
         </div>
         <div className="at-market-meta">
-          <span><Activity size={12} /> {groupTicks[market.group].toLocaleString()} ticks</span>
-          <span>{signal?.sample_count ?? 0} sample</span>
+          <span><Activity size={12} /> {ticks > 0 ? `${ticks.toLocaleString()} ${ticks === 1 ? "tick" : "ticks"}` : "Waiting for first tick"}</span>
+          <span className={`at-market-live${scanning && signal ? " is-live" : ""}`}>{scanning && signal ? "LIVE" : scanning ? "WAITING" : "PAUSED"}</span>
         </div>
-        <div className="at-frequencies" aria-label={`Digit frequency for ${market.name}`}>
+        <div className="at-frequencies" aria-label={`Digit frequency and trade controls for ${market.name}`}>
           {digits.map((count, digit) => (
-            <button
-              className={`at-frequency${selectedDigit === digit ? " active" : ""}`}
-              key={digit}
-              type="button"
-              aria-pressed={selectedDigit === digit}
-              onClick={() => { setSelectedSymbol(market.symbol); setSelectedDigit(digit); }}
-              aria-label={`Select digit ${digit}, observed ${count} times`}
-              data-testid={`button-digit-${market.symbol}-${digit}`}
-            >
-              <b>{digit}</b><span>{count}</span>
-            </button>
+            <div className="at-digit-column" key={digit}>
+              <span className="at-digit-label">{digit}</span>
+              <span className={`at-digit-count${count === 0 ? " zero" : ""}`} aria-label={`${count} observations`}>{count}</span>
+              <div className="at-digit-trades">
+                <button type="button" disabled={!connected || !scanning || !signal || !hasMarketTicksThisScan || bulkBuy.isPending} onClick={() => void placeTrade(market, digit, 3)} aria-label={`Place three separate contracts on ${market.name}, digit ${digit}`} data-testid={`button-trade-3x-${market.symbol}-${digit}`}>3×</button>
+                <button type="button" disabled={!connected || !scanning || !signal || !hasMarketTicksThisScan || bulkBuy.isPending} onClick={() => void placeTrade(market, digit, 6)} aria-label={`Place six separate contracts on ${market.name}, digit ${digit}`} data-testid={`button-trade-6x-${market.symbol}-${digit}`}>6×</button>
+              </div>
+            </div>
           ))}
-        </div>
-        <div className="at-market-foot">
-          <span>Digit frequency · this scan</span>
-          <span className="at-live-dot">{scanning ? "LIVE" : "PAUSED"}</span>
         </div>
       </article>
     );
@@ -391,21 +422,21 @@ function AutoTraderContent() {
                 <p>Live last-digit distribution · Deriv market signals</p>
               </div>
               <div className="at-scan-actions">
-                <button type="button" className="at-icon-button" onClick={() => startScan(true)} aria-label="Rescan markets" data-testid="button-rescan"><RefreshCw size={15} /> Rescan</button>
+                <button type="button" className="at-icon-button" onClick={() => void startScan()} disabled={!connected || status.isFetching} aria-label="Rescan markets" data-testid="button-rescan"><RefreshCw size={15} /> Rescan</button>
                 {scanning ? (
                   <button type="button" className="at-stop-button" onClick={() => { setScanning(false); setMessage({ tone: "info", text: "Scan paused. No further digit counts will be added." }); }} data-testid="button-stop-scan"><Pause size={14} /> Stop</button>
                 ) : (
-                  <button type="button" className="at-live-button" onClick={() => startScan(false)} disabled={!hasToken} data-testid="button-go-live"><Play size={14} /> Go Live</button>
+                  <button type="button" className="at-live-button" onClick={() => void startScan()} disabled={!connected || status.isFetching} data-testid="button-go-live"><Play size={14} /> Go Live</button>
                 )}
               </div>
             </header>
 
             <div className="at-filterbar" role="tablist" aria-label="Filter markets">
               {([
-                ["all", "All markets", 18],
-                ["regular", "Volatility", 5],
+                ["all", "All markets", 17],
+                ["regular", "Volatility", 7],
                 ["jump", "Jump", 5],
-                ["one-sec", "Volatility 1s", 8],
+                ["one-sec", "Volatility 1s", 5],
               ] as [FilterKey, string, number][]).map(([key, label, count]) => (
                 <button
                   key={key}
@@ -425,7 +456,14 @@ function AutoTraderContent() {
               <span className="at-source-note">No simulated feed</span>
             </div>
 
-            {filteredMarkets.length > 0 && (
+            {!scanning && (
+              <div className="at-empty-overlay" data-testid="empty-market-signals">
+                <Signal size={22} />
+                <strong>{connected ? "Scanner is paused" : "Awaiting a Deriv connection"}</strong>
+                <span>{connected ? "Select Go Live to reveal the 17 live markets and begin counting real ticks." : "Connect and select an authorized Deriv account before starting a live scan."}</span>
+              </div>
+            )}
+            {scanning && filteredMarkets.length > 0 && (
               <div className="at-market-list">
                 {filter === "all" ? (
                   (["regular", "jump", "one-sec"] as MarketGroup[]).map((group) => (
@@ -437,24 +475,19 @@ function AutoTraderContent() {
                 ) : <div className="at-market-grid">{filteredMarkets.map(renderMarket)}</div>}
               </div>
             )}
-            {!hasToken && !token.isLoading && (
-              <div className="at-empty-overlay" data-testid="empty-market-signals">
-                <Signal size={22} /><strong>Awaiting a Deriv connection</strong><span>Live quotes and digit counters appear here when account signals are available.</span>
-              </div>
-            )}
             {hasToken && !status.isLoading && currentSignals.length === 0 && !status.error && (
-              <div className="at-empty-inline" data-testid="empty-live-quotes"><Clock3 size={16} /> Waiting for actual Deriv tick data. No sample quotes are shown.</div>
+              <div className="at-empty-inline" data-testid="empty-live-quotes"><Clock3 size={16} /> Waiting for actual Deriv ticks. No sample data is shown.</div>
             )}
           </section>
 
           <aside className="at-order-column">
             <section className="at-order-panel" aria-labelledby="order-title">
               <div className="at-order-topline"><span><Crosshair size={14} /> MANUAL EXECUTION</span><span className="at-contract-tag">DIGIT DIFFERS</span></div>
-              <h2 id="order-title">Place a trade</h2>
-              <p className="at-order-description">Every order uses the exact market and digit selected in the scanner.</p>
+              <h2 id="order-title">Trade Now</h2>
+              <p className="at-order-description">One contract on the least-observed digit in the live scan. Use each digit's 3× or 6× buttons for batches.</p>
               <div className="at-order-selection">
-                <div><span>MARKET</span><strong>{selectedMarket.name}</strong><small>{selectedMarket.symbol}</small></div>
-                <div className="at-order-digit"><span>BARRIER</span><strong>{selectedDigit}</strong></div>
+                <div><span>LIVE SCAN TARGET</span><strong>{tradeNowTarget?.market.name ?? "Start the scanner first"}</strong><small>{tradeNowTarget?.market.symbol ?? "No digit data yet"}</small></div>
+                <div className="at-order-digit"><span>DIGIT</span><strong>{tradeNowTarget?.digit ?? "—"}</strong></div>
               </div>
               <label className="at-field-label" htmlFor="at-stake">Stake per contract <span>{currency}</span></label>
               <div className="at-stake-input"><span>{currency}</span><input id="at-stake" type="number" min="0.01" step="0.01" value={stake} onChange={(event) => setStake(event.target.value)} aria-label="Stake per contract" data-testid="input-stake" /></div>
@@ -462,20 +495,15 @@ function AutoTraderContent() {
               <button
                 type="button"
                 className="at-trade-button"
-                disabled={!connected || bulkBuy.isPending}
-                onClick={() => void placeTrade(1)}
+                disabled={!connected || !scanning || !tradeNowTarget || bulkBuy.isPending}
+                onClick={() => tradeNowTarget && void placeTrade(tradeNowTarget.market, tradeNowTarget.digit, 1)}
                 data-testid="button-trade-now"
               >
                 {bulkBuy.isPending ? <RefreshCw size={16} className="at-spin" /> : <Target size={16} />}
                 {bulkBuy.isPending ? "Sending order…" : "Trade Now"}
                 <span>1 contract</span>
               </button>
-              <div className="at-batch-label"><Layers3 size={13} /> MULTI-CONTRACT BATCH <span>1 tick each</span></div>
-              <div className="at-batch-actions">
-                <button type="button" disabled={!connected || bulkBuy.isPending} onClick={() => void placeTrade(3)} data-testid="button-trade-3x"><span>3×</span><small>3 separate contracts</small></button>
-                <button type="button" disabled={!connected || bulkBuy.isPending} onClick={() => void placeTrade(6)} data-testid="button-trade-6x"><span>6×</span><small>6 separate contracts</small></button>
-              </div>
-              <p className="at-batch-disclaimer">Batch contracts may settle differently. Deriv quotes the complete batch before buys are sent; outcomes are not all-or-none.</p>
+              <p className="at-batch-disclaimer">Each 3× or 6× action sends separate one-tick contracts from that market and digit. Contracts may settle differently.</p>
               {message && <div className={`at-action-message ${message.tone}`} role={message.tone === "error" ? "alert" : "status"} data-testid="status-trade-message">
                 {message.tone === "error" ? <AlertCircle size={15} /> : <Check size={15} />}<span>{message.text}</span>
                 <button type="button" aria-label="Dismiss message" onClick={() => setMessage(null)} data-testid="button-dismiss-message"><X size={13} /></button>
@@ -499,7 +527,7 @@ function AutoTraderContent() {
                 <Play size={15} /> Start <span>Inactive</span>
               </button>
               <p>Strategy execution is not defined yet. Start will not place trades.</p>
-              <div className="at-5m-control"><span><Clock3 size={14} /> 5m Auto</span><span className="at-5m-badge">DEFERRED</span></div>
+              <button type="button" className="at-5m-control" disabled aria-disabled="true" data-testid="button-5m-auto"><span><Clock3 size={14} /> 5m Auto</span><span className="at-5m-badge">DEFERRED</span></button>
               <small>The 5-minute automation workflow is not active.</small>
             </section>
 
