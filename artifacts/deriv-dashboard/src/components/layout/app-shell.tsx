@@ -3,6 +3,7 @@ import { Link, useLocation } from 'wouter';
 import { useUser } from '@clerk/react';
 import { getGetAccessSessionQueryKey, useGetAccessSession } from '@workspace/api-client-react';
 import {
+  Bot,
   Gauge,
   ShieldCheck,
   Moon,
@@ -37,7 +38,8 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
   const canUseBulkTrader = isAdmin || features.includes("bulk-trader");
   const canUseCashGrab = isAdmin || features.includes("cash-grab");
   const canUseMoneyBank = isAdmin || features.includes("money-bank");
-  const canUseTrading = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseCashGrab || canUseMoneyBank;
+  const canUseAutoTrader = isAdmin || features.includes("auto-trader");
+  const canUseTrading = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseCashGrab || canUseMoneyBank || canUseAutoTrader;
   const canUseSettings = isAdmin || features.includes("settings");
 
   return (
@@ -57,6 +59,14 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
             >
               <Gauge size={17} />Dashboard
               {location === '/app' && <span className="nav-live" />}
+            </Link>}
+            {canUseAutoTrader && <Link
+              href="/auto-trader"
+              className={`nav-item ${location === '/auto-trader' ? 'nav-item-active' : ''}`}
+              data-testid="link-nav-auto-trader"
+            >
+              <Bot size={17} />Auto Trader
+              {location === '/auto-trader' && <span className="nav-live" />}
             </Link>}
             {isAdmin && (
               <Link 
@@ -80,7 +90,7 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
         </div>
       </aside>
 
-      <main className="main-shell">
+      <main className={`main-shell ${location.startsWith('/admin') ? 'admin-shell' : ''}`}>
         <header className="topbar">
           <div className="crumbs">
             <span>WORKSPACE</span><span className="crumb-slash">/</span>

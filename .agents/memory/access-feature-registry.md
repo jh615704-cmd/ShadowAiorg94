@@ -5,9 +5,9 @@ description: Access-controlled dashboard features must stay synchronized across 
 
 Keep every access-controlled feature in one synchronized registry across the API server, OpenAPI schema, generated client types, route middleware, and administrator feature picker.
 
-**Why:** Adding a feature only to the UI leaves access keys unable to grant it correctly, while adding it only to the server makes the admin control and client types reject valid values.
+**Why:** A hand-maintained administrator list omitted an existing feature, while schema/runtime drift can make access keys reject otherwise valid values.
 
-**How to apply:** When adding or renaming an access feature, update all registry surfaces together and rebuild the workspace declaration cache before type-checking dependent artifacts.
+**How to apply:** Derive the administrator picker and server accepted values from generated `AccessFeature` values rather than duplicate lists. When adding or renaming a feature, update the OpenAPI enum and its route/UI gates together, then regenerate clients before type-checking dependent artifacts.
 
 History polling should be enabled for users with any trading feature, even when their access key does not separately grant the optional history feature.
 

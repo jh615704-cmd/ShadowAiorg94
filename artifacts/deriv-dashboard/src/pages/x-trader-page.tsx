@@ -295,7 +295,8 @@ export default function XTraderPage() {
   const canUseBulkTrader = isAdmin || accessSession.data?.features.includes("bulk-trader") === true;
   const canUseCashGrab = isAdmin || accessSession.data?.features.includes("cash-grab") === true;
   const canUseMoneyBank = isAdmin || accessSession.data?.features.includes("money-bank") === true;
-  const canUseDeriv = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseCashGrab || canUseMoneyBank;
+  const canUseAutoTrader = isAdmin || accessSession.data?.features.includes("auto-trader") === true;
+  const canUseDeriv = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseCashGrab || canUseMoneyBank || canUseAutoTrader;
   const canViewHistory = canUseDeriv || accessSession.data?.features.includes("history") === true;
   const tokenStatus = useGetDerivTokenStatus({ query: { enabled: canUseDeriv, retry: false, queryKey: getGetDerivTokenStatusQueryKey() } });
   const connectedToken = Boolean(tokenStatus.data?.has_token);
@@ -3307,6 +3308,17 @@ export default function XTraderPage() {
           : guideMode === "cash-grab"
             ? cashGrabGuidePages
         : guidePages;
+  const canUseGuideFeature = guideMode === "trade-x"
+    ? canUseTradeX
+    : guideMode === "digit-flip"
+      ? canUseDigitFlip
+      : guideMode === "bulk-trader"
+        ? canUseBulkTrader
+        : guideMode === "money-bank"
+          ? canUseMoneyBank
+          : guideMode === "cash-grab"
+            ? canUseCashGrab
+            : canUseEdge;
   const statusText = isConnected ? "CONNECTED" : connectedToken ? "CONNECTING" : "DISCONNECTED";
   const activityText = running ? "EDGE RUNNING" : "EDGE STOPPED";
   const edgeBalanceReady = currentAccountBalance != null && currentAccountBalance > 0;
@@ -3351,7 +3363,10 @@ export default function XTraderPage() {
                 >
                   <LogOut size={15} />Log out
                 </button>
-                <Link href="/auto-trader" onClick={() => setNavigationOpen(false)}><Bot size={15} />Auto Trader</Link>
+                <Link href="/auto-trader" className={canUseAutoTrader ? "" : "xt-navigation-link-restricted"} onClick={() => setNavigationOpen(false)}>
+                  <Bot size={15} />Auto Trader
+                  {!canUseAutoTrader && <span>Restricted — admin access only</span>}
+                </Link>
               </nav>
             )}
           </div>
@@ -3410,13 +3425,13 @@ export default function XTraderPage() {
         )}
       </section>
 
-      <section className="xt-feature-card xt-feature-card-cash-grab" id="cash-grab-feature">
-        <div><Activity size={18} /><span><b>Cash Grab</b><small>Rise/Fall contracts · one at a time</small></span></div>
+      <section className={`xt-feature-card xt-feature-card-cash-grab ${!canUseCashGrab ? "xt-feature-card-restricted" : ""}`} id="cash-grab-feature">
+        <div><Activity size={18} /><span><b>Cash Grab</b><small>{canUseCashGrab ? "Rise/Fall contracts · one at a time" : "Restricted — admin access only"}</small></span></div>
         <div className="xt-feature-actions">
           {!canUseCashGrab && <span className="xt-feature-locked">RESTRICTED</span>}
-          {canUseCashGrab && <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("cash-grab"); setGuidePage(0); setGuideOpen(true); }}>
+          <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("cash-grab"); setGuidePage(0); setGuideOpen(true); }}>
             <BookOpen size={14} />Guide
-          </button>}
+          </button>
           <label className="xt-switch">
             <input type="checkbox" checked={cashGrabEnabled} onChange={(event) => toggleCashGrab(event.target.checked)} aria-label="Toggle Cash Grab" disabled={!canUseCashGrab || !isConnected} />
             <span />
@@ -3424,9 +3439,10 @@ export default function XTraderPage() {
         </div>
       </section>
 
-      <section className="xt-feature-card xt-feature-card-edge2">
-        <div><Bot size={18} /><span><b>Money Bank</b><small>Accumulator</small></span></div>
+      <section className={`xt-feature-card xt-feature-card-edge2 ${!canUseMoneyBank ? "xt-feature-card-restricted" : ""}`}>
+        <div><Bot size={18} /><span><b>Money Bank</b><small>{canUseMoneyBank ? "Accumulator" : "Restricted — admin access only"}</small></span></div>
         <div className="xt-feature-actions">
+          {!canUseMoneyBank && <span className="xt-feature-locked">RESTRICTED</span>}
           <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("money-bank"); setGuidePage(0); setGuideOpen(true); }}>
             <BookOpen size={14} />Guide
           </button>
@@ -3443,13 +3459,13 @@ export default function XTraderPage() {
         </div>
       </section>
 
-      <section className="xt-feature-card xt-feature-card-bulk">
-        <div><Activity size={18} /><span><b>Bulk Trader</b><small>Send 1–6 contracts instantly across four trade types</small></span></div>
+      <section className={`xt-feature-card xt-feature-card-bulk ${!canUseBulkTrader ? "xt-feature-card-restricted" : ""}`}>
+        <div><Activity size={18} /><span><b>Bulk Trader</b><small>{canUseBulkTrader ? "Send 1–6 contracts instantly across four trade types" : "Restricted — admin access only"}</small></span></div>
         <div className="xt-feature-actions">
           {!canUseBulkTrader && <span className="xt-feature-locked">RESTRICTED</span>}
-          {canUseBulkTrader && <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("bulk-trader"); setGuidePage(0); setGuideOpen(true); }}>
+          <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("bulk-trader"); setGuidePage(0); setGuideOpen(true); }}>
             <BookOpen size={14} />Guide
-          </button>}
+          </button>
           <label className="xt-switch">
             <input type="checkbox" checked={bulkTraderEnabled} onChange={(event) => toggleBulkTrader(event.target.checked)} aria-label="Toggle Bulk Trader" disabled={!canUseBulkTrader || !isConnected} />
             <span />
@@ -3457,11 +3473,11 @@ export default function XTraderPage() {
         </div>
       </section>
 
-      <section className="xt-feature-card xt-feature-card-digit-flip">
-        <div><Zap size={18} /><span><b>DigitFlip</b><small>Even / Odd parity trading with live estimates</small></span></div>
+      <section className={`xt-feature-card xt-feature-card-digit-flip ${!canUseDigitFlip ? "xt-feature-card-restricted" : ""}`}>
+        <div><Zap size={18} /><span><b>DigitFlip</b><small>{canUseDigitFlip ? "Even / Odd parity trading with live estimates" : "Restricted — admin access only"}</small></span></div>
         <div className="xt-feature-actions">
           {!canUseDigitFlip && <span className="xt-feature-locked">RESTRICTED</span>}
-          {canUseDigitFlip && <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("digit-flip"); setGuidePage(0); setGuideOpen(true); }}><BookOpen size={14} />Guide</button>}
+          <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("digit-flip"); setGuidePage(0); setGuideOpen(true); }}><BookOpen size={14} />Guide</button>
           <label className="xt-switch">
             <input type="checkbox" checked={digitFlipEnabled} onChange={(event) => toggleDigitFlip(event.target.checked)} aria-label="Toggle DigitFlip" disabled={!canUseDigitFlip} />
             <span />
@@ -3469,13 +3485,13 @@ export default function XTraderPage() {
         </div>
       </section>
 
-      <section className="xt-feature-card xt-feature-card-trade-x">
-        <div><Activity size={18} /><span><b>Trade X</b><small>Digit Differs distribution and ranked-entry automation</small></span></div>
+      <section className={`xt-feature-card xt-feature-card-trade-x ${!canUseTradeX ? "xt-feature-card-restricted" : ""}`}>
+        <div><Activity size={18} /><span><b>Trade X</b><small>{canUseTradeX ? "Digit Differs distribution and ranked-entry automation" : "Restricted — admin access only"}</small></span></div>
         <div className="xt-feature-actions">
           {!canUseTradeX && <span className="xt-feature-locked">RESTRICTED</span>}
-          {canUseTradeX && <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("trade-x"); setGuidePage(0); setGuideOpen(true); }}>
+          <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("trade-x"); setGuidePage(0); setGuideOpen(true); }}>
             <BookOpen size={14} />Guide
-          </button>}
+          </button>
           <label className="xt-switch">
             <input
               type="checkbox"
@@ -3489,13 +3505,13 @@ export default function XTraderPage() {
         </div>
       </section>
 
-      <section className="xt-feature-card xt-feature-card-edge">
-        <div><Bot size={18} /><span><b>EDGE 🏔️</b><small>Over / Under digit automation</small></span></div>
+      <section className={`xt-feature-card xt-feature-card-edge ${!canUseEdge ? "xt-feature-card-restricted" : ""}`}>
+        <div><Bot size={18} /><span><b>EDGE 🏔️</b><small>{canUseEdge ? "Over / Under digit automation" : "Restricted — admin access only"}</small></span></div>
         <div className="xt-feature-actions">
           {!canUseEdge && <span className="xt-feature-locked">RESTRICTED</span>}
-          {canUseEdge && <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("edge"); setGuidePage(0); setGuideOpen(true); }}>
+          <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("edge"); setGuidePage(0); setGuideOpen(true); }}>
             <BookOpen size={14} />Guide
-          </button>}
+          </button>
           <label className="xt-switch">
             <input
               type="checkbox"
@@ -3946,7 +3962,11 @@ export default function XTraderPage() {
               <button type="button" className="xt-guide-nav" onClick={() => setGuidePage((page) => Math.max(0, page - 1))} disabled={guidePage === 0}><ChevronLeft size={15} />Back</button>
               <span>{guidePage + 1} / {activeGuidePages.length}</span>
               {guidePage === activeGuidePages.length - 1 ? (
-                <button type="button" className="xt-guide-start" onClick={() => { setGuideOpen(false); guideMode === "trade-x" ? toggleTradeX(true) : guideMode === "digit-flip" ? toggleDigitFlip(true) : guideMode === "bulk-trader" ? toggleBulkTrader(true) : guideMode === "money-bank" ? toggleMoneyBank(true) : guideMode === "cash-grab" ? toggleCashGrab(true) : toggleXTrader(true); }}>Let's start trading</button>
+                <button type="button" className="xt-guide-start" onClick={() => {
+                  setGuideOpen(false);
+                  if (!canUseGuideFeature) return;
+                  guideMode === "trade-x" ? toggleTradeX(true) : guideMode === "digit-flip" ? toggleDigitFlip(true) : guideMode === "bulk-trader" ? toggleBulkTrader(true) : guideMode === "money-bank" ? toggleMoneyBank(true) : guideMode === "cash-grab" ? toggleCashGrab(true) : toggleXTrader(true);
+                }}>{canUseGuideFeature ? "Let's start trading" : "Close guide"}</button>
               ) : (
                 <button type="button" className="xt-guide-nav next" onClick={() => setGuidePage((page) => Math.min(activeGuidePages.length - 1, page + 1))}>Next<ChevronRight size={15} /></button>
               )}

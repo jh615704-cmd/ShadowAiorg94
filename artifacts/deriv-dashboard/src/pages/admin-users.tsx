@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  AccessFeature,
   getListAccessKeysQueryKey,
   getGetTradingProtectionQueryKey,
   useCreateAccessKey,
@@ -10,7 +11,7 @@ import {
   useUpdateAccessKey,
   useGetTradingProtection,
   useUpdateTradingProtection,
-  type AccessFeature,
+  type AccessFeature as AccessFeatureValue,
   type AccessKeySummary,
 } from "@workspace/api-client-react";
 import { AppShell } from "@/components/layout/app-shell";
@@ -35,17 +36,42 @@ import {
   X,
 } from "lucide-react";
 
-const featureOptions: Array<{ value: AccessFeature; label: string; description: string }> = [
-  { value: "edge", label: "EDGE trading", description: "PAT connection, live telemetry, and trades" },
-  { value: "digit-flip", label: "DigitFlip", description: "Even / Odd parity trading and automation" },
-  { value: "trade-x", label: "Trade X", description: "Digit Differs trading and automation" },
-  { value: "bulk-trader", label: "Bulk Trader", description: "Send 1–6 contracts across four trade types" },
-  { value: "cash-grab", label: "Cash Grab", description: "Controlled batch trading with risk gates" },
-  { value: "money-bank", label: "Money Bank", description: "Accumulator automation with recovery controls" },
-  { value: "jdy-ai-3", label: "Shadows 3", description: "Cash Grab live gate and immediate stop control" },
-  { value: "settings", label: "Settings", description: "View and manage the Deriv connection" },
-  { value: "history", label: "History", description: "Read recent trading activity" },
-];
+const featureLabels: Partial<Record<AccessFeatureValue, string>> = {
+  edge: "EDGE trading",
+  "digit-flip": "DigitFlip",
+  "trade-x": "Trade X",
+  "bulk-trader": "Bulk Trader",
+  "cash-grab": "Cash Grab",
+  "money-bank": "Money Bank",
+  "jdy-ai-3": "Shadows 3",
+  "auto-trader": "Auto Trader",
+  settings: "Settings",
+  history: "History",
+};
+
+const featureDescriptions: Partial<Record<AccessFeatureValue, string>> = {
+  edge: "PAT connection, live telemetry, and trades",
+  "digit-flip": "Even / Odd parity trading and automation",
+  "trade-x": "Digit Differs trading and automation",
+  "bulk-trader": "Send 1–6 contracts across four trade types",
+  "cash-grab": "Controlled batch trading with risk gates",
+  "money-bank": "Accumulator automation with recovery controls",
+  "jdy-ai-3": "Cash Grab live gate and immediate stop control",
+  "auto-trader": "Live market scanner and Digit Differs orders",
+  settings: "View and manage the Deriv connection",
+  history: "Read recent trading activity",
+};
+
+const featureOptions = Object.values(AccessFeature)
+  .filter((value): value is Exclude<AccessFeatureValue, "admin"> => value !== "admin")
+  .map((value) => {
+    const label = featureLabels[value] ?? value.split("-").map((part) => part[0]?.toUpperCase() + part.slice(1)).join(" ");
+    return {
+      value,
+      label,
+      description: featureDescriptions[value] ?? `${label} access`,
+    };
+  });
 
 function errorMessage(error: unknown) {
   const candidate = error as { data?: { error?: string }; message?: string };

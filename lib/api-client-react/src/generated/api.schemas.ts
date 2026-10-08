@@ -76,6 +76,7 @@ export const AccessFeature = {
   'cash-grab': 'cash-grab',
   'money-bank': 'money-bank',
   'jdy-ai-3': 'jdy-ai-3',
+  'auto-trader': 'auto-trader',
   settings: 'settings',
   history: 'history',
   admin: 'admin',

@@ -640,3 +640,24 @@
     transition-duration: .01ms !important;
   }
 }
+
+.auto-trader-page .at-market-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.at-restricted-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  max-width: 740px;
+  margin: clamp(24px, 6vh, 64px) auto;
+  padding: 18px;
+  border: 1px solid rgba(255, 91, 105, .58);
+  border-radius: 13px;
+  background: linear-gradient(145deg, rgba(72, 24, 41, .9), rgba(28, 23, 40, .96));
+  box-shadow: inset 3px 0 0 #f05261, 0 14px 34px rgba(73, 16, 39, .18);
+  color: #ff9ba3;
+}
+.at-restricted-card > svg { flex: 0 0 auto; color: #ff7c88; }
+.at-restricted-card > div { display: grid; gap: 5px; min-width: 0; }
+.at-restricted-card strong { color: #ffafb5; font-size: 13px; }
+.at-restricted-card span { color: #d99aa7; font-size: 11px; line-height: 1.5; }

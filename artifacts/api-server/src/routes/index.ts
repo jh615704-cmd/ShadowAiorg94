@@ -10,7 +10,7 @@ const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(accessRouter);
-const tradingFeatures = ["edge", "digit-flip", "trade-x", "bulk-trader", "cash-grab", "money-bank", "jdy-ai-3"] as const;
+const tradingFeatures = ["edge", "digit-flip", "trade-x", "bulk-trader", "cash-grab", "money-bank", "jdy-ai-3", "auto-trader"] as const;
 const tokenFeatures = [...tradingFeatures, "settings"] as const;
 
 router.use("/token", requireAccess, requireAnyAccessFeature(...tokenFeatures));

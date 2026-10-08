@@ -89,24 +89,25 @@ function todayStart() {
 function AutoTraderContent() {
   const queryClient = useQueryClient();
   const access = useGetAccessSession({ query: { queryKey: getGetAccessSessionQueryKey(), retry: false } });
-  const token = useGetDerivTokenStatus({ query: { queryKey: getGetDerivTokenStatusQueryKey(), retry: false } });
+  const hasAutoTraderAccess = access.data?.is_admin === true || access.data?.features.includes("auto-trader") === true;
+  const token = useGetDerivTokenStatus({ query: { queryKey: getGetDerivTokenStatusQueryKey(), retry: false, enabled: hasAutoTraderAccess } });
   const hasToken = token.data?.has_token === true;
   const [scanning, setScanning] = useState(false);
   const [scanResetPending, setScanResetPending] = useState(false);
   const scanRestartLockRef = useRef(false);
   const accounts = useGetDerivAccounts({
-    query: { queryKey: getGetDerivAccountsQueryKey(), enabled: hasToken, retry: false, refetchInterval: 10_000 },
+    query: { queryKey: getGetDerivAccountsQueryKey(), enabled: hasAutoTraderAccess && hasToken, retry: false, refetchInterval: 10_000 },
   });
   const status = useGetDerivStatus({
     query: {
       queryKey: getGetDerivStatusQueryKey(),
-      enabled: hasToken,
+      enabled: hasAutoTraderAccess && hasToken,
       retry: false,
       refetchInterval: scanning ? 500 : false,
     },
   });
   const history = useGetDerivHistory({
-    query: { queryKey: getGetDerivHistoryQueryKey(), enabled: hasToken, retry: false, refetchInterval: hasToken ? 2_000 : false },
+    query: { queryKey: getGetDerivHistoryQueryKey(), enabled: hasAutoTraderAccess && hasToken, retry: false, refetchInterval: hasAutoTraderAccess && hasToken ? 2_000 : false },
   });
   const bulkBuy = useBulkBuyDerivContracts();
 
@@ -389,6 +390,41 @@ function AutoTraderContent() {
       </article>
     );
   };
+
+  if (access.isLoading) {
+    return (
+      <AppShell title="AUTO TRADER">
+        <main className="auto-trader-page">
+          <div className="at-connection-note skeleton" aria-label="Loading workspace access" />
+        </main>
+      </AppShell>
+    );
+  }
+
+  if (access.isError) {
+    return (
+      <AppShell title="AUTO TRADER">
+        <main className="auto-trader-page">
+          <div className="at-connection-note error" role="alert">
+            <AlertCircle size={17} /><div><strong>Unable to confirm feature access</strong><span>Refresh the page or sign in again before using Auto Trader.</span></div>
+          </div>
+        </main>
+      </AppShell>
+    );
+  }
+
+  if (!hasAutoTraderAccess) {
+    return (
+      <AppShell title="AUTO TRADER">
+        <main className="auto-trader-page">
+          <section className="at-restricted-card" role="status" data-testid="status-auto-trader-restricted">
+            <ShieldAlert size={20} />
+            <div><strong>Restricted — admin access only</strong><span>Ask your administrator to grant Auto Trader access to this key.</span></div>
+          </section>
+        </main>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell title="AUTO TRADER">

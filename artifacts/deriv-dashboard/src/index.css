@@ -2398,3 +2398,158 @@ body { overflow-x: hidden; }
     scroll-behavior: auto !important;
   }
 }
+
+/* Access states and administrator controls follow the dashboard's blue surfaces. */
+.xt-feature-card.xt-feature-card-restricted {
+  border-color: rgba(255, 91, 105, .68) !important;
+  background: linear-gradient(145deg, rgba(72, 24, 41, .96), rgba(35, 22, 42, .98)) !important;
+  box-shadow: inset 3px 0 0 #f05261, 0 10px 26px rgba(73, 16, 39, .2);
+}
+.xt-feature-card-restricted > div:first-child > svg { color: #ff7c88 !important; }
+.xt-feature-card-restricted > div:first-child > span > small {
+  color: #ff9ba3 !important;
+  font-weight: 750 !important;
+}
+.xt-feature-card-restricted .xt-feature-locked {
+  border-color: rgba(255, 107, 119, .52);
+  border-radius: 999px;
+  background: rgba(166, 43, 58, .2);
+  color: #ff9ba3;
+}
+.xt-feature-card-restricted .xt-switch > span { background: #58333e; }
+.xt-feature-card-restricted .xt-switch input:disabled + span { cursor: not-allowed; }
+.xt-guide-button {
+  width: auto;
+  min-width: 72px;
+  min-height: 34px;
+  height: auto;
+  padding: 0 12px;
+  justify-content: center;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.xt-navigation-menu .xt-navigation-link-restricted { color: #ff9ba3; }
+.xt-navigation-menu .xt-navigation-link-restricted > span {
+  margin-left: auto;
+  color: #ff9ba3;
+  font-size: 9px;
+  text-align: right;
+}
+
+.admin-console {
+  --admin-bg: #071a30;
+  --admin-surface: rgba(10, 35, 62, .94);
+  --admin-surface-raised: rgba(15, 47, 81, .96);
+  --admin-line: rgba(106, 171, 231, .25);
+  --admin-line-strong: rgba(93, 184, 255, .5);
+  --admin-text: #edf5ff;
+  --admin-muted: #9bb5cf;
+  --admin-dim: #7597b7;
+  --admin-accent: #62b9ff;
+  border-color: rgba(83, 162, 226, .42);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(32, 120, 194, .24), transparent 34%),
+    radial-gradient(circle at 0% 100%, rgba(20, 85, 148, .2), transparent 37%),
+    linear-gradient(136deg, #0c2b49 0%, var(--admin-bg) 58%, #0b2948 100%);
+  box-shadow: 0 24px 70px rgba(0, 12, 28, .34), inset 0 1px 0 rgba(211, 237, 255, .05);
+}
+.admin-console::before {
+  background-image: radial-gradient(rgba(173, 220, 255, .11) .6px, transparent .7px);
+}
+.admin-console-heading .eyebrow,
+.admin-console .panel-overline,
+.admin-console .admin-field > span,
+.admin-console .admin-field-label { color: #86b9e3; }
+.admin-console .refresh-control {
+  border-color: var(--admin-line-strong);
+  background: rgba(66, 159, 231, .12);
+  color: var(--admin-accent);
+}
+.admin-console .refresh-control:hover:not(:disabled) { background: rgba(66, 159, 231, .2); }
+.admin-console .new-key-callout {
+  border-color: var(--admin-line-strong);
+  background: linear-gradient(135deg, rgba(24, 95, 153, .46), rgba(7, 35, 63, .86));
+  box-shadow: 0 10px 30px rgba(3, 26, 51, .25);
+}
+.admin-console .new-key-icon { background: rgba(83, 176, 245, .18); color: var(--admin-accent); }
+.admin-console .new-key-callout h3,
+.admin-console .new-key-callout code { color: #a4d9ff; }
+.admin-console .admin-field input,
+.admin-console .admin-field select,
+.admin-console .key-edit-limit input {
+  border-color: var(--admin-line);
+  background: rgba(4, 22, 42, .82);
+  color: var(--admin-text);
+}
+.admin-console .admin-field input:focus,
+.admin-console .admin-field select:focus,
+.admin-console .key-edit-limit input:focus {
+  border-color: var(--admin-accent);
+  box-shadow: 0 0 0 3px rgba(76, 166, 238, .14);
+}
+.admin-console .admin-feature-option,
+.admin-console .key-edit-feature {
+  border-color: var(--admin-line);
+  background: rgba(4, 23, 43, .7);
+  color: var(--admin-muted);
+}
+.admin-console .admin-feature-option.selected,
+.admin-console .key-edit-feature.selected {
+  border-color: var(--admin-line-strong);
+  background: rgba(44, 130, 195, .24);
+  color: var(--admin-text);
+}
+.admin-console .admin-feature-option input,
+.admin-console .key-edit-feature input,
+.admin-console .admin-unlimited-toggle input,
+.admin-console .key-edit-unlimited input { accent-color: #59b7ff; }
+.admin-console .admin-safety-note {
+  border-color: var(--admin-line);
+  background: linear-gradient(145deg, rgba(13, 49, 83, .92), rgba(5, 26, 49, .94));
+  color: var(--admin-muted);
+}
+.admin-console .admin-safety-icon { background: rgba(80, 169, 237, .17); color: var(--admin-accent); }
+.admin-console .admin-protection-card {
+  border-color: var(--admin-line);
+  background: linear-gradient(145deg, rgba(11, 45, 78, .96), rgba(6, 27, 50, .96));
+}
+.admin-console .admin-protection-toggle { background: rgba(3, 21, 40, .6); }
+.admin-console .admin-protection-toggle.selected { background: rgba(38, 116, 177, .28); }
+.admin-console .admin-protection-switch { background: #244768; }
+.admin-console .admin-protection-toggle.selected .admin-protection-switch { background: var(--admin-accent); }
+.admin-console .admin-key-features-note { box-shadow: inset 0 1px 0 rgba(211, 237, 255, .04); }
+.admin-console .key-avatar,
+.admin-console .key-reissue-button {
+  border-color: var(--admin-line);
+  background: rgba(70, 154, 218, .16);
+  color: var(--admin-accent);
+}
+.admin-console .key-feature-list span { background: rgba(66, 143, 201, .18); color: var(--admin-muted); }
+.admin-console .key-action:hover { background: rgba(66, 143, 201, .18); }
+.admin-console .key-edit-panel {
+  min-width: 0;
+  border-color: var(--admin-line-strong);
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgba(14, 49, 82, .98), rgba(7, 29, 53, .98));
+  box-shadow: 0 10px 25px rgba(0, 10, 25, .2);
+}
+.admin-console .key-edit-limit { color: var(--admin-muted); }
+.admin-console .key-edit-limit input {
+  border-radius: 7px;
+  background: rgba(4, 22, 42, .9);
+}
+.admin-console .key-edit-feature { min-height: 32px; border-radius: 7px; }
+.admin-console .key-edit-actions .key-action { min-height: 36px; }
+.main-shell.admin-shell .deriv-account-trigger,
+.main-shell.admin-shell .deriv-account-trigger:hover:not(:disabled) {
+  border-color: rgba(93, 184, 255, .48);
+  background: linear-gradient(145deg, #103b62, #0b2948);
+  color: #edf5ff;
+}
+.main-shell.admin-shell .deriv-account-trigger > svg { color: #91caff; }
+.main-shell.admin-shell .deriv-account-amount { color: #f3f9ff; }
+
+@media (max-width: 640px) {
+  .xt-guide-button { min-width: 62px; min-height: 32px; padding: 0 9px; font-size: 9px; }
+  .xt-navigation-menu .xt-navigation-link-restricted > span { max-width: 132px; }
+}

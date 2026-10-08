@@ -1,5 +1,6 @@
 import { createHash, hkdfSync, randomBytes, createCipheriv, createDecipheriv } from "node:crypto";
 import { and, eq, gt, isNull } from "drizzle-orm";
+import { AccessFeature as AccessFeatureValues } from "@workspace/api-zod";
 import { db, accessKeySessionsTable, accessKeysTable } from "@workspace/db";
 
 export const ACCESS_COOKIE_NAME = "jdy_access";
@@ -8,7 +9,9 @@ const LEGACY_PRIMARY_ADMIN_KEY_HASH = "0d11ae258d4fd0f86e2e07606a4b835b2cdc745a7
 // An administrator max-device value of 0 means unlimited.
 export const PRIMARY_ADMIN_MAX_DEVICES = 0;
 const PRIMARY_ADMIN_LABEL = "Primary administrator";
-export const ACCESS_FEATURES = ["edge", "digit-flip", "trade-x", "bulk-trader", "cash-grab", "money-bank", "jdy-ai-3", "settings", "history", "admin"] as const;
+export const ACCESS_FEATURES = Object.values(AccessFeatureValues) as Array<
+  (typeof AccessFeatureValues)[keyof typeof AccessFeatureValues]
+>;
 export type AccessFeature = typeof ACCESS_FEATURES[number];
 export type AccessKeyStatus = "active" | "paused" | "blocked" | "banned" | "deleted";
 
