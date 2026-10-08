@@ -155,6 +155,27 @@
 .edge-ref-market-icon::after { position: absolute; width: 9px; height: 2px; border-radius: 2px; background: currentColor; content: ""; }
 .edge-ref-market-icon::before { transform: translateY(-3px); box-shadow: 0 6px 0 currentColor; }
 .edge-ref-market-icon::after { width: 2px; height: 10px; transform: translateX(-3px); box-shadow: 6px 0 0 currentColor; }
+.edge-ref-auto-market {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 9px 10px;
+  border: 1px solid rgba(91, 142, 169, .38);
+  border-radius: 8px;
+  background: rgba(10, 34, 55, .78);
+  cursor: pointer;
+}
+.edge-ref-auto-market.active {
+  border-color: rgba(61, 217, 189, .6);
+  background: rgba(15, 70, 72, .5);
+}
+.edge-ref-auto-market > span { display: grid; gap: 3px; min-width: 0; }
+.edge-ref-auto-market b { color: #e1f1fa; font-size: 10px; }
+.edge-ref-auto-market small { overflow: hidden; color: #8baec1; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.edge-ref-auto-market input { width: 18px; height: 18px; flex: 0 0 auto; accent-color: #2bd4b6; cursor: pointer; }
+.edge-ref-auto-market input:disabled { cursor: not-allowed; opacity: .5; }
 .edge-ref-market select {
   position: absolute;
   inset: 15px 14px auto 14px;

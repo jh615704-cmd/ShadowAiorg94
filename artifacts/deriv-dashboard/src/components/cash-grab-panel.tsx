@@ -491,7 +491,7 @@ export default function CashGrabPanel({
           rows={recentTrades}
           sessionRows={sessionRows}
           currency={currency}
-          sessionPnl={sessionPnl}
+          currentStake={stake}
           sessionTradeCount={recentTrades.length}
           clearArmed={clearArmed}
           fading={historyFading}

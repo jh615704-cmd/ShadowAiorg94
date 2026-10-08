@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, Download, Info, Play, RefreshCw, RotateCcw, ShieldCheck, Square, TrendingUp } from "lucide-react";
+import { ChevronDown, Download, Info, Play, RefreshCw, ShieldCheck, Square, TrendingUp } from "lucide-react";
 import { estimateAccumulatorReturnRate } from "../lib/money-bank-math";
 import DerivHistory, { type DerivHistoryRow } from "./deriv-history";
 import "./money-bank-panel.css";
@@ -93,8 +93,6 @@ type MoneyBankPanelProps = {
   lastSettledProfit: number | null;
   onStart: (config: MoneyBankStartConfig) => void;
   onStop: () => void;
-  sessionPnl: number;
-  tradeCount: number;
 };
 
 const LEVEL_NAMES = ["BASE", "L1", "L2", "L3", "L4", "L5", "L6"];
@@ -170,8 +168,6 @@ export function MoneyBankPanel({
   lastSettledProfit,
   onStart,
   onStop,
-  sessionPnl,
-  tradeCount,
 }: MoneyBankPanelProps) {
   const ladder = calculateRecoveryLadder({
     strategy,
@@ -193,6 +189,7 @@ export function MoneyBankPanel({
   const [historyClearArmed, setHistoryClearArmed] = useState(false);
   const [historyFading, setHistoryFading] = useState(false);
   const visibleTrades = recentTrades.filter((trade) => !historyHidden.has(trade.contract_id));
+  const visibleSessionRows = sessionRows.filter((trade) => !historyHidden.has(trade.contract_id));
 
   const submitStart = () => {
     if (running) {
@@ -246,7 +243,11 @@ export function MoneyBankPanel({
     }
     setHistoryFading(true);
     window.setTimeout(() => {
-      setHistoryHidden(new Set(recentTrades.map((trade) => trade.contract_id)));
+      setHistoryHidden((current) => new Set([
+        ...current,
+        ...recentTrades.map((trade) => trade.contract_id),
+        ...sessionRows.map((trade) => trade.contract_id),
+      ]));
       setHistoryFading(false);
       setHistoryClearArmed(false);
     }, 350);
@@ -460,31 +461,20 @@ export function MoneyBankPanel({
         <button type="button" className={`money-bank-start ${running ? "stop" : ""}`} onClick={submitStart} disabled={!isConnected || (!running && tradeSlotBlocked)}>
           {closing ? <><RefreshCw size={15} className="money-bank-spin" /> Closing contracts…</> : running ? <><Square size={15} /> Stop Accumulator</> : <><Play size={15} /> Start Accumulator</>}
         </button>
-        <button type="button" className="money-bank-reset" onClick={() => { onGrowthRateChange(4); onTakeProfitTicksChange(5); onStrategyChange("budget"); }} disabled={running} title="Reset core settings">
-          <RotateCcw size={15} />
-        </button>
       </div>
 
       <DerivHistory
           title="Money Bank History"
           strategy="Money Bank Strategy"
           rows={visibleTrades}
-          sessionRows={sessionRows}
+          sessionRows={visibleSessionRows}
           currency={currency}
-          sessionPnl={sessionPnl}
-          sessionTradeCount={tradeCount}
+          currentStake={selectedStake}
           clearArmed={historyClearArmed}
           fading={historyFading}
           onClear={clearHistory}
           actions={<button type="button" onClick={downloadHistory} disabled={!visibleTrades.length}><Download size={13} />Download</button>}
         />
-
-      <footer className="money-bank-footer">
-        <div className="money-bank-session-stats">
-          <span><small>SESSION P/L</small><b className={sessionPnl >= 0 ? "positive" : "negative"}>{sessionPnl >= 0 ? "+" : ""}{money(sessionPnl, currency)}</b></span>
-          <span><small>TRADES</small><b>{tradeCount}</b></span>
-        </div>
-      </footer>
     </section>
   );
 }

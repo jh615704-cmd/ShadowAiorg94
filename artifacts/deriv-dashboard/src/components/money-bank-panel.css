@@ -1104,3 +1104,46 @@
   .money-bank-history-row > span:nth-child(4) { grid-column: 3; grid-row: 1; }
   .money-bank-history-row > span:nth-child(5) { grid-column: 4; grid-row: 1; }
 }
+
+/* One clear primary action, sized to read as the decision point in the footer. */
+.money-bank-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.money-bank-start {
+  min-width: min(100%, 224px);
+  min-height: 46px;
+  padding: 0 22px;
+  border: 1px solid rgba(173, 255, 210, .38);
+  border-radius: 10px;
+  background: linear-gradient(135deg, #35c983, #167b50);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 8px 20px rgba(5, 103, 58, .25);
+  color: #f0fff6;
+  font-size: .76rem;
+  letter-spacing: .065em;
+}
+.money-bank-start:hover:not(:disabled) {
+  border-color: rgba(190, 255, 218, .66);
+  background: linear-gradient(135deg, #43d894, #1b8a5b);
+}
+.money-bank-start.stop {
+  border-color: rgba(255, 190, 181, .4);
+  background: linear-gradient(135deg, #dc665c, #a43338);
+}
+
+@media (max-width: 640px) {
+  .money-bank-actions { width: 100%; }
+  .money-bank-actions .money-bank-start {
+    width: 100%;
+    min-width: 0;
+    min-height: 48px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .money-bank-panel *,
+  .money-bank-panel *::before,
+  .money-bank-panel *::after {
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}

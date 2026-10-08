@@ -22,11 +22,12 @@ type Props = {
   onClear?: () => void;
   sessionPnl?: number;
   sessionTradeCount?: number;
+  currentStake?: number;
   summaryMode?: "full" | "pnl-only" | "hidden";
   actions?: ReactNode;
 };
 
-export default function DerivHistory({ title, strategy, className, rows, sessionRows = rows, currency, clearArmed = false, fading = false, onClear, sessionPnl, sessionTradeCount, summaryMode = "full", actions }: Props) {
+export default function DerivHistory({ title, strategy, className, rows, sessionRows = rows, currency, clearArmed = false, fading = false, onClear, sessionPnl, sessionTradeCount, currentStake, summaryMode = "full", actions }: Props) {
   const [filter, setFilter] = useState<"all" | "win" | "loss">("all");
   const listRef = useRef<HTMLDivElement>(null);
   const [listHeight, setListHeight] = useState<number>();
@@ -85,7 +86,7 @@ export default function DerivHistory({ title, strategy, className, rows, session
           <div><small>TRADES</small><b>{summary.trades}</b></div>
           <div><small>WON / LOST</small><b><span className="positive">{summary.wins}</span><i> / </i><span className="negative">{summary.losses}</span></b></div>
           <div><small>WIN RATE</small><b>{summary.winRate.toFixed(1)}%</b></div>
-          <div><small>STAKED</small><b>{money(summary.staked, currency)}</b></div>
+          <div><small>STAKED</small><b>{money(currentStake ?? summary.staked, currency)}</b></div>
         </div>}
       </div>}
       <nav className="deriv-history-filters" aria-label={`Filter ${title} history`}>

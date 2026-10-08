@@ -537,3 +537,71 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Responsive control rail: keep the complete ticket available at laptop widths. */
+.auto-trader-page .at-order-column,
+.auto-trader-page .at-order-panel,
+.auto-trader-page .at-order-topline,
+.auto-trader-page .at-settings-fields,
+.auto-trader-page .at-action-message {
+  min-width: 0;
+}
+.auto-trader-page .at-order-panel button,
+.auto-trader-page .at-order-panel select,
+.auto-trader-page .at-order-panel input {
+  max-width: 100%;
+}
+.auto-trader-page .at-settings-fields select,
+.auto-trader-page .at-inline-input,
+.auto-trader-page .at-stake-input {
+  min-height: 40px;
+}
+.auto-trader-page .at-order-panel button {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.auto-trader-page .at-market-grid,
+.auto-trader-page .at-settings-fields {
+  min-width: 0;
+}
+.auto-trader-page .at-scan-actions {
+  flex-wrap: wrap;
+}
+.auto-trader-page .at-scan-actions button {
+  min-height: 40px;
+}
+
+@media (max-width: 1120px) {
+  .at-workspace-grid { grid-template-columns: minmax(0, 1fr); }
+  .at-order-column {
+    grid-row: auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+  .at-order-panel { min-width: 0; }
+  .at-history-panel { min-width: 0; }
+  .at-market-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 800px) {
+  .at-order-column { grid-template-columns: minmax(0, 1fr); }
+  .at-market-grid { grid-template-columns: minmax(0, 1fr); }
+  .at-scan-actions { width: 100%; }
+  .at-scan-actions button { flex: 1 1 140px; }
+  .at-digit-trades button { min-height: 28px; }
+}
+@media (max-width: 560px) {
+  .at-heading-actions { align-items: stretch; }
+  .at-heading-actions > * { min-height: 42px; }
+  .at-order-topline { flex-wrap: wrap; }
+  .at-settings-toggle { min-height: 42px; }
+  .at-settings-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .at-settings-fields > * { min-width: 0; }
+  .at-settings-fields select,
+  .at-inline-input { height: 40px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auto-trader-page *, .auto-trader-page *::before, .auto-trader-page *::after {
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}

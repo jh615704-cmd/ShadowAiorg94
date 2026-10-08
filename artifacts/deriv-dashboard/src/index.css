@@ -2351,3 +2351,50 @@ body { overflow-x: hidden; }
 .xt-app small { font-size: max(10px, 1em) !important; }
 .xt-app p { font-size: max(11px, 1em) !important; }
 .xt-app .xt-digits button small { font-size: 10px !important; }
+
+/* Shared sizing baseline for trading controls; component layouts remain authoritative. */
+.xt-app,
+:is(.auto-trader-page, .cash-grab-df-panel, .money-bank-panel, .df-panel, .tx-panel, .edge-reference-layout, .bulk-trader-panel) {
+  min-width: 0;
+}
+.xt-app :is(button, input, select),
+:is(.auto-trader-page, .cash-grab-df-panel, .money-bank-panel, .df-panel, .tx-panel, .edge-reference-layout, .bulk-trader-panel) :is(button, input, select) {
+  min-width: 0;
+  max-width: 100%;
+}
+.xt-app :is(input, select),
+:is(.auto-trader-page, .cash-grab-df-panel, .money-bank-panel, .df-panel, .tx-panel, .edge-reference-layout, .bulk-trader-panel) :is(input, select) {
+  box-sizing: border-box;
+}
+@media (max-width: 760px) {
+  .xt-app,
+  :is(.auto-trader-page, .cash-grab-df-panel, .money-bank-panel, .df-panel, .tx-panel, .edge-reference-layout, .bulk-trader-panel) {
+    --trade-control-gap: 8px;
+  }
+  .xt-app :is(input, select),
+  :is(.auto-trader-page, .cash-grab-df-panel, .money-bank-panel, .df-panel, .tx-panel, .edge-reference-layout, .bulk-trader-panel) :is(input, select) {
+    min-height: 40px;
+  }
+}
+@media (pointer: coarse) {
+  .xt-app :is(button, select, input[type="checkbox"], input[type="radio"]),
+  :is(.auto-trader-page, .cash-grab-df-panel, .money-bank-panel, .df-panel, .tx-panel, .edge-reference-layout, .bulk-trader-panel) :is(button, select, input[type="checkbox"], input[type="radio"]) {
+    touch-action: manipulation;
+  }
+  .xt-app button:not(.at-digit-trades button),
+  :is(.auto-trader-page, .cash-grab-df-panel, .money-bank-panel, .df-panel, .tx-panel, .edge-reference-layout, .bulk-trader-panel) button:not(.at-digit-trades button) {
+    min-height: 40px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .xt-app *,
+  .xt-app *::before,
+  .xt-app *::after,
+  :is(.cash-grab-df-panel, .money-bank-panel, .df-panel, .tx-panel, .edge-reference-layout, .bulk-trader-panel) *,
+  :is(.cash-grab-df-panel, .money-bank-panel, .df-panel, .tx-panel, .edge-reference-layout, .bulk-trader-panel) *::before,
+  :is(.cash-grab-df-panel, .money-bank-panel, .df-panel, .tx-panel, .edge-reference-layout, .bulk-trader-panel) *::after {
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -303,3 +303,55 @@
   .cash-grab-df-panel .df-parity-toggle { padding: 5px; gap: 5px; }
   .cash-grab-df-panel .df-parity-toggle button { min-height: 44px; font-size: 13px; }
 }
+
+/* Tighter safeguard and direction rows keep the live scanner in view. */
+.cash-grab-df-panel .df-toggle-card {
+  min-height: 0;
+  padding: 10px 13px;
+  gap: 10px;
+}
+.cash-grab-df-panel .df-toggle-copy > p { margin-top: 2px; }
+.cash-grab-df-panel .df-pair-card {
+  min-height: 0;
+  align-items: center;
+}
+.cash-grab-df-panel .df-pair-card .df-toggle-copy > p { max-width: 48ch; }
+.cash-grab-df-panel .df-toggle-control { min-height: 40px; }
+.cash-grab-df-panel .df-toggle {
+  width: 38px;
+  height: 22px;
+}
+.cash-grab-df-panel .df-toggle input { min-height: 40px; }
+.cash-grab-df-panel .df-direction-card .df-toggle-state { line-height: 1.2; }
+
+/* AI Scanner treatment tuned for the wide scanner panel: crisp label, calm control. */
+.cash-grab-ai-scanner {
+  gap: clamp(10px, 1.6vw, 20px);
+  padding: 11px 14px;
+  border-color: rgba(89, 167, 231, .38);
+  background:
+    linear-gradient(90deg, rgba(20, 76, 124, .68), rgba(8, 30, 53, .96) 72%);
+  box-shadow: inset 3px 0 0 rgba(75, 169, 242, .72);
+}
+.cash-grab-ai-scanner > div b { letter-spacing: .12em; }
+.cash-grab-ai-scanner .ai-scanner-control { min-width: 150px; margin-top: 0; }
+.cash-grab-ai-scanner .ai-scanner-button {
+  min-height: 42px;
+  padding-inline: 17px;
+  border: 1px solid rgba(112, 199, 255, .45);
+  border-radius: 8px;
+  color: #e8f5ff;
+  background: linear-gradient(145deg, #176cae, #104d83);
+  font-weight: 800;
+  letter-spacing: .025em;
+}
+.cash-grab-ai-scanner .ai-scanner-button:hover:not(:disabled) {
+  border-color: #8bd1ff;
+  background: linear-gradient(145deg, #2181c9, #155d98);
+}
+.cash-grab-ai-scanner .ai-scanner-message { overflow-wrap: anywhere; }
+
+@media (max-width: 760px) {
+  .cash-grab-df-panel .df-toggle-card { padding: 9px 11px; }
+  .cash-grab-df-panel .df-toggle-copy > p { line-height: 1.35; }
+}

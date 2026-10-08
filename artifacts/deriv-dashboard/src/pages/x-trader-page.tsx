@@ -595,6 +595,7 @@ export default function XTraderPage() {
   const edgeRows = edgeAllRows.filter((trade) => edgeClaimedHistoryIdsRef.current.has(trade.contract_id) && !edgeHiddenHistoryIds.has(trade.contract_id));
   const tradeXRows = tradeXAllRows.filter((trade) => tradeXClaimedHistoryIdsRef.current.has(trade.contract_id) && !tradeXHiddenHistoryIds.has(trade.contract_id));
   const tradeXSessionRows = tradeXAllRows.filter((trade) => tradeXClaimedHistoryIdsRef.current.has(trade.contract_id));
+  const tradeXVisibleSessionRows = tradeXSessionRows.filter((trade) => !tradeXHiddenHistoryIds.has(trade.contract_id));
   const digitFlipRows = digitFlipAllRows.filter((trade) => digitFlipClaimedHistoryIdsRef.current.has(trade.contract_id) && !digitFlipHiddenHistoryIds.has(trade.contract_id));
   const bulkRows = bulkAllRows.filter((trade) => bulkClaimedHistoryIdsRef.current.has(trade.contract_id) && !bulkTraderHiddenHistoryIds.has(trade.contract_id));
   const moneyBankRows = moneyBankAllRows
@@ -616,14 +617,22 @@ export default function XTraderPage() {
     return signals.sort((left, right) => right.score - left.score || right.signal.sample_count - left.signal.sample_count)[0]?.signal.symbol ?? null;
   }, [cashGrabDirection, cashGrabSymbols, status.data?.market_signals]);
   const bulkSessionRows = bulkSessionKnownIdsRef.current
-    ? bulkAllRows.filter((trade) => bulkClaimedHistoryIdsRef.current.has(trade.contract_id) && !bulkSessionKnownIdsRef.current?.has(trade.contract_id))
+    ? bulkAllRows.filter((trade) => (
+      bulkClaimedHistoryIdsRef.current.has(trade.contract_id)
+      && !bulkSessionKnownIdsRef.current?.has(trade.contract_id)
+    ))
     : [];
+  const bulkVisibleSessionRows = bulkSessionRows.filter((trade) => !bulkTraderHiddenHistoryIds.has(trade.contract_id));
   const edgeSessionRows = edgeSessionKnownIdsRef.current
     ? edgeAllRows.filter((trade) => edgeClaimedHistoryIdsRef.current.has(trade.contract_id) && !edgeSessionKnownIdsRef.current?.has(trade.contract_id))
     : [];
   const digitFlipSessionRows = digitFlipSessionKnownIdsRef.current
-    ? digitFlipAllRows.filter((trade) => digitFlipClaimedHistoryIdsRef.current.has(trade.contract_id) && !digitFlipSessionKnownIdsRef.current?.has(trade.contract_id))
+    ? digitFlipAllRows.filter((trade) => (
+      digitFlipClaimedHistoryIdsRef.current.has(trade.contract_id)
+      && !digitFlipSessionKnownIdsRef.current?.has(trade.contract_id)
+    ))
     : [];
+  const digitFlipVisibleSessionRows = digitFlipSessionRows.filter((trade) => !digitFlipHiddenHistoryIds.has(trade.contract_id));
   const moneyBankSessionRows = moneyBankSessionKnownIdsRef.current
     ? moneyBankAllRows
       .filter((trade) => !cashGrabClaimedHistoryIdsRef.current.has(trade.contract_id))
@@ -635,10 +644,9 @@ export default function XTraderPage() {
       && !cashGrabSessionKnownIdsRef.current?.has(trade.contract_id)
     ))
     : [];
-  const moneyBankCompletedRows = moneyBankSessionRows.filter((trade) => trade.status !== "open");
+  const cashGrabVisibleSessionRows = cashGrabSessionRows.filter((trade) => !cashGrabHiddenHistoryIds.has(trade.contract_id));
   const moneyBankSignals = (status.data?.market_signals ?? []) as MoneyBankMarketSignal[];
   const fastSessionPnl = realizedProfit(edgeSessionRows);
-  const moneyBankHistorySessionPnl = realizedProfit(moneyBankSessionRows);
   const cashGrabHistorySessionPnl = cashGrabSessionRows.length
     ? realizedProfit(cashGrabSessionRows)
     : cashGrabSessionPnl;
@@ -1346,6 +1354,7 @@ export default function XTraderPage() {
     });
     result.buys.forEach((buy) => edgeClaimedHistoryIdsRef.current.add(buy.contract_id));
     await claimFeatureRows(edgeClaimedHistoryIdsRef.current, latestRows, ["DIGITOVER", "DIGITUNDER"]);
+    setConnectionMessage(null);
     setSessionTrades((value) => value + 1);
     if (!await waitForEdgeSettlement(result.buys.map((buy) => buy.contract_id))) {
       runningRef.current = false;
@@ -1401,6 +1410,7 @@ export default function XTraderPage() {
     });
     result.buys.forEach((buy) => edgeClaimedHistoryIdsRef.current.add(buy.contract_id));
     await claimFeatureRows(edgeClaimedHistoryIdsRef.current, latestRows, ["DIGITOVER", "DIGITUNDER"]);
+    setConnectionMessage(null);
     setSessionTrades((value) => value + 2);
     if (!await waitForEdgeSettlement(result.buys.map((buy) => buy.contract_id))) {
       runningRef.current = false;
@@ -1629,6 +1639,7 @@ export default function XTraderPage() {
       if (typeof contractId === "string" && contractId) {
         moneyBankOpenContractIdRef.current = contractId;
       }
+      setConnectionMessage(null);
       setMoneyBankTradeCount((value) => value + 1);
       await refreshTradeResults();
     } finally {
@@ -1979,6 +1990,7 @@ export default function XTraderPage() {
         }),
       });
       contractConfirmed = true;
+      setConnectionMessage(null);
       result.buys.forEach((buy) => {
         cashGrabClaimedHistoryIdsRef.current.add(buy.contract_id);
         cashGrabOpenContractIdsRef.current.add(buy.contract_id);
@@ -2419,7 +2431,8 @@ export default function XTraderPage() {
       result.buys.forEach((buy) => tradeXClaimedHistoryIdsRef.current.add(buy.contract_id));
        await claimFeatureRows(tradeXClaimedHistoryIdsRef.current, latestRows, ["DIGITDIFF"]);
       setTradeXTradesSent((value) => value + count);
-      setTradeXMessage(`${count === 1 ? "Trade X trade" : `${count} Trade X trades`} sent on ${symbolOverride ?? config.symbol} Digit Differs ${entryDigit} for ${durationOverride} ${durationOverride === 1 ? "tick" : "ticks"}.`);
+      setTradeXMessage(null);
+      setConnectionMessage(null);
       await refreshTradeResults();
       return true;
     } catch (error) {
@@ -2508,6 +2521,7 @@ export default function XTraderPage() {
       result.buys.forEach((buy) => edgeClaimedHistoryIdsRef.current.add(buy.contract_id));
       await claimFeatureRows(edgeClaimedHistoryIdsRef.current, historySnapshot.rows, ["DIGITOVER", "DIGITUNDER"]);
       setSessionTrades((value) => value + result.buys.length);
+      setConnectionMessage(null);
       await refreshTradeResults();
     } finally {
       edgeActionLockRef.current = false;
@@ -2566,6 +2580,7 @@ export default function XTraderPage() {
         }),
       });
       if (!result.buys.length) throw new Error("Deriv did not return a confirmed Cash Grab contract.");
+      setConnectionMessage(null);
       result.buys.forEach((buy) => cashGrabClaimedHistoryIdsRef.current.add(buy.contract_id));
       await claimFeatureRows(cashGrabClaimedHistoryIdsRef.current, historySnapshot.rows, [candidate.contractType]);
       await refreshTradeResults();
@@ -2749,6 +2764,7 @@ export default function XTraderPage() {
       if (result.buy?.contract_id) {
         digitFlipClaimedHistoryIdsRef.current.add(result.buy.contract_id);
       }
+      setConnectionMessage(null);
       setDigitFlipTradeCount((value) => value + 1);
       await refreshTradeResults();
       return true;
@@ -3042,6 +3058,7 @@ export default function XTraderPage() {
       if (!result.buys.length) throw new Error("Deriv did not acknowledge any contracts for this setup.");
       result.buys.forEach((buy) => bulkClaimedHistoryIdsRef.current.add(buy.contract_id));
       await claimFeatureRows(bulkClaimedHistoryIdsRef.current, beforeRows, [contractType]);
+      setConnectionMessage(null);
       await refreshTradeResults();
       return true;
     } catch (error) {
@@ -3136,6 +3153,7 @@ export default function XTraderPage() {
       });
       result.buys.forEach((buy) => edgeClaimedHistoryIdsRef.current.add(buy.contract_id));
       await claimFeatureRows(edgeClaimedHistoryIdsRef.current, latestRows, ["DIGITOVER", "DIGITUNDER"]);
+      setConnectionMessage(null);
       setDirection(contractType);
       setSessionTrades((value) => value + 1);
       if (!await waitForEdgeSettlement(result.buys.map((buy) => buy.contract_id))) {
@@ -3199,6 +3217,7 @@ export default function XTraderPage() {
       });
       result.buys.forEach((buy) => edgeClaimedHistoryIdsRef.current.add(buy.contract_id));
       await claimFeatureRows(edgeClaimedHistoryIdsRef.current, latestRows, ["DIGITOVER", "DIGITUNDER"]);
+      setConnectionMessage(null);
       setSessionTrades((value) => value + 2);
       if (!await waitForEdgeSettlement(result.buys.map((buy) => buy.contract_id))) {
         setConnectionMessage({
@@ -3508,7 +3527,7 @@ export default function XTraderPage() {
            analysisTickCount={analysisTickCount}
            autoSelectBest={bulkTraderAutoSelectBest}
           recentTrades={bulkRows}
-          sessionRows={bulkSessionRows}
+          sessionRows={bulkVisibleSessionRows}
           isConnected={isConnected}
           isPlacingTrade={bulkBuyMutation.isPending}
           tradeSlotMessage={tradeSlotMessage}
@@ -3558,10 +3577,8 @@ export default function XTraderPage() {
           stopLoss={digitFlipStopLoss}
           running={digitFlipRunning}
           currentStake={digitFlipCurrentStake}
-          sessionPnl={digitFlipSessionPnl}
-          tradeCount={digitFlipTradeCount}
           recentTrades={digitFlipRows}
-          sessionRows={digitFlipSessionRows}
+          sessionRows={digitFlipVisibleSessionRows}
             assaultEnabled={digitFlipAssault}
            magicEnabled={digitFlipMagic}
            clearTradesArmed={digitFlipClearArmed}
@@ -3779,7 +3796,7 @@ export default function XTraderPage() {
             onRefreshAnalysis={refreshAnalysis}
           />
           {tradeXMessage && <p className="tx-parent-message" role="status">{tradeXMessage}</p>}
-          {canViewHistory && <DerivHistory title="Trade X History" strategy="Trade X Strategy" rows={tradeXRows} sessionRows={tradeXSessionRows} currency={currentAccount?.currency} clearArmed={tradeXHistoryClearArmed} fading={historyFading} onClear={clearTradeXHistory} />}
+          {canViewHistory && <DerivHistory title="Trade X History" strategy="Trade X Strategy" rows={tradeXRows} sessionRows={tradeXVisibleSessionRows} currency={currentAccount?.currency} currentStake={tradeXStake} clearArmed={tradeXHistoryClearArmed} fading={historyFading} onClear={clearTradeXHistory} />}
         </section>
       )}
 
@@ -3819,8 +3836,6 @@ export default function XTraderPage() {
           recentTrades={moneyBankRows}
           sessionRows={moneyBankSessionRows}
           lastSettledProfit={moneyBankLastSettledProfit}
-           sessionPnl={moneyBankHistorySessionPnl}
-          tradeCount={moneyBankCompletedRows.length}
           onStart={(config) => void startMoneyBank(config)}
           onStop={stopMoneyBank}
         />
@@ -3853,7 +3868,7 @@ export default function XTraderPage() {
           isConnected={isConnected}
           isPlacingTrade={bulkBuyMutation.isPending}
           recentTrades={cashGrabRows}
-          sessionRows={cashGrabSessionRows}
+          sessionRows={cashGrabVisibleSessionRows}
           clearArmed={cashGrabClearArmed}
           historyFading={historyFading}
           onDirectionChange={setCashGrabDirection}

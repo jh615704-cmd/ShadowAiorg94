@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Pause, Play } from "lucide-react";
 import { formatDerivQuote } from "../lib/format-deriv-quote";
 import AiScannerAction from "./ai-scanner-action";
@@ -111,7 +111,9 @@ export default function EdgeReferencePanel({
   onClearHistory,
 }: EdgeReferencePanelProps) {
   const [marketPickerOpen, setMarketPickerOpen] = useState(false);
+  const [autoSelectBest, setAutoSelectBest] = useState(false);
   const [maxStake, setMaxStake] = useState("No limit");
+  const autoSelectedSymbolRef = useRef<string | null>(null);
   const canRunAiScanner = isConnected
     && !running
     && Number.isInteger(duration)
@@ -144,9 +146,21 @@ export default function EdgeReferencePanel({
             Number(outcome.under_percentage),
           ]), 0)
         : 0;
-      return { value, label, score };
+      return { value, label, score, sampleCount: signal?.sample_count ?? 0 };
     }).sort((left, right) => right.score - left.score || left.label.localeCompare(right.label));
   }, [marketSignals, markets]);
+  const bestRankedMarket = rankedMarkets.find((option) => option.sampleCount >= 20 && option.score > 0);
+  const bestRankedMarketRank = bestRankedMarket ? rankedMarkets.indexOf(bestRankedMarket) + 1 : null;
+  useEffect(() => {
+    if (!autoSelectBest) {
+      autoSelectedSymbolRef.current = null;
+      return;
+    }
+    if (running || !bestRankedMarket || bestRankedMarket.value === symbol) return;
+    if (autoSelectedSymbolRef.current === bestRankedMarket.value) return;
+    autoSelectedSymbolRef.current = bestRankedMarket.value;
+    onSymbolChange(bestRankedMarket.value);
+  }, [autoSelectBest, bestRankedMarket, onSymbolChange, running, symbol]);
   const quoteText = quote == null ? "—" : formatDerivQuote(quote);
   const payoutText = payoutPercent == null || !Number.isFinite(payoutPercent) ? "waiting" : `${payoutPercent.toFixed(1)}%`;
   const currency = currentAccount?.currency ?? "USD";
@@ -168,9 +182,27 @@ export default function EdgeReferencePanel({
       <section className={`edge-ref-card edge-ref-market ${marketPickerOpen ? "open" : ""}`}>
         <button type="button" className="edge-ref-market-trigger" onClick={() => setMarketPickerOpen((open) => !open)} aria-expanded={marketPickerOpen} disabled={!isConnected}>
           <span className="edge-ref-market-icon" aria-hidden="true" />
-          <span className="edge-ref-market-copy"><small>Market (manual)</small><b>{marketLabel}</b></span>
+          <span className="edge-ref-market-copy"><small>Market ({autoSelectBest ? "auto" : "manual"})</small><b>{marketLabel}</b></span>
           <ChevronDown size={18} className="edge-ref-market-chevron" />
         </button>
+        <label className={`edge-ref-auto-market${autoSelectBest ? " active" : ""}`}>
+          <span><b>Auto select best</b><small>{bestRankedMarket ? `Rank #${bestRankedMarketRank} · ${bestRankedMarket.label}` : "Waiting for 20 live samples"}</small></span>
+          <input
+            type="checkbox"
+            checked={autoSelectBest}
+            onChange={(event) => {
+              const enabled = event.target.checked;
+              setAutoSelectBest(enabled);
+              autoSelectedSymbolRef.current = null;
+              if (enabled && bestRankedMarket && bestRankedMarket.value !== symbol) {
+                autoSelectedSymbolRef.current = bestRankedMarket.value;
+                onSymbolChange(bestRankedMarket.value);
+              }
+            }}
+            disabled={!isConnected || running || !bestRankedMarket}
+            aria-label="Auto select the best-ranked EDGE market"
+          />
+        </label>
         <label className={`edge-sniper-toggle${sniperOverUnder ? " active" : ""}`}>
           <span className="edge-sniper-copy">
             <b>Sniper over/under</b>
@@ -192,8 +224,8 @@ export default function EdgeReferencePanel({
         {marketPickerOpen && (
           <div className="edge-ref-market-menu">
             {rankedMarkets.map((option, index) => (
-              <button type="button" className={`edge-ref-market-option ${symbol === option.value ? "selected" : ""}`} key={option.value} onClick={() => { onSymbolChange(option.value); setMarketPickerOpen(false); }} disabled={running}>
-                <span><b>{option.label}</b>{index === 0 && <small>BEST</small>}<em>observed {option.score ? `${option.score.toFixed(0)}%` : "waiting"} · {option.value}</em></span>
+              <button type="button" className={`edge-ref-market-option ${symbol === option.value ? "selected" : ""}`} key={option.value} onClick={() => { setAutoSelectBest(false); autoSelectedSymbolRef.current = null; onSymbolChange(option.value); setMarketPickerOpen(false); }} disabled={running}>
+                <span><b>{option.label}</b>{option.value === bestRankedMarket?.value && <small>BEST</small>}<em>observed {option.score ? `${option.score.toFixed(0)}%` : "waiting"} · {option.value}</em></span>
                 <strong>{option.score ? `${option.score.toFixed(1)}%` : "—"}</strong>
               </button>
             ))}
