@@ -34,8 +34,6 @@ const markets: Market[] = [
   { symbol: "R_50", name: "Volatility 50", group: "regular" },
   { symbol: "R_75", name: "Volatility 75", group: "regular" },
   { symbol: "R_100", name: "Volatility 100", group: "regular" },
-  { symbol: "R_150", name: "Volatility 150", group: "regular" },
-  { symbol: "R_250", name: "Volatility 250", group: "regular" },
   { symbol: "JD10", name: "Jump 10", group: "jump" },
   { symbol: "JD25", name: "Jump 25", group: "jump" },
   { symbol: "JD50", name: "Jump 50", group: "jump" },
@@ -53,25 +51,23 @@ const groupLabels: Record<MarketGroup, string> = {
   jump: "JUMP INDICES",
   "one-sec": "VOLATILITY 1S",
 };
+const filterOptions: Array<[FilterKey, string, number]> = [
+  ["all", "All markets", markets.length],
+  ["regular", "Volatility", markets.filter((market) => market.group === "regular").length],
+  ["jump", "Jump", markets.filter((market) => market.group === "jump").length],
+  ["one-sec", "Volatility 1s", markets.filter((market) => market.group === "one-sec").length],
+];
 const storagePrefix = "deriv-auto-trader-contracts:";
 const guideCopy = [
-  ["Welcome to Auto Trader", "Read live last-digit counts and place Digit Differs contracts from the scanner.", "Signals describe observed ticks. They do not predict or guarantee the next result."],
-  ["Connect a Deriv account", "The selected account is shown in the header with its live balance and account type.", "Use a demo account while familiarizing yourself with the controls."],
-  ["Real and demo accounts", "Real-account orders use real funds. Demo orders use virtual funds.", "Confirm the account badge before every trade."],
-  ["Scanner markets", "The scanner shows 7 regular Volatility markets, 5 Jump markets and 5 Volatility 1s markets.", "Category buttons filter the cards; there is no separate market-selection list."],
-  ["Market groups", "Use the category filters to focus the scanner without changing its live data source.", "All markets shows the same 17 symbols."],
-  ["Go Live", "Go Live starts a fresh count from the next real ticks observed from Deriv.", "There are no simulated ticks or starting sample counts."],
-  ["Stop and Rescan", "Stop pauses the scanner. Rescan resets the count baseline to the latest live tick sequence.", "Stopping does not cancel an order already accepted by Deriv."],
-  ["Live digit counts", "Each digit column shows its observed count since this scan began.", "A zero count is shown in green; other counts use standard text."],
-  ["Tick counts", "Each market has its own count, starting at one when its first new tick arrives after Go Live.", "The count advances only from new Deriv ticks."],
-  ["Missed updates", "Recent tick digits let the scanner recover sequence updates between polls.", "If a market is disconnected, its counts wait for real ticks to resume."],
-  ["Digit Differs", "A Digit Differs contract wins if its final digit at expiry is different from the selected barrier.", "Deriv determines the contract result at expiry."],
-  ["3× and 6× buttons", "Each digit column has buttons for three or six separate contracts using the duration in Settings.", "Separate contracts can settle differently; the batch is not all-or-none."],
-  ["Order confirmations", "Check the result message and account history after placing a trade.", "If the connection drops during an order, its outcome may be unknown. Check Deriv history before retrying."],
-  ["Stake", "Stake is the requested amount for each contract in a batch.", "The total requested exposure grows with the batch size. Check your balance first."],
-  ["Risk settings", "Take-profit and stop-loss values are planning fields for the manual session.", "Automatic stopping is not active in this workspace."],
-  ["Daily stats and history", "Daily metrics only include contract IDs placed from this page in the selected account.", "Trades from other Deriv features are excluded."],
-  ["A considered workflow", "Review account, market, digit, stake and batch size before each manual order.", "No frequency pattern guarantees an outcome. Trade within your own risk limits."],
+  ["What this page does", "Auto Trader displays live last-digit counts and lets you manually place Digit Differs contracts.", "Orders go to Deriv immediately when you press a 3× or 6× button."],
+  ["Choose an account", "The header shows the selected account, account type, connection status, and balance.", "Real-account orders use real funds. Check the account badge before ordering."],
+  ["Start the scanner", "Select Go Live to count actual Deriv ticks. Rescan starts a fresh count baseline; Stop pauses updates.", "A stopped scan does not cancel contracts already accepted by Deriv."],
+  ["Find a market", "Filter the 15 instruments by Volatility, Jump, or Volatility 1s. Each market has its own tick counter.", "Counts begin with new live ticks; the scanner does not fill in sample data."],
+  ["Read digit counts", "The number under each digit is how many times that final digit appeared during this scan.", "Zero means it has not appeared in the observed scan. It does not predict the next digit or guarantee a win."],
+  ["Place a Digit Differs order", "Choose a digit and press 3× or 6× to send that many separate contracts using the stake and duration in Settings.", "Buttons are available after the first live tick for that market; no larger sample threshold is required. Each contract can settle differently."],
+  ["Set stake and duration", "Stake is per contract. Duration is 1–5 ticks; a 2-tick duration is valid. A 6× order requests six times the per-contract stake.", "Take-profit and stop-loss fields are reference targets only; they do not automatically close trades."],
+  ["Review and clear history", "Today's trades and daily totals include only contracts placed from this page on the selected account.", "Clear removes them from this page's account-scoped view. Deriv's account history is not deleted."],
+  ["Check the outcome", "A Digit Differs contract is settled by Deriv at expiry; it wins only if the final digit differs from its barrier.", "A zero count, a short sample, or waiting for another tick cannot guarantee the result. If an order response is uncertain, check Deriv history before retrying."],
 ] as const;
 
 type LocalContract = { id: string; placedAt: number };
@@ -445,75 +441,6 @@ function AutoTraderContent() {
         </section>
 
         <div className="at-workspace-grid">
-          <section className="at-scanner-panel" aria-labelledby="scanner-title">
-            <header className="at-panel-header">
-              <div>
-                <div className="at-section-label"><span className="at-live-indicator" /> MARKET INTELLIGENCE</div>
-                <h2 id="scanner-title">Differ Search <span>{markets.length} MARKETS</span></h2>
-                <p>Live last-digit distribution · Deriv market signals</p>
-              </div>
-              <div className="at-scan-actions">
-                <button type="button" className="at-guide-button" onClick={() => { setGuidePage(0); setGuideOpen(true); }} data-testid="button-open-guide">
-                  <BookOpen size={15} /> Guide
-                </button>
-                <button type="button" className="at-icon-button" onClick={() => void startScan()} disabled={!connected || scanResetPending} aria-label="Rescan markets" data-testid="button-rescan"><RefreshCw size={15} className={scanResetPending ? "at-spin" : ""} /> Rescan</button>
-                {scanning ? (
-                  <button type="button" className="at-stop-button" onClick={() => { setScanning(false); setMessage(null); }} data-testid="button-stop-scan"><Pause size={14} /> Stop</button>
-                ) : (
-                  <button type="button" className="at-live-button" onClick={() => void startScan()} disabled={!connected || scanResetPending} data-testid="button-go-live"><Play size={14} /> Go Live</button>
-                )}
-              </div>
-            </header>
-
-            <div className="at-filterbar" role="tablist" aria-label="Filter markets">
-              {([
-                ["all", "All markets", 17],
-                ["regular", "Volatility", 7],
-                ["jump", "Jump", 5],
-                ["one-sec", "Volatility 1s", 5],
-              ] as [FilterKey, string, number][]).map(([key, label, count]) => (
-                <button
-                  key={key}
-                  type="button"
-                  role="tab"
-                  aria-selected={filter === key}
-                  className={filter === key ? "selected" : ""}
-                  onClick={() => setFilter(key)}
-                  data-testid={`button-filter-${key}`}
-                >{label}<span>{count}</span></button>
-              ))}
-            </div>
-
-            <div className="at-scan-status" data-testid="status-scanner">
-              <span className={scanning ? "is-live" : ""}><i />{scanning ? "SCANNING LIVE MARKETS" : "SCAN PAUSED"}</span>
-              <span>{filteredMarkets.length} instruments in view</span>
-              <span className="at-source-note">No simulated feed</span>
-            </div>
-
-            {!scanning && (
-              <div className="at-empty-overlay" data-testid="empty-market-signals">
-                <Signal size={22} />
-                <strong>{connected ? "Scanner is paused" : "Awaiting a Deriv connection"}</strong>
-                <span>{connected ? "Select Go Live to reveal the 17 live markets and begin counting real ticks." : "Connect and select an authorized Deriv account before starting a live scan."}</span>
-              </div>
-            )}
-            {scanning && filteredMarkets.length > 0 && (
-              <div className="at-market-list">
-                {filter === "all" ? (
-                  (["regular", "jump", "one-sec"] as MarketGroup[]).map((group) => (
-                    <section className="at-market-group" key={group} aria-label={groupLabels[group]}>
-                      <div className="at-group-heading"><span>{groupLabels[group]}</span><b>{markets.filter((market) => market.group === group).length} symbols</b></div>
-                      <div className="at-market-grid">{markets.filter((market) => market.group === group).map(renderMarket)}</div>
-                    </section>
-                  ))
-                ) : <div className="at-market-grid">{filteredMarkets.map(renderMarket)}</div>}
-              </div>
-            )}
-            {hasToken && !status.isLoading && currentSignals.length === 0 && !status.error && (
-              <div className="at-empty-inline" data-testid="empty-live-quotes"><Clock3 size={16} /> Waiting for actual Deriv ticks. No sample data is shown.</div>
-            )}
-          </section>
-
           <aside className="at-order-column">
             <section className="at-order-panel" aria-label="Auto Trader settings">
               <div className="at-order-topline"><span><Settings2 size={14} /> ORDER SETTINGS</span><span className="at-contract-tag">DIGIT DIFFERS</span></div>
@@ -565,6 +492,70 @@ function AutoTraderContent() {
               </div>
             </section>
           </aside>
+
+          <section className="at-scanner-panel" aria-labelledby="scanner-title">
+            <header className="at-panel-header">
+              <div>
+                <div className="at-section-label"><span className="at-live-indicator" /> MARKET INTELLIGENCE</div>
+                <h2 id="scanner-title">Differ Search <span>{markets.length} MARKETS</span></h2>
+                <p>Live last-digit distribution · Deriv market signals</p>
+              </div>
+              <div className="at-scan-actions">
+                <button type="button" className="at-guide-button" onClick={() => { setGuidePage(0); setGuideOpen(true); }} data-testid="button-open-guide">
+                  <BookOpen size={15} /> Guide
+                </button>
+                <button type="button" className="at-icon-button" onClick={() => void startScan()} disabled={!connected || scanResetPending} aria-label="Rescan markets" data-testid="button-rescan"><RefreshCw size={15} className={scanResetPending ? "at-spin" : ""} /> Rescan</button>
+                {scanning ? (
+                  <button type="button" className="at-stop-button" onClick={() => { setScanning(false); setMessage(null); }} data-testid="button-stop-scan"><Pause size={14} /> Stop</button>
+                ) : (
+                  <button type="button" className="at-live-button" onClick={() => void startScan()} disabled={!connected || scanResetPending} data-testid="button-go-live"><Play size={14} /> Go Live</button>
+                )}
+              </div>
+            </header>
+
+            <div className="at-filterbar" role="tablist" aria-label="Filter markets">
+              {filterOptions.map(([key, label, count]) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={filter === key}
+                  className={filter === key ? "selected" : ""}
+                  onClick={() => setFilter(key)}
+                  data-testid={`button-filter-${key}`}
+                >{label}<span>{count}</span></button>
+              ))}
+            </div>
+
+            <div className="at-scan-status" data-testid="status-scanner">
+              <span className={scanning ? "is-live" : ""}><i />{scanning ? "SCANNING LIVE MARKETS" : "SCAN PAUSED"}</span>
+              <span>{filteredMarkets.length} instruments in view</span>
+              <span className="at-source-note">No simulated feed</span>
+            </div>
+
+            {!scanning && (
+              <div className="at-empty-overlay" data-testid="empty-market-signals">
+                <Signal size={22} />
+                <strong>{connected ? "Scanner is paused" : "Awaiting a Deriv connection"}</strong>
+                <span>{connected ? `Select Go Live to reveal the ${markets.length} live markets and begin counting real ticks.` : "Connect and select an authorized Deriv account before starting a live scan."}</span>
+              </div>
+            )}
+            {scanning && filteredMarkets.length > 0 && (
+              <div className="at-market-list">
+                {filter === "all" ? (
+                  (["regular", "jump", "one-sec"] as MarketGroup[]).map((group) => (
+                    <section className="at-market-group" key={group} aria-label={groupLabels[group]}>
+                      <div className="at-group-heading"><span>{groupLabels[group]}</span><b>{markets.filter((market) => market.group === group).length} symbols</b></div>
+                      <div className="at-market-grid">{markets.filter((market) => market.group === group).map(renderMarket)}</div>
+                    </section>
+                  ))
+                ) : <div className="at-market-grid">{filteredMarkets.map(renderMarket)}</div>}
+              </div>
+            )}
+            {hasToken && !status.isLoading && currentSignals.length === 0 && !status.error && (
+              <div className="at-empty-inline" data-testid="empty-live-quotes"><Clock3 size={16} /> Waiting for actual Deriv ticks. No sample data is shown.</div>
+            )}
+          </section>
         </div>
 
         <section className="at-footnote">

@@ -30,3 +30,4 @@
 - [Trading feature blue surfaces](trading-feature-blue-surfaces.md) — use Cash Grab’s smooth deep blue on feature shells and nested cards, not only outer wrappers.
 - [Responsive trading controls](responsive-trading-controls.md) — keep trading panels and future controls usable across laptop, tablet, and phone sizes.
 - [Deriv quote display](deriv-quote-display.md) — Cash Grab, DigitFlip, and EDGE quotes use at least four integer digits and exactly two decimals.
+- [Auto Trader guide boundary](auto-trader-guide-boundary.md) — explain controls and observed data without exposing private strategy logic or implying guaranteed outcomes.

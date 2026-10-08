@@ -220,7 +220,7 @@
 
 .at-workspace-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 335px;
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: 17px;
   max-width: 1640px;
@@ -358,18 +358,18 @@
   gap: 4px;
 }
 .at-digit-label { color: #b7c5d7; font: 700 10px "DM Mono", monospace; }
-.at-digit-count { display: grid; place-items: center; width: clamp(27px, 3vw, 38px); aspect-ratio: 1; border: 1px solid #34485f; border-radius: 50%; background: #172538; color: #dce5ef; font: 700 10px "DM Mono", monospace; font-variant-numeric: tabular-nums; }
+.at-digit-count { display: grid; place-items: center; width: clamp(30px, 3vw, 38px); aspect-ratio: 1; border: 1px solid #34485f; border-radius: 50%; background: #172538; color: #dce5ef; font: 700 11px "DM Mono", monospace; font-variant-numeric: tabular-nums; }
 .at-digit-count.zero { border-color: #41c68a; background: rgba(20, 117, 79, .3); color: #80f2ad; box-shadow: 0 0 0 2px rgba(45, 208, 132, .1), 0 0 12px rgba(45, 208, 132, .16); }
-.at-digit-trades { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px; width: 100%; }
+.at-digit-trades { display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; width: 100%; }
 .at-digit-trades button {
   min-width: 0;
-  min-height: 19px;
-  padding: 1px 0;
+  min-height: 24px;
+  padding: 2px 1px;
   border: 1px solid #615532;
-  border-radius: 4px;
+  border-radius: 5px;
   background: #302a1c;
   color: #f1d47f;
-  font: 800 8px "DM Mono", monospace;
+  font: 800 10px "DM Mono", monospace;
   line-height: 1;
   cursor: pointer;
 }
@@ -392,7 +392,7 @@
 .at-empty-overlay span { color: #8aa2bf; font-size: 10px; }
 .at-empty-inline { padding: 12px 17px; color: #849bb7; font-size: 10px; display: flex; align-items: center; gap: 7px; border-top: 1px solid var(--at-border-soft); }
 
-.at-order-column { display: grid; gap: 13px; min-width: 0; }
+.at-order-column { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; min-width: 0; }
 .at-order-panel { padding: 17px 16px 13px; }
 .at-order-topline { display: flex; justify-content: space-between; gap: 6px; align-items: center; font-size: 8px; letter-spacing: .09em; }
 .at-order-topline > span:first-child { display: flex; gap: 6px; align-items: center; color: #91a9c5; }
@@ -521,9 +521,9 @@
   .at-frequencies { gap: 2px; }
    .at-digit-column { padding: 3px 0; gap: 3px; }
    .at-digit-label { font-size: 9px; }
-   .at-digit-count { width: 27px; font-size: 9px; }
+   .at-digit-count { width: 30px; font-size: 10px; }
    .at-digit-trades { gap: 1px; }
-   .at-digit-trades button { min-height: 18px; font-size: 7px; }
+   .at-digit-trades button { min-height: 24px; font-size: 9px; }
   .at-scan-status { flex-wrap: wrap; gap: 6px 12px; padding: 9px 12px; }
   .at-source-note { margin-left: 0; }
   .at-order-panel { padding: 14px 12px 12px; }
@@ -598,6 +598,41 @@
   .at-settings-fields > * { min-width: 0; }
   .at-settings-fields select,
   .at-inline-input { height: 40px; }
+}
+
+/* Give the market labels and per-digit trade controls enough room to read. */
+.at-market-heading { min-height: 36px; }
+.at-market-name {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 auto;
+  width: max-content;
+  max-width: calc(100% - 92px);
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid #315271;
+  border-radius: 6px;
+  background: rgba(21, 51, 81, .72);
+  color: #edf5ff;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+}
+.at-market-tick-count { font-size: 10px; }
+.at-frequencies { gap: 5px; }
+.at-digit-column { gap: 5px; }
+.at-digit-label { font-size: 11px; }
+.at-digit-trades button { min-height: 24px; font-size: 10px; }
+.at-order-column { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.at-guide-dialog { width: min(540px, calc(100vw - 28px)) !important; }
+
+@media (max-width: 560px) {
+  .at-frequencies { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 7px 5px; }
+  .at-digit-column { gap: 4px; }
+  .at-market-name { max-width: calc(100% - 88px); font-size: 13px; }
+}
+@media (max-width: 800px) {
+  .at-order-column { grid-template-columns: minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
   .auto-trader-page *, .auto-trader-page *::before, .auto-trader-page *::after {
