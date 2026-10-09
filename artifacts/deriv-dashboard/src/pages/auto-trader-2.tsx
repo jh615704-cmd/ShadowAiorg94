@@ -29,6 +29,13 @@ import type { DerivHistoryRow } from "@/components/deriv-history";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getAccountBalance } from "@/lib/account-balance";
 import {
+  parseAutoTrader2SavedSession,
+  reconcileAutoTrader2SavedSession,
+  type AutoTrader2RunConfig as RunConfig,
+  type AutoTrader2SavedPhase,
+  type AutoTrader2SavedSession,
+} from "@/lib/auto-trader-2-session";
+import {
   chooseAutoTrader2Candidate,
   updateAutoTrader2Recovery,
   type AutoTrader2Candidate,
@@ -81,34 +88,24 @@ const guideCopy = [
 ] as const;
 
 type LocalContract = { id: string; placedAt: number };
-type RunConfig = {
-  family: AutoTrader2Family;
-  contractType: AutoTrader2ContractType;
-  barrier: number;
-  stake: number;
-  duration: number;
-  takeProfit: number;
-  lossLimit: number;
-  stakeMode: "flat" | "multiply";
-  multiplier: number;
-  aiEnabled: boolean;
-  autoSelect: boolean;
-  selectedMarket: string;
-};
-
 type Runtime = {
   generation: number;
   active: boolean;
   stopRequested: boolean;
   contractIds: string[];
+  config: RunConfig | null;
   currentStake: number;
   sessionPnl: number;
   recovery: boolean;
   recoveryTargetPnl: number | null;
+  pendingContractId: string | null;
+  pendingContractType: AutoTrader2ContractType | null;
+  pendingStake: number | null;
   lastCandidate: AutoTrader2Candidate | null;
 };
 
 const storagePrefix = "deriv-auto-trader-2-contracts:";
+const sessionStoragePrefix = "deriv-auto-trader-2-session:";
 const minimumStake = 0.35;
 const delay = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 const isSettled = (status: string) => !["open", "pending", "active"].includes(status.toLowerCase());
@@ -154,16 +151,26 @@ function AutoTrader2Content() {
   const [historyFading, setHistoryFading] = useState(false);
   const [sessionPnl, setSessionPnl] = useState(0);
   const [sessionTradeCount, setSessionTradeCount] = useState(0);
+  const [savedSession, setSavedSession] = useState<AutoTrader2SavedSession | null>(null);
+  const [savedSessionIssue, setSavedSessionIssue] = useState("");
+  const [savedSessionNotice, setSavedSessionNotice] = useState("");
+  const [sessionLoadComplete, setSessionLoadComplete] = useState(false);
+  const [verifyingSavedSession, setVerifyingSavedSession] = useState(false);
+  const [discardSessionArmed, setDiscardSessionArmed] = useState(false);
   const clearTimer = useRef<number | null>(null);
   const runRef = useRef<Runtime>({
     generation: 0,
     active: false,
     stopRequested: false,
     contractIds: [],
+    config: null,
     currentStake: 1,
     sessionPnl: 0,
     recovery: false,
     recoveryTargetPnl: null,
+    pendingContractId: null,
+    pendingContractType: null,
+    pendingStake: null,
     lastCandidate: null,
   });
   const buyMutation = useBuyDerivContract();
@@ -226,12 +233,18 @@ function AutoTrader2Content() {
     setRunContractIds([]);
     setSessionPnl(0);
     setSessionTradeCount(0);
+    setSavedSession(null);
+    setSavedSessionIssue("");
+    setSavedSessionNotice("");
+    setSessionLoadComplete(false);
+    setDiscardSessionArmed(false);
     if (clearTimer.current !== null) {
       window.clearTimeout(clearTimer.current);
       clearTimer.current = null;
     }
     if (!accountId) {
       setLocalContracts([]);
+      setSessionLoadComplete(true);
       return;
     }
     try {
@@ -239,8 +252,43 @@ function AutoTrader2Content() {
       setLocalContracts(Array.isArray(parsed)
         ? parsed.filter((entry) => typeof entry?.id === "string" && Number.isFinite(entry.placedAt)).slice(-500)
         : []);
+      const rawSession = localStorage.getItem(`${sessionStoragePrefix}${accountId}`);
+      const restoredSession = parseAutoTrader2SavedSession(rawSession, accountId);
+      setSavedSession(restoredSession);
+      if (rawSession && !restoredSession) {
+        setSavedSessionIssue("Saved Auto Trader 2.0 state could not be validated. Check Deriv history before clearing it or starting another automated session.");
+      }
+      if (restoredSession) {
+        setRunContractIds(restoredSession.contractIds);
+        setSessionPnl(restoredSession.sessionPnl);
+        setSessionTradeCount(restoredSession.contractIds.length);
+        setNextStake(restoredSession.currentStake);
+        setFamily(restoredSession.config.family);
+        setContractType(restoredSession.config.contractType);
+        setBarrier(restoredSession.config.barrier);
+        setStake(restoredSession.config.stake);
+        setDuration(restoredSession.config.duration);
+        setTakeProfit(restoredSession.config.takeProfit);
+        setLossLimit(restoredSession.config.lossLimit);
+        setStakeMode(restoredSession.config.stakeMode);
+        setMultiplier(restoredSession.config.multiplier);
+        setAiEnabled(restoredSession.config.aiEnabled);
+        setAutoSelect(restoredSession.config.autoSelect);
+        setSelectedMarket(restoredSession.config.selectedMarket);
+        setSavedSessionNotice(
+          restoredSession.phase === "placing" || restoredSession.phase === "manual-review"
+            ? "The last order may have been submitted before the page reloaded. Check Deriv history and open contracts; no order will be resent."
+            : restoredSession.phase === "awaiting-settlement"
+              ? "A saved contract still needs a fresh Deriv settlement check before this session can resume."
+              : restoredSession.phase === "completed"
+                ? "This saved AI 2 session has already reached a stop condition. Dismiss it before starting another run."
+                : "A saved AI 2 session was found. Verify its Deriv history and open-contract status before resuming.";
+      }
     } catch {
       setLocalContracts([]);
+      setSavedSessionIssue("This browser could not read Auto Trader 2.0's saved state. No automated order will be sent until the saved session is reviewed.");
+    } finally {
+      setSessionLoadComplete(true);
     }
   }, [accountId]);
 
@@ -252,10 +300,15 @@ function AutoTrader2Content() {
   }, []);
 
   useEffect(() => {
+    if (savedSession) {
+      setSessionPnl(savedSession.sessionPnl);
+      setSessionTradeCount(savedSession.contractIds.length);
+      return;
+    }
     setSessionTradeCount(runContractIds.length);
     setSessionPnl(Number(runRows.filter((entry) => isSettled(entry.status))
       .reduce((total, entry) => total + Number(entry.profit || 0), 0).toFixed(2)));
-  }, [runContractIds, runRows]);
+  }, [runContractIds, runRows, savedSession]);
 
   const persistContract = (contractId: string) => {
     if (!accountId) return;
