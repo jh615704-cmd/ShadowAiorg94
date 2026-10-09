@@ -26,6 +26,10 @@ const viewports = [
   { name: "tablet", width: 768, height: 1024 },
   { name: "laptop", width: 1440, height: 900 },
 ];
+const bulkViewports = [
+  ...viewports,
+  { name: "small-phone", width: 320, height: 740 },
+];
 
 let browser;
 let viteServer;
@@ -296,6 +300,92 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
     assert.deepEqual(state.unhandledApis, [], `Unexpected API requests: ${JSON.stringify(state.unhandledApis)}`);
     assert.deepEqual(state.tradeRequests, [], "Responsive controls must be tested without submitting any trade.");
     assert.deepEqual(pageErrors, [], "The app should render without browser exceptions.");
+  } finally {
+    await context.close();
+  }
+});
+
+test("Bulk Trader digit distribution matches Trade X sizing and fits phone, tablet, and laptop widths", async () => {
+  const state = createState(userSession(["bulk-trader"]));
+  state.hasToken = true;
+  const { context, page, pageErrors } = await createMockPage(state, bulkViewports[0]);
+  try {
+    await page.goto(`${baseUrl}/app`);
+    const bulkGrant = page.getByRole("checkbox", { name: "Toggle Bulk Trader" });
+    await bulkGrant.waitFor();
+    await page.locator(".xt-feature-card-bulk .xt-switch").click();
+    assert.equal(await bulkGrant.isChecked(), true);
+
+    const panel = page.getByTestId("panel-bulk-trader");
+    await panel.waitFor();
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll(".bulk-digit-streak")].some((element) => /^\d+×$/.test(element.textContent?.trim() ?? "")),
+    undefined, { timeout: 10_000 });
+
+    for (const viewport of bulkViewports) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await panel.scrollIntoViewIfNeeded();
+      await assertNoHorizontalOverflow(page, viewport, "Bulk Trader");
+      await assertWithinViewport(page, '[data-testid="panel-bulk-trader"]', viewport.width, "Bulk Trader panel");
+
+      const distribution = page.locator(".bulk-trader-digit-row");
+      await distribution.scrollIntoViewIfNeeded();
+      const layout = await distribution.evaluate((row) => {
+        const rowRect = row.getBoundingClientRect();
+        const digits = [...row.querySelectorAll(".bulk-digit")].map((digit) => {
+          const rect = digit.getBoundingClientRect();
+          return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width };
+        });
+        return { left: rowRect.left, right: rowRect.right, boxes: digits };
+      });
+      assert.equal(layout.boxes.length, 10);
+      assert.ok(layout.right <= viewport.width + 1 && layout.left >= -1, `The digit row must fit at ${viewport.name} width.`);
+      for (const box of layout.boxes) {
+        assert.ok(box.width >= 35, `Digit cells need enough width for readable values at ${viewport.name}: ${JSON.stringify(box)}`);
+        assert.ok(box.left >= layout.left - 1 && box.right <= layout.right + 1, `A digit cell escaped its row at ${viewport.name}.`);
+      }
+      for (let index = 1; index < 5; index += 1) {
+        assert.ok(Math.abs(layout.boxes[index].top - layout.boxes[0].top) <= 1, `Digits 0–4 should share the first row at ${viewport.name}.`);
+      }
+      assert.ok(layout.boxes[5].top >= layout.boxes[0].bottom - 1, `Digits 5–9 should wrap cleanly to the next row at ${viewport.name}.`);
+
+      const streakLabels = await panel.locator(".bulk-digit-streak").allTextContents();
+      assert.equal(streakLabels.length, 10);
+      assert.ok(streakLabels.every((label) => /^\d+×$|^—$/.test(label.trim())), "Streaks should use the same compact numeric marker as Trade X.");
+      assert.ok(streakLabels.every((label) => !/absent/i.test(label)));
+
+      const readability = await distribution.evaluate((row) => {
+        const digit = row.querySelector(".bulk-digit b");
+        const percentage = row.querySelector(".bulk-digit > small:not(.bulk-digit-streak)");
+        const streak = row.querySelector(".bulk-digit-streak");
+        return [digit, percentage, streak].map((element) => {
+          if (!(element instanceof HTMLElement)) return null;
+          const style = getComputedStyle(element);
+          return {
+            fontSize: Number.parseFloat(style.fontSize),
+            opacity: Number.parseFloat(style.opacity),
+            filter: style.filter,
+            textShadow: style.textShadow,
+          };
+        });
+      });
+      assert.ok(readability.every((style) => style), "Digit, percentage, and streak text should all render.");
+      assert.ok(readability[0].fontSize >= 19 && readability[1].fontSize >= 11 && readability[2].fontSize >= 10);
+      for (const style of readability) {
+        assert.equal(style.opacity, 1);
+        assert.equal(style.filter, "none");
+        assert.equal(style.textShadow, "none");
+      }
+
+      const selectedDigit = page.getByTestId("button-digit-4");
+      await selectedDigit.click();
+      assert.equal(await selectedDigit.getAttribute("aria-pressed"), "true");
+      await page.screenshot({ path: path.join(screenshotsDir, `bulk-trader-${viewport.name}.png`) });
+    }
+
+    assert.deepEqual(state.unhandledApis, [], `Unexpected API requests: ${JSON.stringify(state.unhandledApis)}`);
+    assert.deepEqual(state.tradeRequests, [], "Bulk Trader layout checks must not submit any trade.");
+    assert.deepEqual(pageErrors, [], "Bulk Trader should render without browser exceptions.");
   } finally {
     await context.close();
   }

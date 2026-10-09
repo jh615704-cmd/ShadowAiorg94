@@ -449,3 +449,83 @@
   font-size: 9px !important;
   font-weight: 600 !important;
 }
+
+/* Mirror Trade X's readable digit / percentage / streak stack in Bulk Trader. */
+.xt-app .bulk-trader-panel .bulk-trader-digit-row {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px clamp(4px, 1.5vw, 9px);
+  min-width: 0;
+}
+
+.xt-app .bulk-trader-panel .bulk-digit {
+  min-width: 0;
+  min-height: 78px;
+  justify-content: flex-start;
+  padding: 8px 4px;
+  border-radius: 999px !important;
+  text-align: center;
+}
+
+.xt-app .bulk-trader-panel .bulk-digit.absent {
+  border-style: solid !important;
+  opacity: 1 !important;
+}
+
+.xt-app .bulk-trader-panel .bulk-digit-marker {
+  top: 6px;
+  left: 50%;
+  z-index: 2;
+  color: #c5d8e8 !important;
+  font-family: Manrope, "DM Sans", sans-serif !important;
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  transform: translateX(-50%);
+}
+
+.xt-app .bulk-trader-panel .bulk-digit b {
+  z-index: 1;
+  margin-top: 12px;
+  color: #f6fbff !important;
+  font-family: Manrope, "DM Sans", sans-serif !important;
+  font-size: clamp(19px, 2.7vw, 24px) !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  opacity: 1 !important;
+  filter: none !important;
+  text-shadow: none !important;
+}
+
+.xt-app .bulk-trader-panel .bulk-digit > small:not(.bulk-digit-streak) {
+  z-index: 1;
+  margin-top: 3px;
+  color: #a9f5e6 !important;
+  font-family: Manrope, "DM Sans", sans-serif !important;
+  font-size: clamp(11px, 1.5vw, 13px) !important;
+  font-weight: 800 !important;
+  line-height: 1.1 !important;
+  opacity: 1 !important;
+  filter: none !important;
+  text-shadow: none !important;
+}
+
+.xt-app .bulk-trader-panel .bulk-digit .bulk-digit-streak {
+  z-index: 1;
+  margin-top: 2px;
+  color: #d2e0ef !important;
+  font-family: Manrope, "DM Sans", sans-serif !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  line-height: 1.1 !important;
+  opacity: 1 !important;
+  filter: none !important;
+  text-shadow: none !important;
+}
+
+.xt-app .bulk-trader-panel .bulk-digit > i {
+  z-index: 0;
+}
+
+.xt-app .bulk-trader-panel .bulk-digit em {
+  z-index: 2;
+}
