@@ -30,6 +30,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { getAccountBalance } from "@/lib/account-balance";
 import {
   chooseAutoTrader2Candidate,
+  updateAutoTrader2Recovery,
   type AutoTrader2Candidate,
   type AutoTrader2ContractType,
   type AutoTrader2Family,
@@ -72,7 +73,7 @@ const guideCopy = [
   ["Auto-select market", "When enabled, the feature can choose among the supported markets using the available live samples. Turn it off to keep the manually selected market.", "Auto-selection ranks observed data; it is not a forecast of future results."],
   ["AI 2 checkbox", "Select the AI 2 box before starting to enable its observed-data filter. The box displays a tick and the status reads WORKING while enabled.", "AI 2 is a rule-based filter of observed market data, not a source of guaranteed outcomes."],
   ["AI 2 sample threshold", "AI 2 waits for a minimum recent sample and looks for a measurable difference from a simple baseline before sending an entry. If the sample is too small or weak, it waits.", "A larger historical sample can still differ from future results. No win-rate promise is made."],
-  ["Differs loss response", "If an AI 2 session starts on Differs and a Differs trade settles at a loss, the next eligible selection switches to Rise/Fall or Even/Odd. It returns to Differs only after the session's settled result is above zero.", "Switching contract families does not ensure the earlier loss will be recovered. Session limits and Stop remain important."],
+  ["Differs loss response", "After any AI 2 Differs trade settles at a loss, recovery selection switches to Rise/Fall or Even/Odd. It remains in recovery until settled session P/L rises above the P/L level from just before that loss, which means the loss has been made back and additional profit gained.", "Recovery does not guarantee a profit. If no qualifying recovery setup is available, AI 2 waits without placing an order."],
   ["One open contract at a time", "The loop waits for Deriv history to show the active contract as settled before considering another entry. Other open contracts also block new entries.", "If settlement cannot be verified, the loop pauses instead of guessing or sending another order."],
   ["Reading Auto Trader 2.0 History", "History uses the same session summary and trade-row design as Cash Grab. It only includes contracts this feature recorded for the currently selected account.", "The history list is a dashboard view. Deriv remains the authoritative account record."],
   ["Clear this feature's history", "The two-step clear removes only Auto Trader 2.0 rows from this browser's account-scoped view. It does not delete Deriv contracts or account records.", "Clearing the view does not close or cancel a contract."],
@@ -103,6 +104,7 @@ type Runtime = {
   currentStake: number;
   sessionPnl: number;
   recovery: boolean;
+  recoveryTargetPnl: number | null;
   lastCandidate: AutoTrader2Candidate | null;
 };
 
@@ -161,6 +163,7 @@ function AutoTrader2Content() {
     currentStake: 1,
     sessionPnl: 0,
     recovery: false,
+    recoveryTargetPnl: null,
     lastCandidate: null,
   });
   const buyMutation = useBuyDerivContract();
@@ -325,6 +328,7 @@ function AutoTrader2Content() {
       currentStake: config.stake,
       sessionPnl: 0,
       recovery: false,
+      recoveryTargetPnl: null,
       lastCandidate: null,
     };
     setRunContractIds([]);
@@ -416,7 +420,9 @@ function AutoTrader2Content() {
       if (continuous && (!first || !loopCandidate)) {
         loopCandidate = chooseCandidate(config, inRecovery);
         if (!loopCandidate) {
-          setDecision("Waiting for a fresh sample that meets the entry filter.");
+          setDecision(inRecovery
+            ? "Recovery active · AI 2 is waiting for a qualifying Rise/Fall or Even/Odd sample; no new order sent."
+            : "Waiting for a fresh sample that meets the entry filter.");
           await delay(1_000);
           continue;
         }
@@ -509,16 +515,31 @@ function AutoTrader2Content() {
       }
 
       const settledProfit = Number(settledRow.profit);
-      runRef.current.sessionPnl = Number((runRef.current.sessionPnl + settledProfit).toFixed(2));
+      if (!Number.isFinite(settledProfit)) {
+        finishLoop(generation, {
+          tone: "error",
+          text: "Deriv history returned an invalid settled profit. Auto Trader 2.0 stopped without sending another order.",
+        });
+        return;
+      }
+      const pnlBefore = runRef.current.sessionPnl;
+      runRef.current.sessionPnl = Number((pnlBefore + settledProfit).toFixed(2));
       setSessionPnl(runRef.current.sessionPnl);
       setSessionTradeCount(runRef.current.contractIds.length);
 
-      if (selectedType === "DIGITDIFF" && settledProfit < 0 && config.family === "differs" && config.aiEnabled) {
-        runRef.current.recovery = true;
-      }
-      if (runRef.current.recovery && runRef.current.sessionPnl > 0) {
-        runRef.current.recovery = false;
-      }
+      const recovery = updateAutoTrader2Recovery({
+        state: {
+          active: runRef.current.recovery,
+          targetPnl: runRef.current.recoveryTargetPnl,
+        },
+        contractType: selectedType,
+        settledProfit,
+        pnlBefore,
+        pnlAfter: runRef.current.sessionPnl,
+        aiEnabled: config.aiEnabled,
+      });
+      runRef.current.recovery = recovery.active;
+      runRef.current.recoveryTargetPnl = recovery.targetPnl;
 
       const hitTakeProfit = config.takeProfit > 0 && runRef.current.sessionPnl >= config.takeProfit;
       const hitLossLimit = config.lossLimit > 0 && runRef.current.sessionPnl <= -config.lossLimit;
@@ -547,7 +568,7 @@ function AutoTrader2Content() {
       first = false;
       loopCandidate = null;
       setDecision(runRef.current.recovery
-        ? "WORKING · recovery selection is active until the session result is above zero."
+        ? `WORKING · recovery selection stays active until session P/L is above ${amountLabel(runRef.current.recoveryTargetPnl ?? 0, currency)}.`
         : "WORKING · waiting for the next eligible live sample.");
       await delay(300);
     }

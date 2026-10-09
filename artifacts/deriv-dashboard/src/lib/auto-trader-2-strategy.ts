@@ -21,6 +21,36 @@ export type AutoTrader2Candidate = {
 export const AUTO_TRADER_2_MIN_SAMPLE = 20;
 export const AUTO_TRADER_2_MIN_EDGE = 4;
 
+export type AutoTrader2RecoveryState = {
+  active: boolean;
+  targetPnl: number | null;
+};
+
+export function updateAutoTrader2Recovery(input: {
+  state: AutoTrader2RecoveryState;
+  contractType: AutoTrader2ContractType;
+  settledProfit: number;
+  pnlBefore: number;
+  pnlAfter: number;
+  aiEnabled: boolean;
+}): AutoTrader2RecoveryState {
+  let targetPnl = input.state.targetPnl;
+
+  if (
+    input.aiEnabled
+    && input.contractType === "DIGITDIFF"
+    && input.settledProfit < 0
+  ) {
+    targetPnl = Math.max(targetPnl ?? input.pnlBefore, input.pnlBefore);
+  }
+
+  if (targetPnl !== null && input.pnlAfter > targetPnl) {
+    return { active: false, targetPnl: null };
+  }
+
+  return { active: targetPnl !== null, targetPnl };
+}
+
 function candidatesForSignal(
   signal: AutoTrader2Signal,
   family: AutoTrader2Family | "recovery",
