@@ -295,7 +295,7 @@ export default function TradeXPanel({
                     <span className={`tx-market-touch ${isMarketDigit ? "is-live" : ""}`} aria-hidden="true">{isMarketDigit ? "LIVE" : ""}</span>
                      <span className="tx-digit-number">{item.digit}</span>
                       <span className="tx-digit-percent">{analysisTickCount ? `${item.percentage.toFixed(1)}%` : "—"}</span>
-                       <span className={`tx-digit-meta tx-digit-meta-${item.momentum ?? "flat"}`}>{analysisTickCount ? `${item.streak} absent` : "waiting"}</span>
+                       <span className={`tx-digit-meta tx-digit-meta-${item.momentum ?? "flat"}`}>{analysisTickCount ? `${item.streak}×` : "—"}</span>
                   </button>
                 );
               })}
@@ -318,7 +318,7 @@ export default function TradeXPanel({
             <div className="tx-distribution-foot">
                <span><i className="tx-key tx-key-ranked" /> ranked differ candidate</span>
               <span><i className="tx-key tx-key-selected" /> current selection</span>
-              <span className="tx-foot-note">Descriptive signal, not a guarantee.</span>
+               <span className="tx-foot-note">× = consecutive ticks without this digit · descriptive only.</span>
             </div>
           </section>
 
@@ -327,7 +327,7 @@ export default function TradeXPanel({
               <div>
                 <span className="tx-index">03</span>
                 <div>
-                    <h3>Top 3 DIFFERS Digits</h3>
+                    <h3>Top 3 Safest DIFFERS Digits</h3>
                    <p>Lowest observed frequency in the current window.</p>
                 </div>
               </div>
@@ -350,7 +350,7 @@ export default function TradeXPanel({
                         <span className={`tx-rank-medal medal-${index + 1}`} aria-hidden="true"><Medal size={18} /></span>
                        <span className="tx-rank-digit">{digit}</span>
                      </button>
-                      <span className="tx-rank-metrics"><b>{safetyScore.toFixed(1)} <small>score · {safetyLabel}</small></b><small>{item.percentage.toFixed(1)}% freq · {item.streak} absent</small></span>
+                       <span className="tx-rank-metrics"><b>{safetyScore.toFixed(1)} <small>score · {safetyLabel}</small></b><small>{item.percentage.toFixed(1)}% · {item.streak}×</small></span>
                     <button type="button" className="tx-tap-trade" onClick={() => onTradeSelect(digit)} disabled={disabled || isPlacingTrade || !enabled} data-testid={`button-trade-x-tap-${digit}`}>TAP TO TRADE</button>
                   </div>
                 );

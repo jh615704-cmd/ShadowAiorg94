@@ -140,6 +140,7 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
     const tradeXGrant = page.getByRole("checkbox", { name: "Toggle Trade X" });
     await tradeXGrant.waitFor();
     await page.locator(".xt-feature-card-trade-x .xt-switch").click();
+    assert.equal(await tradeXGrant.isChecked(), true, "The Trade X access switch should activate the feature.");
     const tradeXPanel = page.getByTestId("trade-x-panel");
     const analysisSurface = page.getByTestId("trade-x-analysis-surface");
     await tradeXPanel.waitFor();
@@ -163,6 +164,28 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
     assert.equal(sharedSurface.distributionBackground, "rgba(0, 0, 0, 0)");
     assert.equal(sharedSurface.rankingBackground, "rgba(0, 0, 0, 0)");
 
+    const digitLabels = await page.locator(".tx-digit-meta, .tx-rank-metrics > small").allTextContents();
+    assert.ok(digitLabels.length > 0);
+    assert.ok(digitLabels.every((label) => !/absent/i.test(label)), "Digit streak captions should show a compact count, not the word absent.");
+
+    const liveDigit = page.locator(".tx-digit-market").first();
+    await liveDigit.waitFor({ state: "visible", timeout: 10_000 });
+    const liveDigitStyle = await liveDigit.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        insideDashboardTheme: Boolean(element.closest(".xt-app")),
+        borderColor: style.borderTopColor,
+        background: style.backgroundColor,
+        backgroundImage: style.backgroundImage,
+        boxShadow: style.boxShadow,
+      };
+    });
+    const borderChannels = liveDigitStyle.borderColor.match(/[\d.]+/g)?.slice(0, 3).map(Number);
+    assert.equal(liveDigitStyle.insideDashboardTheme, true);
+    assert.ok(borderChannels && borderChannels[1] > borderChannels[0] && borderChannels[1] > borderChannels[2], `The current market digit should have a green outline: ${JSON.stringify(liveDigitStyle)}`);
+    assert.ok(!liveDigitStyle.background.includes("34, 201, 130") && !liveDigitStyle.backgroundImage.includes("34, 201, 130"), "The live digit should not use the old solid green fill.");
+    assert.match(liveDigitStyle.boxShadow, /82, 230, 169/, "A subtle green edge glow should reinforce the outline.");
+
     for (const viewport of viewports) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await tradeXPanel.scrollIntoViewIfNeeded();
@@ -184,6 +207,34 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
       await page.locator('[data-testid="input-trade-x-stake"]').fill("2.50");
       await page.locator('[data-testid="button-trade-x-digit-4"]').click();
       await page.locator('[data-testid="button-trade-x-duration-2"]').click();
+      assert.equal(await page.locator('[data-testid="button-place-trade-x"]').isEnabled(), true, "The configured Trade X trade button should be usable.");
+      const readableStyles = await page.evaluate(() => {
+        const selectors = {
+          digit: ".tx-digit-number",
+          percentage: ".tx-digit-percent",
+          streak: ".tx-digit-meta",
+          rankScore: ".tx-rank-metrics b small",
+          rankFrequency: ".tx-rank-metrics > small",
+        };
+        return Object.fromEntries(Object.entries(selectors).map(([name, selector]) => {
+          const element = document.querySelector(selector);
+          if (!(element instanceof HTMLElement)) return [name, null];
+          const style = getComputedStyle(element);
+          return [name, {
+            fontSize: Number.parseFloat(style.fontSize),
+            opacity: Number.parseFloat(style.opacity),
+            filter: style.filter,
+            textShadow: style.textShadow,
+          }];
+        }));
+      });
+      for (const [name, style] of Object.entries(readableStyles)) {
+        assert.ok(style, `${name} should be visible in the Trade X analysis.`);
+        assert.ok(style.fontSize >= (name === "digit" ? 20 : 10), `${name} should remain readable at ${viewport.name} width.`);
+        assert.equal(style.opacity, 1, `${name} should not be faded at ${viewport.name} width.`);
+        assert.equal(style.filter, "none", `${name} should not be blurred at ${viewport.name} width.`);
+        assert.equal(style.textShadow, "none", `${name} should not have a soft text shadow at ${viewport.name} width.`);
+      }
       await page.screenshot({ path: path.join(screenshotsDir, `trade-x-${viewport.name}.png`) });
     }
 
@@ -195,6 +246,10 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
       const tradeButton = document.querySelector('[data-testid="button-trade-3x-R_10-0"]');
       return tradeButton instanceof HTMLButtonElement && !tradeButton.disabled;
     }, undefined, { timeout: 10_000 });
+    const firstMarketTradeButtons = page.getByTestId("card-market-R_10").locator('button[data-testid^="button-trade-"]');
+    const firstMarketButtonStates = await firstMarketTradeButtons.evaluateAll((buttons) => buttons.map((button) => !button.disabled));
+    assert.equal(firstMarketButtonStates.length, 20, "Every digit should have both 3× and 6× controls.");
+    assert.ok(firstMarketButtonStates.every(Boolean), "All 3× and 6× controls should be usable once the market is live.");
 
     for (const viewport of viewports) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
@@ -412,6 +467,7 @@ function makeDerivStatus(version) {
     authorized: true,
     account,
     active_contract_count: 0,
+    last_digit: version % 10,
     open_contracts_ready: true,
     last_tick: { symbol: "R_75", quote: 100_000 + version, epoch: 1_700_000_000 + version },
     market_signals: signals,
