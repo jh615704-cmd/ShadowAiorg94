@@ -76,4 +76,26 @@ describe("customFetch transport recovery", () => {
 
     assert.equal(calls, 1);
   });
+
+  it("replaces Deriv's raw no-return response with a safe, non-retry message", async () => {
+    globalThis.fetch = (async () => new Response(
+      JSON.stringify({ message: "This contract offers no return." }),
+      { status: 400, statusText: "Bad Request", headers: { "content-type": "application/json" } },
+    )) as typeof fetch;
+
+    await assert.rejects(
+      customFetch("/api/deriv/buy", {
+        method: "POST",
+        body: JSON.stringify({ amount: 1, contract_type: "DIGITDIFF" }),
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /Deriv did not offer a return/i);
+        assert.match(error.message, /no contract was placed/i);
+        assert.match(error.message, /stopped without retrying/i);
+        assert.doesNotMatch(error.message, /HTTP 400|offers no return/i);
+        return true;
+      },
+    );
+  });
 });

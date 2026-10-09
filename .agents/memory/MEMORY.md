@@ -31,3 +31,4 @@
 - [Responsive trading controls](responsive-trading-controls.md) — keep trading panels and future controls usable across laptop, tablet, and phone sizes.
 - [Deriv quote display](deriv-quote-display.md) — Cash Grab, DigitFlip, and EDGE quotes use at least four integer digits and exactly two decimals.
 - [Auto Trader guide boundary](auto-trader-guide-boundary.md) — explain controls and observed data without exposing private strategy logic or implying guaranteed outcomes.
+- [Trading feature connection copy](trading-feature-connection-copy.md) — keep credential setup copy in the shared account flow; don't repeat PAT prompts under each new feature.

@@ -171,6 +171,10 @@ function buildErrorMessage(response: Response, data: unknown): string {
     getStringField(data, "error_description") ??
     getStringField(data, "error");
 
+  if (response.status === 400 && message && /offers no return/i.test(message)) {
+    return "Deriv did not offer a return for this setup, so no contract was placed. Auto trading stopped without retrying. Change the market or contract settings and check Deriv history before taking any manual action.";
+  }
+
   if (title && detail) return `${prefix}: ${title} — ${detail}`;
   if (detail) return `${prefix}: ${detail}`;
   if (message) return `${prefix}: ${message}`;

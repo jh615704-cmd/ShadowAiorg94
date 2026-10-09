@@ -11,6 +11,7 @@ import AdminUsersPage from '@/pages/admin-users';
 import AppPage from '@/pages/app-page';
 import SettingsPage from '@/pages/settings';
 import AutoTraderPage from '@/pages/auto-trader';
+import AutoTrader2Page from '@/pages/auto-trader-2';
 import { AccessGate } from '@/components/access-gate';
 import SignInPage from '@/pages/sign-in';
 import { DerivCredentialWarning } from '@/components/deriv-credential-warning';
@@ -28,6 +29,7 @@ function Router() {
         <Route path="/dashboard" component={AppPage} />
         <Route path="/settings" component={SettingsPage} />
         <Route path="/auto-trader" component={AutoTraderPage} />
+        <Route path="/auto-trader-2" component={AutoTrader2Page} />
         <Route path="/sign-in" component={SignInPage} />
         <Route path="/admin" component={AdminUsersPage} />
         <Route path="/admin/users" component={AdminUsersPage} />

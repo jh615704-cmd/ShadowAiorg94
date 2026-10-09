@@ -1,0 +1,125 @@
+.auto-trader-2-page {
+  min-height: 100%;
+  padding: 20px clamp(12px, 2.4vw, 32px) 32px;
+  color: #eaf3ff;
+  background:
+    radial-gradient(ellipse at 88% 0%, rgba(19, 85, 147, .2), transparent 38%),
+    linear-gradient(180deg, #081a31 0%, #08192d 58%, #07172a 100%);
+  font-family: "DM Sans", "Segoe UI", sans-serif;
+}
+.auto-trader-2-page *,
+.auto-trader-2-page *::before,
+.auto-trader-2-page *::after { box-sizing: border-box; }
+.at2-page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 0 auto 15px;
+  max-width: 1320px;
+}
+.at2-page-heading h1 {
+  margin: 7px 0 4px;
+  color: #eff6ff;
+  font: 700 clamp(22px, 3vw, 30px)/1.1 "Space Grotesk", "DM Sans", sans-serif;
+  letter-spacing: -.045em;
+}
+.at2-page-heading h1 strong {
+  color: #92e4aa;
+  font: 800 12px "DM Mono", monospace;
+  letter-spacing: .06em;
+  vertical-align: middle;
+}
+.at2-page-heading p { margin: 0; color: #91a9c4; font-size: 11px; }
+.at2-page-kicker {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #819cb8;
+  font: 800 8px "DM Mono", monospace;
+  letter-spacing: .12em;
+}
+.at2-page-kicker span { width: 6px; height: 6px; border-radius: 50%; background: #77d99a; box-shadow: 0 0 0 3px rgba(119, 217, 154, .12); }
+.at2-account-strip {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: 1320px;
+  min-height: 38px;
+  margin: 0 auto 12px;
+  padding: 7px 10px;
+  border: 1px solid #1d3c5d;
+  border-radius: 7px;
+  background: linear-gradient(120deg, rgba(13, 37, 66, .92), rgba(9, 27, 48, .9));
+  color: #95abc4;
+  font: 800 8px "DM Mono", monospace;
+  letter-spacing: .04em;
+}
+.at2-account-strip > span { color: #92b8e0; }
+.at2-account-strip > span.real { color: #ffba9a; }
+.at2-account-strip > strong { overflow: hidden; color: #e0edfc; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.at2-account-strip > b { margin-left: auto; color: #ebf4ff; font-size: 9px; white-space: nowrap; }
+.at2-account-strip > i { color: #8598ae; font-style: normal; }
+.at2-account-strip > i.connected { color: #8ce4a4; }
+.at2-page-notice,
+.at2-page-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  max-width: 1320px;
+  margin: 0 auto 11px;
+  padding: 9px 11px;
+  border: 1px solid #365879;
+  border-radius: 6px;
+  background: rgba(12, 40, 68, .75);
+  color: #c3d4e7;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.at2-page-notice.error,
+.at2-page-message.error { border-color: rgba(194, 93, 102, .55); background: rgba(71, 28, 39, .35); color: #ffc4c5; }
+.at2-page-notice button { padding: 0; border: 0; background: transparent; color: #98d6ff; text-decoration: underline; cursor: pointer; }
+.at2-page-message { align-items: center; }
+.at2-page-message > svg { flex: 0 0 auto; }
+.at2-page-message > span { flex: 1; }
+.at2-page-message > button { flex: 0 0 auto; border: 0; background: transparent; color: inherit; font-size: 17px; cursor: pointer; }
+.at2-page-message.success { border-color: rgba(94, 179, 119, .5); background: rgba(23, 65, 46, .35); color: #a8e9b7; }
+.at2-page-message.info { color: #c5d7eb; }
+.at2-page-caution {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 1320px;
+  margin: 11px auto 0;
+  color: #8da3bc;
+  font-size: 9px;
+  line-height: 1.55;
+}
+.at2-page-caution svg { flex: 0 0 auto; color: #e3bf78; }
+.at2-guide-dialog { max-width: 500px !important; border: 1px solid #294a6b !important; background: linear-gradient(150deg, #102b49, #071a30) !important; color: #e8f1ff !important; }
+.at2-guide-dialog [data-radix-dialog-title] { color: #f1f6ff; font: 700 19px/1.2 "Space Grotesk", "DM Sans", sans-serif; }
+.at2-guide-dialog [data-radix-dialog-description] { color: #a8bad0; font-size: 12px; line-height: 1.7; }
+.at2-guide-overline { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; color: #9bb2cb; font: 800 8px "DM Mono", monospace; letter-spacing: .08em; }
+.at2-guide-overline svg { color: #8ee1a6; }
+.at2-guide-overline span { margin-left: auto; color: #e1c47e; }
+.at2-guide-caution { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; padding: 10px; border: 1px solid rgba(179, 143, 83, .35); border-radius: 6px; background: rgba(93, 65, 29, .16); color: #cdb98e; font-size: 10px; line-height: 1.55; }
+.at2-guide-caution svg { flex: 0 0 auto; color: #e2c47f; }
+.at2-guide-progress { height: 3px; margin-top: 18px; overflow: hidden; border-radius: 4px; background: #1b3653; }
+.at2-guide-progress span { display: block; width: 100%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #52bd78, #54d2c6); transform-origin: left center; transition: transform .22s ease; }
+.at2-guide-controls { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 14px; }
+.at2-guide-controls button { display: inline-flex; align-items: center; gap: 5px; min-height: 34px; padding: 0 10px; border: 1px solid #365777; border-radius: 5px; background: #0c2440; color: #c9d8e9; font-size: 10px; font-weight: 700; cursor: pointer; }
+.at2-guide-controls button:last-child { border-color: #58bd78; background: #5dcb7d; color: #082819; }
+.at2-guide-controls button:disabled { opacity: .42; cursor: not-allowed; }
+.at2-page-loading { width: 28px; height: 28px; margin: 36px auto; border: 2px solid #294766; border-top-color: #83e4a0; border-radius: 50%; animation: at2-page-spin .8s linear infinite; }
+@keyframes at2-page-spin { to { transform: rotate(360deg); } }
+@media (max-width: 600px) {
+  .auto-trader-2-page { padding: 16px 10px 24px; }
+  .at2-page-heading { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .at2-account-strip { flex-wrap: wrap; }
+  .at2-account-strip > b { margin-left: 0; }
+  .at2-account-strip > i { margin-left: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .at2-page-loading { animation-duration: .01ms; }
+  .at2-guide-progress span { transition-duration: .01ms; }
+}

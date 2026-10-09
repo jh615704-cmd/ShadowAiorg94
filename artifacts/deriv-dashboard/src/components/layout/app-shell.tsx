@@ -62,11 +62,20 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
             </Link>}
             {canUseAutoTrader && <Link
               href="/auto-trader"
-              className={`nav-item ${location === '/auto-trader' ? 'nav-item-active' : ''}`}
+              className={`nav-item ${location === '/auto-trader' || location === '/auto-trader-2' ? 'nav-item-active' : ''}`}
               data-testid="link-nav-auto-trader"
             >
               <Bot size={17} />Auto Trader
-              {location === '/auto-trader' && <span className="nav-live" />}
+              {(location === '/auto-trader' || location === '/auto-trader-2') && <span className="nav-live" />}
+            </Link>}
+            {canUseAutoTrader && <Link
+              href="/auto-trader-2"
+              className={`nav-item ${location === '/auto-trader-2' ? 'nav-item-active' : ''}`}
+              style={{ paddingLeft: "36px", fontSize: "12px" }}
+              data-testid="link-nav-auto-trader-2"
+            >
+              <Bot size={15} />Auto Trader 2.0
+              {location === '/auto-trader-2' && <span className="nav-live" />}
             </Link>}
             {isAdmin && (
               <Link 
