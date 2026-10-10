@@ -674,19 +674,14 @@
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, #58d58f, #9af0bb);
-  transform: scaleX(0);
   transform-origin: left center;
-  animation: money-bank-knockout-countdown 10s linear forwards;
-}
-
-@keyframes money-bank-knockout-countdown {
-  to { transform: scaleX(1); }
+  transition: transform 100ms linear;
+  will-change: transform;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .money-bank-knockout-progress i {
-    animation: none;
-    transform: scaleX(1);
+    transition: none;
   }
 }
 

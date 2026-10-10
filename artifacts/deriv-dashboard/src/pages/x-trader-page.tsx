@@ -18,7 +18,6 @@ import {
   useTestDerivConnection,
   useTestDerivToken,
   useRequestDerivProposal,
-  useScanDerivAccumulatorKnockout,
   getGetDerivTokenStatusQueryKey,
   getGetDerivAccountsQueryKey,
   getGetDerivStatusQueryKey,
@@ -452,7 +451,6 @@ export default function XTraderPage() {
   const edgePercentageModeRef = useRef(edgePercentageMode);
   const edgeProposalRequestKeyRef = useRef("");
   const edgeProposalMutation = useRequestDerivProposal();
-  const moneyBankKnockoutScanMutation = useScanDerivAccumulatorKnockout();
   const edgeLossStreakRef = useRef(0);
   const edgeProcessedSettlementIdsRef = useRef(new Set<string>());
   const nextStakeRef = useRef(stake);
@@ -1637,42 +1635,14 @@ export default function XTraderPage() {
     moneyBankActionLockRef.current = true;
     try {
       if (currentConfig.autoKnockout) {
-        const scanStartedAt = Date.now();
-        const scanEndsAt = scanStartedAt + 10_000;
+        const countdownEndsAt = Date.now() + 10_000;
         setMoneyBankAutoKnockoutCountdown(10);
-        let scanResolved = false;
-        let scanFailed = false;
-        let scanError: unknown;
-        const scanPromise = moneyBankKnockoutScanMutation.mutateAsync({
-          data: {
-            amount: Number(level.stake.toFixed(2)),
-            duration: currentConfig.takeProfitTicks,
-            duration_unit: "t",
-            contract_type: "ACCU",
-            growth_rate: currentConfig.growthRate / 100,
-            symbol: tradeSymbol,
-          },
-        }).then(
-          () => { scanResolved = true; },
-          (error: unknown) => {
-            scanFailed = true;
-            scanError = error;
-            scanResolved = true;
-          },
-        );
-
-        while (moneyBankRunningRef.current && !scanResolved && Date.now() < scanEndsAt) {
-          setMoneyBankAutoKnockoutCountdown(Math.max(1, Math.ceil((scanEndsAt - Date.now()) / 1000)));
-          await sleep(Math.min(250, scanEndsAt - Date.now()));
+        while (moneyBankRunningRef.current && Date.now() < countdownEndsAt) {
+          setMoneyBankAutoKnockoutCountdown(Math.max(0, (countdownEndsAt - Date.now()) / 1000));
+          await sleep(Math.min(100, countdownEndsAt - Date.now()));
         }
-        if (!moneyBankRunningRef.current) {
-          await scanPromise;
-          return;
-        }
-        setMoneyBankAutoKnockoutCountdown(0);
-        await scanPromise;
-        if (scanFailed) throw scanError;
         if (!moneyBankRunningRef.current) return;
+        setMoneyBankAutoKnockoutCountdown(0);
       }
 
       const result = await moneyBankBuyMutation.mutateAsync({
@@ -1683,7 +1653,6 @@ export default function XTraderPage() {
           contract_type: "ACCU",
           growth_rate: currentConfig.growthRate / 100,
           symbol: tradeSymbol,
-          auto_knockout: currentConfig.autoKnockout,
         },
       });
       const contractId = result.buy?.contract_id;
@@ -1714,11 +1683,6 @@ export default function XTraderPage() {
             text: "Deriv is still settling the previous Accumulator. Money Bank will retry when the server confirms it is safe to continue.",
           });
           await sleep(750);
-          continue;
-        }
-        if (message.includes("Money Bank Auto Knockout")) {
-          setConnectionMessage({ kind: "info", text: message });
-          await sleep(1000);
           continue;
         }
         if (message.includes("reached the Auto Budget limit") || message.includes("reached its Auto Budget limit")) {

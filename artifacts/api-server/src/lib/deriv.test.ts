@@ -411,25 +411,24 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
     assert.ok(latestSocket().sent.some((message) => message.buy));
   });
 
-  test("blocks an Auto Knockout buy when the quote moves at the proposal timestamp", async () => {
-    await withSelectedAccount("accumulator-knockout-post-proposal-user", async () => {
+  test("does not gate Money Bank buys on knockout movement or incomplete exit-window ticks", async () => {
+    const result = await withSelectedAccount("accumulator-knockout-nonblocking-user", async () => {
       const socket = latestSocket();
-      emitAccumulatorTicks(socket, [75.5, 75.5, 75.5, 75.5, 75.5, 75.5]);
+      emitAccumulatorTicks(socket, [75.5, 75.5]);
       emitAccumulatorTick(socket, 75.50006);
-      await assert.rejects(
-        deriv.buyContract({
-          amount: 1,
-          duration: 5,
-          duration_unit: "t",
-          contract_type: "ACCU",
-          growth_rate: 0.04,
-          symbol: "1HZ90V",
-          auto_knockout: true,
-        }),
-        /new tick reached Deriv's contract barrier/,
-      );
-      assert.equal(socket.sent.some((message) => message.buy), false);
+      return deriv.buyContract({
+        amount: 1,
+        duration: 5,
+        duration_unit: "t",
+        contract_type: "ACCU",
+        growth_rate: 0.04,
+        symbol: "1HZ90V",
+        auto_knockout: true,
+      });
     });
+
+    assert.equal(result.buy.contract_id, "contract-proposal-1");
+    assert.ok(latestSocket().sent.some((message) => message.buy));
   });
 
   test("requires a clear ten-second Auto Knockout scan and a fresh exit-window quote", async () => {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, Download, Info, Play, RefreshCw, ShieldCheck, Square, TrendingUp } from "lucide-react";
+import { Activity, ChevronDown, Download, Info, Play, RefreshCw, ShieldCheck, Square, TrendingUp } from "lucide-react";
 import {
   calculateRecoveryLadder,
   estimateAccumulatorReturnRate,
@@ -279,28 +279,34 @@ export function MoneyBankPanel({
             </div>
             <div className="money-bank-toggle-list money-bank-market-toggle">
               <label>
-                <span><b>Auto Knockout</b>{autoKnockout && <small>{autoKnockoutCountdown == null ? "Ready" : "Scanning"}</small>}</span>
+                <span><b>Auto Knockout</b>{autoKnockout && <small>{autoKnockoutCountdown == null ? "Ready" : "Countdown"}</small>}</span>
                 <input type="checkbox" checked={autoKnockout} onChange={(event) => onAutoKnockoutChange(event.target.checked)} disabled={running} aria-label="Toggle Money Bank Auto Knockout" />
                 <i />
               </label>
             </div>
-            {autoKnockout && autoKnockoutCountdown != null && (
+            {autoKnockout && (
               <div className="money-bank-knockout-scan" role="status" aria-live="polite">
-                <ShieldCheck size={15} />
+                <Activity size={15} />
                 <span>
-                  {autoKnockoutCountdown > 0
-                    ? `Checking ${growthRate}% growth · ${takeProfitTicks} exit ticks · ${selectedMarket}: ${autoKnockoutCountdown}s`
-                    : "Rechecking the latest quote and exit ticks before entry…"}
+                  {autoKnockoutCountdown == null
+                    ? "Ready · 10-second entry countdown; Auto Knockout never blocks or closes trades."
+                    : autoKnockoutCountdown > 0
+                      ? `Preparing trade · ${growthRate}% growth · ${takeProfitTicks} exit ticks · ${selectedMarket}: ${autoKnockoutCountdown.toFixed(1)}s`
+                      : "Countdown complete · submitting the trade…"}
                 </span>
                 <div
                   className="money-bank-knockout-progress"
                   role="progressbar"
-                  aria-label="Auto Knockout scan progress"
+                  aria-label="Money Bank entry countdown progress"
                   aria-valuemin={0}
                   aria-valuemax={10}
-                  aria-valuenow={10 - autoKnockoutCountdown}
+                  aria-valuenow={autoKnockoutCountdown == null ? 0 : 10 - autoKnockoutCountdown}
                 >
-                  <i />
+                  <i
+                    style={{
+                      transform: `scaleX(${autoKnockoutCountdown == null ? 0 : Math.min(1, Math.max(0, (10 - autoKnockoutCountdown) / 10))})`,
+                    }}
+                  />
                 </div>
               </div>
             )}

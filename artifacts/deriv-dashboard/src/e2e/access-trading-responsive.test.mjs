@@ -330,6 +330,21 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
     await page.locator(".money-bank-market-toggle label").click();
     assert.equal(await autoKnockoutSwitch.isChecked(), true);
     await page.getByText("Ready", { exact: true }).waitFor();
+    const autoKnockoutStatus = page.locator(".money-bank-knockout-scan");
+    await autoKnockoutStatus.waitFor({ state: "visible" });
+    assert.match(await autoKnockoutStatus.innerText(), /10-second entry countdown/);
+    assert.match(await autoKnockoutStatus.innerText(), /never blocks or closes trades/);
+    await page.getByRole("button", { name: "Start Accumulator" }).click();
+    await page.getByText(/Preparing trade ·/).waitFor({ timeout: 5_000 });
+    const countdownProgress = page.getByRole("progressbar", { name: "Money Bank entry countdown progress" });
+    await countdownProgress.waitFor({ state: "visible" });
+    const progressAtStart = Number(await countdownProgress.getAttribute("aria-valuenow"));
+    await page.waitForTimeout(1_200);
+    assert.equal(await autoKnockoutStatus.isVisible(), true, "The countdown must remain visible while Money Bank is preparing a trade.");
+    const progressAfterWait = Number(await countdownProgress.getAttribute("aria-valuenow"));
+    assert.ok(progressAfterWait > progressAtStart, "The countdown progress should advance smoothly instead of blinking out.");
+    await page.getByRole("button", { name: "Stop Accumulator" }).click();
+    assert.equal(await autoKnockoutStatus.isVisible(), true, "Stopping Money Bank should leave the enabled countdown panel visible.");
     for (const viewport of viewports) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await assertNoHorizontalOverflow(page, viewport, "Money Bank Auto Knockout");

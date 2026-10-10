@@ -139,6 +139,7 @@ type BuyInput = {
   barrier?: number;
   growth_rate?: number;
   symbol?: string;
+  /** Legacy Money Bank UI field. It must never gate an otherwise valid buy. */
   auto_knockout?: boolean;
 };
 
@@ -1458,16 +1459,12 @@ export async function buyContract(input: BuyInput, assertAuthorized?: TradeAutho
     growth_rate: normalizedInput.growth_rate,
     symbol: normalizedInput.symbol,
   });
-  assertAccumulatorKnockoutClear(normalizedInput, proposal);
   await assertAuthorized?.();
   const connected = await connect();
   if (!connected) {
     throw new Error("Deriv WebSocket is not ready");
   }
   await assertAuthorized?.();
-  if (normalizedInput.auto_knockout) {
-    assertAccumulatorKnockoutClear(normalizedInput, proposal);
-  }
   const buy = await sendProposalBuy(proposal, normalizedInput);
   return {
     ok: true,
