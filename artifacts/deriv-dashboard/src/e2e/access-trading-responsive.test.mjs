@@ -141,6 +141,118 @@ test("Auto Trader and Auto Trader 2.0 grants stay independent during key creatio
   }
 });
 
+test("clearing Auto Trader 2.0 resets run metrics and stake without deleting Deriv history", async () => {
+  const state = createState(userSession(["auto-trader-2"]));
+  state.hasToken = true;
+  state.history = [
+    {
+      account_id: account.id,
+      contract_id: "at2-win",
+      contract_type: "DIGITDIFF",
+      symbol: "R_10",
+      account_type: "demo",
+      currency: "USD",
+      barrier: 2,
+      buy_price: 2,
+      current_value: 3.5,
+      payout: 3.5,
+      profit: 1.5,
+      status: "won",
+      buy_time: 1_700_000_002,
+      sell_time: 1_700_000_003,
+    },
+    {
+      account_id: account.id,
+      contract_id: "at2-loss",
+      contract_type: "CALL",
+      symbol: "R_10",
+      account_type: "demo",
+      currency: "USD",
+      barrier: null,
+      buy_price: 2,
+      current_value: 0.75,
+      payout: 3.5,
+      profit: -1.25,
+      status: "lost",
+      buy_time: 1_700_000_000,
+      sell_time: 1_700_000_001,
+    },
+  ];
+  const savedSession = {
+    version: 2,
+    accountId: account.id,
+    phase: "ready",
+    config: {
+      family: "differs",
+      contractType: "DIGITDIFF",
+      barrier: 2,
+      stake: 2.5,
+      duration: 1,
+      takeProfit: 10,
+      lossLimit: 10,
+      stakeMode: "multiply",
+      multiplier: 2,
+      aiEnabled: true,
+      autoSelect: true,
+      selectedMarket: "R_10",
+    },
+    contractIds: ["at2-win", "at2-loss"],
+    sessionPnl: 0.25,
+    currentStake: 4,
+    recoveryTargetPnl: 0.5,
+    lossStreaks: { CALL: 3 },
+    pausedContractTypes: ["CALL"],
+    pendingContractId: null,
+    pendingContractType: null,
+    pendingStake: null,
+    updatedAt: 1_700_000_004,
+  };
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.addInitScript(({ historyKey, sessionKey, historyLinks, session }) => {
+      localStorage.setItem(historyKey, JSON.stringify(historyLinks));
+      localStorage.setItem(sessionKey, JSON.stringify(session));
+    }, {
+      historyKey: `deriv-auto-trader-2-contracts:${account.id}`,
+      sessionKey: `deriv-auto-trader-2-session:${account.id}`,
+      historyLinks: ["at2-win", "at2-loss"].map((id, index) => ({ id, placedAt: 1_700_000_000 + index })),
+      session: savedSession,
+    });
+    await page.goto(`${baseUrl}/auto-trader-2`);
+    await page.getByTestId("auto-trader-2-panel").waitFor();
+    const summary = page.locator(".deriv-history-session");
+    await summary.getByText("50.0%", { exact: true }).waitFor();
+    assert.match(await summary.innerText(), /0\.25/);
+    assert.match(await summary.innerText(), /TRADES\s+2/);
+    assert.match(await summary.innerText(), /WON \/ LOST\s+1\s*\/\s*1/);
+    assert.match(await summary.innerText(), /STAKED\s+US\$4\.00/);
+
+    await page.getByRole("button", { name: "Clear Auto Trader 2.0 History session" }).click();
+    await page.getByTestId("at2-message").getByText(/Tap Clear session again/).waitFor();
+    await page.getByRole("button", { name: "Tap again to clear Auto Trader 2.0 History session" }).click();
+    await page.getByText(/The next session will start at the configured stake/).waitFor();
+
+    const clearedSummary = await summary.innerText();
+    assert.match(clearedSummary, /TRADES\s+0/);
+    assert.match(clearedSummary, /WON \/ LOST\s+0\s+\/\s+0/);
+    assert.match(clearedSummary, /WIN RATE\s+0\.0%/);
+    assert.match(clearedSummary, /US\$0\.00/);
+    assert.match(clearedSummary, /STAKED\s+US\$2\.50/);
+    assert.match(await page.locator(".at2-stake-plan .at2-field-note").innerText(), /USD 2\.50/);
+    assert.equal(await page.locator(".deriv-history-row").count(), 0);
+    assert.equal(state.history.length, 2, "The local clear must leave Deriv's returned account history unchanged.");
+    assert.deepEqual(await page.evaluate(() => ({
+      history: localStorage.getItem("deriv-auto-trader-2-contracts:VRTC12345"),
+      session: localStorage.getItem("deriv-auto-trader-2-session:VRTC12345"),
+    })), { history: null, session: null });
+    assert.deepEqual(state.tradeRequests, [], "Clearing run history must never submit a trade.");
+    assert.deepEqual(state.unhandledApis, []);
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+});
+
 test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports", async () => {
   const state = createState(userSession(["edge", "trade-x", "auto-trader", "auto-trader-2", "money-bank"]));
   state.hasToken = true;
@@ -587,7 +699,7 @@ async function mockApiRequest(route, state, pathname, method) {
     return;
   }
   if (pathname === "/api/deriv/history" && method === "GET") {
-    await fulfillJson(route, []);
+    await fulfillJson(route, state.history ?? []);
     return;
   }
   if (pathname === "/api/deriv/select-symbol" && method === "POST") {

@@ -47,6 +47,7 @@ export interface AutoTrader2PanelProps {
   sessionRows: DerivHistoryRow[];
   clearArmed: boolean;
   historyFading: boolean;
+  clearingHistory: boolean;
   onStart: () => void;
   onStop: () => void;
   onClearHistory: () => void;
@@ -108,12 +109,13 @@ export default function AutoTrader2Panel({
   sessionRows,
   clearArmed,
   historyFading,
+  clearingHistory,
   onStart,
   onStop,
   onClearHistory,
   onOpenGuide,
 }: AutoTrader2PanelProps) {
-  const controlsLocked = running || stopping || isPlacingTrade;
+  const controlsLocked = running || stopping || isPlacingTrade || clearingHistory;
   const canStart = connected && !tradeSlotBlocked && !sessionNeedsReview && !controlsLocked && stake > 0;
   const aiLabel = !aiEnabled
     ? "OFF"
@@ -388,7 +390,7 @@ export default function AutoTrader2Panel({
           sessionPnl={sessionPnl}
           sessionTradeCount={sessionTradeCount}
           clearArmed={clearArmed}
-          fading={historyFading}
+          fading={historyFading || clearingHistory}
           onClear={onClearHistory}
         />
       </div>

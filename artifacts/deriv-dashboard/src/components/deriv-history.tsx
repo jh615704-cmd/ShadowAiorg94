@@ -74,7 +74,7 @@ export default function DerivHistory({ title, strategy, className, rows, session
         <div className="deriv-history-title"><Activity size={18} /><span><b>This session</b><small>{title} · {strategy}</small></span></div>
         <div className="deriv-history-actions">
           {actions}
-          {onClear && <button type="button" onClick={onClear} disabled={!rows.length || fading} aria-label={clearArmed ? `Tap again to clear ${title} session` : `Clear ${title} session`}><Trash2 size={15} />{clearArmed ? "Tap again" : "Clear session"}</button>}
+          {onClear && <button type="button" onClick={onClear} disabled={(!rows.length && summary.trades === 0 && summary.pnl === 0) || fading} aria-label={clearArmed ? `Tap again to clear ${title} session` : `Clear ${title} session`}><Trash2 size={15} />{clearArmed ? "Tap again" : "Clear session"}</button>}
         </div>
       </header>
       {summaryMode !== "hidden" && <div className={`deriv-history-session ${summaryMode === "pnl-only" ? "pnl-only" : ""}`}>

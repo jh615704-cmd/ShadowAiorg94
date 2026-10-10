@@ -85,7 +85,7 @@ const guideCopy = [
   ["Differs loss response", "After any AI 2 Differs loss settles, recovery selection switches to qualifying Rise/Fall or Even/Odd candidates and can auto-select the strongest market. It remains in recovery until settled session P/L rises above the P/L level from just before that loss.", "Recovery does not guarantee a profit. If no qualifying setup is available, AI 2 waits without placing an order."],
   ["One open contract at a time", "The loop waits for Deriv history to show the active contract as settled before considering another entry. Other open contracts also block new entries.", "If settlement cannot be verified, the loop pauses instead of guessing or sending another order."],
   ["Reading Auto Trader 2.0 History", "History uses the same session summary and trade-row design as Cash Grab. It only includes contracts this feature recorded for the currently selected account.", "The history list is a dashboard view. Deriv remains the authoritative account record."],
-  ["Clear this feature's history", "The two-step clear removes only Auto Trader 2.0 rows from this browser's account-scoped view. It does not delete Deriv contracts or account records.", "Clearing the view does not close or cancel a contract."],
+  ["Clear this feature's history", "The two-step clear removes this browser's Auto Trader 2.0 rows and verified local run state. It resets this run's totals and next stake to the configured stake; Deriv account history is unchanged.", "A saved session with an unsettled or uncertain contract must be verified before it can be cleared. Clearing never closes or cancels a contract."],
   ["Declines, uncertain orders & reloads", "Deriv may decline unavailable contracts; Auto Trader 2.0 stops after a rejection and never retries an uncertain order. AI 2 saves account-scoped recovery state in this browser. After reload, verify Deriv history and open contracts before resuming; an order that may have been submitted is never resent.", "A saved checkpoint is not proof of settlement. If history, account identity, or open-contract status cannot be confirmed, keep the session paused and review Deriv directly."],
 ] as const;
 
@@ -152,6 +152,7 @@ function AutoTrader2Content() {
   const localContractsRef = useRef<LocalContract[]>([]);
   const [runContractIds, setRunContractIds] = useState<string[]>([]);
   const [clearArmed, setClearArmed] = useState(false);
+  const [clearingHistory, setClearingHistory] = useState(false);
   const [historyFading, setHistoryFading] = useState(false);
   const [sessionPnl, setSessionPnl] = useState(0);
   const [sessionTradeCount, setSessionTradeCount] = useState(0);
@@ -962,10 +963,14 @@ function AutoTrader2Content() {
     }
   };
 
-  const clearHistory = () => {
-    if (!accountId || running) return;
+  const clearHistory = async () => {
+    if (!accountId || running || runRef.current.active || clearingHistory) return;
     if (!clearArmed) {
       setClearArmed(true);
+      setMessage({
+        tone: "info",
+        text: "Tap Clear session again to reset Auto Trader 2.0's local history, run totals, recovery state, and stake progression. Deriv account history will remain unchanged.",
+      });
       if (clearTimer.current !== null) window.clearTimeout(clearTimer.current);
       clearTimer.current = window.setTimeout(() => {
         setClearArmed(false);
@@ -978,16 +983,79 @@ function AutoTrader2Content() {
       window.clearTimeout(clearTimer.current);
       clearTimer.current = null;
     }
-    setHistoryFading(true);
-    window.setTimeout(() => setHistoryFading(false), 320);
+    setClearingHistory(true);
+    if (
+      sessionLoadingForAccount
+      || sessionLoadedForAccount !== accountId
+      || savedSessionIssue
+      || requiresAutoTrader2SessionReview(savedSession)
+      || runRef.current.pendingContractId !== null
+    ) {
+      setMessage({
+        tone: "info",
+        text: "Verify or review the saved Auto Trader 2.0 session before clearing its run totals. No Deriv contracts or account history were changed.",
+      });
+      setClearingHistory(false);
+      return;
+    }
+    try {
+      const refreshedStatus = await statusRef.current.refetch();
+      const currentStatus = refreshedStatus.data;
+      if (
+        refreshedStatus.isError
+        || currentStatus?.connected !== true
+        || currentStatus.authorized !== true
+        || currentStatus.account?.id !== accountId
+        || currentStatus.open_contracts_ready !== true
+        || (currentStatus.active_contract_count ?? 0) > 0
+      ) {
+        setMessage({
+          tone: "info",
+          text: "Auto Trader 2.0 can reset its run totals only after Deriv confirms this account is connected and has no open contract. No contract was closed or cancelled.",
+        });
+        return;
+      }
+      localStorage.removeItem(`${storagePrefix}${accountId}`);
+      localStorage.removeItem(`${sessionStoragePrefix}${accountId}`);
+    } catch {
+      setMessage({
+        tone: "error",
+        text: "The local history and run state could not be cleared. Auto Trader 2.0 left its totals and stake unchanged; Deriv account history was not changed.",
+      });
+      return;
+    } finally {
+      setClearingHistory(false);
+    }
+    localContractsRef.current = [];
     setLocalContracts([]);
     setRunContractIds([]);
-    try {
-      localStorage.removeItem(`${storagePrefix}${accountId}`);
-      setMessage({ tone: "success", text: "Auto Trader 2.0 history was cleared from this account-scoped view. Deriv account history is unchanged." });
-    } catch {
-      setMessage({ tone: "error", text: "History was cleared from this view, but this browser could not save the change." });
-    }
+    setSessionPnl(0);
+    setSessionTradeCount(0);
+    setNextStake(stake);
+    runRef.current.active = false;
+    runRef.current.contractIds = [];
+    runRef.current.config = null;
+    runRef.current.currentStake = stake;
+    runRef.current.sessionPnl = 0;
+    runRef.current.recovery = false;
+    runRef.current.recoveryTargetPnl = null;
+    runRef.current.lossStreaks = {};
+    runRef.current.pausedContractTypes = [];
+    runRef.current.pendingContractId = null;
+    runRef.current.pendingContractType = null;
+    runRef.current.pendingStake = null;
+    runRef.current.lastCandidate = null;
+    setSavedSession(null);
+    setSavedSessionIssue("");
+    setSavedSessionNotice("");
+    setDiscardSessionArmed(false);
+    setHistoryFading(true);
+    window.setTimeout(() => setHistoryFading(false), 320);
+    setDecision("Session cleared · the next run starts at the configured stake.");
+    setMessage({
+      tone: "success",
+      text: "Auto Trader 2.0 local history and run totals were cleared. The next session will start at the configured stake; Deriv account history is unchanged.",
+    });
   };
 
   const chooseFamily = (nextFamily: AutoTrader2Family) => {
@@ -1098,6 +1166,7 @@ function AutoTrader2Content() {
           sessionRows={runRows}
           clearArmed={clearArmed}
           historyFading={historyFading}
+          clearingHistory={clearingHistory}
           onStart={() => void start()}
           onStop={stop}
           onClearHistory={clearHistory}
