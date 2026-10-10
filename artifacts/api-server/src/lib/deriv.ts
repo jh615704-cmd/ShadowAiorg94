@@ -40,6 +40,10 @@ export type DerivProposal = {
   payout: number;
   spot: number;
   longcode: string | null;
+  spot_time?: number;
+  contract_details?: {
+    tick_size_barrier?: number;
+  };
 };
 
 export type DerivBuy = {
@@ -106,6 +110,8 @@ export type DerivStatus = {
     last_digit: number | null;
     tick_sequence: number;
     recent_digits: number[];
+    recent_quotes: number[];
+    tick_epoch: number;
     sample_count: number;
     digit_even_percentage: number;
     digit_odd_percentage: number;
@@ -133,6 +139,7 @@ type BuyInput = {
   barrier?: number;
   growth_rate?: number;
   symbol?: string;
+  auto_knockout?: boolean;
 };
 
 export type SellResult = {
@@ -216,6 +223,7 @@ return {
     tickSequence: number;
     digitHistory: number[];
     movementHistory: Array<"rise" | "fall" | "flat">;
+    quoteHistory: Array<{ quote: number; epoch: number }>;
   }>(),
   selectedSymbol: defaultSymbol,
   hiddenHistoryIds: new Set<string>(),
@@ -485,7 +493,7 @@ function recordMarketTick(symbol: string, quote: unknown, epoch: number, pipSize
       : "";
   const digits = rawQuote.replace(/\D/g, "");
   const lastDigit = digits.at(-1);
-  const market = runtime.marketHistory.get(symbol) ?? { quote: null, epoch: 0, tickSequence: 0, digitHistory: [], movementHistory: [] };
+  const market = runtime.marketHistory.get(symbol) ?? { quote: null, epoch: 0, tickSequence: 0, digitHistory: [], movementHistory: [], quoteHistory: [] };
   const nextQuote = Number(quote ?? 0);
   if (market.quote != null && Number.isFinite(market.quote) && Number.isFinite(nextQuote)) {
     market.movementHistory.push(nextQuote > market.quote ? "rise" : nextQuote < market.quote ? "fall" : "flat");
@@ -493,6 +501,10 @@ function recordMarketTick(symbol: string, quote: unknown, epoch: number, pipSize
   }
   market.quote = nextQuote;
   market.epoch = epoch;
+  if (Number.isFinite(nextQuote) && nextQuote > 0) {
+    market.quoteHistory.push({ quote: nextQuote, epoch });
+    market.quoteHistory = market.quoteHistory.slice(-200);
+  }
   market.tickSequence += 1;
   if (lastDigit !== undefined) market.digitHistory.push(Number(lastDigit));
   market.digitHistory = market.digitHistory.slice(-1000);
@@ -524,6 +536,8 @@ function getMarketSignals() {
       last_digit: digits.at(-1) ?? null,
       tick_sequence: market?.tickSequence ?? 0,
       recent_digits: digits,
+      recent_quotes: (market?.quoteHistory ?? []).slice(-200).map((tick: { quote: number; epoch: number }) => tick.quote),
+      tick_epoch: market?.epoch ?? 0,
       sample_count: sampleCount,
       digit_even_percentage: sampleCount ? Number(((evenCount / sampleCount) * 100).toFixed(1)) : 50,
       digit_odd_percentage: sampleCount ? Number((((sampleCount - evenCount) / sampleCount) * 100).toFixed(1)) : 50,
@@ -806,13 +820,69 @@ function proposalFromMessage(raw: unknown): DerivProposal | null {
   const proposal = raw as Record<string, unknown>;
   const id = String(proposal.id ?? "");
   if (!id) return null;
+  const rawDetails = proposal.contract_details && typeof proposal.contract_details === "object"
+    ? proposal.contract_details as Record<string, unknown>
+    : null;
+  const rawBarrier = Number(rawDetails?.tick_size_barrier);
   return {
     id,
     ask_price: Number(proposal.ask_price ?? 0),
     payout: Number(proposal.payout ?? 0),
     spot: Number(proposal.spot ?? 0),
     longcode: typeof proposal.longcode === "string" ? proposal.longcode : null,
+    ...(Number.isFinite(Number(proposal.spot_time)) ? { spot_time: Number(proposal.spot_time) } : {}),
+    ...(Number.isFinite(rawBarrier) && rawBarrier > 0
+      ? { contract_details: { tick_size_barrier: rawBarrier } }
+      : {}),
   };
+}
+
+function assertAccumulatorKnockoutClear(input: BuyInput, proposal: DerivProposal) {
+  if (!input.auto_knockout) return;
+  if (input.contract_type !== "ACCU") {
+    throw new Error("Auto Knockout is only supported for Accumulator contracts.");
+  }
+
+  const symbol = input.symbol ?? defaultSymbol;
+  const market = getState().marketHistory.get(symbol);
+  const barrier = proposal.contract_details?.tick_size_barrier;
+  const now = Math.floor(Date.now() / 1000);
+  const proposalEpoch = proposal.spot_time;
+  const proposalSpot = proposal.spot;
+  if (
+    !market
+    || !Number.isFinite(barrier)
+    || barrier! <= 0
+    || !Number.isFinite(proposalEpoch)
+    || Math.abs(now - proposalEpoch!) > 3
+    || Math.abs(now - market.epoch) > 3
+    || !Number.isFinite(proposalSpot)
+    || proposalSpot <= 0
+  ) {
+    throw new Error("Money Bank Auto Knockout is waiting for a fresh Deriv proposal and quote sample. No contract was sent.");
+  }
+
+  const samples = market.quoteHistory.filter((tick: { quote: number; epoch: number }) => tick.epoch <= proposalEpoch!);
+  const latest = samples.at(-1);
+  if (!latest || proposalEpoch! - latest.epoch > 1) {
+    throw new Error("Money Bank Auto Knockout is waiting for a matching quote sample. No contract was sent.");
+  }
+  if (latest.epoch === proposalEpoch) {
+    samples[samples.length - 1] = { quote: proposalSpot, epoch: proposalEpoch! };
+  } else {
+    samples.push({ quote: proposalSpot, epoch: proposalEpoch! });
+  }
+
+  const requiredQuotes = input.duration + 1;
+  const window = samples.slice(-requiredQuotes);
+  if (window.length !== requiredQuotes) {
+    throw new Error("Money Bank Auto Knockout is waiting for enough ticks to scan this contract window. No contract was sent.");
+  }
+  for (let index = 1; index < window.length; index += 1) {
+    if (Math.abs(window[index].quote - window[index - 1].quote) >= barrier!) {
+      throw new Error("Money Bank Auto Knockout blocked this entry after detecting a recent move at Deriv's contract barrier. No contract was sent.");
+    }
+  }
 }
 
 function scheduleReconnect() {
@@ -1308,6 +1378,7 @@ export async function buyContract(input: BuyInput, assertAuthorized?: TradeAutho
     growth_rate: normalizedInput.growth_rate,
     symbol: normalizedInput.symbol,
   });
+  assertAccumulatorKnockoutClear(normalizedInput, proposal);
   await assertAuthorized?.();
   const connected = await connect();
   if (!connected) {

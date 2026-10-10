@@ -1721,6 +1721,7 @@ body { overflow-x: hidden; }
 .xt-feature-card-digit-flip svg,
 .xt-feature-card-bulk svg,
 .xt-feature-card-cash-grab svg { color: #71cfff; }
+.xt-trading-strategies-heading { margin: 22px 0 8px; color: #dcedff; font-size: 14px; font-weight: 900; letter-spacing: .04em; }
 .trade-x-panel,
 .digit-flip-panel,
 .bulk-trader-panel,

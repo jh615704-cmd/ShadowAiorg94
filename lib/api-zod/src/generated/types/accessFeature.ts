@@ -18,6 +18,7 @@ export const AccessFeature = {
   'money-bank': 'money-bank',
   'jdy-ai-3': 'jdy-ai-3',
   'auto-trader': 'auto-trader',
+  'auto-trader-2': 'auto-trader-2',
   settings: 'settings',
   history: 'history',
   admin: 'admin',

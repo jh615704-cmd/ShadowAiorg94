@@ -97,6 +97,8 @@ function handleClientMessage(socket: FakeWebSocket, message: SocketMessage) {
         ask_price: 1.25 + proposalNumber,
         payout: proposalPayoutOverride ?? 2.5 + proposalNumber,
         spot: 75.5,
+        spot_time: Math.floor(Date.now() / 1000),
+        contract_details: { tick_size_barrier: 0.00005 },
         longcode: `proposal ${proposalNumber}`,
       },
     });
@@ -180,6 +182,21 @@ function latestSocket() {
   const socket = sockets.at(-1);
   assert.ok(socket, "expected an authenticated WebSocket");
   return socket;
+}
+
+function emitAccumulatorTicks(socket: FakeWebSocket, quotes: number[]) {
+  const now = Math.floor(Date.now() / 1000);
+  quotes.forEach((quote, index) => {
+    emitMessage(socket, {
+      msg_type: "tick",
+      tick: {
+        symbol: "1HZ90V",
+        quote,
+        epoch: now - (quotes.length - index),
+        pip_size: 5,
+      },
+    });
+  });
 }
 
 before(() => {
@@ -347,6 +364,45 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
     assert.equal(proposalRequests[0].date_expiry, undefined);
     assert.deepEqual(proposalRequests[0].limit_order, { take_profit: 0.22 });
     assert.equal(proposalRequests[0].growth_rate, 0.04);
+  });
+
+  test("allows Auto Knockout only when the recent window remains inside Deriv's proposal barrier", async () => {
+    const result = await withSelectedAccount("accumulator-knockout-safe-user", async () => {
+      const socket = latestSocket();
+      emitAccumulatorTicks(socket, [75.5, 75.5, 75.5, 75.5, 75.5, 75.5]);
+      return deriv.buyContract({
+        amount: 1,
+        duration: 5,
+        duration_unit: "t",
+        contract_type: "ACCU",
+        growth_rate: 0.04,
+        symbol: "1HZ90V",
+        auto_knockout: true,
+      });
+    });
+
+    assert.equal(result.buy.contract_id, "contract-proposal-1");
+    assert.ok(latestSocket().sent.some((message) => message.buy));
+  });
+
+  test("blocks an ACCU buy when a recent tick crosses Deriv's proposal barrier", async () => {
+    await withSelectedAccount("accumulator-knockout-risk-user", async () => {
+      const socket = latestSocket();
+      emitAccumulatorTicks(socket, [75.5, 75.5, 75.5, 75.5, 75.50006, 75.5]);
+      await assert.rejects(
+        deriv.buyContract({
+          amount: 1,
+          duration: 5,
+          duration_unit: "t",
+          contract_type: "ACCU",
+          growth_rate: 0.04,
+          symbol: "1HZ90V",
+          auto_knockout: true,
+        }),
+        /Auto Knockout blocked this entry/,
+      );
+      assert.equal(socket.sent.some((message) => message.buy), false);
+    });
   });
 
   test("rounds Accumulator stakes before Deriv receives the proposal", async () => {

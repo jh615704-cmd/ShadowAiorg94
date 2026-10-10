@@ -29,4 +29,6 @@ export interface DerivBuyInput {
      */
   growth_rate?: number;
   symbol?: string;
+  /** When true for ACCU, the server checks recent ticks against Deriv's proposal-specific knockout barrier before sending a buy. */
+  auto_knockout?: boolean;
 }

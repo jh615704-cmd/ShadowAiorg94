@@ -86,7 +86,7 @@ export const LoginAccessKeyResponse = zod.object({
   "is_admin": zod.boolean(),
   "status": zod.enum(['active', 'paused', 'blocked', 'banned']),
   "max_devices": zod.number().int(),
-  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'settings', 'history', 'admin'])),
+  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin'])),
   "online": zod.boolean(),
   "last_seen_at": zod.coerce.date().nullable()
 })
@@ -103,7 +103,7 @@ export const GetAccessSessionResponse = zod.object({
   "is_admin": zod.boolean(),
   "status": zod.enum(['active', 'paused', 'blocked', 'banned']),
   "max_devices": zod.number().int(),
-  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'settings', 'history', 'admin'])),
+  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin'])),
   "online": zod.boolean(),
   "last_seen_at": zod.coerce.date().nullable()
 })
@@ -164,7 +164,7 @@ export const ListAccessKeysResponseItem = zod.object({
   "is_admin": zod.boolean(),
   "status": zod.enum(['active', 'paused', 'blocked', 'banned']),
   "max_devices": zod.number().int(),
-  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'settings', 'history', 'admin'])),
+  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin'])),
   "online": zod.boolean(),
   "last_seen_at": zod.coerce.date().nullable()
 }).and(zod.object({
@@ -192,7 +192,7 @@ export const CreateAccessKeyBody = zod.object({
   "label": zod.string().min(1).max(createAccessKeyBodyLabelMax),
   "kind": zod.enum(['admin', 'user']),
   "max_devices": zod.number().int().min(createAccessKeyBodyMaxDevicesMin).max(createAccessKeyBodyMaxDevicesMax).describe('Maximum active devices; 0 means unlimited and is allowed only for administrator keys.'),
-  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'settings', 'history', 'admin'])).min(1)
+  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin'])).min(1)
 })
 
 export const CreateAccessKeyResponse = zod.object({
@@ -203,7 +203,7 @@ export const CreateAccessKeyResponse = zod.object({
   "is_admin": zod.boolean(),
   "status": zod.enum(['active', 'paused', 'blocked', 'banned']),
   "max_devices": zod.number().int(),
-  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'settings', 'history', 'admin'])),
+  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin'])),
   "online": zod.boolean(),
   "last_seen_at": zod.coerce.date().nullable()
 }).and(zod.object({
@@ -227,7 +227,7 @@ export const updateAccessKeyBodyMaxDevicesMax = 50;
 export const UpdateAccessKeyBody = zod.object({
   "status": zod.enum(['active', 'paused', 'blocked', 'banned', 'deleted']).optional(),
   "max_devices": zod.number().int().min(updateAccessKeyBodyMaxDevicesMin).max(updateAccessKeyBodyMaxDevicesMax).optional().describe('Maximum active devices; 0 means unlimited and is allowed only for administrator keys.'),
-  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'settings', 'history', 'admin'])).min(1).optional()
+  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin'])).min(1).optional()
 })
 
 export const UpdateAccessKeyResponse = zod.object({
@@ -238,7 +238,7 @@ export const UpdateAccessKeyResponse = zod.object({
   "is_admin": zod.boolean(),
   "status": zod.enum(['active', 'paused', 'blocked', 'banned']),
   "max_devices": zod.number().int(),
-  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'settings', 'history', 'admin'])),
+  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin'])),
   "online": zod.boolean(),
   "last_seen_at": zod.coerce.date().nullable()
 }).and(zod.object({
@@ -278,7 +278,7 @@ export const ResetAccessKeyResponse = zod.object({
   "is_admin": zod.boolean(),
   "status": zod.enum(['active', 'paused', 'blocked', 'banned']),
   "max_devices": zod.number().int(),
-  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'settings', 'history', 'admin'])),
+  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin'])),
   "online": zod.boolean(),
   "last_seen_at": zod.coerce.date().nullable()
 }).and(zod.object({
@@ -371,6 +371,10 @@ export const getDerivStatusResponseMarketSignalsItemRecentDigitsItemMin = 0;
 export const getDerivStatusResponseMarketSignalsItemRecentDigitsItemMax = 9;
 
 export const getDerivStatusResponseMarketSignalsItemRecentDigitsMax = 100;
+
+export const getDerivStatusResponseMarketSignalsItemRecentQuotesMax = 200;
+
+export const getDerivStatusResponseMarketSignalsItemTickEpochMin = 0;
 
 export const getDerivStatusResponseMarketSignalsItemSampleCountMin = 0;
 
@@ -467,6 +471,8 @@ export const GetDerivStatusResponse = zod.object({
   "last_digit": zod.number().int().min(getDerivStatusResponseMarketSignalsItemLastDigitMin).max(getDerivStatusResponseMarketSignalsItemLastDigitMax).nullable(),
   "tick_sequence": zod.number().int().min(getDerivStatusResponseMarketSignalsItemTickSequenceMin).describe('Monotonically increasing count of ticks observed for this market in the active Deriv session.'),
   "recent_digits": zod.array(zod.number().int().min(getDerivStatusResponseMarketSignalsItemRecentDigitsItemMin).max(getDerivStatusResponseMarketSignalsItemRecentDigitsItemMax)).max(getDerivStatusResponseMarketSignalsItemRecentDigitsMax).describe('Most recent final digits, in arrival order, for recovering missed ticks in the live scanner.'),
+  "recent_quotes": zod.array(zod.number()).max(getDerivStatusResponseMarketSignalsItemRecentQuotesMax).describe('Most recent market quotes, in arrival order, for evaluating configured tick windows.'),
+  "tick_epoch": zod.number().int().min(getDerivStatusResponseMarketSignalsItemTickEpochMin).describe('Epoch in seconds of the latest quote received for this market.'),
   "sample_count": zod.number().int().min(getDerivStatusResponseMarketSignalsItemSampleCountMin),
   "digit_even_percentage": zod.number().min(getDerivStatusResponseMarketSignalsItemDigitEvenPercentageMin).max(getDerivStatusResponseMarketSignalsItemDigitEvenPercentageMax),
   "digit_odd_percentage": zod.number().min(getDerivStatusResponseMarketSignalsItemDigitOddPercentageMin).max(getDerivStatusResponseMarketSignalsItemDigitOddPercentageMax),
@@ -515,6 +521,10 @@ export const testDerivConnectionResponseStatusMarketSignalsItemRecentDigitsItemM
 export const testDerivConnectionResponseStatusMarketSignalsItemRecentDigitsItemMax = 9;
 
 export const testDerivConnectionResponseStatusMarketSignalsItemRecentDigitsMax = 100;
+
+export const testDerivConnectionResponseStatusMarketSignalsItemRecentQuotesMax = 200;
+
+export const testDerivConnectionResponseStatusMarketSignalsItemTickEpochMin = 0;
 
 export const testDerivConnectionResponseStatusMarketSignalsItemSampleCountMin = 0;
 
@@ -621,6 +631,8 @@ export const TestDerivConnectionResponse = zod.object({
   "last_digit": zod.number().int().min(testDerivConnectionResponseStatusMarketSignalsItemLastDigitMin).max(testDerivConnectionResponseStatusMarketSignalsItemLastDigitMax).nullable(),
   "tick_sequence": zod.number().int().min(testDerivConnectionResponseStatusMarketSignalsItemTickSequenceMin).describe('Monotonically increasing count of ticks observed for this market in the active Deriv session.'),
   "recent_digits": zod.array(zod.number().int().min(testDerivConnectionResponseStatusMarketSignalsItemRecentDigitsItemMin).max(testDerivConnectionResponseStatusMarketSignalsItemRecentDigitsItemMax)).max(testDerivConnectionResponseStatusMarketSignalsItemRecentDigitsMax).describe('Most recent final digits, in arrival order, for recovering missed ticks in the live scanner.'),
+  "recent_quotes": zod.array(zod.number()).max(testDerivConnectionResponseStatusMarketSignalsItemRecentQuotesMax).describe('Most recent market quotes, in arrival order, for evaluating configured tick windows.'),
+  "tick_epoch": zod.number().int().min(testDerivConnectionResponseStatusMarketSignalsItemTickEpochMin).describe('Epoch in seconds of the latest quote received for this market.'),
   "sample_count": zod.number().int().min(testDerivConnectionResponseStatusMarketSignalsItemSampleCountMin),
   "digit_even_percentage": zod.number().min(testDerivConnectionResponseStatusMarketSignalsItemDigitEvenPercentageMin).max(testDerivConnectionResponseStatusMarketSignalsItemDigitEvenPercentageMax),
   "digit_odd_percentage": zod.number().min(testDerivConnectionResponseStatusMarketSignalsItemDigitOddPercentageMin).max(testDerivConnectionResponseStatusMarketSignalsItemDigitOddPercentageMax),
@@ -708,6 +720,10 @@ export const selectDerivAccountResponseMarketSignalsItemRecentDigitsItemMin = 0;
 export const selectDerivAccountResponseMarketSignalsItemRecentDigitsItemMax = 9;
 
 export const selectDerivAccountResponseMarketSignalsItemRecentDigitsMax = 100;
+
+export const selectDerivAccountResponseMarketSignalsItemRecentQuotesMax = 200;
+
+export const selectDerivAccountResponseMarketSignalsItemTickEpochMin = 0;
 
 export const selectDerivAccountResponseMarketSignalsItemSampleCountMin = 0;
 
@@ -804,6 +820,8 @@ export const SelectDerivAccountResponse = zod.object({
   "last_digit": zod.number().int().min(selectDerivAccountResponseMarketSignalsItemLastDigitMin).max(selectDerivAccountResponseMarketSignalsItemLastDigitMax).nullable(),
   "tick_sequence": zod.number().int().min(selectDerivAccountResponseMarketSignalsItemTickSequenceMin).describe('Monotonically increasing count of ticks observed for this market in the active Deriv session.'),
   "recent_digits": zod.array(zod.number().int().min(selectDerivAccountResponseMarketSignalsItemRecentDigitsItemMin).max(selectDerivAccountResponseMarketSignalsItemRecentDigitsItemMax)).max(selectDerivAccountResponseMarketSignalsItemRecentDigitsMax).describe('Most recent final digits, in arrival order, for recovering missed ticks in the live scanner.'),
+  "recent_quotes": zod.array(zod.number()).max(selectDerivAccountResponseMarketSignalsItemRecentQuotesMax).describe('Most recent market quotes, in arrival order, for evaluating configured tick windows.'),
+  "tick_epoch": zod.number().int().min(selectDerivAccountResponseMarketSignalsItemTickEpochMin).describe('Epoch in seconds of the latest quote received for this market.'),
   "sample_count": zod.number().int().min(selectDerivAccountResponseMarketSignalsItemSampleCountMin),
   "digit_even_percentage": zod.number().min(selectDerivAccountResponseMarketSignalsItemDigitEvenPercentageMin).max(selectDerivAccountResponseMarketSignalsItemDigitEvenPercentageMax),
   "digit_odd_percentage": zod.number().min(selectDerivAccountResponseMarketSignalsItemDigitOddPercentageMin).max(selectDerivAccountResponseMarketSignalsItemDigitOddPercentageMax),
@@ -859,6 +877,10 @@ export const selectDerivSymbolResponseMarketSignalsItemRecentDigitsItemMin = 0;
 export const selectDerivSymbolResponseMarketSignalsItemRecentDigitsItemMax = 9;
 
 export const selectDerivSymbolResponseMarketSignalsItemRecentDigitsMax = 100;
+
+export const selectDerivSymbolResponseMarketSignalsItemRecentQuotesMax = 200;
+
+export const selectDerivSymbolResponseMarketSignalsItemTickEpochMin = 0;
 
 export const selectDerivSymbolResponseMarketSignalsItemSampleCountMin = 0;
 
@@ -955,6 +977,8 @@ export const SelectDerivSymbolResponse = zod.object({
   "last_digit": zod.number().int().min(selectDerivSymbolResponseMarketSignalsItemLastDigitMin).max(selectDerivSymbolResponseMarketSignalsItemLastDigitMax).nullable(),
   "tick_sequence": zod.number().int().min(selectDerivSymbolResponseMarketSignalsItemTickSequenceMin).describe('Monotonically increasing count of ticks observed for this market in the active Deriv session.'),
   "recent_digits": zod.array(zod.number().int().min(selectDerivSymbolResponseMarketSignalsItemRecentDigitsItemMin).max(selectDerivSymbolResponseMarketSignalsItemRecentDigitsItemMax)).max(selectDerivSymbolResponseMarketSignalsItemRecentDigitsMax).describe('Most recent final digits, in arrival order, for recovering missed ticks in the live scanner.'),
+  "recent_quotes": zod.array(zod.number()).max(selectDerivSymbolResponseMarketSignalsItemRecentQuotesMax).describe('Most recent market quotes, in arrival order, for evaluating configured tick windows.'),
+  "tick_epoch": zod.number().int().min(selectDerivSymbolResponseMarketSignalsItemTickEpochMin).describe('Epoch in seconds of the latest quote received for this market.'),
   "sample_count": zod.number().int().min(selectDerivSymbolResponseMarketSignalsItemSampleCountMin),
   "digit_even_percentage": zod.number().min(selectDerivSymbolResponseMarketSignalsItemDigitEvenPercentageMin).max(selectDerivSymbolResponseMarketSignalsItemDigitEvenPercentageMax),
   "digit_odd_percentage": zod.number().min(selectDerivSymbolResponseMarketSignalsItemDigitOddPercentageMin).max(selectDerivSymbolResponseMarketSignalsItemDigitOddPercentageMax),
@@ -997,7 +1021,8 @@ export const BuyDerivContractBody = zod.object({
   "contract_type": zod.enum(['DIGITEVEN', 'DIGITODD', 'DIGITOVER', 'DIGITUNDER', 'DIGITDIFF', 'CALL', 'PUT', 'ACCU']),
   "barrier": zod.number().int().min(buyDerivContractBodyBarrierMin).max(buyDerivContractBodyBarrierMax).optional(),
   "growth_rate": zod.number().min(buyDerivContractBodyGrowthRateMin).max(buyDerivContractBodyGrowthRateMax).optional(),
-  "symbol": zod.string().optional()
+  "symbol": zod.string().optional(),
+  "auto_knockout": zod.boolean().optional().describe('When true for ACCU, the server checks recent ticks against Deriv\'s proposal-specific knockout barrier before sending a buy.')
 })
 
 export const BuyDerivContractResponse = zod.object({

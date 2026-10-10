@@ -16,6 +16,7 @@ import {
 } from "./requireAccess.ts";
 
 const autoTraderFeature = "auto-trader";
+const autoTrader2Feature = "auto-trader-2";
 
 describe("Auto Trader access-key feature path", () => {
   it("accepts Auto Trader in both create and edit requests", () => {
@@ -29,6 +30,20 @@ describe("Auto Trader access-key feature path", () => {
 
     assert.deepEqual(create.features, ["edge", autoTraderFeature]);
     assert.deepEqual(update.features, [autoTraderFeature]);
+  });
+
+  it("keeps Auto Trader 2.0 as an independent access grant", () => {
+    const create = CreateAccessKeyBody.parse({
+      label: "Auto Trader 2.0 user",
+      kind: "user",
+      max_devices: 1,
+      features: [autoTrader2Feature],
+    });
+    const update = UpdateAccessKeyBody.parse({ features: [autoTrader2Feature] });
+    assert.deepEqual(create.features, [autoTrader2Feature]);
+    assert.deepEqual(update.features, [autoTrader2Feature]);
+    assert.ok(TRADING_ACCESS_FEATURES.includes(autoTrader2Feature));
+    assert.ok(ACCESS_FEATURES.includes(autoTrader2Feature));
   });
 
   it("preserves the grant for user sessions and filters administrator-only values", () => {

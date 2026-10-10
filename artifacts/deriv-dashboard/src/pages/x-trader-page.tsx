@@ -296,7 +296,8 @@ export default function XTraderPage() {
   const canUseCashGrab = isAdmin || accessSession.data?.features.includes("cash-grab") === true;
   const canUseMoneyBank = isAdmin || accessSession.data?.features.includes("money-bank") === true;
   const canUseAutoTrader = isAdmin || accessSession.data?.features.includes("auto-trader") === true;
-  const canUseDeriv = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseCashGrab || canUseMoneyBank || canUseAutoTrader;
+  const canUseAutoTrader2 = isAdmin || accessSession.data?.features.includes("auto-trader-2") === true;
+  const canUseDeriv = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseCashGrab || canUseMoneyBank || canUseAutoTrader || canUseAutoTrader2;
   const canViewHistory = canUseDeriv || accessSession.data?.features.includes("history") === true;
   const tokenStatus = useGetDerivTokenStatus({ query: { enabled: canUseDeriv, retry: false, queryKey: getGetDerivTokenStatusQueryKey() } });
   const connectedToken = Boolean(tokenStatus.data?.has_token);
@@ -346,6 +347,7 @@ export default function XTraderPage() {
   const [moneyBankSymbol, setMoneyBankSymbol] = useState("1HZ90V");
   const [moneyBankGrowthRate, setMoneyBankGrowthRate] = useState(4);
   const [moneyBankTakeProfitTicks, setMoneyBankTakeProfitTicks] = useState(5);
+  const [moneyBankAutoKnockout, setMoneyBankAutoKnockout] = useState(false);
   const [moneyBankStrategy, setMoneyBankStrategy] = useState<MoneyBankStrategy>("budget");
   const [moneyBankBudget, setMoneyBankBudget] = useState(500);
   const [moneyBankManualBase, setMoneyBankManualBase] = useState(1);
@@ -1634,6 +1636,7 @@ export default function XTraderPage() {
           contract_type: "ACCU",
           growth_rate: currentConfig.growthRate / 100,
           symbol: tradeSymbol,
+          auto_knockout: currentConfig.autoKnockout,
         },
       });
       const contractId = result.buy?.contract_id;
@@ -1663,6 +1666,15 @@ export default function XTraderPage() {
             text: "Deriv is still settling the previous Accumulator. Money Bank will retry when the server confirms it is safe to continue.",
           });
           await sleep(750);
+          continue;
+        }
+        if (message.includes("Money Bank Auto Knockout")) {
+          setConnectionMessage({ kind: "info", text: message });
+          await sleep(1000);
+          continue;
+        }
+        if (message.includes("Buy cooldown active")) {
+          await sleep(1000);
           continue;
         }
         stopMoneyBank();
@@ -3367,6 +3379,10 @@ export default function XTraderPage() {
                   <Bot size={15} />Auto Trader
                   {!canUseAutoTrader && <span>Restricted — admin access only</span>}
                 </Link>
+                <Link href="/auto-trader-2" className={canUseAutoTrader2 ? "" : "xt-navigation-link-restricted"} onClick={() => setNavigationOpen(false)}>
+                  <Bot size={15} />Auto Trader 2.0
+                  {!canUseAutoTrader2 && <span>Restricted — admin access only</span>}
+                </Link>
               </nav>
             )}
           </div>
@@ -3424,6 +3440,8 @@ export default function XTraderPage() {
           </p>
         )}
       </section>
+
+      <h2 className="xt-trading-strategies-heading">Trading Strategies</h2>
 
       <section className={`xt-feature-card xt-feature-card-cash-grab ${!canUseCashGrab ? "xt-feature-card-restricted" : ""}`} id="cash-grab-feature">
         <div><Activity size={18} /><span><b>Cash Grab</b><small>{canUseCashGrab ? "Rise/Fall contracts · one at a time" : "Restricted — admin access only"}</small></span></div>
@@ -3835,6 +3853,8 @@ export default function XTraderPage() {
           onGrowthRateChange={setMoneyBankGrowthRate}
           takeProfitTicks={moneyBankTakeProfitTicks}
           onTakeProfitTicksChange={setMoneyBankTakeProfitTicks}
+          autoKnockout={moneyBankAutoKnockout}
+          onAutoKnockoutChange={setMoneyBankAutoKnockout}
           strategy={moneyBankStrategy}
           onStrategyChange={setMoneyBankStrategy}
           budget={moneyBankBudget}

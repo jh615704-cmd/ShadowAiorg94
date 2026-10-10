@@ -17,6 +17,7 @@ export type MoneyBankStartConfig = {
   symbol: string;
   growthRate: number;
   takeProfitTicks: number;
+  autoKnockout: boolean;
   strategy: MoneyBankStrategy;
   ladder: MoneyBankLadderLevel[];
   reinvestProfit: boolean;
@@ -73,6 +74,8 @@ type MoneyBankPanelProps = {
   onGrowthRateChange: (value: number) => void;
   takeProfitTicks: number;
   onTakeProfitTicksChange: (value: number) => void;
+  autoKnockout: boolean;
+  onAutoKnockoutChange: (enabled: boolean) => void;
   strategy: MoneyBankStrategy;
   onStrategyChange: (strategy: MoneyBankStrategy) => void;
   budget: number;
@@ -148,6 +151,8 @@ export function MoneyBankPanel({
   onGrowthRateChange,
   takeProfitTicks,
   onTakeProfitTicksChange,
+  autoKnockout,
+  onAutoKnockoutChange,
   strategy,
   onStrategyChange,
   budget,
@@ -201,6 +206,7 @@ export function MoneyBankPanel({
       symbol,
       growthRate,
       takeProfitTicks,
+      autoKnockout,
       strategy,
       ladder,
       reinvestProfit,
@@ -299,6 +305,13 @@ export function MoneyBankPanel({
             <div className="money-bank-market-meta">
               <span><i /> {isConnected ? "Live market available" : "Connect Deriv to stream quotes"}</span>
               {quote != null && <strong>{quote.toFixed(2)}</strong>}
+            </div>
+            <div className="money-bank-toggle-list money-bank-market-toggle">
+              <label>
+                <span><b>Auto Knockout</b>{autoKnockout && <small>Working</small>}</span>
+                <input type="checkbox" checked={autoKnockout} onChange={(event) => onAutoKnockoutChange(event.target.checked)} disabled={running} aria-label="Toggle Money Bank Auto Knockout" />
+                <i />
+              </label>
             </div>
           </section>
 

@@ -77,6 +77,7 @@ export const AccessFeature = {
   'money-bank': 'money-bank',
   'jdy-ai-3': 'jdy-ai-3',
   'auto-trader': 'auto-trader',
+  'auto-trader-2': 'auto-trader-2',
   settings: 'settings',
   history: 'history',
   admin: 'admin',
@@ -318,6 +319,16 @@ export interface DerivMarketSignal {
      * @items.maximum 9
      */
   recent_digits: number[];
+  /**
+     * Most recent market quotes, in arrival order, for evaluating configured tick windows.
+     * @maxItems 200
+     */
+  recent_quotes: number[];
+  /**
+     * Epoch in seconds of the latest quote received for this market.
+     * @minimum 0
+     */
+  tick_epoch: number;
   /** @minimum 0 */
   sample_count: number;
   /**
@@ -493,6 +504,8 @@ export interface DerivBuyInput {
      */
   growth_rate?: number;
   symbol?: string;
+  /** When true for ACCU, the server checks recent ticks against Deriv's proposal-specific knockout barrier before sending a buy. */
+  auto_knockout?: boolean;
 }
 
 export type DerivBulkBuyInputDurationUnit = typeof DerivBulkBuyInputDurationUnit[keyof typeof DerivBulkBuyInputDurationUnit];

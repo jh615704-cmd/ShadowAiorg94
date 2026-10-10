@@ -122,7 +122,7 @@ function amountLabel(value: number, currency: string) {
 function AutoTrader2Content() {
   const queryClient = useQueryClient();
   const access = useGetAccessSession({ query: { queryKey: getGetAccessSessionQueryKey(), retry: false } });
-  const hasAccess = access.data?.is_admin === true || access.data?.features.includes("auto-trader") === true;
+  const hasAccess = access.data?.is_admin === true || access.data?.features.includes("auto-trader-2") === true;
   const token = useGetDerivTokenStatus({ query: { queryKey: getGetDerivTokenStatusQueryKey(), retry: false, enabled: hasAccess } });
   const hasToken = token.data?.has_token === true;
   const [running, setRunning] = useState(false);
@@ -974,7 +974,7 @@ function AutoTrader2Content() {
     return <AppShell title="AUTO TRADER 2.0"><main className="auto-trader-2-page"><div className="at2-page-notice error" role="alert"><AlertCircle size={16} />Unable to confirm feature access. Refresh or sign in again before using this feature.</div></main></AppShell>;
   }
   if (!hasAccess) {
-    return <AppShell title="AUTO TRADER 2.0"><main className="auto-trader-2-page"><div className="at2-page-notice error" role="status"><ShieldAlert size={16} />Auto Trader access is required for this feature.</div></main></AppShell>;
+    return <AppShell title="AUTO TRADER 2.0"><main className="auto-trader-2-page"><div className="at2-page-notice error" role="status"><ShieldAlert size={16} />Auto Trader 2.0 access is required for this feature.</div></main></AppShell>;
   }
 
   return (

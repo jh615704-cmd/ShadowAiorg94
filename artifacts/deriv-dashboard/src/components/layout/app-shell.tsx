@@ -39,7 +39,8 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
   const canUseCashGrab = isAdmin || features.includes("cash-grab");
   const canUseMoneyBank = isAdmin || features.includes("money-bank");
   const canUseAutoTrader = isAdmin || features.includes("auto-trader");
-  const canUseTrading = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseCashGrab || canUseMoneyBank || canUseAutoTrader;
+  const canUseAutoTrader2 = isAdmin || features.includes("auto-trader-2");
+  const canUseTrading = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseCashGrab || canUseMoneyBank || canUseAutoTrader || canUseAutoTrader2;
   const canUseSettings = isAdmin || features.includes("settings");
 
   return (
@@ -60,8 +61,8 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
               <Gauge size={17} />Dashboard
               {location === '/app' && <span className="nav-live" />}
             </Link>}
-            {canUseAutoTrader && <div className="nav-item-group" role="group" aria-label="Auto Trader features">
-              <Link
+            {(canUseAutoTrader || canUseAutoTrader2) && <div className="nav-item-group" role="group" aria-label="Auto Trader features">
+              {canUseAutoTrader && <Link
                 href="/auto-trader"
                 className={`nav-item ${location === '/auto-trader' || location === '/auto-trader-2' ? 'nav-item-active' : ''}`}
                 aria-current={location === '/auto-trader' ? 'page' : undefined}
@@ -69,8 +70,8 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
               >
                 <Bot size={17} />Auto Trader
                 {(location === '/auto-trader' || location === '/auto-trader-2') && <span className="nav-live" />}
-              </Link>
-              <Link
+              </Link>}
+              {canUseAutoTrader2 && <Link
                 href="/auto-trader-2"
                 className={`nav-item nav-sub-item ${location === '/auto-trader-2' ? 'nav-item-active' : ''}`}
                 aria-current={location === '/auto-trader-2' ? 'page' : undefined}
@@ -78,7 +79,7 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
               >
                 <Bot size={15} />Auto Trader 2.0
                 {location === '/auto-trader-2' && <span className="nav-live" />}
-              </Link>
+              </Link>}
             </div>}
             {isAdmin && (
               <Link 

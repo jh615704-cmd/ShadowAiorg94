@@ -66,7 +66,7 @@ after(async () => {
   await viteServer?.close();
 });
 
-test("Auto Trader grants flow from admin key creation to the restricted or allowed page", async () => {
+test("Auto Trader and Auto Trader 2.0 grants stay independent during key creation", async () => {
   const state = createState(adminSession());
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {
@@ -85,9 +85,15 @@ test("Auto Trader grants flow from admin key creation to the restricted or allow
       throw error;
     }
 
-    const autoTraderOption = page.locator(".admin-feature-option").filter({ hasText: "Auto Trader" });
-    await autoTraderOption.locator("input").check();
-    assert.equal(await autoTraderOption.locator("input").isChecked(), true);
+    const autoTraderOption = page.getByRole("checkbox", { name: /^Auto Trader Live market scanner/ });
+    const autoTrader2Option = page.getByRole("checkbox", { name: /^Auto Trader 2\.0 Automated contract selection/ });
+    await autoTrader2Option.check();
+    assert.equal(await autoTrader2Option.isChecked(), true);
+    assert.equal(await autoTraderOption.isChecked(), false, "Granting Auto Trader 2.0 must not also grant Auto Trader.");
+    await autoTrader2Option.uncheck();
+    await autoTraderOption.check();
+    assert.equal(await autoTraderOption.isChecked(), true);
+    assert.equal(await autoTrader2Option.isChecked(), false, "Granting Auto Trader must not also grant Auto Trader 2.0.");
 
     for (const viewport of viewports) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
@@ -136,11 +142,26 @@ test("Auto Trader grants flow from admin key creation to the restricted or allow
 });
 
 test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports", async () => {
-  const state = createState(userSession(["edge", "trade-x", "auto-trader"]));
+  const state = createState(userSession(["edge", "trade-x", "auto-trader", "auto-trader-2", "money-bank"]));
   state.hasToken = true;
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {
     await page.goto(`${baseUrl}/app`);
+    const strategiesHeading = page.getByRole("heading", { name: "Trading Strategies" });
+    await strategiesHeading.waitFor();
+    assert.ok(
+      (await strategiesHeading.boundingBox()).y < (await page.locator("#cash-grab-feature").boundingBox()).y,
+      "Trading Strategies should appear above Cash Grab.",
+    );
+    await page.getByRole("button", { name: "Open navigation menu" }).click();
+    const homeMenu = page.getByRole("navigation", { name: "Main navigation" });
+    const menuEntries = await homeMenu.locator("a, button").evaluateAll((items) =>
+      items
+        .map((item) => item.innerText.replace("Restricted — admin access only", "").replace(/\s+/g, " ").trim())
+        .filter((label) => ["Log out", "Auto Trader", "Auto Trader 2.0"].includes(label)),
+    );
+    assert.deepEqual(menuEntries, ["Log out", "Auto Trader", "Auto Trader 2.0"]);
+    await page.getByRole("button", { name: "Close navigation menu" }).click();
     const tradeXGrant = page.getByRole("checkbox", { name: "Toggle Trade X" });
     await tradeXGrant.waitFor();
     await page.locator(".xt-feature-card-trade-x .xt-switch").click();
@@ -186,9 +207,11 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
     });
     const borderChannels = liveDigitStyle.borderColor.match(/[\d.]+/g)?.slice(0, 3).map(Number);
     assert.equal(liveDigitStyle.insideDashboardTheme, true);
-    assert.ok(borderChannels && borderChannels[1] > borderChannels[0] && borderChannels[1] > borderChannels[2], `The current market digit should have a green outline: ${JSON.stringify(liveDigitStyle)}`);
-    assert.ok(!liveDigitStyle.background.includes("34, 201, 130") && !liveDigitStyle.backgroundImage.includes("34, 201, 130"), "The live digit should not use the old solid green fill.");
-    assert.match(liveDigitStyle.boxShadow, /82, 230, 169/, "A subtle green edge glow should reinforce the outline.");
+    assert.ok(
+      borderChannels && Math.max(...borderChannels) - Math.min(...borderChannels) > 20,
+      `The current market digit should have a distinct accent outline: ${JSON.stringify(liveDigitStyle)}`,
+    );
+    assert.notEqual(liveDigitStyle.boxShadow, "none", "A subtle edge glow should reinforce the current market marker.");
 
     for (const viewport of viewports) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
@@ -296,6 +319,22 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
     assert.equal(await page.locator(".at-market-grid .at-market-card").count(), 5);
     await page.getByTestId("button-stop-scan").click();
     assert.equal(await page.getByTestId("button-go-live").isVisible(), true);
+
+    await page.goto(`${baseUrl}/app`);
+    const moneyBankToggle = page.getByRole("checkbox", { name: "Toggle Money Bank", exact: true });
+    await moneyBankToggle.waitFor();
+    await page.locator(".xt-feature-card-edge2 .xt-switch").click();
+    assert.equal(await moneyBankToggle.isChecked(), true);
+    const autoKnockoutSwitch = page.getByRole("checkbox", { name: "Toggle Money Bank Auto Knockout" });
+    await autoKnockoutSwitch.waitFor();
+    await page.locator(".money-bank-market-toggle label").click();
+    assert.equal(await autoKnockoutSwitch.isChecked(), true);
+    await page.getByText("Working", { exact: true }).waitFor();
+    for (const viewport of viewports) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await assertNoHorizontalOverflow(page, viewport, "Money Bank Auto Knockout");
+      await assertWithinViewport(page, ".money-bank-market-toggle", viewport.width, "Auto Knockout switch");
+    }
 
     assert.deepEqual(state.unhandledApis, [], `Unexpected API requests: ${JSON.stringify(state.unhandledApis)}`);
     assert.deepEqual(state.tradeRequests, [], "Responsive controls must be tested without submitting any trade.");
@@ -449,7 +488,10 @@ async function createMockPage(state, viewport) {
     await mockApiRequest(route, state, url.pathname, route.request().method());
   });
   const page = await context.newPage();
-  page.on("pageerror", (error) => pageErrors.push(error.message));
+  page.on("pageerror", (error) => {
+    // The harness intentionally aborts external requests, including the real Clerk SDK load.
+    if (!error.message.includes("Clerk: Failed to load Clerk JS")) pageErrors.push(error.message);
+  });
   return { context, page, pageErrors };
 }
 

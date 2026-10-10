@@ -29,6 +29,16 @@ export interface DerivMarketSignal {
      * @items.maximum 9
      */
   recent_digits: number[];
+  /**
+     * Most recent market quotes, in arrival order, for evaluating configured tick windows.
+     * @maxItems 200
+     */
+  recent_quotes: number[];
+  /**
+     * Epoch in seconds of the latest quote received for this market.
+     * @minimum 0
+     */
+  tick_epoch: number;
   /** @minimum 0 */
   sample_count: number;
   /**

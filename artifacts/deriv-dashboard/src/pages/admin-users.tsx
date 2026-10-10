@@ -45,6 +45,7 @@ const featureLabels: Partial<Record<AccessFeatureValue, string>> = {
   "money-bank": "Money Bank",
   "jdy-ai-3": "Shadows 3",
   "auto-trader": "Auto Trader",
+  "auto-trader-2": "Auto Trader 2.0",
   settings: "Settings",
   history: "History",
 };
@@ -58,6 +59,7 @@ const featureDescriptions: Partial<Record<AccessFeatureValue, string>> = {
   "money-bank": "Accumulator automation with recovery controls",
   "jdy-ai-3": "Cash Grab live gate and immediate stop control",
   "auto-trader": "Live market scanner and Digit Differs orders",
+  "auto-trader-2": "Automated contract selection and session controls",
   settings: "View and manage the Deriv connection",
   history: "Read recent trading activity",
 };
@@ -444,7 +446,7 @@ export default function AdminUsersPage() {
               <button type="submit" className="primary-button admin-create-submit" disabled={!canCreate}><KeyRound size={16} />{createKey.isPending ? "Generating…" : `Generate ${kind === "admin" ? "admin" : "user"} key`}</button>
             </form>
           </div>
-             <div className="admin-safety-note admin-key-features-note"><div className="admin-safety-icon"><KeyRound size={20} /></div><h3>Key features</h3><ul><li>Grant EDGE, DigitFlip, Trade X, Bulk Trader, Cash Grab, Money Bank, Settings, or History independently.</li><li>Shadows 3 is an additional Cash Grab gate and immediate-stop control.</li><li>If a feature is not granted, the workspace shows “Restricted — admin access only.”</li><li>Edit access later to unlock a feature without issuing a replacement key.</li><li>Delete permanently revokes the key and reserves its label.</li></ul></div>
+            <div className="admin-safety-note admin-key-features-note"><div className="admin-safety-icon"><KeyRound size={20} /></div><h3>Key features</h3><ul><li>Grant EDGE, DigitFlip, Trade X, Bulk Trader, Cash Grab, Money Bank, Auto Trader, Auto Trader 2.0, Settings, or History independently.</li><li>Shadows 3 is an additional Cash Grab gate and immediate-stop control.</li><li>If a feature is not granted, the workspace shows “Restricted — admin access only.”</li><li>Edit access later to unlock a feature without issuing a replacement key.</li><li>Delete permanently revokes the key and reserves its label.</li></ul></div>
         </section>
 
         <section className="panel admin-directory">
