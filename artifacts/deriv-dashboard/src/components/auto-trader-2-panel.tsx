@@ -340,7 +340,7 @@ export default function AutoTrader2Panel({
             data-testid="at2-auto-select"
           />
           <span className="at2-checkmark" aria-hidden="true" />
-          <span className="at2-check-copy"><strong>Auto-select market</strong><small>Ranks available live samples across supported markets.</small></span>
+          <span className="at2-check-copy"><strong>Auto-select market</strong><small>With AI 2, picks the strongest eligible market for your selected family.</small></span>
           <b className="at2-status-tag">{autoSelect ? "ON" : "OFF"}</b>
         </label>
         <label className={`at2-check-row at2-ai-row ${aiEnabled ? "checked" : ""}`}>
@@ -353,7 +353,7 @@ export default function AutoTrader2Panel({
             data-testid="at2-ai-enabled"
           />
           <span className="at2-checkmark" aria-hidden="true" />
-          <span className="at2-check-copy"><strong>AI 2 <small>OBSERVED-DATA FILTER</small></strong><small>Filters and ranks observed market data only.</small></span>
+          <span className="at2-check-copy"><strong>AI 2 <small>OBSERVED-DATA FILTER</small></strong><small>Chooses the stronger direction; pauses a type after three losses.</small></span>
           <b className={`at2-status-tag ${aiEnabled && aiLabel === "WORKING" ? "working" : ""}`} data-testid="at2-ai-status">{aiLabel}</b>
         </label>
         <p className="at2-truth-note">AI 2 does not predict contract outcomes or guarantee results. Observed samples are historical context, not a promise of future performance.</p>

@@ -1,7 +1,9 @@
 import {
+  updateAutoTrader2LossState,
   updateAutoTrader2Recovery,
   type AutoTrader2ContractType,
   type AutoTrader2Family,
+  type AutoTrader2LossState,
 } from "./auto-trader-2-strategy.ts";
 
 export type AutoTrader2RunConfig = {
@@ -27,7 +29,7 @@ export type AutoTrader2SavedPhase =
   | "completed";
 
 export type AutoTrader2SavedSession = {
-  version: 1;
+  version: 2;
   accountId: string;
   phase: AutoTrader2SavedPhase;
   config: AutoTrader2RunConfig;
@@ -35,6 +37,8 @@ export type AutoTrader2SavedSession = {
   sessionPnl: number;
   currentStake: number;
   recoveryTargetPnl: number | null;
+  lossStreaks: AutoTrader2LossState["lossStreaks"];
+  pausedContractTypes: AutoTrader2ContractType[];
   pendingContractId: string | null;
   pendingContractType: AutoTrader2ContractType | null;
   pendingStake: number | null;
@@ -96,7 +100,7 @@ export function parseAutoTrader2SavedSession(
   try {
     const value = JSON.parse(serialized) as Record<string, unknown>;
     if (
-      value.version !== 1
+      (value.version !== 1 && value.version !== 2)
       || value.accountId !== expectedAccountId
       || !phases.includes(value.phase as AutoTrader2SavedPhase)
       || !isRunConfig(value.config)
@@ -113,7 +117,29 @@ export function parseAutoTrader2SavedSession(
     ) {
       return null;
     }
-    return value as AutoTrader2SavedSession;
+    const lossStreaks = value.version === 1 ? {} : value.lossStreaks;
+    const pausedContractTypes = value.version === 1 ? [] : value.pausedContractTypes;
+    if (
+      typeof lossStreaks !== "object"
+      || lossStreaks === null
+      || Array.isArray(lossStreaks)
+      || Object.entries(lossStreaks).some(([type, count]) =>
+        !contractTypes.includes(type as AutoTrader2ContractType)
+        || !Number.isInteger(count)
+        || Number(count) < 0
+      )
+      || !Array.isArray(pausedContractTypes)
+      || !pausedContractTypes.every((type) => contractTypes.includes(type as AutoTrader2ContractType))
+      || new Set(pausedContractTypes).size !== pausedContractTypes.length
+    ) {
+      return null;
+    }
+    return {
+      ...value,
+      version: 2,
+      lossStreaks: lossStreaks as AutoTrader2LossState["lossStreaks"],
+      pausedContractTypes: pausedContractTypes as AutoTrader2ContractType[],
+    } as AutoTrader2SavedSession;
   } catch {
     return null;
   }
@@ -217,6 +243,14 @@ export function reconcileAutoTrader2SavedSession(input: {
       pnlAfter: sessionPnl,
       aiEnabled: session.config.aiEnabled,
     });
+    const lossState = updateAutoTrader2LossState({
+      state: {
+        lossStreaks: session.lossStreaks,
+        pausedContractTypes: session.pausedContractTypes,
+      },
+      contractType: session.pendingContractType,
+      settledProfit: row.profit,
+    });
     const currentStake = row.profit < 0 && session.config.stakeMode === "multiply"
       ? cents(session.pendingStake * session.config.multiplier)
       : session.config.stake;
@@ -226,6 +260,8 @@ export function reconcileAutoTrader2SavedSession(input: {
       sessionPnl,
       currentStake,
       recoveryTargetPnl: recovery.targetPnl,
+      lossStreaks: lossState.lossStreaks,
+      pausedContractTypes: lossState.pausedContractTypes,
       pendingContractId: null,
       pendingContractType: null,
       pendingStake: null,

@@ -8,7 +8,7 @@ import {
 } from "./auto-trader-2-session.ts";
 
 const session = (overrides: Partial<AutoTrader2SavedSession> = {}): AutoTrader2SavedSession => ({
-  version: 1,
+  version: 2,
   accountId: "VRTC123",
   phase: "ready",
   config: {
@@ -29,6 +29,8 @@ const session = (overrides: Partial<AutoTrader2SavedSession> = {}): AutoTrader2S
   sessionPnl: 0,
   currentStake: 1,
   recoveryTargetPnl: null,
+  lossStreaks: {},
+  pausedContractTypes: [],
   pendingContractId: null,
   pendingContractType: null,
   pendingStake: null,
@@ -49,6 +51,16 @@ test("saved automation state is scoped to the selected Deriv account", () => {
     saved,
   );
   assert.equal(parseAutoTrader2SavedSession(JSON.stringify(saved), "CR123"), null);
+});
+
+test("legacy AI 2 recovery checkpoints migrate without losing their account scope", () => {
+  const current = session();
+  const { lossStreaks: _lossStreaks, pausedContractTypes: _pausedContractTypes, ...legacy } = current;
+  const parsed = parseAutoTrader2SavedSession(
+    JSON.stringify({ ...legacy, version: 1 }),
+    "VRTC123",
+  );
+  assert.deepEqual(parsed, current);
 });
 
 test("a clean or completed stop does not require a manual clear before starting again", () => {
@@ -101,6 +113,27 @@ test("a settled Differs loss is reconciled into recovery before a session can re
   assert.equal(assessment.session.recoveryTargetPnl, 5);
   assert.equal(assessment.session.phase, "ready");
   assert.equal(assessment.session.pendingContractId, null);
+  assert.equal(assessment.session.lossStreaks.DIGITDIFF, 1);
+});
+
+test("a third settled loss pauses that contract type before a saved session resumes", () => {
+  const saved = session({
+    phase: "awaiting-settlement",
+    contractIds: ["call-loss"],
+    lossStreaks: { CALL: 2 },
+    pendingContractId: "call-loss",
+    pendingContractType: "CALL",
+    pendingStake: 1,
+  });
+  const assessment = reconcileAutoTrader2SavedSession({
+    session: saved,
+    history: [{ account_id: "VRTC123", contract_id: "call-loss", profit: -1, status: "lost" }],
+    openContracts: clearOpenContracts,
+  });
+  assert.equal(assessment.kind, "ready");
+  if (assessment.kind !== "ready") return;
+  assert.equal(assessment.session.lossStreaks.CALL, 3);
+  assert.deepEqual(assessment.session.pausedContractTypes, ["CALL"]);
 });
 
 test("an unsettled or missing contract cannot be treated as a safe resume", () => {

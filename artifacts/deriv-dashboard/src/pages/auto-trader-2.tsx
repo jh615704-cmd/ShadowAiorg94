@@ -38,6 +38,7 @@ import {
 } from "@/lib/auto-trader-2-session";
 import {
   chooseAutoTrader2Candidate,
+  updateAutoTrader2LossState,
   updateAutoTrader2Recovery,
   type AutoTrader2Candidate,
   type AutoTrader2ContractType,
@@ -68,7 +69,7 @@ const markets: Market[] = [
 const guideCopy = [
   ["Welcome to Auto Trader 2.0", "This is a separate automated-trading mode under Auto Trader. It lets you set trade size, session boundaries, contract family, market selection, and how the next stake changes after a loss.", "All contracts are settled by Deriv. Historical signals and automation do not guarantee a winning result."],
   ["Select the Deriv account", "The account selector in the page header shows which Deriv account the feature will use. Confirm the account type, ID, and balance before every session.", "Demo trading is recommended while you learn. Real-account orders use real funds and remain subject to server permissions."],
-  ["Choose a contract family", "Choose Differs, Rise/Fall, or Even/Odd. The controls below the family choice show the exact contract type or digit barrier that will be used.", "The contract result is decided at expiry. A recent pattern does not determine the next result."],
+  ["Choose a contract family", "Choose Differs, Rise/Fall, or Even/Odd. With AI 2 on, it ranks the eligible direction or parity and market inside that family; with AI 2 off, your selected contract type is used.", "The contract result is decided at expiry. A recent pattern does not determine the next result."],
   ["Digit Differs", "Differs wins when the last digit at contract expiry is not the selected barrier digit. Choose a digit from 0 through 9 when using manual settings.", "A digit that appeared less often in a sample is not guaranteed to stay uncommon."],
   ["Rise and Fall", "Rise uses a CALL contract and Fall uses a PUT contract. The selected market movement at expiry determines which contract wins.", "Recent up/down movements are descriptive history only; they do not predict the next movement."],
   ["Even and Odd", "Even and Odd use the last digit at expiry. Choose the parity manually or let AI 2 compare the observed sample when it is enabled.", "A recent imbalance can change quickly and is not a promise of future parity."],
@@ -78,10 +79,10 @@ const guideCopy = [
   ["Loss limit", "Loss Limit stops the loop before another entry once settled session losses reach the configured amount. Enter zero to turn this stop off.", "This does not cap the possible loss on an already-open contract or guarantee an exact maximum loss."],
   ["Flat stake mode", "Flat mode uses the configured stake for each entry. It makes the planned amount consistent from one contract to the next.", "Flat staking cannot prevent losses. Review the stake against the account balance before starting."],
   ["Multiply after loss", "Multiply after loss increases the next requested stake after a losing settlement by your configured multiplier. A win returns the next amount to the base stake.", "Multiplying can increase exposure quickly and does not guarantee recovery. The server still checks the selected account balance."],
-  ["Auto-select market", "When enabled, the feature can choose among the supported markets using the available live samples. Turn it off to keep the manually selected market.", "Auto-selection ranks observed data; it is not a forecast of future results."],
-  ["AI 2 checkbox", "Select the AI 2 box before starting to enable its observed-data filter. The box displays a tick and the status reads WORKING while enabled.", "AI 2 is a rule-based filter of observed market data, not a source of guaranteed outcomes."],
-  ["AI 2 sample threshold", "AI 2 waits for a minimum recent sample and looks for a measurable difference from a simple baseline before sending an entry. If the sample is too small or weak, it waits.", "A larger historical sample can still differ from future results. No win-rate promise is made."],
-  ["Differs loss response", "After any AI 2 Differs trade settles at a loss, recovery selection switches to Rise/Fall or Even/Odd. It remains in recovery until settled session P/L rises above the P/L level from just before that loss, which means the loss has been made back and additional profit gained.", "Recovery does not guarantee a profit. If no qualifying recovery setup is available, AI 2 waits without placing an order."],
+  ["Auto-select market", "When enabled with AI 2, the feature compares qualifying live samples across supported markets and selects the strongest eligible market. Turn it off to keep the manually selected market.", "Auto-selection ranks observed data; it is not a forecast of future results."],
+  ["AI 2 checkbox", "AI 2 selects the strongest qualifying direction or parity within the chosen family. After three losses on one contract type without a win on that type, it pauses that type for the rest of the session.", "AI 2 is a rule-based filter of observed market data, not a source of guaranteed outcomes."],
+  ["AI 2 sample threshold", "AI 2 needs at least 20 historical expiry samples at the configured duration and a rate at least 4 percentage points above that contract's baseline. Rise/Fall and parity use a 50% baseline (54% observed).", "Observed rates are historical context, not a promise of future contract results."],
+  ["Differs loss response", "After any AI 2 Differs loss settles, recovery selection switches to qualifying Rise/Fall or Even/Odd candidates and can auto-select the strongest market. It remains in recovery until settled session P/L rises above the P/L level from just before that loss.", "Recovery does not guarantee a profit. If no qualifying setup is available, AI 2 waits without placing an order."],
   ["One open contract at a time", "The loop waits for Deriv history to show the active contract as settled before considering another entry. Other open contracts also block new entries.", "If settlement cannot be verified, the loop pauses instead of guessing or sending another order."],
   ["Reading Auto Trader 2.0 History", "History uses the same session summary and trade-row design as Cash Grab. It only includes contracts this feature recorded for the currently selected account.", "The history list is a dashboard view. Deriv remains the authoritative account record."],
   ["Clear this feature's history", "The two-step clear removes only Auto Trader 2.0 rows from this browser's account-scoped view. It does not delete Deriv contracts or account records.", "Clearing the view does not close or cancel a contract."],
@@ -99,6 +100,8 @@ type Runtime = {
   sessionPnl: number;
   recovery: boolean;
   recoveryTargetPnl: number | null;
+  lossStreaks: Partial<Record<AutoTrader2ContractType, number>>;
+  pausedContractTypes: AutoTrader2ContractType[];
   pendingContractId: string | null;
   pendingContractType: AutoTrader2ContractType | null;
   pendingStake: number | null;
@@ -170,6 +173,8 @@ function AutoTrader2Content() {
     sessionPnl: 0,
     recovery: false,
     recoveryTargetPnl: null,
+    lossStreaks: {},
+    pausedContractTypes: [],
     pendingContractId: null,
     pendingContractType: null,
     pendingStake: null,
@@ -351,7 +356,7 @@ function AutoTrader2Content() {
     if (!accountId) return false;
     const isTerminalOrReady = phase === "ready" || phase === "completed";
     const snapshot: AutoTrader2SavedSession = {
-      version: 1,
+      version: 2,
       accountId,
       phase,
       config,
@@ -359,6 +364,8 @@ function AutoTrader2Content() {
       sessionPnl: Number(runRef.current.sessionPnl.toFixed(2)),
       currentStake: Number(runRef.current.currentStake.toFixed(2)),
       recoveryTargetPnl: runRef.current.recoveryTargetPnl,
+      lossStreaks: { ...runRef.current.lossStreaks },
+      pausedContractTypes: [...runRef.current.pausedContractTypes],
       pendingContractId: isTerminalOrReady ? null : runRef.current.pendingContractId,
       pendingContractType: isTerminalOrReady ? null : runRef.current.pendingContractType,
       pendingStake: isTerminalOrReady ? null : runRef.current.pendingStake,
@@ -426,6 +433,8 @@ function AutoTrader2Content() {
     barrier: config.barrier,
     selectedMarket: config.selectedMarket,
     autoSelect: config.autoSelect,
+    duration: config.duration,
+    excludedContractTypes: runRef.current.pausedContractTypes,
   });
 
   const finishLoop = (generation: number, finalMessage?: { tone: "error" | "success" | "info"; text: string }) => {
@@ -507,6 +516,8 @@ function AutoTrader2Content() {
       sessionPnl: 0,
       recovery: false,
       recoveryTargetPnl: null,
+      lossStreaks: {},
+      pausedContractTypes: [],
       pendingContractId: null,
       pendingContractType: null,
       pendingStake: null,
@@ -609,9 +620,14 @@ function AutoTrader2Content() {
       if (continuous && (!first || !loopCandidate)) {
         loopCandidate = chooseCandidate(config, inRecovery);
         if (!loopCandidate) {
-          setDecision(inRecovery
-            ? "Recovery active · AI 2 is waiting for a qualifying Rise/Fall or Even/Odd sample; no new order sent."
-            : "Waiting for a fresh sample that meets the entry filter.");
+          const pausedTypes = runRef.current.pausedContractTypes
+            .map((type) => type.replace("DIGIT", ""))
+            .join(", ");
+          setDecision(pausedTypes
+            ? `Waiting for a qualifying alternate sample · AI 2 paused ${pausedTypes} after three losses; no new order sent.`
+            : inRecovery
+              ? "Waiting for a qualifying Rise/Fall or Even/Odd recovery sample; no new order sent."
+              : "Waiting for a fresh sample that meets the entry filter.");
           await delay(1_000);
           continue;
         }
@@ -756,6 +772,16 @@ function AutoTrader2Content() {
         pnlAfter: runRef.current.sessionPnl,
         aiEnabled: config.aiEnabled,
       });
+      const lossState = updateAutoTrader2LossState({
+        state: {
+          lossStreaks: runRef.current.lossStreaks,
+          pausedContractTypes: runRef.current.pausedContractTypes,
+        },
+        contractType: selectedType,
+        settledProfit,
+      });
+      runRef.current.lossStreaks = lossState.lossStreaks;
+      runRef.current.pausedContractTypes = lossState.pausedContractTypes;
       runRef.current.recovery = recovery.active;
       runRef.current.recoveryTargetPnl = recovery.targetPnl;
       runRef.current.pendingContractId = null;
@@ -870,6 +896,8 @@ function AutoTrader2Content() {
         sessionPnl: session.sessionPnl,
         recovery: session.recoveryTargetPnl !== null,
         recoveryTargetPnl: session.recoveryTargetPnl,
+        lossStreaks: { ...session.lossStreaks },
+        pausedContractTypes: [...session.pausedContractTypes],
         pendingContractId: null,
         pendingContractType: null,
         pendingStake: null,
