@@ -74,6 +74,10 @@ function money(amount: number, currency?: string) {
     : `${currency ? `${currency} ` : ""}${amount.toFixed(2)}`;
 }
 
+export function formatSignedDerivProfit(amount: number, currency?: string) {
+  return `${amount < 0 ? "-" : "+"}${money(Math.abs(amount), currency)}`;
+}
+
 function timeLabel(epoch?: number | null) {
   if (epoch == null || !Number.isFinite(epoch)) return "—";
   const date = new Date(epoch * 1000);
@@ -108,7 +112,7 @@ export function createDerivHistoryRowView(
     barrier,
     outcome: isOpen ? "OPEN" : row.profit > 0 ? "WON" : row.profit < 0 ? "LOST" : status.toUpperCase(),
     outcomeClass: isOpen ? "open" : row.profit < 0 ? "loss" : "win",
-    profit: `${row.profit < 0 ? "-" : "+"}${money(Math.abs(row.profit), rowCurrency)}`,
+    profit: formatSignedDerivProfit(row.profit, rowCurrency),
     profitClass: row.profit < 0 ? "negative" : "positive",
     details: [
       { label: "OPENED", value: timeLabel(row.buy_time) },

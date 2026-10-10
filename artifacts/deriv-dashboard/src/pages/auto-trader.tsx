@@ -23,6 +23,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { DerivAccountSwitcher } from "@/components/deriv-account-switcher";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getAccountBalance } from "@/lib/account-balance";
+import { formatSignedDerivProfit } from "@/lib/deriv-history";
 import "./auto-trader.css";
 
 type MarketGroup = "regular" | "jump" | "one-sec";
@@ -470,7 +471,7 @@ function AutoTraderContent() {
           </div>
           <div className="at-stat-row">
             <div className="at-stat"><span>TODAY'S BALANCE</span><strong>{money(accountBalance, currency)}</strong><small>Selected account</small></div>
-            <div className="at-stat"><span>DAILY P/L</span><strong className={dailyProfit >= 0 ? "positive" : "negative"}>{dailyProfit >= 0 ? "+" : ""}{money(dailyProfit, currency)}</strong><small>Page-placed contracts</small></div>
+            <div className="at-stat"><span>DAILY PROFIT / LOSS</span><strong className={dailyProfit >= 0 ? "positive" : "negative"} data-testid="text-daily-profit">{formatSignedDerivProfit(dailyProfit, currency)}</strong><small>{dailyProfit > 0 ? "PROFIT" : dailyProfit < 0 ? "LOSS" : "BREAK EVEN"} · Page-placed contracts</small></div>
             <div className="at-stat"><span>TRADES</span><strong>{todayIds.size}</strong><small>Contracts placed today</small></div>
             <div className="at-stat"><span>WINS / LOSSES</span><strong><em>{wins}</em><i>/</i><b>{losses}</b></strong><small>{settled.length ? `${((wins / settled.length) * 100).toFixed(1)}% win rate` : "Win rate —"}</small></div>
           </div>

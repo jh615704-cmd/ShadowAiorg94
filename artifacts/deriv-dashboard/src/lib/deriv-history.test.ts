@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createDerivHistoryRowView, summarizeDerivHistorySession, type DerivHistoryRow } from "./deriv-history.ts";
+import {
+  createDerivHistoryRowView,
+  formatSignedDerivProfit,
+  summarizeDerivHistorySession,
+  type DerivHistoryRow,
+} from "./deriv-history.ts";
 
 const row = (overrides: Partial<DerivHistoryRow>): DerivHistoryRow => ({
   contract_id: "contract-1",
@@ -50,4 +55,11 @@ test("session summary accepts the feature's live P/L and trade count", () => {
 test("USD history profits put the sign before the US$ currency marker", () => {
   assert.equal(createDerivHistoryRowView(row({ profit: 2.5 }), "USD").profit, "+US$2.50");
   assert.equal(createDerivHistoryRowView(row({ profit: -0.35 }), "USD").profit, "-US$0.35");
+});
+
+test("signed daily profit includes the signed currency amount before its outcome label", () => {
+  assert.equal(formatSignedDerivProfit(2.5, "USD"), "+US$2.50");
+  assert.equal(formatSignedDerivProfit(-0.35, "USD"), "-US$0.35");
+  assert.equal(formatSignedDerivProfit(0, "USD"), "+US$0.00");
+  assert.equal(formatSignedDerivProfit(2.5, "EUR"), "+EUR 2.50");
 });
