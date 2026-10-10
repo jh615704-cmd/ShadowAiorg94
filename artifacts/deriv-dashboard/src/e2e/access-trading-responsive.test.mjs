@@ -162,6 +162,27 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
     );
     assert.deepEqual(menuEntries, ["Log out", "Auto Trader", "Auto Trader 2.0"]);
     await page.getByRole("button", { name: "Close navigation menu" }).click();
+    await page.goto(`${baseUrl}/auto-trader-2`);
+    await page.locator(".auto-trader-2-page").waitFor();
+    const autoTraderNavLink = page.getByTestId("link-nav-auto-trader");
+    const autoTrader2NavLink = page.getByTestId("link-nav-auto-trader-2");
+    assert.notEqual((await autoTraderNavLink.getAttribute("class"))?.includes("nav-item-active"), true);
+    assert.equal(await autoTraderNavLink.getAttribute("aria-current"), null);
+    assert.equal(await autoTraderNavLink.locator(".nav-live").count(), 0);
+    assert.equal((await autoTrader2NavLink.getAttribute("class"))?.includes("nav-item-active"), true);
+    assert.equal(await autoTrader2NavLink.getAttribute("aria-current"), "page");
+    assert.equal(await autoTrader2NavLink.locator(".nav-live").count(), 1);
+
+    await page.goto(`${baseUrl}/auto-trader`);
+    await page.getByRole("heading", { name: "Auto Trader" }).waitFor();
+    assert.equal((await autoTraderNavLink.getAttribute("class"))?.includes("nav-item-active"), true);
+    assert.equal(await autoTraderNavLink.getAttribute("aria-current"), "page");
+    assert.equal(await autoTraderNavLink.locator(".nav-live").count(), 1);
+    assert.notEqual((await autoTrader2NavLink.getAttribute("class"))?.includes("nav-item-active"), true);
+    assert.equal(await autoTrader2NavLink.getAttribute("aria-current"), null);
+    assert.equal(await autoTrader2NavLink.locator(".nav-live").count(), 0);
+
+    await page.goto(`${baseUrl}/app`);
     const tradeXGrant = page.getByRole("checkbox", { name: "Toggle Trade X" });
     await tradeXGrant.waitFor();
     await page.locator(".xt-feature-card-trade-x .xt-switch").click();

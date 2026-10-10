@@ -64,12 +64,12 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
             {(canUseAutoTrader || canUseAutoTrader2) && <div className="nav-item-group" role="group" aria-label="Auto Trader features">
               {canUseAutoTrader && <Link
                 href="/auto-trader"
-                className={`nav-item ${location === '/auto-trader' || location === '/auto-trader-2' ? 'nav-item-active' : ''}`}
+                className={`nav-item ${location === '/auto-trader' ? 'nav-item-active' : ''}`}
                 aria-current={location === '/auto-trader' ? 'page' : undefined}
                 data-testid="link-nav-auto-trader"
               >
                 <Bot size={17} />Auto Trader
-                {(location === '/auto-trader' || location === '/auto-trader-2') && <span className="nav-live" />}
+                {location === '/auto-trader' && <span className="nav-live" />}
               </Link>}
               {canUseAutoTrader2 && <Link
                 href="/auto-trader-2"
