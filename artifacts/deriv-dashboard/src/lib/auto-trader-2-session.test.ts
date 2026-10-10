@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   parseAutoTrader2SavedSession,
   reconcileAutoTrader2SavedSession,
+  requiresAutoTrader2SessionReview,
   type AutoTrader2SavedSession,
 } from "./auto-trader-2-session.ts";
 
@@ -48,6 +49,15 @@ test("saved automation state is scoped to the selected Deriv account", () => {
     saved,
   );
   assert.equal(parseAutoTrader2SavedSession(JSON.stringify(saved), "CR123"), null);
+});
+
+test("a clean or completed stop does not require a manual clear before starting again", () => {
+  assert.equal(requiresAutoTrader2SessionReview(session()), false);
+  assert.equal(requiresAutoTrader2SessionReview(session({ phase: "completed" })), false);
+  assert.equal(requiresAutoTrader2SessionReview(session({ phase: "awaiting-settlement" })), true);
+  assert.equal(requiresAutoTrader2SessionReview(session({ phase: "placing" })), true);
+  assert.equal(requiresAutoTrader2SessionReview(session({ phase: "manual-review" })), true);
+  assert.equal(requiresAutoTrader2SessionReview(null), false);
 });
 
 test("a reload while an order is being submitted requires manual history review", () => {

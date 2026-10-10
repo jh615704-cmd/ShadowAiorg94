@@ -60,6 +60,10 @@ export type AutoTrader2ResumeAssessment =
   | { kind: "uncertain"; session: AutoTrader2SavedSession; reason: string }
   | { kind: "completed"; session: AutoTrader2SavedSession };
 
+export function requiresAutoTrader2SessionReview(session: AutoTrader2SavedSession | null): boolean {
+  return session !== null && session.phase !== "ready" && session.phase !== "completed";
+}
+
 const contractTypes: AutoTrader2ContractType[] = ["DIGITDIFF", "CALL", "PUT", "DIGITEVEN", "DIGITODD"];
 const families: AutoTrader2Family[] = ["differs", "rise-fall", "even-odd"];
 const phases: AutoTrader2SavedPhase[] = ["ready", "placing", "awaiting-settlement", "manual-review", "completed"];

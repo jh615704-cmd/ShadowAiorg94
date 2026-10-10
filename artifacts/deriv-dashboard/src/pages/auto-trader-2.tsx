@@ -31,6 +31,7 @@ import { getAccountBalance } from "@/lib/account-balance";
 import {
   parseAutoTrader2SavedSession,
   reconcileAutoTrader2SavedSession,
+  requiresAutoTrader2SessionReview,
   type AutoTrader2RunConfig as RunConfig,
   type AutoTrader2SavedPhase,
   type AutoTrader2SavedSession,
@@ -285,7 +286,7 @@ function AutoTrader2Content() {
             : restoredSession.phase === "awaiting-settlement"
               ? "A saved contract still needs a fresh Deriv settlement check before this session can resume."
               : restoredSession.phase === "completed"
-                ? "This saved AI 2 session has already reached a stop condition. Dismiss it before starting another run."
+                ? "This saved AI 2 session reached a stop condition. Starting again replaces only this completed checkpoint; Deriv history remains unchanged."
                 : "A saved AI 2 session was found. Verify its Deriv history and open-contract status before resuming.",
         );
       }
@@ -445,7 +446,7 @@ function AutoTrader2Content() {
             : saved.phase === "awaiting-settlement"
               ? "The accepted contract has not been confirmed as settled. Verify it against Deriv history before resuming."
               : saved.phase === "completed"
-                ? "This saved AI 2 session reached a stop limit. Dismiss its local checkpoint before starting another run."
+                ? "This saved AI 2 session reached a stop limit. Starting again replaces only this completed checkpoint; Deriv history remains unchanged."
                 : "The saved AI 2 session is paused. Verify its Deriv history and open-contract status before resuming.",
         );
       }
@@ -463,8 +464,23 @@ function AutoTrader2Content() {
       return;
     }
     if (savedSession) {
-      setMessage({ tone: "info", text: "Verify and resume the saved Auto Trader 2.0 session, or check Deriv history and explicitly clear its local recovery state before starting another run." });
-      return;
+      if (savedSession.phase === "ready") {
+        await verifyAndResumeSavedSession();
+        return;
+      }
+      if (savedSession.phase === "completed") {
+        try {
+          localStorage.removeItem(`${sessionStoragePrefix}${accountId}`);
+          setSavedSession(null);
+          setSavedSessionNotice("");
+        } catch {
+          setMessage({ tone: "error", text: "The completed local checkpoint could not be replaced. Deriv history remains unchanged." });
+          return;
+        }
+      } else {
+        setMessage({ tone: "info", text: "This session has an unsettled or uncertain contract. Verify it in Deriv before resuming; no order will be retried." });
+        return;
+      }
     }
     if (!Number.isFinite(stake) || stake < minimumStake) {
       setMessage({ tone: "error", text: `Enter a stake of at least ${minimumStake.toFixed(2)} ${currency}.` });
@@ -999,7 +1015,7 @@ function AutoTrader2Content() {
             {savedSession && (savedSession.phase === "ready" || savedSession.phase === "awaiting-settlement") && <button type="button" onClick={() => void verifyAndResumeSavedSession()} disabled={verifyingSavedSession || !connected} data-testid="at2-verify-resume">
               {verifyingSavedSession ? "VERIFYING…" : "VERIFY DERIV & RESUME"}
             </button>}
-            {(savedSession || savedSessionIssue) && <button type="button" className="secondary" onClick={discardSavedSession} disabled={verifyingSavedSession} data-testid="at2-discard-session">
+            {(savedSessionIssue || requiresAutoTrader2SessionReview(savedSession)) && <button type="button" className="secondary" onClick={discardSavedSession} disabled={verifyingSavedSession} data-testid="at2-discard-session">
               {discardSessionArmed ? "CONFIRM CLEAR LOCAL STATE" : "I CHECKED HISTORY"}
             </button>}
           </div>
@@ -1032,7 +1048,12 @@ function AutoTrader2Content() {
           stopping={stopping}
           connected={connected}
           tradeSlotBlocked={tradeSlotBlocked}
-          sessionNeedsReview={sessionLoadingForAccount || Boolean(savedSession) || Boolean(savedSessionIssue)}
+          sessionNeedsReview={
+            sessionLoadingForAccount
+            || Boolean(savedSessionIssue)
+            || requiresAutoTrader2SessionReview(savedSession)
+          }
+          resumeAvailable={savedSession?.phase === "ready"}
           isPlacingTrade={isPlacing}
           selectedMarket={selectedMarket}
           selectedMarketLabel={selectedLabel}

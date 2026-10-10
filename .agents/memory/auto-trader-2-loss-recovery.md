@@ -13,4 +13,4 @@ For reload safety, save AI 2 session checkpoints in account-scoped browser stora
 
 **Why:** A browser reload can interrupt an in-flight buy or settlement check; without a durable checkpoint, the bot could forget recovery state or duplicate an order.
 
-**How to apply:** On reload, require a fresh Deriv status and history check, matching account ID, no open contracts, and settled saved contract IDs with a matching session total before resuming. Treat an interrupted placement or ambiguous history as manual review and fail closed.
+**How to apply:** On reload, require a fresh Deriv status and history check, matching account ID, no open contracts, and settled saved contract IDs with a matching session total before resuming. A clean `ready` checkpoint should remain resumable from Start without a manual clear; only awaiting-settlement, interrupted placement, or ambiguous history should keep Start blocked for review.

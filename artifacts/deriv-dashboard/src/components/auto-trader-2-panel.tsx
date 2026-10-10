@@ -30,6 +30,7 @@ export interface AutoTrader2PanelProps {
   connected: boolean;
   tradeSlotBlocked: boolean;
   sessionNeedsReview: boolean;
+  resumeAvailable: boolean;
   isPlacingTrade: boolean;
   selectedMarket: string;
   selectedMarketLabel: string;
@@ -90,6 +91,7 @@ export default function AutoTrader2Panel({
   connected,
   tradeSlotBlocked,
   sessionNeedsReview,
+  resumeAvailable,
   isPlacingTrade,
   selectedMarket,
   selectedMarketLabel,
@@ -366,7 +368,7 @@ export default function AutoTrader2Panel({
         ) : (
           <button type="button" className="at2-action-button start" onClick={onStart} disabled={!canStart} data-testid="at2-start">
             {isPlacingTrade ? <Loader2 size={15} className="at2-spin" aria-hidden="true" /> : <Play size={14} fill="currentColor" aria-hidden="true" />}
-            {isPlacingTrade ? "PLACING…" : "START AUTO TRADER 2.0"}
+            {isPlacingTrade ? "PLACING…" : resumeAvailable ? "VERIFY & RESUME AUTO TRADER 2.0" : "START AUTO TRADER 2.0"}
           </button>
         )}
         {!connected && <p className="at2-action-note" role="status">Connect to Deriv before starting this trading mode.</p>}
