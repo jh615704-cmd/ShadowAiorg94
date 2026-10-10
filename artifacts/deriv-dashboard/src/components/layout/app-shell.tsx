@@ -60,7 +60,7 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
               <Gauge size={17} />Dashboard
               {location === '/app' && <span className="nav-live" />}
             </Link>}
-            {canUseAutoTrader && <div className="nav-item-group" aria-label="Auto Trader features">
+            {canUseAutoTrader && <div className="nav-item-group" role="group" aria-label="Auto Trader features">
               <Link
                 href="/auto-trader"
                 className={`nav-item ${location === '/auto-trader' || location === '/auto-trader-2' ? 'nav-item-active' : ''}`}

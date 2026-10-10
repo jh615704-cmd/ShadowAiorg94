@@ -29,6 +29,7 @@ export interface AutoTrader2PanelProps {
   stopping: boolean;
   connected: boolean;
   tradeSlotBlocked: boolean;
+  sessionNeedsReview: boolean;
   isPlacingTrade: boolean;
   selectedMarket: string;
   selectedMarketLabel: string;
@@ -88,6 +89,7 @@ export default function AutoTrader2Panel({
   stopping,
   connected,
   tradeSlotBlocked,
+  sessionNeedsReview,
   isPlacingTrade,
   selectedMarket,
   selectedMarketLabel,
@@ -110,7 +112,7 @@ export default function AutoTrader2Panel({
   onOpenGuide,
 }: AutoTrader2PanelProps) {
   const controlsLocked = running || stopping || isPlacingTrade;
-  const canStart = connected && !tradeSlotBlocked && !controlsLocked && stake > 0;
+  const canStart = connected && !tradeSlotBlocked && !sessionNeedsReview && !controlsLocked && stake > 0;
   const aiLabel = !aiEnabled
     ? "OFF"
     : aiStatus === "waiting"
@@ -369,6 +371,7 @@ export default function AutoTrader2Panel({
         )}
         {!connected && <p className="at2-action-note" role="status">Connect to Deriv before starting this trading mode.</p>}
         {tradeSlotBlocked && <p className="at2-action-note" role="status">New entries are paused while an open contract is settling.</p>}
+        {sessionNeedsReview && <p className="at2-action-note" role="status">Review the saved recovery session before starting or resuming automation.</p>}
         {connected && !tradeSlotBlocked && stake <= 0 && <p className="at2-action-note" role="status">Enter a stake greater than zero to start.</p>}
       </div>
 
