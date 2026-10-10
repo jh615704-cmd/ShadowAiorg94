@@ -652,11 +652,42 @@
   color: #bcebd2;
   font-size: 12px;
   line-height: 1.45;
+  flex-wrap: wrap;
 }
 
 .money-bank-knockout-scan svg {
   flex: 0 0 auto;
   color: #61d99c;
+}
+
+.money-bank-knockout-progress {
+  flex: 0 0 100%;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(112, 211, 160, .2);
+}
+
+.money-bank-knockout-progress i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #58d58f, #9af0bb);
+  transform: scaleX(0);
+  transform-origin: left center;
+  animation: money-bank-knockout-countdown 10s linear forwards;
+}
+
+@keyframes money-bank-knockout-countdown {
+  to { transform: scaleX(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .money-bank-knockout-progress i {
+    animation: none;
+    transform: scaleX(1);
+  }
 }
 
 .money-bank-jdy-status,

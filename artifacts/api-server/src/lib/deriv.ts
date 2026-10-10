@@ -868,33 +868,20 @@ function assertAccumulatorKnockoutClear(input: BuyInput, proposal: DerivProposal
   if (!latest || proposalEpoch! - latest.epoch > 1) {
     throw new Error("Money Bank Auto Knockout is waiting for a matching quote sample. No contract was sent.");
   }
-  if (latest.epoch === proposalEpoch) {
-    samples[samples.length - 1] = { quote: proposalSpot, epoch: proposalEpoch! };
-  } else {
-    samples.push({ quote: proposalSpot, epoch: proposalEpoch! });
-  }
 
   const requiredQuotes = input.duration + 1;
-  const window = samples.slice(-requiredQuotes);
-  if (window.length !== requiredQuotes) {
+  if (samples.slice(-requiredQuotes).length !== requiredQuotes) {
     throw new Error("Money Bank Auto Knockout is waiting for enough ticks to scan this contract window. No contract was sent.");
   }
-  for (let index = 1; index < window.length; index += 1) {
-    if (Math.abs(window[index].quote - window[index - 1].quote) >= barrier!) {
-      throw new Error("Money Bank Auto Knockout blocked this entry after detecting a recent move at Deriv's contract barrier. No contract was sent.");
-    }
-  }
 
-  // Include ticks delivered after the proposal spot before the buy is sent.
-  // Same-second timestamps are ambiguous, so treating their order
-  // conservatively is safer than allowing a potentially stale entry.
+  // An Accumulator's barrier is measured from its contract's entry spot, not
+  // from the preceding tick. Same-second ticks are ambiguous, so check them
+  // conservatively against the proposal spot too.
   const afterProposal = market.quoteHistory.filter((tick: { quote: number; epoch: number }) => tick.epoch >= proposalEpoch!);
-  let previousPostProposalQuote = proposalSpot;
   for (const tick of afterProposal) {
-    if (Math.abs(tick.quote - previousPostProposalQuote) >= barrier!) {
+    if (Math.abs(tick.quote - proposalSpot!) >= barrier!) {
       throw new Error("Money Bank Auto Knockout blocked this entry after a new tick reached Deriv's contract barrier. No contract was sent.");
     }
-    previousPostProposalQuote = tick.quote;
   }
 }
 
@@ -911,7 +898,7 @@ async function observeAccumulatorMarketForKnockouts(
   }
 
   let lastSequence = market.tickSequence;
-  let previousQuote = proposal.spot;
+  const entrySpot = proposal.spot;
   let observedTicks = 0;
   const deadline = Date.now() + observationMs;
 
@@ -934,10 +921,9 @@ async function observeAccumulatorMarketForKnockouts(
       throw new Error("Money Bank Auto Knockout could not verify every tick in the selected market's scan. No contract was sent.");
     }
     for (const tick of newTicks) {
-      if (Math.abs(tick.quote - previousQuote) >= barrier!) {
+      if (Math.abs(tick.quote - entrySpot) >= barrier!) {
         throw new Error("Money Bank Auto Knockout blocked this entry after detecting a knockout-sized move during its 10-second scan. No contract was sent.");
       }
-      previousQuote = tick.quote;
       observedTicks += 1;
     }
     lastSequence = current.tickSequence;

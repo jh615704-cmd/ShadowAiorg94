@@ -271,7 +271,7 @@ export function MoneyBankPanel({
               <h2>Money Bank</h2>
               <span>Accumulator</span>
             </div>
-            <p>Structured growth with controlled recovery</p>
+            <p>Accumulator contracts with configurable risk controls</p>
           </div>
         </div>
         <div className={`money-bank-live-state ${running ? "running" : ""}`}>
@@ -323,6 +323,16 @@ export function MoneyBankPanel({
                     ? `Checking ${growthRate}% growth · ${takeProfitTicks} exit ticks · ${selectedMarket}: ${autoKnockoutCountdown}s`
                     : "Rechecking the latest quote and exit ticks before entry…"}
                 </span>
+                <div
+                  className="money-bank-knockout-progress"
+                  role="progressbar"
+                  aria-label="Auto Knockout scan progress"
+                  aria-valuemin={0}
+                  aria-valuemax={10}
+                  aria-valuenow={10 - autoKnockoutCountdown}
+                >
+                  <i />
+                </div>
               </div>
             )}
           </section>
@@ -429,11 +439,11 @@ export function MoneyBankPanel({
         <aside className="money-bank-side">
           <section className="money-bank-return-card">
             <div className="money-bank-return-top">
-              <span>ESTIMATED RETURN</span>
+              <span>THEORETICAL CONTRACT RETURN</span>
               <span className="money-bank-return-icon"><TrendingUp size={16} /></span>
             </div>
             <strong>+{estimatedReturn.toFixed(1)}%</strong>
-            <p>Recovery {recoveryStart}–{takeProfitTicks} ticks @ {growthRate}%</p>
+            <p>Contract estimate · {recoveryStart}–{takeProfitTicks} ticks @ {growthRate}%</p>
           </section>
 
           <section className="money-bank-card money-bank-ladder-card">
