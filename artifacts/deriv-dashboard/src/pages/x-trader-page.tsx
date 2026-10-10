@@ -18,6 +18,7 @@ import {
   useTestDerivConnection,
   useTestDerivToken,
   useRequestDerivProposal,
+  useScanDerivAccumulatorKnockout,
   getGetDerivTokenStatusQueryKey,
   getGetDerivAccountsQueryKey,
   getGetDerivStatusQueryKey,
@@ -356,6 +357,7 @@ export default function XTraderPage() {
   const [moneyBankProfitTarget, setMoneyBankProfitTarget] = useState<number | null>(null);
   const [moneyBankLossLimit, setMoneyBankLossLimit] = useState<number | null>(null);
   const [moneyBankRunning, setMoneyBankRunning] = useState(false);
+  const [moneyBankAutoKnockoutCountdown, setMoneyBankAutoKnockoutCountdown] = useState<number | null>(null);
   const [moneyBankClosing, setMoneyBankClosing] = useState(false);
   const [moneyBankJdyEnabled, setMoneyBankJdyEnabled] = useState(false);
   const [moneyBankJdyState, setMoneyBankJdyState] = useState<"idle" | "scanning" | "safe" | "not-good">("idle");
@@ -450,6 +452,7 @@ export default function XTraderPage() {
   const edgePercentageModeRef = useRef(edgePercentageMode);
   const edgeProposalRequestKeyRef = useRef("");
   const edgeProposalMutation = useRequestDerivProposal();
+  const moneyBankKnockoutScanMutation = useScanDerivAccumulatorKnockout();
   const edgeLossStreakRef = useRef(0);
   const edgeProcessedSettlementIdsRef = useRef(new Set<string>());
   const nextStakeRef = useRef(stake);
@@ -1508,6 +1511,7 @@ export default function XTraderPage() {
     moneyBankRunningRef.current = false;
     moneyBankActionLockRef.current = false;
     setMoneyBankRunning(false);
+    setMoneyBankAutoKnockoutCountdown(null);
     void closeMoneyBankContracts().catch((error) => {
       setConnectionMessage({ kind: "error", text: `Money Bank could not close every open contract: ${errorMessage(error)}` });
     });
@@ -1628,6 +1632,45 @@ export default function XTraderPage() {
 
     moneyBankActionLockRef.current = true;
     try {
+      if (currentConfig.autoKnockout) {
+        const scanStartedAt = Date.now();
+        const scanEndsAt = scanStartedAt + 10_000;
+        setMoneyBankAutoKnockoutCountdown(10);
+        let scanResolved = false;
+        let scanFailed = false;
+        let scanError: unknown;
+        const scanPromise = moneyBankKnockoutScanMutation.mutateAsync({
+          data: {
+            amount: Number(level.stake.toFixed(2)),
+            duration: currentConfig.takeProfitTicks,
+            duration_unit: "t",
+            contract_type: "ACCU",
+            growth_rate: currentConfig.growthRate / 100,
+            symbol: tradeSymbol,
+          },
+        }).then(
+          () => { scanResolved = true; },
+          (error: unknown) => {
+            scanFailed = true;
+            scanError = error;
+            scanResolved = true;
+          },
+        );
+
+        while (moneyBankRunningRef.current && !scanResolved && Date.now() < scanEndsAt) {
+          setMoneyBankAutoKnockoutCountdown(Math.max(1, Math.ceil((scanEndsAt - Date.now()) / 1000)));
+          await sleep(Math.min(250, scanEndsAt - Date.now()));
+        }
+        if (!moneyBankRunningRef.current) {
+          await scanPromise;
+          return;
+        }
+        setMoneyBankAutoKnockoutCountdown(0);
+        await scanPromise;
+        if (scanFailed) throw scanError;
+        if (!moneyBankRunningRef.current) return;
+      }
+
       const result = await moneyBankBuyMutation.mutateAsync({
         data: {
           amount: Number(level.stake.toFixed(2)),
@@ -1647,6 +1690,7 @@ export default function XTraderPage() {
       setMoneyBankTradeCount((value) => value + 1);
       await refreshTradeResults();
     } finally {
+      setMoneyBankAutoKnockoutCountdown(null);
       moneyBankActionLockRef.current = false;
       if (!moneyBankRunningRef.current) await closeMoneyBankContracts();
     }
@@ -1722,6 +1766,7 @@ export default function XTraderPage() {
       setMoneyBankSessionPnl(0);
       setMoneyBankLastSettledProfit(null);
       setMoneyBankTradeCount(0);
+       setMoneyBankAutoKnockoutCountdown(null);
       moneyBankRunningRef.current = true;
       setMoneyBankRunning(true);
       if (moneyBankJdyEnabled) {
@@ -3854,6 +3899,7 @@ export default function XTraderPage() {
           takeProfitTicks={moneyBankTakeProfitTicks}
           onTakeProfitTicksChange={setMoneyBankTakeProfitTicks}
           autoKnockout={moneyBankAutoKnockout}
+          autoKnockoutCountdown={moneyBankAutoKnockoutCountdown}
           onAutoKnockoutChange={setMoneyBankAutoKnockout}
           strategy={moneyBankStrategy}
           onStrategyChange={setMoneyBankStrategy}

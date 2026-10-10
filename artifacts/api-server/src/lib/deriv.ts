@@ -223,7 +223,7 @@ return {
     tickSequence: number;
     digitHistory: number[];
     movementHistory: Array<"rise" | "fall" | "flat">;
-    quoteHistory: Array<{ quote: number; epoch: number }>;
+    quoteHistory: Array<{ quote: number; epoch: number; sequence?: number }>;
   }>(),
   selectedSymbol: defaultSymbol,
   hiddenHistoryIds: new Set<string>(),
@@ -494,6 +494,7 @@ function recordMarketTick(symbol: string, quote: unknown, epoch: number, pipSize
   const digits = rawQuote.replace(/\D/g, "");
   const lastDigit = digits.at(-1);
   const market = runtime.marketHistory.get(symbol) ?? { quote: null, epoch: 0, tickSequence: 0, digitHistory: [], movementHistory: [], quoteHistory: [] };
+  const nextSequence = market.tickSequence + 1;
   const nextQuote = Number(quote ?? 0);
   if (market.quote != null && Number.isFinite(market.quote) && Number.isFinite(nextQuote)) {
     market.movementHistory.push(nextQuote > market.quote ? "rise" : nextQuote < market.quote ? "fall" : "flat");
@@ -502,10 +503,10 @@ function recordMarketTick(symbol: string, quote: unknown, epoch: number, pipSize
   market.quote = nextQuote;
   market.epoch = epoch;
   if (Number.isFinite(nextQuote) && nextQuote > 0) {
-    market.quoteHistory.push({ quote: nextQuote, epoch });
+    market.quoteHistory.push({ quote: nextQuote, epoch, sequence: nextSequence });
     market.quoteHistory = market.quoteHistory.slice(-200);
   }
-  market.tickSequence += 1;
+  market.tickSequence = nextSequence;
   if (lastDigit !== undefined) market.digitHistory.push(Number(lastDigit));
   market.digitHistory = market.digitHistory.slice(-1000);
   runtime.marketHistory.set(symbol, market);
@@ -883,6 +884,99 @@ function assertAccumulatorKnockoutClear(input: BuyInput, proposal: DerivProposal
       throw new Error("Money Bank Auto Knockout blocked this entry after detecting a recent move at Deriv's contract barrier. No contract was sent.");
     }
   }
+
+  // Include ticks delivered after the proposal spot before the buy is sent.
+  // Same-second timestamps are ambiguous, so treating their order
+  // conservatively is safer than allowing a potentially stale entry.
+  const afterProposal = market.quoteHistory.filter((tick: { quote: number; epoch: number }) => tick.epoch >= proposalEpoch!);
+  let previousPostProposalQuote = proposalSpot;
+  for (const tick of afterProposal) {
+    if (Math.abs(tick.quote - previousPostProposalQuote) >= barrier!) {
+      throw new Error("Money Bank Auto Knockout blocked this entry after a new tick reached Deriv's contract barrier. No contract was sent.");
+    }
+    previousPostProposalQuote = tick.quote;
+  }
+}
+
+async function observeAccumulatorMarketForKnockouts(
+  input: BuyInput,
+  proposal: DerivProposal,
+  observationMs: number,
+) {
+  const symbol = input.symbol ?? defaultSymbol;
+  const market = getState().marketHistory.get(symbol);
+  const barrier = proposal.contract_details?.tick_size_barrier;
+  if (!market || !Number.isFinite(barrier) || barrier! <= 0) {
+    throw new Error("Money Bank Auto Knockout cannot start without the selected market's Deriv barrier and live ticks.");
+  }
+
+  let lastSequence = market.tickSequence;
+  let previousQuote = proposal.spot;
+  let observedTicks = 0;
+  const deadline = Date.now() + observationMs;
+
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, Math.min(100, deadline - Date.now())));
+    const current = getState().marketHistory.get(symbol);
+    const nowEpoch = Math.floor(Date.now() / 1000);
+    if (!current || nowEpoch - current.epoch > 3 || current.epoch - nowEpoch > 3) {
+      throw new Error("Money Bank Auto Knockout did not receive fresh ticks for the selected market during its scan. No contract was sent.");
+    }
+
+    const newTickCount = current.tickSequence - lastSequence;
+    if (newTickCount <= 0) continue;
+    const newTicks = current.quoteHistory.filter((tick: { quote: number; epoch: number; sequence?: number }) =>
+      tick.sequence != null
+      && tick.sequence > lastSequence
+      && tick.sequence <= current.tickSequence,
+    );
+    if (newTicks.length !== newTickCount) {
+      throw new Error("Money Bank Auto Knockout could not verify every tick in the selected market's scan. No contract was sent.");
+    }
+    for (const tick of newTicks) {
+      if (Math.abs(tick.quote - previousQuote) >= barrier!) {
+        throw new Error("Money Bank Auto Knockout blocked this entry after detecting a knockout-sized move during its 10-second scan. No contract was sent.");
+      }
+      previousQuote = tick.quote;
+      observedTicks += 1;
+    }
+    lastSequence = current.tickSequence;
+  }
+
+  if (observedTicks === 0) {
+    throw new Error("Money Bank Auto Knockout did not observe any new ticks during its 10-second scan. No contract was sent.");
+  }
+}
+
+export async function scanAccumulatorKnockout(
+  input: ProposalInput,
+  observationMs = 10_000,
+) {
+  if (input.contract_type !== "ACCU") {
+    throw new Error("Money Bank Auto Knockout is only supported for Accumulator contracts.");
+  }
+  validateProposalInput(input);
+  validateAccumulatorInput(input);
+
+  const scanInput: BuyInput = {
+    ...input,
+    duration_unit: "t",
+    auto_knockout: true,
+  };
+  const initialProposal = await requestFreshProposal(input);
+  assertAccumulatorKnockoutClear(scanInput, initialProposal);
+  await observeAccumulatorMarketForKnockouts(scanInput, initialProposal, observationMs);
+
+  // The proposal used to start the scan is stale by the time the observation
+  // finishes. Requote and validate the selected exit-tick window immediately
+  // before reporting success; buyContract repeats this check on its own quote.
+  const finalProposal = await requestFreshProposal(input);
+  assertAccumulatorKnockoutClear(scanInput, finalProposal);
+
+  return {
+    ok: true,
+    message: "The 10-second Auto Knockout scan passed for the selected market, growth rate, and exit-tick window. The buy will run one final fresh-quote check.",
+  };
 }
 
 function scheduleReconnect() {
@@ -1385,6 +1479,9 @@ export async function buyContract(input: BuyInput, assertAuthorized?: TradeAutho
     throw new Error("Deriv WebSocket is not ready");
   }
   await assertAuthorized?.();
+  if (normalizedInput.auto_knockout) {
+    assertAccumulatorKnockoutClear(normalizedInput, proposal);
+  }
   const buy = await sendProposalBuy(proposal, normalizedInput);
   return {
     ok: true,

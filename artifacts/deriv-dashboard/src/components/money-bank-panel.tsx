@@ -75,6 +75,7 @@ type MoneyBankPanelProps = {
   takeProfitTicks: number;
   onTakeProfitTicksChange: (value: number) => void;
   autoKnockout: boolean;
+  autoKnockoutCountdown: number | null;
   onAutoKnockoutChange: (enabled: boolean) => void;
   strategy: MoneyBankStrategy;
   onStrategyChange: (strategy: MoneyBankStrategy) => void;
@@ -152,6 +153,7 @@ export function MoneyBankPanel({
   takeProfitTicks,
   onTakeProfitTicksChange,
   autoKnockout,
+  autoKnockoutCountdown,
   onAutoKnockoutChange,
   strategy,
   onStrategyChange,
@@ -308,11 +310,21 @@ export function MoneyBankPanel({
             </div>
             <div className="money-bank-toggle-list money-bank-market-toggle">
               <label>
-                <span><b>Auto Knockout</b>{autoKnockout && <small>Working</small>}</span>
+                <span><b>Auto Knockout</b>{autoKnockout && <small>{autoKnockoutCountdown == null ? "Ready" : "Scanning"}</small>}</span>
                 <input type="checkbox" checked={autoKnockout} onChange={(event) => onAutoKnockoutChange(event.target.checked)} disabled={running} aria-label="Toggle Money Bank Auto Knockout" />
                 <i />
               </label>
             </div>
+            {autoKnockout && autoKnockoutCountdown != null && (
+              <div className="money-bank-knockout-scan" role="status" aria-live="polite">
+                <ShieldCheck size={15} />
+                <span>
+                  {autoKnockoutCountdown > 0
+                    ? `Checking ${growthRate}% growth · ${takeProfitTicks} exit ticks · ${selectedMarket}: ${autoKnockoutCountdown}s`
+                    : "Rechecking the latest quote and exit ticks before entry…"}
+                </span>
+              </div>
+            )}
           </section>
 
           <section className="money-bank-card">

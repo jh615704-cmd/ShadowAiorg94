@@ -685,6 +685,37 @@ export const RequestDerivProposalResponse = zod.object({
 
 
 /**
+ * @summary Scan an Accumulator market for ten seconds before entry
+ */
+export const scanDerivAccumulatorKnockoutBodyAmountExclusiveMin = 0;
+
+export const scanDerivAccumulatorKnockoutBodyDurationMax = 1000;
+
+export const scanDerivAccumulatorKnockoutBodyBarrierMin = 0;
+export const scanDerivAccumulatorKnockoutBodyBarrierMax = 9;
+
+export const scanDerivAccumulatorKnockoutBodyGrowthRateMin = 0.01;
+export const scanDerivAccumulatorKnockoutBodyGrowthRateMax = 0.05;
+
+
+
+export const ScanDerivAccumulatorKnockoutBody = zod.object({
+  "amount": zod.number().gt(scanDerivAccumulatorKnockoutBodyAmountExclusiveMin),
+  "duration": zod.number().int().min(1).max(scanDerivAccumulatorKnockoutBodyDurationMax),
+  "duration_unit": zod.enum(['t', 's', 'm']),
+  "contract_type": zod.enum(['DIGITEVEN', 'DIGITODD', 'DIGITOVER', 'DIGITUNDER', 'DIGITDIFF', 'CALL', 'PUT', 'ACCU']),
+  "barrier": zod.number().int().min(scanDerivAccumulatorKnockoutBodyBarrierMin).max(scanDerivAccumulatorKnockoutBodyBarrierMax).optional(),
+  "growth_rate": zod.number().min(scanDerivAccumulatorKnockoutBodyGrowthRateMin).max(scanDerivAccumulatorKnockoutBodyGrowthRateMax).optional(),
+  "symbol": zod.string().optional()
+})
+
+export const ScanDerivAccumulatorKnockoutResponse = zod.object({
+  "ok": zod.boolean(),
+  "message": zod.string()
+})
+
+
+/**
  * @summary Select the account used by the authenticated WebSocket
  */
 

@@ -640,6 +640,25 @@
   transform: translateX(15px);
 }
 
+.money-bank-knockout-scan {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 9px 11px;
+  border: 1px solid rgba(66, 213, 142, .22);
+  border-radius: 10px;
+  background: rgba(33, 147, 92, .10);
+  color: #bcebd2;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.money-bank-knockout-scan svg {
+  flex: 0 0 auto;
+  color: #61d99c;
+}
+
 .money-bank-jdy-status,
 .money-bank-reinvest-details {
   margin: 0 0 9px;

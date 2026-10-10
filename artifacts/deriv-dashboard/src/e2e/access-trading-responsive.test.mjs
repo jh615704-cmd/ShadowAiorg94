@@ -329,7 +329,7 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
     await autoKnockoutSwitch.waitFor();
     await page.locator(".money-bank-market-toggle label").click();
     assert.equal(await autoKnockoutSwitch.isChecked(), true);
-    await page.getByText("Working", { exact: true }).waitFor();
+    await page.getByText("Ready", { exact: true }).waitFor();
     for (const viewport of viewports) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await assertNoHorizontalOverflow(page, viewport, "Money Bank Auto Knockout");

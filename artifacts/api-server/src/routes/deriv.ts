@@ -25,6 +25,7 @@ import {
   getHistory,
   clearHistory,
   requestProposal,
+  scanAccumulatorKnockout,
   buyContract,
   sellContract,
   bulkBuyContracts,
@@ -202,6 +203,31 @@ router.post("/deriv/proposals", async (req, res) => {
      const missingCredential = isCredentialError(error);
       return res.status(missingCredential ? credentialHttpStatus(error) : 503).json({
        error: missingCredential ? error.message : "Deriv WebSocket is not ready",
+    });
+  }
+});
+
+router.post("/deriv/accumulator-knockout-scan", async (req, res) => {
+  const parsed = RequestDerivProposalBody.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid Accumulator scan request" });
+  }
+
+  try {
+    const result = RequestDerivProposalResponse.parse(
+      await withCredential(res.locals.userId, () => scanAccumulatorKnockout(parsed.data), true),
+    );
+    return res.json(result);
+  } catch (error) {
+    if (isCapacityError(error)) {
+      return res.status(503).json({ error: error.message });
+    }
+    if (isCredentialError(error)) {
+      return res.status(credentialHttpStatus(error)).json({ error: error.message });
+    }
+    req.log.warn({ err: error }, "Money Bank Auto Knockout scan did not pass");
+    return res.status(409).json({
+      error: error instanceof Error ? error.message : "Money Bank Auto Knockout could not verify the selected market.",
     });
   }
 });

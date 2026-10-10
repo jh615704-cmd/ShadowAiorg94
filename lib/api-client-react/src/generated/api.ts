@@ -1703,6 +1703,77 @@ export const useRequestDerivProposal = <TError = ErrorType<ErrorResponse>,
       return useMutation(getRequestDerivProposalMutationOptions(options));
     }
 
+export const getScanDerivAccumulatorKnockoutUrl = () => {
+
+
+
+
+  return `/api/deriv/accumulator-knockout-scan`
+}
+
+/**
+ * @summary Scan an Accumulator market for ten seconds before entry
+ */
+export const scanDerivAccumulatorKnockout = async (derivProposalInput: DerivProposalInput, options?: Parameters<typeof customFetch>[1]): Promise<DerivProposalRequest> => {
+
+  return customFetch<DerivProposalRequest>(getScanDerivAccumulatorKnockoutUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(derivProposalInput)
+  }
+);}
+
+
+
+
+
+export const getScanDerivAccumulatorKnockoutMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof scanDerivAccumulatorKnockout>>, TError,{data: BodyType<DerivProposalInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof scanDerivAccumulatorKnockout>>, TError,{data: BodyType<DerivProposalInput>}, TContext> => {
+
+const mutationKey = ['scanDerivAccumulatorKnockout'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof scanDerivAccumulatorKnockout>>, {data: BodyType<DerivProposalInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  scanDerivAccumulatorKnockout(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ScanDerivAccumulatorKnockoutMutationResult = NonNullable<Awaited<ReturnType<typeof scanDerivAccumulatorKnockout>>>
+    export type ScanDerivAccumulatorKnockoutMutationBody = BodyType<DerivProposalInput>
+    export type ScanDerivAccumulatorKnockoutMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Scan an Accumulator market for ten seconds before entry
+ */
+export const useScanDerivAccumulatorKnockout = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof scanDerivAccumulatorKnockout>>, TError,{data: BodyType<DerivProposalInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof scanDerivAccumulatorKnockout>>,
+        TError,
+        {data: BodyType<DerivProposalInput>},
+        TContext
+      > => {
+      return useMutation(getScanDerivAccumulatorKnockoutMutationOptions(options));
+    }
+
 export const getSelectDerivAccountUrl = () => {
 
 

@@ -27,6 +27,7 @@ let forceAccessRevoked = false;
 let buyInvocations = 0;
 let bulkBuyInvocations = 0;
 let dualBuyInvocations = 0;
+let knockoutScanInvocations = 0;
 
 class MockDerivCapacityError extends Error {}
 class MockDerivCredentialError extends Error {
@@ -145,6 +146,11 @@ mock.module("../lib/deriv", {
       observePat();
       return { ok: true, message: "proposal requested" };
     },
+    scanAccumulatorKnockout: async () => {
+      observePat();
+      knockoutScanInvocations += 1;
+      return { ok: true, message: "scan passed" };
+    },
     buyContract: async () => {
       observePat();
       buyInvocations += 1;
@@ -261,6 +267,21 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
     });
     assert.equal(proposalResponse.status, 202);
 
+    const scanResponse = await fetch(`${baseUrl}/deriv/accumulator-knockout-scan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: 1,
+        duration: 5,
+        duration_unit: "t",
+        contract_type: "ACCU",
+        growth_rate: 0.04,
+        symbol: "1HZ90V",
+      }),
+    });
+    assert.equal(scanResponse.status, 200, JSON.stringify(await readJson(scanResponse)));
+    assert.equal(knockoutScanInvocations, 1);
+
     const buyResponse = await fetch(`${baseUrl}/deriv/buy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -304,7 +325,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
     });
     assert.equal(digitBulkResponse.status, 400);
     assert.match(String((await readJson(digitBulkResponse)).error), /duration/);
-    assert.deepEqual(observedPats, [enteredPat, enteredPat, enteredPat, enteredPat, enteredPat, enteredPat]);
+    assert.deepEqual(observedPats, [enteredPat, enteredPat, enteredPat, enteredPat, enteredPat, enteredPat, enteredPat]);
 
     const priorBuyInvocations = buyInvocations;
     const priorBulkBuyInvocations = bulkBuyInvocations;
