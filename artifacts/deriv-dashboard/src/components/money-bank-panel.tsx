@@ -1,17 +1,16 @@
 import { useState } from "react";
 import { ChevronDown, Download, Info, Play, RefreshCw, ShieldCheck, Square, TrendingUp } from "lucide-react";
-import { estimateAccumulatorReturnRate } from "../lib/money-bank-math";
+import {
+  calculateRecoveryLadder,
+  estimateAccumulatorReturnRate,
+  type MoneyBankLadderLevel,
+  type MoneyBankStrategy,
+} from "../lib/money-bank-math";
 import DerivHistory, { type DerivHistoryRow } from "./deriv-history";
 import "./money-bank-panel.css";
 
-export type MoneyBankStrategy = "budget" | "manual";
-
-export type MoneyBankLadderLevel = {
-  name: string;
-  stake: number;
-  cumulative: number;
-  profit: number;
-};
+export { calculateRecoveryLadder };
+export type { MoneyBankLadderLevel, MoneyBankStrategy } from "../lib/money-bank-math";
 
 export type MoneyBankStartConfig = {
   symbol: string;
@@ -99,41 +98,11 @@ type MoneyBankPanelProps = {
   onStop: () => void;
 };
 
-const LEVEL_NAMES = ["BASE", "L1", "L2", "L3", "L4", "L5", "L6"];
 const GROWTH_RATES = [1, 2, 3, 4, 5];
 export const MONEY_BANK_AUTO_SYMBOLS = ["1HZ10V", "1HZ15V", "1HZ25V", "1HZ30V", "1HZ50V", "1HZ75V", "1HZ90V", "1HZ100V"] as const;
 
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const ACCUMULATOR_MIN_STAKE = 1;
 const roundCents = (value: number) => Number((Math.round((value + Number.EPSILON) * 100) / 100).toFixed(2));
-
-export function calculateRecoveryLadder(input: {
-  strategy: MoneyBankStrategy;
-  budget: number;
-  manualBase: number;
-  growthRate: number;
-  takeProfitTicks: number;
-}): MoneyBankLadderLevel[] {
-  const payout = estimateAccumulatorReturnRate(input.growthRate, input.takeProfitTicks);
-  const ratio = clamp(1.12 + (0.08 / (payout + 0.16)), 1.14, 1.42);
-  const factors = LEVEL_NAMES.map((_, index) => Math.pow(ratio, index));
-  const requestedBase = input.strategy === "budget"
-    ? Math.max(ACCUMULATOR_MIN_STAKE, input.budget) / factors.reduce((sum, factor) => sum + factor, 0)
-    : Math.max(ACCUMULATOR_MIN_STAKE, input.manualBase);
-  const base = roundCents(Math.max(ACCUMULATOR_MIN_STAKE, requestedBase));
-
-  return LEVEL_NAMES.map((name, index) => {
-    const stake = roundCents(Math.max(ACCUMULATOR_MIN_STAKE, base * factors[index]));
-    const cumulative = LEVEL_NAMES.slice(0, index + 1)
-      .reduce((sum, _, levelIndex) => roundCents(sum + roundCents(Math.max(ACCUMULATOR_MIN_STAKE, base * factors[levelIndex]))), 0);
-    return {
-      name,
-      stake,
-      cumulative,
-      profit: roundCents(stake * payout),
-    };
-  });
-}
 
 const money = (value: number, currency = "USD") =>
   `${currency === "USD" ? "$" : `${currency} `}${value.toFixed(2)}`;
@@ -432,7 +401,7 @@ export function MoneyBankPanel({
                 <strong>{money(selectedStake, currency)}</strong>
               </div>
             </div>
-             <p className="money-bank-helper"><Info size={14} /> BASE is the first stake. Accumulator contracts require at least {money(ACCUMULATOR_MIN_STAKE, currency)}. A loss advances one level; a win recovers prior losses plus the target profit.</p>
+             <p className="money-bank-helper"><Info size={14} /> BASE is the first stake. Accumulator contracts require at least {money(ACCUMULATOR_MIN_STAKE, currency)}. Auto Budget caps planned stakes at the entered amount; Manual BASE is not capped by a budget. Losses can exhaust the budget, and recovery is not guaranteed.</p>
           </section>
         </div>
 
@@ -450,7 +419,7 @@ export function MoneyBankPanel({
             <div className="money-bank-card-head">
               <div>
                 <small>RECOVERY LADDER</small>
-                <h3>BASE → L6</h3>
+               <h3>BASE → {ladder.at(-1)?.name ?? "—"}</h3>
               </div>
               <span className="money-bank-risk-pill">{money(totalCycleRisk, currency)} cycle</span>
             </div>
@@ -459,11 +428,11 @@ export function MoneyBankPanel({
                 <div className={`money-bank-level ${index === 0 ? "base" : ""}`} key={level.name}>
                   <span><b>{level.name}</b>{index === 0 ? "First stake" : `After ${index} loss${index === 1 ? "" : "es"}`}</span>
                   <strong>{money(level.stake, currency)}</strong>
-                  <small>win +{money(level.profit, currency)}</small>
+                  <small>theoretical +{money(level.profit, currency)}</small>
                 </div>
               ))}
             </div>
-             <p className="money-bank-helper"><Info size={14} /> The ladder has seven bounded levels. A win resets to BASE unless Reinvest Profit is enabled.</p>
+             <p className="money-bank-helper"><Info size={14} /> Auto Budget includes only levels affordable within its cap. A loss at the last planned level stops the run; a win resets to BASE unless Reinvest Profit is enabled.</p>
           </section>
 
           <section className="money-bank-card money-bank-risk-card">

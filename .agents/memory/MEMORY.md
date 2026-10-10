@@ -21,6 +21,7 @@
 - [Deriv Accumulator contract](deriv-accumulator-contract.md) — Accumulator trades use ACCU with decimal growth_rate in both proposal and buy payloads.
 - [Money Bank JDY gate](money-bank-jdy-gate.md) — evaluate the user-selected setup at entry; alternatives are advisory and must never be auto-applied.
 - [Money Bank Auto Knockout](money-bank-auto-knockout.md) — screen ACCU entries against Deriv’s proposal-specific tick barrier; fail closed when quote evidence is incomplete.
+- [Money Bank budget cap](money-bank-budget-cap.md) — Auto Budget caps cumulative planned stakes, with fewer steps when the minimum stake leaves insufficient budget.
 - [Access feature registry](access-feature-registry.md) — keep runtime access, API schemas, generated clients, route guards, UI history polling, and admin controls synchronized.
 - [Cash Grab auto-switch](cash-grab-auto-switch.md) — scan live evidence every 20 seconds, keep one contract open at a time, and retain immediate stop controls.
 - [Trading protection test isolation](trading-protection-test-isolation.md) — API trade tests must isolate persisted admin entry shields before asserting Deriv behavior.

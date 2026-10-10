@@ -201,7 +201,7 @@ const moneyBankGuidePages = [
   { title: "Choose a Volatility pair", body: "The market selector contains Volatility indices only, including 1-second V10, V15, V25, V30, V50, V75, V90, and V100 streams.", points: ["Switch markets before starting.", "Live quotes show the selected stream.", "Changing markets does not change the recovery ladder."] },
   { title: "Growth rate", body: "Growth rate is the Accumulator growth applied to each tick. Higher rates can increase the theoretical return while also changing the contract risk.", points: ["Available rates are 1% through 5%.", "The exact decimal rate is sent to Deriv.", "The rate is not a win probability."] },
   { title: "Take-profit ticks", body: "Take Profit ticks is the exact contract duration target used by Money Bank. The panel keeps it between 5 and 50 ticks because Deriv Accumulator contracts require at least five ticks.", points: ["Shorter contracts settle sooner.", "Longer contracts expose the position for more ticks.", "The selected tick target is sent unchanged to Deriv."] },
-  { title: "Auto Budget BASE", body: "Auto Budget divides the entered budget across the seven recovery levels and calculates the first BASE stake for you.", points: ["The budget is a planning amount, not a guaranteed loss cap.", "Review the calculated BASE before starting.", "The account balance remains the final guard."] },
+  { title: "Auto Budget BASE", body: "Auto Budget keeps the planned cumulative stakes within the selected amount, using as many of the seven levels as the minimum stake allows.", points: ["The planned total stays within the entered budget.", "A loss on the final affordable level stops the run.", "This risk limit does not guarantee recovery or profit."] },
   { title: "Manual BASE", body: "Manual BASE lets you choose the first stake directly. Each recovery level is calculated from that BASE and the selected growth and tick settings.", points: ["Use a small stake while testing.", "The next level can be larger after a loss.", "Keep enough balance for the full ladder."] },
   { title: "Recovery ladder", body: "BASE through L6 are explicit recovery levels. A losing settlement advances one level; a profitable settlement resets the level.", points: ["L6 is the final level.", "Money Bank stops instead of silently extending the ladder.", "The ladder is always visible before entry."] },
   { title: "Reinvest Profit", body: "Reinvest Profit is off by default. When it is off, every win resets to the original BASE; when it is on, the win is added to the next BASE.", points: ["The switch changes the next cycle only.", "Compounding can increase exposure quickly.", "Review the next-stake value after every win."] },
@@ -1570,20 +1570,24 @@ export default function XTraderPage() {
         if (config.reinvestProfit) {
           const reinvestedProfit = settledAccumulator.profit * (config.reinvestPercent / 100);
           const nextBase = Math.max(1, config.ladder[0].stake + reinvestedProfit);
+          const cycleBudget = config.ladder.at(-1)?.cumulative ?? 0;
           moneyBankConfigRef.current = {
             ...config,
             ladder: calculateRecoveryLadder({
-              strategy: "manual",
-              budget: config.ladder.at(-1)?.cumulative ?? 0,
+              strategy: config.strategy,
+              budget: cycleBudget,
               manualBase: nextBase,
+              ...(config.strategy === "budget" ? { preferredBase: nextBase } : {}),
               growthRate: config.growthRate,
               takeProfitTicks: config.takeProfitTicks,
             }),
           };
         }
-      } else if (moneyBankLevelRef.current >= 6) {
-        throw new Error("Money Bank stopped at L6 after a losing settlement.");
       } else {
+        const currentLadder = moneyBankConfigRef.current?.ladder ?? config.ladder;
+        if (moneyBankLevelRef.current + 1 >= currentLadder.length) {
+          throw new Error("Money Bank reached the Auto Budget limit; no planned recovery level remains.");
+        }
         moneyBankLevelRef.current += 1;
       }
       if (config.profitTarget != null && config.profitTarget > 0 && nextSessionPnl >= config.profitTarget) {
@@ -1619,7 +1623,7 @@ export default function XTraderPage() {
       });
     }
     const level = currentConfig.ladder?.[Math.min(6, moneyBankLevelRef.current)];
-    if (!level) throw new Error("Money Bank could not calculate the next recovery level.");
+    if (!level) throw new Error("Money Bank reached its Auto Budget limit; no planned recovery level remains.");
     const accountBalance = currentAccountBalance ?? 0;
     if (!accountBalance || level.stake > accountBalance) {
       throw new Error(`Money Bank stopped because ${level.stake.toFixed(2)} ${currentAccount?.currency ?? "USD"} exceeds the connected balance.`);
@@ -1717,6 +1721,11 @@ export default function XTraderPage() {
           await sleep(1000);
           continue;
         }
+        if (message.includes("reached the Auto Budget limit") || message.includes("reached its Auto Budget limit")) {
+          stopMoneyBank();
+          setConnectionMessage({ kind: "info", text: message });
+          return;
+        }
         if (message.includes("Buy cooldown active")) {
           await sleep(1000);
           continue;
@@ -1736,8 +1745,17 @@ export default function XTraderPage() {
       setConnectionMessage({ kind: "error", text: "Select a Deriv account before starting Money Bank." });
       return;
     }
+    if (config.strategy === "budget" && !config.ladder?.length) {
+      setConnectionMessage({ kind: "error", text: "The Auto Budget must cover at least one minimum Accumulator stake." });
+      return;
+    }
     if (!config.ladder?.[0] || config.ladder[0].stake > currentAccountBalance) {
       setConnectionMessage({ kind: "error", text: "The calculated BASE is higher than the connected account balance." });
+      return;
+    }
+    const plannedStakeTotal = config.ladder.at(-1)?.cumulative ?? 0;
+    if (config.strategy === "budget" && plannedStakeTotal > currentAccountBalance) {
+      setConnectionMessage({ kind: "error", text: "The planned Auto Budget cycle exceeds the connected balance. Lower the budget before starting." });
       return;
     }
 
