@@ -8,7 +8,7 @@ import {
 } from "./auto-trader-2-session.ts";
 
 const session = (overrides: Partial<AutoTrader2SavedSession> = {}): AutoTrader2SavedSession => ({
-  version: 2,
+  version: 3,
   accountId: "VRTC123",
   phase: "ready",
   config: {
@@ -31,6 +31,7 @@ const session = (overrides: Partial<AutoTrader2SavedSession> = {}): AutoTrader2S
   recoveryTargetPnl: null,
   lossStreaks: {},
   pausedContractTypes: [],
+  forcedNextType: null,
   pendingContractId: null,
   pendingContractType: null,
   pendingStake: null,
@@ -55,12 +56,34 @@ test("saved automation state is scoped to the selected Deriv account", () => {
 
 test("legacy AI 2 recovery checkpoints migrate without losing their account scope", () => {
   const current = session();
-  const { lossStreaks: _lossStreaks, pausedContractTypes: _pausedContractTypes, ...legacy } = current;
+  const {
+    lossStreaks: _lossStreaks,
+    pausedContractTypes: _pausedContractTypes,
+    forcedNextType: _forcedNextType,
+    ...legacy
+  } = current;
   const parsed = parseAutoTrader2SavedSession(
     JSON.stringify({ ...legacy, version: 1 }),
     "VRTC123",
   );
   assert.deepEqual(parsed, current);
+});
+
+test("version-two checkpoints migrate with no forced direction", () => {
+  const current = session();
+  const { forcedNextType: _forcedNextType, ...versionTwo } = current;
+  assert.deepEqual(parseAutoTrader2SavedSession(
+    JSON.stringify({ ...versionTwo, version: 2 }),
+    "VRTC123",
+  ), current);
+});
+
+test("version-three checkpoints preserve the forced opposite direction", () => {
+  const saved = session({ forcedNextType: "PUT" });
+  assert.deepEqual(
+    parseAutoTrader2SavedSession(JSON.stringify(saved), "VRTC123"),
+    saved,
+  );
 });
 
 test("a clean or completed stop does not require a manual clear before starting again", () => {
@@ -114,6 +137,26 @@ test("a settled Differs loss is reconciled into recovery before a session can re
   assert.equal(assessment.session.phase, "ready");
   assert.equal(assessment.session.pendingContractId, null);
   assert.equal(assessment.session.lossStreaks.DIGITDIFF, 1);
+  assert.equal(assessment.session.forcedNextType, null);
+});
+
+test("a settled Rise loss persists Fall as the required next side", () => {
+  const saved = session({
+    phase: "awaiting-settlement",
+    contractIds: ["c1"],
+    sessionPnl: 0,
+    pendingContractId: "c1",
+    pendingContractType: "CALL",
+    pendingStake: 1,
+  });
+  const assessment = reconcileAutoTrader2SavedSession({
+    session: saved,
+    history: [{ account_id: "VRTC123", contract_id: "c1", profit: -1, status: "lost" }],
+    openContracts: clearOpenContracts,
+  });
+  assert.equal(assessment.kind, "ready");
+  if (assessment.kind !== "ready") return;
+  assert.equal(assessment.session.forcedNextType, "PUT");
 });
 
 test("a third settled loss pauses that contract type before a saved session resumes", () => {

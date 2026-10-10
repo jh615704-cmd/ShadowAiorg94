@@ -38,6 +38,7 @@ import {
 } from "@/lib/auto-trader-2-session";
 import {
   chooseAutoTrader2Candidate,
+  getAutoTrader2OppositeType,
   updateAutoTrader2LossState,
   updateAutoTrader2Recovery,
   type AutoTrader2Candidate,
@@ -102,6 +103,7 @@ type Runtime = {
   recoveryTargetPnl: number | null;
   lossStreaks: Partial<Record<AutoTrader2ContractType, number>>;
   pausedContractTypes: AutoTrader2ContractType[];
+  forcedNextType: AutoTrader2ContractType | null;
   pendingContractId: string | null;
   pendingContractType: AutoTrader2ContractType | null;
   pendingStake: number | null;
@@ -176,6 +178,7 @@ function AutoTrader2Content() {
     recoveryTargetPnl: null,
     lossStreaks: {},
     pausedContractTypes: [],
+    forcedNextType: null,
     pendingContractId: null,
     pendingContractType: null,
     pendingStake: null,
@@ -228,8 +231,16 @@ function AutoTrader2Content() {
   const selectedLabel = markets.find((market) => market.value === selectedMarket)?.label ?? selectedMarket;
   const selectedSignal = signals.find((signal) => signal.symbol === selectedMarket);
   const observedSampleCount = selectedSignal?.recent_digits?.length ?? 0;
-  const aiStatus = !aiEnabled ? "off" : running ? (decision.toLowerCase().includes("waiting") ? "waiting" : "working") : "working";
+  const aiStatus = !aiEnabled ? "off" : !running ? "paused" : decision.toLowerCase().includes("waiting") ? "waiting" : "working";
   localContractsRef.current = localContracts;
+
+  useEffect(() => {
+    if (!message || message.tone === "error") return;
+    const timer = window.setTimeout(() => {
+      setMessage((current) => current === message ? null : current);
+    }, 4_000);
+    return () => window.clearTimeout(timer);
+  }, [message]);
 
   useEffect(() => {
     runRef.current.active = false;
@@ -357,7 +368,7 @@ function AutoTrader2Content() {
     if (!accountId) return false;
     const isTerminalOrReady = phase === "ready" || phase === "completed";
     const snapshot: AutoTrader2SavedSession = {
-      version: 2,
+      version: 3,
       accountId,
       phase,
       config,
@@ -367,6 +378,7 @@ function AutoTrader2Content() {
       recoveryTargetPnl: runRef.current.recoveryTargetPnl,
       lossStreaks: { ...runRef.current.lossStreaks },
       pausedContractTypes: [...runRef.current.pausedContractTypes],
+      forcedNextType: runRef.current.forcedNextType,
       pendingContractId: isTerminalOrReady ? null : runRef.current.pendingContractId,
       pendingContractType: isTerminalOrReady ? null : runRef.current.pendingContractType,
       pendingStake: isTerminalOrReady ? null : runRef.current.pendingStake,
@@ -427,8 +439,12 @@ function AutoTrader2Content() {
     }
   };
 
-  const chooseCandidate = (config: RunConfig, recovery: boolean) => chooseAutoTrader2Candidate({
-    signals: signalsRef.current,
+  const chooseCandidate = (
+    config: RunConfig,
+    recovery: boolean,
+    currentSignals: readonly AutoTrader2Signal[] = signalsRef.current,
+  ) => chooseAutoTrader2Candidate({
+    signals: currentSignals,
     family: recovery ? "recovery" : config.family,
     preferredType: config.contractType,
     barrier: config.barrier,
@@ -436,6 +452,7 @@ function AutoTrader2Content() {
     autoSelect: config.autoSelect,
     duration: config.duration,
     excludedContractTypes: runRef.current.pausedContractTypes,
+    requiredContractType: runRef.current.forcedNextType,
   });
 
   const finishLoop = (generation: number, finalMessage?: { tone: "error" | "success" | "info"; text: string }) => {
@@ -519,6 +536,7 @@ function AutoTrader2Content() {
       recoveryTargetPnl: null,
       lossStreaks: {},
       pausedContractTypes: [],
+      forcedNextType: null,
       pendingContractId: null,
       pendingContractType: null,
       pendingStake: null,
@@ -595,11 +613,20 @@ function AutoTrader2Content() {
     let loopCandidate = firstCandidate;
     while (runRef.current.active && runRef.current.generation === generation) {
       let slotReady = false;
+      let latestSignals: readonly AutoTrader2Signal[] = signalsRef.current;
       for (let attempt = 0; attempt < 10 && runRef.current.active && runRef.current.generation === generation; attempt += 1) {
         try {
           const refreshedStatus = await statusRef.current.refetch();
-          if (refreshedStatus.data?.open_contracts_ready === true && (refreshedStatus.data?.active_contract_count ?? 0) === 0) {
+          const currentStatus = refreshedStatus.data;
+          if (
+            currentStatus?.connected === true
+            && currentStatus.authorized === true
+            && currentStatus.account?.id === accountId
+            && currentStatus.open_contracts_ready === true
+            && (currentStatus.active_contract_count ?? 0) === 0
+          ) {
             slotReady = true;
+            latestSignals = (currentStatus.market_signals ?? []) as AutoTrader2Signal[];
             break;
           }
         } catch {
@@ -619,7 +646,7 @@ function AutoTrader2Content() {
 
       const inRecovery = runRef.current.recovery;
       if (continuous && (!first || !loopCandidate)) {
-        loopCandidate = chooseCandidate(config, inRecovery);
+        loopCandidate = chooseCandidate(config, inRecovery, latestSignals);
         if (!loopCandidate) {
           const pausedTypes = runRef.current.pausedContractTypes
             .map((type) => type.replace("DIGIT", ""))
@@ -632,6 +659,9 @@ function AutoTrader2Content() {
           await delay(1_000);
           continue;
         }
+      }
+      if (loopCandidate && loopCandidate.contractType === runRef.current.forcedNextType) {
+        runRef.current.forcedNextType = null;
       }
 
       const candidate = loopCandidate;
@@ -785,6 +815,9 @@ function AutoTrader2Content() {
       runRef.current.pausedContractTypes = lossState.pausedContractTypes;
       runRef.current.recovery = recovery.active;
       runRef.current.recoveryTargetPnl = recovery.targetPnl;
+      runRef.current.forcedNextType = config.aiEnabled && settledProfit < 0
+        ? getAutoTrader2OppositeType(selectedType)
+        : null;
       runRef.current.pendingContractId = null;
       runRef.current.pendingContractType = null;
       runRef.current.pendingStake = null;
@@ -824,10 +857,15 @@ function AutoTrader2Content() {
       }
       first = false;
       loopCandidate = null;
-      setDecision(runRef.current.recovery
-        ? `WORKING · recovery selection stays active until session P/L is above ${amountLabel(runRef.current.recoveryTargetPnl ?? 0, currency)}.`
-        : "WORKING · waiting for the next eligible live sample.");
-      await delay(300);
+      if (settledProfit < 0) {
+        setDecision("AI 2 is analyzing the next eligible side and market.");
+        await delay(3_000);
+      } else {
+        setDecision(runRef.current.recovery
+          ? `WORKING · recovery selection stays active until session P/L is above ${amountLabel(runRef.current.recoveryTargetPnl ?? 0, currency)}.`
+          : "WORKING · checking recent market evidence.");
+        await delay(300);
+      }
     }
   };
 
@@ -899,6 +937,7 @@ function AutoTrader2Content() {
         recoveryTargetPnl: session.recoveryTargetPnl,
         lossStreaks: { ...session.lossStreaks },
         pausedContractTypes: [...session.pausedContractTypes],
+        forcedNextType: session.forcedNextType,
         pendingContractId: null,
         pendingContractType: null,
         pendingStake: null,
@@ -967,10 +1006,7 @@ function AutoTrader2Content() {
     if (!accountId || running || runRef.current.active || clearingHistory) return;
     if (!clearArmed) {
       setClearArmed(true);
-      setMessage({
-        tone: "info",
-        text: "Tap Clear session again to reset Auto Trader 2.0's local history, run totals, recovery state, and stake progression. Deriv account history will remain unchanged.",
-      });
+      setMessage(null);
       if (clearTimer.current !== null) window.clearTimeout(clearTimer.current);
       clearTimer.current = window.setTimeout(() => {
         setClearArmed(false);
@@ -1041,6 +1077,7 @@ function AutoTrader2Content() {
     runRef.current.recoveryTargetPnl = null;
     runRef.current.lossStreaks = {};
     runRef.current.pausedContractTypes = [];
+      runRef.current.forcedNextType = null;
     runRef.current.pendingContractId = null;
     runRef.current.pendingContractType = null;
     runRef.current.pendingStake = null;
@@ -1051,11 +1088,8 @@ function AutoTrader2Content() {
     setDiscardSessionArmed(false);
     setHistoryFading(true);
     window.setTimeout(() => setHistoryFading(false), 320);
-    setDecision("Session cleared · the next run starts at the configured stake.");
-    setMessage({
-      tone: "success",
-      text: "Auto Trader 2.0 local history and run totals were cleared. The next session will start at the configured stake; Deriv account history is unchanged.",
-    });
+    setDecision("");
+    setMessage(null);
   };
 
   const chooseFamily = (nextFamily: AutoTrader2Family) => {

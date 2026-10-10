@@ -15,13 +15,41 @@ export type AutoTrader2Candidate = {
   contractType: AutoTrader2ContractType;
   barrier?: number;
   observedRate: number;
+  confidenceLowerRate: number;
   sampleCount: number;
   edgeOverBaseline: number;
+  confidenceEdgeOverBaseline: number;
 };
 
-export const AUTO_TRADER_2_MIN_SAMPLE = 20;
-export const AUTO_TRADER_2_MIN_EDGE = 4;
+export const AUTO_TRADER_2_MIN_SAMPLE = 50;
+export const AUTO_TRADER_2_MIN_EDGE = 8;
+export const AUTO_TRADER_2_MIN_CONFIDENCE_EDGE = 0;
 export const AUTO_TRADER_2_MAX_LOSSES_PER_TYPE = 2;
+
+export function getAutoTrader2OppositeType(
+  contractType: AutoTrader2ContractType,
+): AutoTrader2ContractType | null {
+  switch (contractType) {
+    case "CALL": return "PUT";
+    case "PUT": return "CALL";
+    case "DIGITEVEN": return "DIGITODD";
+    case "DIGITODD": return "DIGITEVEN";
+    default: return null;
+  }
+}
+
+function wilsonLowerBoundPercent(wins: number, sampleCount: number): number {
+  if (sampleCount <= 0) return 0;
+  const z = 1.96;
+  const probability = wins / sampleCount;
+  const zSquared = z * z;
+  const denominator = 1 + zSquared / sampleCount;
+  const center = probability + zSquared / (2 * sampleCount);
+  const margin = z * Math.sqrt(
+    (probability * (1 - probability) + zSquared / (4 * sampleCount)) / sampleCount,
+  );
+  return ((center - margin) / denominator) * 100;
+}
 
 export type AutoTrader2LossState = {
   lossStreaks: Partial<Record<AutoTrader2ContractType, number>>;
@@ -92,6 +120,7 @@ function candidatesForSignal(
   duration: number,
   minimumSample: number,
   minimumEdge: number,
+  minimumConfidenceEdge: number,
 ): AutoTrader2Candidate[] {
   const digits = signal.recent_digits.filter((digit) => Number.isInteger(digit) && digit >= 0 && digit <= 9);
   const digitSampleCount = Math.min(signal.sample_count, digits.length);
@@ -113,17 +142,22 @@ function candidatesForSignal(
     if (family !== "recovery" && family === "differs") {
       if (expiryDigitSampleCount < minimumSample) continue;
       for (let selectedBarrier = 0; selectedBarrier <= 9; selectedBarrier += 1) {
-        const observedRate = ((expiryDigitSampleCount - expiryDigits.slice(0, expiryDigitSampleCount)
-          .filter((digit) => digit === selectedBarrier).length) / expiryDigitSampleCount) * 100;
+        const wins = expiryDigitSampleCount - expiryDigits.slice(0, expiryDigitSampleCount)
+          .filter((digit) => digit === selectedBarrier).length;
+        const observedRate = (wins / expiryDigitSampleCount) * 100;
         const edgeOverBaseline = observedRate - 90;
-        if (edgeOverBaseline >= minimumEdge) {
+        const confidenceLowerRate = wilsonLowerBoundPercent(wins, expiryDigitSampleCount);
+        const confidenceEdgeOverBaseline = confidenceLowerRate - 90;
+        if (edgeOverBaseline >= minimumEdge && confidenceEdgeOverBaseline >= minimumConfidenceEdge) {
           candidates.push({
             symbol: signal.symbol,
             contractType,
             barrier: selectedBarrier,
-            observedRate,
+            observedRate: Number(observedRate.toFixed(1)),
+            confidenceLowerRate,
             sampleCount: expiryDigitSampleCount,
             edgeOverBaseline,
+            confidenceEdgeOverBaseline,
           });
         }
       }
@@ -132,9 +166,10 @@ function candidatesForSignal(
 
     let observedRate: number;
     let baseline: number;
+    let wins: number;
     if (contractType === "CALL" || contractType === "PUT") {
       if (quoteSampleCount < minimumSample) continue;
-      const wins = Array.from({ length: quoteSampleCount }, (_, index) =>
+      wins = Array.from({ length: quoteSampleCount }, (_, index) =>
         contractType === "CALL"
           ? quotes[index + duration]! > quotes[index]!
           : quotes[index + duration]! < quotes[index]!,
@@ -145,21 +180,27 @@ function candidatesForSignal(
       if (expiryDigitSampleCount < minimumSample) continue;
       const sampledExpiryDigits = expiryDigits.slice(0, expiryDigitSampleCount);
       const evenCount = sampledExpiryDigits.filter((digit) => digit % 2 === 0).length;
-      observedRate = contractType === "DIGITEVEN"
-        ? (evenCount / expiryDigitSampleCount) * 100
-        : ((expiryDigitSampleCount - evenCount) / expiryDigitSampleCount) * 100;
+      wins = contractType === "DIGITEVEN" ? evenCount : expiryDigitSampleCount - evenCount;
+      observedRate = (wins / expiryDigitSampleCount) * 100;
       baseline = 50;
     }
     if (!Number.isFinite(observedRate) || observedRate > 100) continue;
+    const confidenceLowerRate = wilsonLowerBoundPercent(
+      wins,
+      contractType === "CALL" || contractType === "PUT" ? quoteSampleCount : expiryDigitSampleCount,
+    );
     observedRate = Number(observedRate.toFixed(1));
     const edgeOverBaseline = observedRate - baseline;
-    if (edgeOverBaseline >= minimumEdge) {
+    const confidenceEdgeOverBaseline = confidenceLowerRate - baseline;
+    if (edgeOverBaseline >= minimumEdge && confidenceEdgeOverBaseline >= minimumConfidenceEdge) {
       candidates.push({
         symbol: signal.symbol,
         contractType,
         observedRate,
+        confidenceLowerRate,
         sampleCount: contractType === "CALL" || contractType === "PUT" ? quoteSampleCount : expiryDigitSampleCount,
         edgeOverBaseline,
+        confidenceEdgeOverBaseline,
       });
     }
   }
@@ -176,11 +217,14 @@ export function chooseAutoTrader2Candidate(input: {
   autoSelect: boolean;
   duration?: number;
   excludedContractTypes?: readonly AutoTrader2ContractType[];
+  requiredContractType?: AutoTrader2ContractType | null;
   minimumSample?: number;
   minimumEdge?: number;
+  minimumConfidenceEdge?: number;
 }): AutoTrader2Candidate | null {
   const minimumSample = input.minimumSample ?? AUTO_TRADER_2_MIN_SAMPLE;
   const minimumEdge = input.minimumEdge ?? AUTO_TRADER_2_MIN_EDGE;
+  const minimumConfidenceEdge = input.minimumConfidenceEdge ?? AUTO_TRADER_2_MIN_CONFIDENCE_EDGE;
   const duration = Number.isInteger(input.duration) && (input.duration ?? 0) > 0
     ? input.duration!
     : 1;
@@ -193,10 +237,15 @@ export function chooseAutoTrader2Candidate(input: {
     duration,
     minimumSample,
     minimumEdge,
-  )).filter((candidate) => !excludedContractTypes.has(candidate.contractType));
+    minimumConfidenceEdge,
+  )).filter((candidate) =>
+    !excludedContractTypes.has(candidate.contractType)
+    && (!input.requiredContractType || candidate.contractType === input.requiredContractType)
+  );
 
   candidates.sort((left, right) =>
-    right.edgeOverBaseline - left.edgeOverBaseline
+    right.confidenceEdgeOverBaseline - left.confidenceEdgeOverBaseline
+    || right.edgeOverBaseline - left.edgeOverBaseline
     || right.sampleCount - left.sampleCount
     || Number(right.contractType === input.preferredType) - Number(left.contractType === input.preferredType)
     || left.symbol.localeCompare(right.symbol)

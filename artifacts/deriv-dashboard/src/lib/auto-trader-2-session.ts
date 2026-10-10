@@ -1,4 +1,5 @@
 import {
+  getAutoTrader2OppositeType,
   updateAutoTrader2LossState,
   updateAutoTrader2Recovery,
   type AutoTrader2ContractType,
@@ -29,7 +30,7 @@ export type AutoTrader2SavedPhase =
   | "completed";
 
 export type AutoTrader2SavedSession = {
-  version: 2;
+  version: 3;
   accountId: string;
   phase: AutoTrader2SavedPhase;
   config: AutoTrader2RunConfig;
@@ -39,6 +40,7 @@ export type AutoTrader2SavedSession = {
   recoveryTargetPnl: number | null;
   lossStreaks: AutoTrader2LossState["lossStreaks"];
   pausedContractTypes: AutoTrader2ContractType[];
+  forcedNextType: AutoTrader2ContractType | null;
   pendingContractId: string | null;
   pendingContractType: AutoTrader2ContractType | null;
   pendingStake: number | null;
@@ -100,7 +102,7 @@ export function parseAutoTrader2SavedSession(
   try {
     const value = JSON.parse(serialized) as Record<string, unknown>;
     if (
-      (value.version !== 1 && value.version !== 2)
+      (value.version !== 1 && value.version !== 2 && value.version !== 3)
       || value.accountId !== expectedAccountId
       || !phases.includes(value.phase as AutoTrader2SavedPhase)
       || !isRunConfig(value.config)
@@ -119,6 +121,7 @@ export function parseAutoTrader2SavedSession(
     }
     const lossStreaks = value.version === 1 ? {} : value.lossStreaks;
     const pausedContractTypes = value.version === 1 ? [] : value.pausedContractTypes;
+    const forcedNextType = value.version === 3 ? value.forcedNextType : null;
     if (
       typeof lossStreaks !== "object"
       || lossStreaks === null
@@ -131,14 +134,16 @@ export function parseAutoTrader2SavedSession(
       || !Array.isArray(pausedContractTypes)
       || !pausedContractTypes.every((type) => contractTypes.includes(type as AutoTrader2ContractType))
       || new Set(pausedContractTypes).size !== pausedContractTypes.length
+      || !(forcedNextType === null || contractTypes.includes(forcedNextType as AutoTrader2ContractType))
     ) {
       return null;
     }
     return {
       ...value,
-      version: 2,
+      version: 3,
       lossStreaks: lossStreaks as AutoTrader2LossState["lossStreaks"],
       pausedContractTypes: pausedContractTypes as AutoTrader2ContractType[],
+      forcedNextType: forcedNextType as AutoTrader2ContractType | null,
     } as AutoTrader2SavedSession;
   } catch {
     return null;
@@ -262,6 +267,7 @@ export function reconcileAutoTrader2SavedSession(input: {
       recoveryTargetPnl: recovery.targetPnl,
       lossStreaks: lossState.lossStreaks,
       pausedContractTypes: lossState.pausedContractTypes,
+      forcedNextType: row.profit < 0 ? getAutoTrader2OppositeType(session.pendingContractType) : null,
       pendingContractId: null,
       pendingContractType: null,
       pendingStake: null,
