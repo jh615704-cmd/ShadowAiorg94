@@ -34,4 +34,4 @@
 - [Deriv quote display](deriv-quote-display.md) — Cash Grab, DigitFlip, and EDGE quotes use at least four integer digits and exactly two decimals.
 - [Auto Trader guide boundary](auto-trader-guide-boundary.md) — explain controls and observed data without exposing private strategy logic or implying guaranteed outcomes.
 - [Trading feature connection copy](trading-feature-connection-copy.md) — keep credential setup copy in the shared account flow; don't repeat PAT prompts under each new feature.
-- [Auto Trader 2 recovery target](auto-trader-2-loss-recovery.md) — every AI 2 Differs loss starts recovery until session P/L exceeds its pre-loss level.
+- [Auto Trader 2 loss handling](auto-trader-2-loss-recovery.md) — Differs losses require recovery; paired-family losses require the opposite side after fresh evidence analysis.

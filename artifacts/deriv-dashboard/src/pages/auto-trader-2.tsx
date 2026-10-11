@@ -81,8 +81,8 @@ const guideCopy = [
   ["Flat stake mode", "Flat mode uses the configured stake for each entry. It makes the planned amount consistent from one contract to the next.", "Flat staking cannot prevent losses. Review the stake against the account balance before starting."],
   ["Multiply after loss", "Multiply after loss increases the next requested stake after a losing settlement by your configured multiplier. A win returns the next amount to the base stake.", "Multiplying can increase exposure quickly and does not guarantee recovery. The server still checks the selected account balance."],
   ["Auto-select market", "When enabled with AI 2, the feature compares qualifying live samples across supported markets and selects the strongest eligible market. Turn it off to keep the manually selected market.", "Auto-selection ranks observed data; it is not a forecast of future results."],
-  ["AI 2 checkbox", "AI 2 selects the strongest qualifying direction or parity within the chosen family. After three losses on one contract type without a win on that type, it pauses that type for the rest of the session.", "AI 2 is a rule-based filter of observed market data, not a source of guaranteed outcomes."],
-  ["AI 2 sample threshold", "AI 2 needs at least 20 historical expiry samples at the configured duration and a rate at least 4 percentage points above that contract's baseline. Rise/Fall and parity use a 50% baseline (54% observed).", "Observed rates are historical context, not a promise of future contract results."],
+  ["AI 2 checkbox", "AI 2 uses a stricter evidence filter, chooses the strongest qualifying direction or parity, and switches to the paired opposite side after a loss. It analyzes fresh market data before the next entry; if the opposite side does not qualify, it waits. After three losses on one type, it pauses that type for the rest of the session.", "AI 2 is a rule-based filter of observed market data, not a source of guaranteed outcomes."],
+  ["AI 2 sample threshold", "AI 2 requires a larger recent expiry sample and statistical support above the contract baseline. When the evidence is weak or inconsistent, it waits instead of placing a trade.", "Observed rates are historical context, not a promise of future contract results."],
   ["Differs loss response", "After any AI 2 Differs loss settles, recovery selection switches to qualifying Rise/Fall or Even/Odd candidates and can auto-select the strongest market. It remains in recovery until settled session P/L rises above the P/L level from just before that loss.", "Recovery does not guarantee a profit. If no qualifying setup is available, AI 2 waits without placing an order."],
   ["One open contract at a time", "The loop waits for Deriv history to show the active contract as settled before considering another entry. Other open contracts also block new entries.", "If settlement cannot be verified, the loop pauses instead of guessing or sending another order."],
   ["Reading Auto Trader 2.0 History", "History uses the same session summary and trade-row design as Cash Grab. It only includes contracts this feature recorded for the currently selected account.", "The history list is a dashboard view. Deriv remains the authoritative account record."],
@@ -857,7 +857,7 @@ function AutoTrader2Content() {
       }
       first = false;
       loopCandidate = null;
-      if (settledProfit < 0) {
+      if (config.aiEnabled && settledProfit < 0) {
         setDecision("AI 2 is analyzing the next eligible side and market.");
         await delay(3_000);
       } else {
@@ -1051,8 +1051,55 @@ function AutoTrader2Content() {
         });
         return;
       }
-      localStorage.removeItem(`${storagePrefix}${accountId}`);
-      localStorage.removeItem(`${sessionStoragePrefix}${accountId}`);
+      const historyKey = `${storagePrefix}${accountId}`;
+      const sessionKey = `${sessionStoragePrefix}${accountId}`;
+      const previousHistory = localStorage.getItem(historyKey);
+      const previousSession = localStorage.getItem(sessionKey);
+      try {
+        localStorage.removeItem(sessionKey);
+        localStorage.removeItem(historyKey);
+      } catch (error) {
+        try {
+          if (previousHistory !== null) localStorage.setItem(historyKey, previousHistory);
+          if (previousSession !== null) localStorage.setItem(sessionKey, previousSession);
+        } catch {
+          setMessage({
+            tone: "error",
+            text: "Browser storage could not finish clearing Auto Trader 2.0. Refresh and verify the local session; Deriv history was not changed.",
+          });
+          return;
+        }
+        throw error;
+      }
+
+      localContractsRef.current = [];
+      setLocalContracts([]);
+      setRunContractIds([]);
+      setSessionPnl(0);
+      setSessionTradeCount(0);
+      setNextStake(stake);
+      runRef.current.active = false;
+      runRef.current.contractIds = [];
+      runRef.current.config = null;
+      runRef.current.currentStake = stake;
+      runRef.current.sessionPnl = 0;
+      runRef.current.recovery = false;
+      runRef.current.recoveryTargetPnl = null;
+      runRef.current.lossStreaks = {};
+      runRef.current.pausedContractTypes = [];
+      runRef.current.forcedNextType = null;
+      runRef.current.pendingContractId = null;
+      runRef.current.pendingContractType = null;
+      runRef.current.pendingStake = null;
+      runRef.current.lastCandidate = null;
+      setSavedSession(null);
+      setSavedSessionIssue("");
+      setSavedSessionNotice("");
+      setDiscardSessionArmed(false);
+      setHistoryFading(true);
+      window.setTimeout(() => setHistoryFading(false), 320);
+      setDecision("");
+      setMessage(null);
     } catch {
       setMessage({
         tone: "error",
@@ -1062,34 +1109,6 @@ function AutoTrader2Content() {
     } finally {
       setClearingHistory(false);
     }
-    localContractsRef.current = [];
-    setLocalContracts([]);
-    setRunContractIds([]);
-    setSessionPnl(0);
-    setSessionTradeCount(0);
-    setNextStake(stake);
-    runRef.current.active = false;
-    runRef.current.contractIds = [];
-    runRef.current.config = null;
-    runRef.current.currentStake = stake;
-    runRef.current.sessionPnl = 0;
-    runRef.current.recovery = false;
-    runRef.current.recoveryTargetPnl = null;
-    runRef.current.lossStreaks = {};
-    runRef.current.pausedContractTypes = [];
-      runRef.current.forcedNextType = null;
-    runRef.current.pendingContractId = null;
-    runRef.current.pendingContractType = null;
-    runRef.current.pendingStake = null;
-    runRef.current.lastCandidate = null;
-    setSavedSession(null);
-    setSavedSessionIssue("");
-    setSavedSessionNotice("");
-    setDiscardSessionArmed(false);
-    setHistoryFading(true);
-    window.setTimeout(() => setHistoryFading(false), 320);
-    setDecision("");
-    setMessage(null);
   };
 
   const chooseFamily = (nextFamily: AutoTrader2Family) => {
@@ -1123,7 +1142,7 @@ function AutoTrader2Content() {
         {message && <div className={`at2-page-message ${message.tone}`} role={message.tone === "error" ? "alert" : "status"} data-testid="at2-message">
           {message.tone === "error" ? <AlertCircle size={15} /> : <Check size={15} />}
           <span>{message.text}</span>
-          <button type="button" onClick={() => setMessage(null)} aria-label="Dismiss message">×</button>
+          {message.tone === "error" && <button type="button" onClick={() => setMessage(null)} aria-label="Dismiss message">×</button>}
         </div>}
         <section className="at2-account-strip" aria-label="Selected Deriv account">
           <span className={account?.type === "real" ? "real" : ""}>{account?.type ? `${account.type.toUpperCase()} ACCOUNT` : "NO ACCOUNT"}</span>

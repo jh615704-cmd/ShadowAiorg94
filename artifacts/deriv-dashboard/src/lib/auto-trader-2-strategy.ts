@@ -15,10 +15,10 @@ export type AutoTrader2Candidate = {
   contractType: AutoTrader2ContractType;
   barrier?: number;
   observedRate: number;
-  confidenceLowerRate: number;
+  confidenceLowerRate?: number;
   sampleCount: number;
   edgeOverBaseline: number;
-  confidenceEdgeOverBaseline: number;
+  confidenceEdgeOverBaseline?: number;
 };
 
 export const AUTO_TRADER_2_MIN_SAMPLE = 50;
@@ -244,7 +244,7 @@ export function chooseAutoTrader2Candidate(input: {
   );
 
   candidates.sort((left, right) =>
-    right.confidenceEdgeOverBaseline - left.confidenceEdgeOverBaseline
+    (right.confidenceEdgeOverBaseline ?? 0) - (left.confidenceEdgeOverBaseline ?? 0)
     || right.edgeOverBaseline - left.edgeOverBaseline
     || right.sampleCount - left.sampleCount
     || Number(right.contractType === input.preferredType) - Number(left.contractType === input.preferredType)

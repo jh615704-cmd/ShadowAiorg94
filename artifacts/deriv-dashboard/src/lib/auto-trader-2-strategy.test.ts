@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   chooseAutoTrader2Candidate,
+  getAutoTrader2OppositeType,
   updateAutoTrader2LossState,
   updateAutoTrader2Recovery,
   type AutoTrader2LossState,
@@ -17,9 +18,17 @@ const signal = (symbol: string, digits: number[], overrides: Record<string, unkn
   ...overrides,
 });
 
-test("AI 2 waits until there is enough recent sample and observed edge", () => {
+const quotesFromSteps = (count: number, steps: number[]) => {
+  const quotes = [1_000];
+  for (let index = 0; index < count; index += 1) {
+    quotes.push(quotes[quotes.length - 1]! + steps[index % steps.length]!);
+  }
+  return quotes;
+};
+
+test("AI 2 rejects undersized samples and edges without confidence support", () => {
   const candidate = chooseAutoTrader2Candidate({
-    signals: [signal("R_10", Array(19).fill(1))],
+    signals: [signal("R_10", Array(50).fill(2))],
     family: "even-odd",
     preferredType: "DIGITEVEN",
     barrier: 0,
@@ -27,11 +36,21 @@ test("AI 2 waits until there is enough recent sample and observed edge", () => {
     autoSelect: false,
   });
   assert.equal(candidate, null);
+
+  const rawEdgeOnly = chooseAutoTrader2Candidate({
+    signals: [signal("R_10", [0, ...Array(29).fill(2), ...Array(21).fill(1)])],
+    family: "even-odd",
+    preferredType: "DIGITEVEN",
+    barrier: 0,
+    selectedMarket: "R_10",
+    autoSelect: false,
+  });
+  assert.equal(rawEdgeOnly, null);
 });
 
 test("AI 2 ranks the strongest even/odd observation for the selected market", () => {
   const candidate = chooseAutoTrader2Candidate({
-    signals: [signal("R_10", [...Array(17).fill(2), ...Array(4).fill(1)])],
+    signals: [signal("R_10", [0, ...Array(40).fill(2), ...Array(10).fill(1)])],
     family: "even-odd",
     preferredType: "DIGITEVEN",
     barrier: 0,
@@ -40,12 +59,13 @@ test("AI 2 ranks the strongest even/odd observation for the selected market", ()
   });
   assert.equal(candidate?.contractType, "DIGITEVEN");
   assert.equal(candidate?.observedRate, 80);
+  assert.equal(candidate?.sampleCount, 50);
 });
 
 test("Auto-select compares candidates across markets while manual selection stays scoped", () => {
   const signals = [
-    signal("R_10", [...Array(13).fill(1), ...Array(8).fill(2)]),
-    signal("R_25", [...Array(19).fill(2), ...Array(2).fill(1)]),
+    signal("R_10", [1, ...Array(40).fill(2), ...Array(10).fill(1)]),
+    signal("R_25", [1, ...Array(90).fill(2), ...Array(10).fill(1)]),
   ];
   const selected = chooseAutoTrader2Candidate({
     signals,
@@ -56,6 +76,7 @@ test("Auto-select compares candidates across markets while manual selection stay
     autoSelect: true,
   });
   assert.equal(selected?.symbol, "R_25");
+  assert.equal(selected?.contractType, "DIGITEVEN");
 
   const manual = chooseAutoTrader2Candidate({
     signals,
@@ -70,7 +91,11 @@ test("Auto-select compares candidates across markets while manual selection stay
 
 test("Differs chooses a barrier with a sufficiently low observed frequency", () => {
   const candidate = chooseAutoTrader2Candidate({
-    signals: [signal("R_75", [1, 0, 0, 2, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 9])],
+    signals: [signal("R_75", [
+      3,
+      1, 1,
+      ...Array.from({ length: 9 }, (_, index) => Array(index === 0 ? 10 : 11).fill(index === 0 ? 0 : index + 1)).flat(),
+    ])],
     family: "differs",
     preferredType: "DIGITDIFF",
     barrier: 7,
@@ -79,13 +104,15 @@ test("Differs chooses a barrier with a sufficiently low observed frequency", () 
   });
   assert.equal(candidate?.contractType, "DIGITDIFF");
   assert.equal(candidate?.barrier, 1);
+  assert.equal(candidate?.sampleCount, 100);
 });
 
 test("Recovery candidates exclude Differs and consider Rise/Fall and Even/Odd", () => {
   const candidate = chooseAutoTrader2Candidate({
-    signals: [signal("R_50", [...Array(12).fill(4), ...Array(9).fill(3)], {
+    signals: [signal("R_50", [3, ...Array(40).fill(4), ...Array(10).fill(3)], {
       rise_percentage: 70,
       fall_percentage: 30,
+      recent_quotes: quotesFromSteps(51, [1]),
     })],
     family: "recovery",
     preferredType: "DIGITDIFF",
@@ -124,7 +151,11 @@ test("AI 2 pauses a direction after a third loss and retains the pause for the s
 
 test("AI 2 waits when the alternate direction is below its observed-rate threshold", () => {
   const candidate = chooseAutoTrader2Candidate({
-    signals: [signal("R_10", Array(20).fill(2), { rise_percentage: 70, fall_percentage: 30 })],
+    signals: [signal("R_10", Array(51).fill(2), {
+      rise_percentage: 70,
+      fall_percentage: 30,
+      recent_quotes: quotesFromSteps(50, [1]),
+    })],
     family: "rise-fall",
     preferredType: "CALL",
     barrier: 0,
@@ -138,17 +169,11 @@ test("AI 2 waits when the alternate direction is below its observed-rate thresho
 test("Auto-select chooses the strongest eligible alternate direction and market", () => {
   const candidate = chooseAutoTrader2Candidate({
     signals: [
-      signal("R_10", Array(21).fill(2), {
-        rise_percentage: 70,
-        fall_percentage: 30,
-        recent_quotes: Array.from({ length: 22 }, (_, index) => 100 + index),
+      signal("R_10", Array(51).fill(2), {
+        recent_quotes: quotesFromSteps(50, [1]),
       }),
-      signal("R_25", Array(21).fill(2), {
-        rise_percentage: 42,
-        fall_percentage: 58,
-        recent_quotes: Array.from({ length: 101 }, (_, index) =>
-          index <= 58 ? 100 - index : 42 + index - 58,
-        ),
+      signal("R_25", Array(101).fill(2), {
+        recent_quotes: quotesFromSteps(100, [-1, -1, -1, 1]),
       }),
     ],
     family: "rise-fall",
@@ -160,12 +185,12 @@ test("Auto-select chooses the strongest eligible alternate direction and market"
   });
   assert.equal(candidate?.contractType, "PUT");
   assert.equal(candidate?.symbol, "R_25");
-  assert.equal(candidate?.observedRate, 58);
+  assert.equal(candidate?.observedRate, 75);
 });
 
 test("a weak even/odd alternative is not traded after its stronger parity is paused", () => {
   const candidate = chooseAutoTrader2Candidate({
-    signals: [signal("R_50", [...Array(16).fill(2), ...Array(5).fill(1)])],
+    signals: [signal("R_50", [1, ...Array(40).fill(2), ...Array(10).fill(1)])],
     family: "even-odd",
     preferredType: "DIGITEVEN",
     barrier: 0,
@@ -178,8 +203,8 @@ test("a weak even/odd alternative is not traded after its stronger parity is pau
 
 test("Rise/Fall scoring uses the selected multi-tick expiry outcome", () => {
   const candidate = chooseAutoTrader2Candidate({
-    signals: [signal("R_10", Array(20).fill(2), {
-      recent_quotes: [100, 101, 99, 98, 100, 97],
+    signals: [signal("R_10", Array(51).fill(2), {
+      recent_quotes: quotesFromSteps(51, [3, -4]),
     })],
     family: "rise-fall",
     preferredType: "CALL",
@@ -187,10 +212,34 @@ test("Rise/Fall scoring uses the selected multi-tick expiry outcome", () => {
     selectedMarket: "R_10",
     autoSelect: false,
     duration: 2,
-    minimumSample: 3,
+  });
+  assert.equal(candidate?.contractType, "PUT");
+  assert.equal(candidate?.observedRate, 100);
+  assert.equal(candidate?.sampleCount, 50);
+});
+
+test("a forced opposite direction takes priority over the preferred direction", () => {
+  const candidate = chooseAutoTrader2Candidate({
+    signals: [signal("R_10", Array(101).fill(2), {
+      recent_quotes: quotesFromSteps(100, [-1, -1, -1, 1]),
+    })],
+    family: "rise-fall",
+    preferredType: "CALL",
+    barrier: 0,
+    selectedMarket: "R_10",
+    autoSelect: false,
+    requiredContractType: "PUT",
   });
   assert.equal(candidate?.contractType, "PUT");
   assert.equal(candidate?.observedRate, 75);
+});
+
+test("paired contract families switch to the exact opposite type after a loss", () => {
+  assert.equal(getAutoTrader2OppositeType("CALL"), "PUT");
+  assert.equal(getAutoTrader2OppositeType("PUT"), "CALL");
+  assert.equal(getAutoTrader2OppositeType("DIGITEVEN"), "DIGITODD");
+  assert.equal(getAutoTrader2OppositeType("DIGITODD"), "DIGITEVEN");
+  assert.equal(getAutoTrader2OppositeType("DIGITDIFF"), null);
 });
 
 test("a Differs loss enters recovery even when earlier wins leave session P/L positive", () => {

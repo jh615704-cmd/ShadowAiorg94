@@ -228,9 +228,11 @@ test("clearing Auto Trader 2.0 resets run metrics and stake without deleting Der
     assert.match(await summary.innerText(), /STAKED\s+US\$4\.00/);
 
     await page.getByRole("button", { name: "Clear Auto Trader 2.0 History session" }).click();
-    await page.getByTestId("at2-message").getByText(/Tap Clear session again/).waitFor();
+    assert.equal(await page.getByTestId("at2-message").count(), 0, "The clear confirmation should stay on the button, not create a blocking banner.");
     await page.getByRole("button", { name: "Tap again to clear Auto Trader 2.0 History session" }).click();
-    await page.getByText(/The next session will start at the configured stake/).waitFor();
+    await page.waitForFunction(() => /\bTRADES\s+0\b/.test(document.querySelector(".deriv-history-session")?.innerText ?? ""));
+    assert.equal(await page.getByTestId("at2-message").count(), 0, "A completed clear should not require dismissing a status banner.");
+    assert.equal(await page.getByText(/Session cleared · the next run starts at the configured stake/).count(), 0);
 
     const clearedSummary = await summary.innerText();
     assert.match(clearedSummary, /TRADES\s+0/);
