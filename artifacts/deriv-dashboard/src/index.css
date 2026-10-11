@@ -2438,7 +2438,11 @@ body { overflow-x: hidden; }
 .xt-feature-card.xt-feature-card-restricted {
   border-color: rgba(255, 91, 105, .68) !important;
   background: linear-gradient(145deg, rgba(72, 24, 41, .96), rgba(35, 22, 42, .98)) !important;
-  box-shadow: inset 3px 0 0 #f05261, 0 10px 26px rgba(73, 16, 39, .2);
+  box-shadow:
+    inset 3px 0 0 #f05261,
+    0 0 18px rgba(255, 77, 93, .34),
+    0 0 36px rgba(255, 77, 93, .16),
+    0 10px 26px rgba(73, 16, 39, .2);
 }
 .xt-feature-card-restricted > div:first-child > svg { color: #ff7c88 !important; }
 .xt-feature-card-restricted > div:first-child > span > small {
@@ -2451,7 +2455,18 @@ body { overflow-x: hidden; }
   background: rgba(166, 43, 58, .2);
   color: #ff9ba3;
 }
-.xt-feature-card-restricted .xt-switch > span { background: #58333e; }
+.xt-feature-card-restricted .xt-switch > span {
+  border: 1px solid rgba(255, 107, 119, .9);
+  background: linear-gradient(135deg, #a52b3d, #702431) !important;
+  box-shadow:
+    0 0 0 2px rgba(255, 86, 102, .2),
+    0 0 13px rgba(255, 64, 81, .68),
+    inset 0 0 7px rgba(255, 130, 140, .22);
+}
+.xt-feature-card-restricted .xt-switch > span::after {
+  background: #ff7380;
+  box-shadow: 0 0 8px rgba(255, 84, 101, .8);
+}
 .xt-feature-card-restricted .xt-switch input:disabled + span { cursor: not-allowed; }
 .xt-guide-button {
   width: auto;

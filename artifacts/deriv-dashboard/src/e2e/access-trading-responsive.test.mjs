@@ -141,6 +141,45 @@ test("Auto Trader and Auto Trader 2.0 grants stay independent during key creatio
   }
 });
 
+test("restricted homepage feature cards and switches glow red without enabling controls", async () => {
+  const state = createState(userSession(["settings"]));
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/`);
+    const restrictedSwitch = page.locator(".xt-feature-card-restricted .xt-switch").first();
+    await restrictedSwitch.waitFor();
+    await page.getByText(/Restricted — admin access only/).first().waitFor();
+
+    const appearance = await restrictedSwitch.evaluate((switchLabel) => {
+      const input = switchLabel.querySelector("input");
+      const track = switchLabel.querySelector(":scope > span");
+      const card = switchLabel.closest(".xt-feature-card-restricted");
+      return {
+        disabled: input?.disabled,
+        cardShadow: card ? getComputedStyle(card).boxShadow : "",
+        trackShadow: track ? getComputedStyle(track).boxShadow : "",
+        trackBackground: track ? getComputedStyle(track).backgroundImage : "",
+        thumbColor: track ? getComputedStyle(track, "::after").backgroundColor : "",
+      };
+    });
+
+    assert.equal(appearance.disabled, true);
+    assert.match(appearance.cardShadow, /255,\s*77,\s*93/, "The complete restricted feature card should have a red glow.");
+    assert.match(appearance.trackShadow, /255,\s*64,\s*81/, "The switch track should have its own red glow.");
+    assert.match(appearance.trackBackground, /linear-gradient/);
+    assert.equal(appearance.thumbColor, "rgb(255, 115, 128)");
+
+    for (const viewport of viewports) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await assertNoHorizontalOverflow(page, viewport, "restricted homepage feature cards");
+    }
+    assert.deepEqual(state.tradeRequests, [], "A restricted homepage control must not submit a trade.");
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+});
+
 test("clearing Auto Trader 2.0 resets run metrics and stake without deleting Deriv history", async () => {
   const state = createState(userSession(["auto-trader-2"]));
   state.hasToken = true;
