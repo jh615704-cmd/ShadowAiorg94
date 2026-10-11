@@ -314,13 +314,13 @@ export default function AdminUsersPage() {
   };
 
   const handleDelete = (item: AccessKeySummary) => {
-    if (!window.confirm(`Delete ${item.label}? This immediately revokes every session and permanently reserves this label.`)) return;
+    if (!window.confirm(`Delete ${item.label}? This immediately revokes every session. You can reuse this name later, but this key can never sign in again.`)) return;
     setDeletingKeyIds((current) => new Set(current).add(item.key_id));
     deleteKey.mutate(
       { id: item.key_id },
       {
         onSuccess: () => {
-          toast({ title: "Access key deleted", description: `${item.label} has been removed and can no longer sign in.` });
+          toast({ title: "Access key deleted", description: `${item.label} has been removed and can no longer sign in. You can reuse this name for a new key.` });
           window.setTimeout(() => {
             setDeletingKeyIds((current) => {
               const next = new Set(current);
@@ -446,7 +446,7 @@ export default function AdminUsersPage() {
               <button type="submit" className="primary-button admin-create-submit" disabled={!canCreate}><KeyRound size={16} />{createKey.isPending ? "Generating…" : `Generate ${kind === "admin" ? "admin" : "user"} key`}</button>
             </form>
           </div>
-            <div className="admin-safety-note admin-key-features-note"><div className="admin-safety-icon"><KeyRound size={20} /></div><h3>Key features</h3><ul><li>Grant EDGE, DigitFlip, Trade X, Bulk Trader, Cash Grab, Money Bank, Auto Trader, Auto Trader 2.0, Settings, or History independently.</li><li>Shadows 3 is an additional Cash Grab gate and immediate-stop control.</li><li>If a feature is not granted, the workspace shows “Restricted — admin access only.”</li><li>Edit access later to unlock a feature without issuing a replacement key.</li><li>Delete permanently revokes the key and reserves its label.</li></ul></div>
+            <div className="admin-safety-note admin-key-features-note"><div className="admin-safety-icon"><KeyRound size={20} /></div><h3>Key features</h3><ul><li>Grant EDGE, DigitFlip, Trade X, Bulk Trader, Cash Grab, Money Bank, Auto Trader, Auto Trader 2.0, Settings, or History independently.</li><li>Shadows 3 is an additional Cash Grab gate and immediate-stop control.</li><li>If a feature is not granted, the workspace shows “Restricted — admin access only.”</li><li>Edit access later to unlock a feature without issuing a replacement key.</li><li>Delete permanently revokes the key. Its name can be reused, but the old key can never sign in again.</li></ul></div>
         </section>
 
         <section className="panel admin-directory">

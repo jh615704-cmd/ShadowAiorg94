@@ -303,10 +303,13 @@ router.post("/access/keys", async (req, res): Promise<void> => {
   const label = parsed.data.label.trim();
   const [labelMatch] = await db.select({ id: accessKeysTable.id })
     .from(accessKeysTable)
-    .where(eq(accessKeysTable.label, label))
+    .where(and(
+      eq(accessKeysTable.label, label),
+      ne(accessKeysTable.status, "deleted"),
+    ))
     .limit(1);
   if (labelMatch) {
-    res.status(409).json({ error: "That access-key label is already reserved. Choose a different name." });
+    res.status(409).json({ error: "That name is already used by another access key. Choose a different name." });
     return;
   }
   const rawKey = generateAccessKey(kind);
@@ -352,8 +355,8 @@ router.delete("/access/keys/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  // Keep a tombstone so the raw key can never authenticate again and the
-  // deleted label cannot be reassigned to another person.
+  // Keep the hashed-key tombstone so the deleted credential can never
+  // authenticate again. Labels are reusable after deletion.
   await db.update(accessKeysTable)
     .set({ status: "deleted", encryptedKey: null, updatedAt: new Date() })
     .where(eq(accessKeysTable.id, id));
