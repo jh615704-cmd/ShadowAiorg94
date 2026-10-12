@@ -235,7 +235,6 @@ return {
     reject: (error: Error) => void;
     timer: NodeJS.Timeout;
   }>(),
-  lastBuyAt: 0,
   contractInputs: new Map<string, ProposalInput>(),
   digitEvenCount: 0,
   digitOddCount: 0,
@@ -1733,11 +1732,6 @@ export async function buyContract(input: BuyInput, assertAuthorized?: TradeAutho
   assertTradingProtection(await getTradingProtectionSettings(), getStatus(), normalizedInput);
   await refreshOpenContracts();
   assertNoActiveContract(true);
-  const remainingCooldown = 1000 - (Date.now() - getState().lastBuyAt);
-  if (remainingCooldown > 0) {
-    throw new Error(`Buy cooldown active. Wait ${Math.ceil(remainingCooldown / 1000)} second.`);
-  }
-  getState().lastBuyAt = Date.now();
   const proposal = await requestFreshProposal({
     amount: normalizedInput.amount,
     duration: normalizedInput.duration,
@@ -1753,7 +1747,10 @@ export async function buyContract(input: BuyInput, assertAuthorized?: TradeAutho
     throw new Error("Deriv WebSocket is not ready");
   }
   await assertAuthorized?.();
-  const buy = await sendProposalBuy(proposal, normalizedInput);
+  // Proposal IDs can expire before Deriv processes a later buy frame. Reuse
+  // the fresh ask as the maximum price, but submit the contract parameters
+  // directly and correlate the acknowledgement by req_id.
+  const buy = await sendDirectBuy(proposal, normalizedInput);
   return {
     ok: true,
     message: getState().account.type === "real"
@@ -1992,7 +1989,7 @@ export async function dualBuyContracts(input: {
   if (!connected) throw new Error("Deriv WebSocket is not ready");
   await assertAuthorized?.();
   const buyResults = await Promise.allSettled(
-    proposals.map(({ proposal, input: buyInput }) => sendProposalBuy(proposal, buyInput)),
+    proposals.map(({ proposal, input: buyInput }) => sendDirectBuy(proposal, buyInput)),
   );
   const failedBuy = buyResults.find((result): result is PromiseRejectedResult => result.status === "rejected");
   if (failedBuy) {
