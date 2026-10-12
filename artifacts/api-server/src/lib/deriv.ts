@@ -13,6 +13,8 @@ const proposalTimeoutMs = 8_000;
 const proposalAttempts = 3;
 const buyAckTimeoutMs = 12_000;
 const settlementFallbackIntervalMs = 10_000;
+const minimumProfitTableRefreshIntervalMs = 5_000;
+const profitTableRateLimitBackoffMs = 10_000;
 const maxBulkCount = 6;
 const supportedSymbols = new Set([
   "R_10", "R_25", "R_50", "R_75", "R_100", "R_150", "R_250",
@@ -210,6 +212,7 @@ return {
   history: [] as DerivHistoryItem[],
   profitTableReady: false,
   profitTableRefreshAt: 0,
+  profitTableRetryAfter: 0,
   profitTableRefreshPromise: null as Promise<void> | null,
   activeContracts: new Map<string, DerivHistoryItem>(),
   verifiedPortfolioIds: new Set<string>(),
@@ -495,6 +498,25 @@ function historyKey(item: Pick<DerivHistoryItem, "account_id" | "contract_id">) 
 
 function isDerivFlagSet(value: unknown) {
   return value === true || value === 1 || value === "1" || value === "true";
+}
+
+function numericDerivContractId(contractId: string): number | null {
+  if (!/^\d+$/.test(contractId)) return null;
+  const numericId = Number(contractId);
+  return Number.isSafeInteger(numericId) ? numericId : null;
+}
+
+function requestOpenContractUpdate(contractId: string, subscribe = false) {
+  const numericId = numericDerivContractId(contractId);
+  if (numericId == null) {
+    logger.warn({ contractId }, "Skipping Deriv open-contract request with an invalid contract ID");
+    return false;
+  }
+  return send({
+    proposal_open_contract: 1,
+    contract_id: numericId,
+    ...(subscribe ? { subscribe: 1 } : {}),
+  });
 }
 
 function isOpenContractStatus(status: string) {
@@ -1091,12 +1113,6 @@ function scheduleSettlementFallbackCheck(
         if (ownerRuntime.socket?.readyState !== WebSocket.OPEN && !await connect()) {
           throw new Error("Deriv WebSocket is not ready for the settlement check");
         }
-        void refreshOpenContracts().catch((error: unknown) => {
-          logger.warn(
-            { err: error, accountId: ownerRuntime.account?.id ?? ownerRuntime.selectedAccountId },
-            "Deriv portfolio refresh failed during the settlement fallback check",
-          );
-        });
         const runtime = getState();
         const accountId = runtime.account?.id ?? runtime.selectedAccountId;
         const contractIds = new Set([
@@ -1109,7 +1125,7 @@ function scheduleSettlementFallbackCheck(
           ...runtime.verifiedPortfolioIds,
         ]);
         for (const contractId of contractIds) {
-          if (!send({ proposal_open_contract: 1, contract_id: contractId })) {
+          if (!requestOpenContractUpdate(contractId)) {
             runtime.settlementFallbackContractIds.delete(contractId);
             continue;
           }
@@ -1205,7 +1221,17 @@ async function connectInternal() {
         if (profitTableWaiter) {
           clearTimeout(profitTableWaiter.timer);
           getState().profitTableWaiters.delete(reqId);
-          profitTableWaiter.reject(new Error(errorMessage));
+          if (message.error.code === "RateLimit") {
+            getState().profitTableRetryAfter = Date.now() + profitTableRateLimitBackoffMs;
+            getState().profitTableRefreshAt = Date.now();
+            logger.warn(
+              { backoffMs: profitTableRateLimitBackoffMs },
+              "Deriv rate-limited trade history refresh; serving cached history during backoff",
+            );
+            profitTableWaiter.resolve();
+          } else {
+            profitTableWaiter.reject(new Error(errorMessage));
+          }
         }
         const echoedBuyRequestId = Number(message.req_id ?? message.echo_req?.req_id);
         const rejectedProposalId = typeof message.echo_req?.buy === "string" && message.echo_req.buy !== "1"
@@ -1221,7 +1247,10 @@ async function connectInternal() {
             buyWaiter.reject(new Error(errorMessage));
           }
         }
-        logger.warn({ code: message.error.code }, "Deriv WebSocket returned an error");
+        logger.warn(
+          { code: message.error.code, message: errorMessage },
+          "Deriv WebSocket returned an error",
+        );
         return;
       }
 
@@ -1284,11 +1313,7 @@ async function connectInternal() {
         if (historyItem) upsertHistory(historyItem);
         if (getState().lastBuy.contract_id) {
           send({ balance: 1 });
-          send({
-            proposal_open_contract: 1,
-            contract_id: getState().lastBuy.contract_id,
-            subscribe: 1,
-          });
+          requestOpenContractUpdate(getState().lastBuy.contract_id, true);
         }
         if (buyKey) {
           const buyWaiter = getState().buyWaiters.get(buyKey);
@@ -1380,11 +1405,7 @@ async function connectInternal() {
           upsertHistory(historyItem);
           if (isOpenContractStatus(historyItem.status)) {
             portfolioContractIds.add(historyItem.contract_id);
-            send({
-              proposal_open_contract: 1,
-              contract_id: historyItem.contract_id,
-              subscribe: 1,
-            });
+            requestOpenContractUpdate(historyItem.contract_id, true);
           }
         }
         const activeAccountId = getState().account?.id ?? getState().selectedAccountId;
@@ -1412,7 +1433,7 @@ async function connectInternal() {
             // A contract may have settled while this socket was disconnected.
             // Fetch its final state instead of leaving a stale open row blocking
             // every later trade.
-            send({ proposal_open_contract: 1, contract_id: historyItem.contract_id });
+            requestOpenContractUpdate(historyItem.contract_id);
           }
         }
         getState().openContractsReady = true;
@@ -1534,7 +1555,9 @@ export async function refreshDerivHistory() {
   if (!await connect()) throw new Error("Deriv WebSocket is not ready");
   const runtime = getState();
   if (runtime.profitTableRefreshPromise) return runtime.profitTableRefreshPromise;
-  if (Date.now() - runtime.profitTableRefreshAt < 1_500) return;
+  const now = Date.now();
+  if (now < runtime.profitTableRetryAfter) return;
+  if (now - runtime.profitTableRefreshAt < minimumProfitTableRefreshIntervalMs) return;
 
   const reqId = ++runtime.profitTableSequence;
   runtime.profitTableRefreshAt = Date.now();
@@ -1661,6 +1684,7 @@ export async function selectAccount(accountId: string) {
   getState().verifiedPortfolioIds.clear();
   getState().profitTableReady = false;
   getState().profitTableRefreshAt = 0;
+  getState().profitTableRetryAfter = 0;
   getState().profitTableRefreshPromise = null;
   rejectProfitTableWaiters("Deriv account changed before trade history was returned");
   rejectBuyWaiters("Deriv account changed before the contract purchase was acknowledged");

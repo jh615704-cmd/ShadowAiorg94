@@ -15,6 +15,7 @@ let buyBehavior: BuyBehavior = "ack";
 let proposalNumber = 0;
 let proposalPayoutOverride: number | null = null;
 let buyPayoutOverride: number | null = null;
+let mockProfitTableRateLimited = false;
 const sockets: FakeWebSocket[] = [];
 const testUserIds = new Set<string>();
 let mockPortfolioContracts: SocketMessage[] = [];
@@ -87,11 +88,19 @@ function handleClientMessage(socket: FakeWebSocket, message: SocketMessage) {
   }
 
   if (message.profit_table) {
-    emitMessage(socket, {
-      msg_type: "profit_table",
-      ...(message.req_id == null ? {} : { req_id: message.req_id }),
-      profit_table: { transactions: mockProfitTableTransactions },
-    });
+    if (mockProfitTableRateLimited) {
+      emitMessage(socket, {
+        error: { code: "RateLimit", message: "You have reached the rate limit for profit_table." },
+        ...(message.req_id == null ? {} : { req_id: message.req_id }),
+        echo_req: { req_id: message.req_id, profit_table: 1 },
+      });
+    } else {
+      emitMessage(socket, {
+        msg_type: "profit_table",
+        ...(message.req_id == null ? {} : { req_id: message.req_id }),
+        profit_table: { transactions: mockProfitTableTransactions },
+      });
+    }
     return;
   }
 
@@ -151,7 +160,9 @@ function handleClientMessage(socket: FakeWebSocket, message: SocketMessage) {
   }
 
   buySendCountsAtAck.push(socket.sent.filter((sent) => sent.buy).length);
-  const contractId = `contract-${message.buy === "1" ? message.req_id ?? message.buy : message.buy}`;
+  const buyReference = String(message.buy === "1" ? message.req_id ?? message.buy : message.buy);
+  const referenceNumber = Number(buyReference.match(/\d+/)?.[0] ?? 1);
+  const contractId = String(900_000_000 + referenceNumber);
   mockPortfolioContracts.push({
     contract_id: contractId,
     account_id: "DOT123",
@@ -259,6 +270,7 @@ beforeEach(() => {
   proposalNumber = 0;
   proposalPayoutOverride = null;
   buyPayoutOverride = null;
+  mockProfitTableRateLimited = false;
   mockPortfolioContracts = [];
   mockProfitTableTransactions = [];
   mockOpenContractResponses.clear();
@@ -412,7 +424,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       symbol: "1HZ90V",
     }));
 
-    assert.equal(result.buy.contract_id, "contract-proposal-1");
+    assert.equal(result.buy.contract_id, "900000001");
     const socket = latestSocket();
     const proposalRequest = socket.sent.find((message) => message.proposal);
     assert.ok(proposalRequest);
@@ -434,7 +446,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       symbol: "1HZ90V",
     }));
 
-    assert.equal(result.buy.contract_id, "contract-proposal-1");
+    assert.equal(result.buy.contract_id, "900000001");
     const socket = latestSocket();
     const proposalRequests = socket.sent.filter((message) => message.proposal);
     assert.equal(proposalRequests.length, 1);
@@ -460,7 +472,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       });
     });
 
-    assert.equal(result.buy.contract_id, "contract-proposal-1");
+    assert.equal(result.buy.contract_id, "900000001");
     assert.ok(latestSocket().sent.some((message) => message.buy));
   });
 
@@ -479,7 +491,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       });
     });
 
-    assert.equal(result.buy.contract_id, "contract-proposal-1");
+    assert.equal(result.buy.contract_id, "900000001");
     assert.ok(latestSocket().sent.some((message) => message.buy));
   });
 
@@ -499,7 +511,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       });
     });
 
-    assert.equal(result.buy.contract_id, "contract-proposal-1");
+    assert.equal(result.buy.contract_id, "900000001");
     assert.ok(latestSocket().sent.some((message) => message.buy));
   });
 
@@ -648,14 +660,18 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
     }));
 
     assert.equal(result.proposal.id, "proposal-1");
-    assert.equal(result.buy.contract_id, "contract-proposal-1");
+    assert.equal(result.buy.contract_id, "900000001");
     const socket = latestSocket();
     const buyRequest = socket.sent.find((message) => message.buy);
     assert.deepEqual(buyRequest, { buy: "proposal-1", price: 2.25 });
+    assert.equal(
+      typeof socket.sent.find((message) => message.proposal_open_contract === 1 && message.subscribe === 1)?.contract_id,
+      "number",
+    );
 
     await inUser("correlation-user", async () => {
       assert.deepEqual(deriv.getHistory(), [{
-        contract_id: "contract-proposal-1",
+        contract_id: "900000001",
         account_id: "DOT123",
         account_type: "demo",
         currency: "USD",
@@ -674,7 +690,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
        emitMessage(socket, {
          msg_type: "proposal_open_contract",
          proposal_open_contract: {
-           contract_id: "contract-proposal-1",
+           contract_id: "900000001",
            status: "open",
            is_sold: false,
            buy_price: 2.25,
@@ -691,7 +707,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       emitMessage(socket, {
         msg_type: "proposal_open_contract",
         proposal_open_contract: {
-          contract_id: "contract-proposal-1",
+          contract_id: "900000001",
           status: "won",
           is_sold: true,
           buy_price: 2.25,
@@ -795,6 +811,33 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       assert.deepEqual(deriv.getHistory(), []);
       await deriv.selectAccount("DOT123");
       assert.deepEqual(deriv.getHistory(), demoHistory);
+    });
+  });
+
+  test("serves cached trade history and backs off when Deriv rate-limits profit_table", async () => {
+    await withSelectedAccount("history-rate-limit-user", async () => {
+      await deriv.buyContract({
+        amount: 1,
+        duration: 1,
+        duration_unit: "t",
+        contract_type: "DIGITDIFF",
+        barrier: 5,
+        symbol: "R_75",
+      });
+      mockProfitTableRateLimited = true;
+
+      await assert.doesNotReject(() => deriv.refreshDerivHistory());
+      assert.equal(deriv.getHistory().length, 1);
+      assert.equal(deriv.getHistory()[0].status, "open");
+
+      const socket = latestSocket();
+      const requestCount = socket.sent.filter((message) => message.profit_table).length;
+      await deriv.refreshDerivHistory();
+      assert.equal(
+        socket.sent.filter((message) => message.profit_table).length,
+        requestCount,
+        "a rate-limited refresh must not trigger an immediate retry",
+      );
     });
   });
 
@@ -971,7 +1014,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       assert.ok(
         socket.sent.some((message) =>
           message.proposal_open_contract === 1
-          && message.contract_id === contractId
+          && message.contract_id === Number(contractId)
           && message.subscribe === 1,
         ),
         "the reconnect must resubscribe to every still-open contract",
@@ -1040,7 +1083,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       assert.ok(
         latestSocket().sent.some((message) =>
           message.proposal_open_contract === 1
-          && message.contract_id === contractId
+          && message.contract_id === Number(contractId)
           && !message.subscribe,
         ),
         "reconnect must explicitly request final state for the stale history row",
