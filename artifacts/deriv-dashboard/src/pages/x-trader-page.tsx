@@ -92,6 +92,7 @@ import { getAccountBalance } from "../lib/account-balance";
 import { buildCashGrabBulkBuyPayload } from "../lib/cash-grab-order";
 import { getCashGrabLimitReached } from "../lib/cash-grab-limits";
 import { readCachedHistorySnapshot } from "../lib/history-snapshot";
+import { claimConfirmedDerivContractIds, isDerivHistoryOpen } from "../lib/deriv-history";
 
 const markets = [
   ["R_10", "Volatility 10 Index"], ["R_25", "Volatility 25 Index"],
@@ -106,7 +107,7 @@ const markets = [
 ] as const;
 
 const realizedProfit = (trades: readonly { status: string; profit: number }[]) =>
-  trades.reduce((sum, trade) => sum + (trade.status === "open" ? 0 : trade.profit), 0);
+  trades.reduce((sum, trade) => sum + (isDerivHistoryOpen(trade.status) ? 0 : trade.profit), 0);
 
 const guidePages = [
   { title: "Welcome to EDGE 🏔️", body: "EDGE is a digit-contract workspace for testing Over and Under ideas with a controlled stake, a selected market, and visible session results.", points: ["Use demo accounts while learning.", "Every trade uses the selected duration, stake, market, and barrier.", "The guide explains the controls before you start."] },
@@ -839,7 +840,7 @@ export default function XTraderPage() {
       return;
     }
     const newlySettled = digitFlipSessionRows
-      .filter((trade) => !watch.knownIds.has(trade.contract_id) && !watch.processedIds.has(trade.contract_id) && trade.status !== "open")
+      .filter((trade) => !watch.knownIds.has(trade.contract_id) && !watch.processedIds.has(trade.contract_id) && !isDerivHistoryOpen(trade.status))
       .sort((left, right) => (left.buy_time ?? 0) - (right.buy_time ?? 0));
     if (!newlySettled.length) return;
     let next = digitFlipNextStakeRef.current;
@@ -988,7 +989,7 @@ export default function XTraderPage() {
     const watch = martingaleWatchRef.current;
     if (!watch || strategy !== "martingale") return;
     const newlySettled = edgeRows
-      .filter((trade) => !watch.knownIds.has(trade.contract_id) && !watch.processedIds.has(trade.contract_id) && trade.status !== "open")
+      .filter((trade) => !watch.knownIds.has(trade.contract_id) && !watch.processedIds.has(trade.contract_id) && !isDerivHistoryOpen(trade.status))
       .sort((left, right) => (left.buy_time ?? 0) - (right.buy_time ?? 0));
     if (!newlySettled.length) return;
 
@@ -1210,11 +1211,10 @@ export default function XTraderPage() {
 
   const claimFeatureRows = async (
     target: Set<string>,
-    beforeRows: readonly { contract_id: string; contract_type: string }[],
-    types: readonly string[],
+    confirmedContractIds: readonly string[],
   ) => {
-    const beforeIds = new Set(beforeRows.map((trade) => trade.contract_id));
-    let latestRows = beforeRows;
+    claimConfirmedDerivContractIds(target, confirmedContractIds);
+    let latestRows = queryClient.getQueryData<typeof rows>(getGetDerivHistoryQueryKey()) ?? [];
     for (let attempt = 0; attempt < 5; attempt += 1) {
       try {
         latestRows = await getDerivHistory();
@@ -1224,10 +1224,7 @@ export default function XTraderPage() {
         latestRows = queryClient.getQueryData<typeof rows>(getGetDerivHistoryQueryKey()) ?? latestRows;
         break;
       }
-      latestRows
-        .filter((trade) => types.includes(trade.contract_type) && !beforeIds.has(trade.contract_id))
-        .forEach((trade) => target.add(trade.contract_id));
-      if (latestRows.some((trade) => target.has(trade.contract_id))) break;
+      if (confirmedContractIds.some((contractId) => latestRows.some((trade) => trade.contract_id === contractId))) break;
       await sleep(180);
     }
     queryClient.setQueryData(getGetDerivHistoryQueryKey(), latestRows);
@@ -1244,7 +1241,7 @@ export default function XTraderPage() {
     for (let attempt = 0; attempt < 120; attempt += 1) {
       const matching = latestRows.filter((trade) => expectedIds.has(trade.contract_id));
       if (matching.length) sawContract = true;
-      if (sawContract && matching.every((trade) => trade.status !== "open")) {
+      if (sawContract && matching.every((trade) => !isDerivHistoryOpen(trade.status))) {
         queryClient.setQueryData(getGetDerivHistoryQueryKey(), latestRows);
         return true;
       }
@@ -1317,15 +1314,15 @@ export default function XTraderPage() {
     // immediately preceding contract is still open.
     let historySnapshot = await readHistorySnapshot();
     let latestRows = historySnapshot.rows;
-    for (let attempt = 0; historySnapshot.fresh && latestRows.some((trade) => trade.status === "open") && attempt < 20; attempt += 1) {
+    for (let attempt = 0; historySnapshot.fresh && latestRows.some((trade) => isDerivHistoryOpen(trade.status)) && attempt < 20; attempt += 1) {
       await sleep(500);
       historySnapshot = await readHistorySnapshot();
       latestRows = historySnapshot.rows;
     }
-    if (historySnapshot.fresh && latestRows.some((trade) => trade.status === "open")) {
+    if (historySnapshot.fresh && latestRows.some((trade) => isDerivHistoryOpen(trade.status))) {
       throw new Error("The previous contract is still settling. EDGE stopped without sending another trade.");
     }
-    for (const trade of (historySnapshot.fresh ? latestRows : []).filter((item) => (item.contract_type === "DIGITOVER" || item.contract_type === "DIGITUNDER") && item.status !== "open")) {
+    for (const trade of (historySnapshot.fresh ? latestRows : []).filter((item) => (item.contract_type === "DIGITOVER" || item.contract_type === "DIGITUNDER") && !isDerivHistoryOpen(item.status))) {
       if (edgeProcessedSettlementIdsRef.current.has(trade.contract_id)) continue;
       edgeProcessedSettlementIdsRef.current.add(trade.contract_id);
       edgeLossStreakRef.current = trade.profit < 0 ? edgeLossStreakRef.current + 1 : 0;
@@ -1356,8 +1353,7 @@ export default function XTraderPage() {
         count: 1,
       },
     });
-    result.buys.forEach((buy) => edgeClaimedHistoryIdsRef.current.add(buy.contract_id));
-    await claimFeatureRows(edgeClaimedHistoryIdsRef.current, latestRows, ["DIGITOVER", "DIGITUNDER"]);
+    await claimFeatureRows(edgeClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
     setConnectionMessage(null);
     setSessionTrades((value) => value + 1);
     if (!await waitForEdgeSettlement(result.buys.map((buy) => buy.contract_id))) {
@@ -1385,12 +1381,12 @@ export default function XTraderPage() {
     const config = configRef.current;
     let historySnapshot = await readHistorySnapshot();
     let latestRows = historySnapshot.rows;
-    for (let attempt = 0; historySnapshot.fresh && latestRows.some((trade) => trade.status === "open") && attempt < 20; attempt += 1) {
+    for (let attempt = 0; historySnapshot.fresh && latestRows.some((trade) => isDerivHistoryOpen(trade.status)) && attempt < 20; attempt += 1) {
       await sleep(500);
       historySnapshot = await readHistorySnapshot();
       latestRows = historySnapshot.rows;
     }
-    if (historySnapshot.fresh && latestRows.some((trade) => trade.status === "open")) {
+    if (historySnapshot.fresh && latestRows.some((trade) => isDerivHistoryOpen(trade.status))) {
       throw new Error("The previous contract is still settling. EDGE stopped without sending another dual trade.");
     }
     if (!runningRef.current) return;
@@ -1412,8 +1408,7 @@ export default function XTraderPage() {
         symbol: config.symbol,
       },
     });
-    result.buys.forEach((buy) => edgeClaimedHistoryIdsRef.current.add(buy.contract_id));
-    await claimFeatureRows(edgeClaimedHistoryIdsRef.current, latestRows, ["DIGITOVER", "DIGITUNDER"]);
+    await claimFeatureRows(edgeClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
     setConnectionMessage(null);
     setSessionTrades((value) => value + 2);
     if (!await waitForEdgeSettlement(result.buys.map((buy) => buy.contract_id))) {
@@ -1492,7 +1487,7 @@ export default function XTraderPage() {
       try {
         let latestRows = await getDerivHistory();
         const openContractId = moneyBankOpenContractIdRef.current;
-        if (openContractId && latestRows.some((trade) => trade.contract_id === openContractId && trade.status === "open")) {
+        if (openContractId && latestRows.some((trade) => trade.contract_id === openContractId && isDerivHistoryOpen(trade.status))) {
           await moneyBankSellMutation.mutateAsync({ data: { contract_id: openContractId } });
         }
         await queryClient.refetchQueries({ queryKey: getGetDerivHistoryQueryKey(), type: "active" });
@@ -1524,11 +1519,11 @@ export default function XTraderPage() {
     const openContractId = moneyBankOpenContractIdRef.current;
     for (let attempt = 0; historySnapshot.fresh && attempt < 240; attempt += 1) {
       const stillOpen = openContractId
-        ? latestRows.some((trade) => trade.contract_id === openContractId && trade.status === "open")
+        ? latestRows.some((trade) => trade.contract_id === openContractId && isDerivHistoryOpen(trade.status))
         : latestRows.some((trade) =>
           trade.contract_type === "ACCU"
           && !cashGrabClaimedHistoryIdsRef.current.has(trade.contract_id)
-          && trade.status === "open",
+          && isDerivHistoryOpen(trade.status),
         );
       if (!stillOpen) break;
       await sleep(500);
@@ -1536,11 +1531,11 @@ export default function XTraderPage() {
       latestRows = historySnapshot.rows;
     }
     const unsettledPrevious = historySnapshot.fresh && (openContractId
-      ? latestRows.some((trade) => trade.contract_id === openContractId && trade.status === "open")
+      ? latestRows.some((trade) => trade.contract_id === openContractId && isDerivHistoryOpen(trade.status))
       : latestRows.some((trade) =>
         trade.contract_type === "ACCU"
         && !cashGrabClaimedHistoryIdsRef.current.has(trade.contract_id)
-        && trade.status === "open",
+        && isDerivHistoryOpen(trade.status),
       ));
     if (unsettledPrevious) {
       throw new Error("Money Bank stopped while the previous contract was still settling.");
@@ -1552,7 +1547,7 @@ export default function XTraderPage() {
         : latestRows
           .filter((trade) => trade.contract_type === "ACCU")
           .filter((trade) => !cashGrabClaimedHistoryIdsRef.current.has(trade.contract_id))
-          .filter((trade) => trade.status !== "open")
+          .filter((trade) => !isDerivHistoryOpen(trade.status))
       : [];
     const settledAccumulator = settledAccumulatorRows.find((trade) =>
       !moneyBankProcessedSettlementIdsRef.current.has(trade.contract_id),
@@ -1735,7 +1730,7 @@ export default function XTraderPage() {
        const existingOpenAccumulator = latestRows.find((trade) =>
          trade.contract_type === "ACCU"
          && !cashGrabClaimedHistoryIdsRef.current.has(trade.contract_id)
-         && trade.status === "open"
+         && isDerivHistoryOpen(trade.status)
        );
        if (historySnapshot.fresh && existingOpenAccumulator) {
          setConnectionMessage({ kind: "info", text: "Money Bank is waiting for the existing Accumulator contract to settle before starting a new session." });
@@ -1864,7 +1859,7 @@ export default function XTraderPage() {
     const completed = latestRows
       .filter((trade) => cashGrabContractTypes.includes(trade.contract_type as typeof cashGrabContractTypes[number]))
       .filter((trade) => !knownIds.has(trade.contract_id))
-      .filter((trade) => trade.status !== "open")
+      .filter((trade) => !isDerivHistoryOpen(trade.status))
       .filter((trade) => !cashGrabProcessedSettlementIdsRef.current.has(trade.contract_id));
     if (!completed.length) return [];
     completed.forEach((trade) => {
@@ -1961,7 +1956,7 @@ export default function XTraderPage() {
         cashGrabContractTypes.includes(trade.contract_type as typeof cashGrabContractTypes[number])
         && cashGrabSessionKnownIdsRef.current
         && !cashGrabSessionKnownIdsRef.current.has(trade.contract_id)
-        && trade.status === "open",
+        && isDerivHistoryOpen(trade.status),
       );
     for (let attempt = 0; historySnapshot.fresh && attempt < 60 && hasOpenCashGrabContract(); attempt += 1) {
       await sleep(500);
@@ -2032,10 +2027,9 @@ export default function XTraderPage() {
       contractConfirmed = true;
       setConnectionMessage(null);
       result.buys.forEach((buy) => {
-        cashGrabClaimedHistoryIdsRef.current.add(buy.contract_id);
         cashGrabOpenContractIdsRef.current.add(buy.contract_id);
       });
-      let afterRows = await claimFeatureRows(cashGrabClaimedHistoryIdsRef.current, latestRows, [...cashGrabContractTypes]) as typeof rows;
+      let afterRows = await claimFeatureRows(cashGrabClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
       let completed = reconcileCashGrabSession(afterRows);
       applyCashGrabSettlements(completed);
       for (let attempt = 0; attempt < 60 && cashGrabRunningRef.current; attempt += 1) {
@@ -2043,7 +2037,7 @@ export default function XTraderPage() {
           cashGrabContractTypes.includes(trade.contract_type as typeof cashGrabContractTypes[number])
           && cashGrabSessionKnownIdsRef.current
           && !cashGrabSessionKnownIdsRef.current.has(trade.contract_id)
-          && trade.status === "open",
+          && isDerivHistoryOpen(trade.status),
         );
         if (!active) break;
         await sleep(250);
@@ -2117,7 +2111,7 @@ export default function XTraderPage() {
           const cachedOpenIds = cachedRows
             .filter((trade) => cashGrabManagedContractTypes.includes(trade.contract_type as typeof cashGrabManagedContractTypes[number]))
             .filter((trade) => cashGrabClaimedHistoryIdsRef.current.has(trade.contract_id))
-            .filter((trade) => trade.status === "open")
+            .filter((trade) => isDerivHistoryOpen(trade.status))
             .map((trade) => trade.contract_id);
           const openIds = Array.from(new Set([...cachedOpenIds, ...cashGrabOpenContractIdsRef.current]));
           if (!openIds.length) {
@@ -2125,7 +2119,7 @@ export default function XTraderPage() {
             const refreshedHistoryOpenIds = latestRows
               .filter((trade) => cashGrabManagedContractTypes.includes(trade.contract_type as typeof cashGrabManagedContractTypes[number]))
               .filter((trade) => cashGrabClaimedHistoryIdsRef.current.has(trade.contract_id))
-              .filter((trade) => trade.status === "open")
+              .filter((trade) => isDerivHistoryOpen(trade.status))
               .map((trade) => trade.contract_id);
             const refreshedOpenIds = Array.from(new Set([...refreshedHistoryOpenIds, ...cashGrabOpenContractIdsRef.current]));
             queryClient.setQueryData(getGetDerivHistoryQueryKey(), latestRows);
@@ -2168,7 +2162,7 @@ export default function XTraderPage() {
         const stillOpen = finalRows.some((trade) =>
           cashGrabManagedContractTypes.includes(trade.contract_type as typeof cashGrabManagedContractTypes[number])
           && cashGrabClaimedHistoryIdsRef.current.has(trade.contract_id)
-          && trade.status === "open",
+          && isDerivHistoryOpen(trade.status),
         );
         if (stillOpen) {
           throw new Error("Cash Grab could not close every active contract. Deriv is still processing the close request.");
@@ -2468,8 +2462,7 @@ export default function XTraderPage() {
           count,
         },
       });
-      result.buys.forEach((buy) => tradeXClaimedHistoryIdsRef.current.add(buy.contract_id));
-       await claimFeatureRows(tradeXClaimedHistoryIdsRef.current, latestRows, ["DIGITDIFF"]);
+      await claimFeatureRows(tradeXClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
       setTradeXTradesSent((value) => value + count);
       setTradeXMessage(null);
       setConnectionMessage(null);
@@ -2536,7 +2529,7 @@ export default function XTraderPage() {
       stake,
     };
     const historySnapshot = await readHistorySnapshot();
-    if (!historySnapshot.fresh || historySnapshot.rows.some((trade) => trade.status === "open")) {
+    if (!historySnapshot.fresh || historySnapshot.rows.some((trade) => isDerivHistoryOpen(trade.status))) {
       throw new Error("EDGE needs a fresh, settled history check before sending a scanned trade.");
     }
     if (edgeActionLockRef.current || edgeSettlementLockRef.current || bulkBuyMutation.isPending) {
@@ -2558,8 +2551,7 @@ export default function XTraderPage() {
         },
       });
       if (!result.buys.length) throw new Error("Deriv did not return a confirmed EDGE contract.");
-      result.buys.forEach((buy) => edgeClaimedHistoryIdsRef.current.add(buy.contract_id));
-      await claimFeatureRows(edgeClaimedHistoryIdsRef.current, historySnapshot.rows, ["DIGITOVER", "DIGITUNDER"]);
+      await claimFeatureRows(edgeClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
       setSessionTrades((value) => value + result.buys.length);
       setConnectionMessage(null);
       await refreshTradeResults();
@@ -2599,7 +2591,7 @@ export default function XTraderPage() {
     }
     if (!await selectMarket(candidate.symbol)) throw new Error("Deriv could not select the scanned market. No contract was sent.");
     const historySnapshot = await readHistorySnapshot();
-    if (!historySnapshot.fresh || historySnapshot.rows.some((trade) => trade.status === "open")) {
+    if (!historySnapshot.fresh || historySnapshot.rows.some((trade) => isDerivHistoryOpen(trade.status))) {
       throw new Error("Cash Grab needs a fresh, settled history check before sending a scanned contract.");
     }
     if (cashGrabSessionKnownIdsRef.current == null) {
@@ -2621,8 +2613,7 @@ export default function XTraderPage() {
       });
       if (!result.buys.length) throw new Error("Deriv did not return a confirmed Cash Grab contract.");
       setConnectionMessage(null);
-      result.buys.forEach((buy) => cashGrabClaimedHistoryIdsRef.current.add(buy.contract_id));
-      await claimFeatureRows(cashGrabClaimedHistoryIdsRef.current, historySnapshot.rows, [candidate.contractType]);
+      await claimFeatureRows(cashGrabClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
       await refreshTradeResults();
     } finally {
       cashGrabActionLockRef.current = false;
@@ -2715,7 +2706,7 @@ export default function XTraderPage() {
         (trade.contract_type === "DIGITEVEN" || trade.contract_type === "DIGITODD")
         && !watch.knownIds.has(trade.contract_id)
         && !watch.processedIds.has(trade.contract_id)
-        && trade.status !== "open",
+        && !isDerivHistoryOpen(trade.status),
       )
       .sort((left, right) => (left.buy_time ?? 0) - (right.buy_time ?? 0));
     for (const trade of newlySettled) {
@@ -2768,7 +2759,7 @@ export default function XTraderPage() {
       setConnectionMessage({ kind: "info", text: `Standby is waiting for an ${DIGIT_FLIP_SIGNAL_FLOOR}% observed parity signal. Current ${selectedRate.toFixed(1)}%.` });
       return false;
     }
-    const latestFlip = latestRows.find((trade) => (trade.contract_type === "DIGITEVEN" || trade.contract_type === "DIGITODD") && trade.status !== "open");
+    const latestFlip = latestRows.find((trade) => (trade.contract_type === "DIGITEVEN" || trade.contract_type === "DIGITODD") && !isDerivHistoryOpen(trade.status));
     const watch = digitFlipMartingaleWatchRef.current;
     if (
       config.stakeMode === "martingale" &&
@@ -3096,8 +3087,7 @@ export default function XTraderPage() {
     try {
       const result = await send(contractType);
       if (!result.buys.length) throw new Error("Deriv did not acknowledge any contracts for this setup.");
-      result.buys.forEach((buy) => bulkClaimedHistoryIdsRef.current.add(buy.contract_id));
-      await claimFeatureRows(bulkClaimedHistoryIdsRef.current, beforeRows, [contractType]);
+      await claimFeatureRows(bulkClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
       setConnectionMessage(null);
       await refreshTradeResults();
       return true;
@@ -3191,8 +3181,7 @@ export default function XTraderPage() {
           count: 1,
         },
       });
-      result.buys.forEach((buy) => edgeClaimedHistoryIdsRef.current.add(buy.contract_id));
-      await claimFeatureRows(edgeClaimedHistoryIdsRef.current, latestRows, ["DIGITOVER", "DIGITUNDER"]);
+      await claimFeatureRows(edgeClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
       setConnectionMessage(null);
       setDirection(contractType);
       setSessionTrades((value) => value + 1);
@@ -3255,8 +3244,7 @@ export default function XTraderPage() {
           symbol: configRef.current.symbol,
         },
       });
-      result.buys.forEach((buy) => edgeClaimedHistoryIdsRef.current.add(buy.contract_id));
-      await claimFeatureRows(edgeClaimedHistoryIdsRef.current, latestRows, ["DIGITOVER", "DIGITUNDER"]);
+      await claimFeatureRows(edgeClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
       setConnectionMessage(null);
       setSessionTrades((value) => value + 2);
       if (!await waitForEdgeSettlement(result.buys.map((buy) => buy.contract_id))) {

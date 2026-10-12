@@ -63,6 +63,18 @@ const db = {
       },
     };
   },
+  update() {
+    return {
+      set(values: Record<string, unknown>) {
+        return {
+          async where(condition: QueryCondition) {
+            const credential = credentials.get(condition.value);
+            if (credential) Object.assign(credential, values);
+          },
+        };
+      },
+    };
+  },
 };
 
 mock.module("@workspace/db", {
@@ -86,6 +98,12 @@ mock.module("../lib/access-keys", {
         throw new MockAccessSessionRevokedError("This access key is blocked");
       }
     },
+  },
+});
+
+mock.module("../lib/distributed-user-lock", {
+  namedExports: {
+    withDistributedUserLock: async (_userId: string, operation: () => Promise<unknown>) => operation(),
   },
 });
 
@@ -137,6 +155,9 @@ mock.module("../lib/deriv", {
     getHistory: async () => {
       observePat();
       return historyRows;
+    },
+    refreshDerivHistory: async () => {
+      observePat();
     },
     clearHistory: async () => {
       observePat();

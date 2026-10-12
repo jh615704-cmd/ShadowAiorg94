@@ -70,7 +70,17 @@ function handleClientMessage(socket: FakeWebSocket, message: SocketMessage) {
   if (message.portfolio) {
     emitMessage(socket, {
       msg_type: "portfolio",
+      ...(message.req_id == null ? {} : { req_id: message.req_id }),
       portfolio: { contracts: mockPortfolioContracts },
+    });
+    return;
+  }
+
+  if (message.profit_table) {
+    emitMessage(socket, {
+      msg_type: "profit_table",
+      ...(message.req_id == null ? {} : { req_id: message.req_id }),
+      profit_table: { transactions: [] },
     });
     return;
   }
@@ -330,6 +340,31 @@ describe("Deriv market subscriptions", { concurrency: false }, () => {
 });
 
 describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
+  test("refreshes Deriv's account portfolio before buying and blocks cross-session overlap", async () => {
+    mockPortfolioContracts = [{
+      contract_id: "already-open",
+      contract_type: "DIGITEVEN",
+      underlying: "R_75",
+      buy_price: 1,
+      payout: 2,
+      status: "open",
+      purchase_time: 1_700_000_000,
+    }];
+    await assert.rejects(
+      withSelectedAccount("portfolio-overlap-user", () => deriv.buyContract({
+        amount: 1,
+        duration: 1,
+        duration_unit: "t",
+        contract_type: "DIGITODD",
+        symbol: "R_75",
+      })),
+      /Deriv still reports an open contract/,
+    );
+    const socket = latestSocket();
+    assert.ok(socket.sent.some((message) => message.portfolio && message.req_id != null));
+    assert.equal(socket.sent.some((message) => message.proposal || message.buy), false);
+  });
+
   test("omits expiry fields and forwards decimal growth for Accumulator contracts", async () => {
     const result = await withSelectedAccount("accumulator-user", () => deriv.buyContract({
       amount: 1,

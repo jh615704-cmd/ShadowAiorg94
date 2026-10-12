@@ -205,7 +205,11 @@ return {
   lastContract: null as DerivContract | null,
   openContractsReady: false,
   history: [] as DerivHistoryItem[],
+  profitTableReady: false,
+  profitTableRefreshAt: 0,
+  profitTableRefreshPromise: null as Promise<void> | null,
   activeContracts: new Map<string, DerivHistoryItem>(),
+  verifiedPortfolioIds: new Set<string>(),
   lastProposalContractType: "",
   lastProposalSymbol: defaultSymbol,
   lastProposalInput: null as ProposalInput | null,
@@ -213,6 +217,18 @@ return {
   proposalSequence: 0,
   buySequence: 0,
   proposalWaiters: new Map<number, { resolve: (proposal: DerivProposal) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }>(),
+  portfolioSequence: 0,
+  portfolioWaiters: new Map<number, {
+    resolve: (contractIds: string[]) => void;
+    reject: (error: Error) => void;
+    timer: NodeJS.Timeout;
+  }>(),
+  profitTableSequence: 0,
+  profitTableWaiters: new Map<number, {
+    resolve: () => void;
+    reject: (error: Error) => void;
+    timer: NodeJS.Timeout;
+  }>(),
   lastBuyAt: 0,
   contractInputs: new Map<string, ProposalInput>(),
   digitEvenCount: 0,
@@ -322,6 +338,16 @@ export function disposeUser(userId: string) {
     waiter.reject(new Error("Deriv runtime disposed"));
   }
   runtime.proposalWaiters.clear();
+  for (const waiter of runtime.portfolioWaiters.values()) {
+    clearTimeout(waiter.timer);
+    waiter.reject(new Error("Deriv runtime disposed"));
+  }
+  runtime.portfolioWaiters.clear();
+  for (const waiter of runtime.profitTableWaiters.values()) {
+    clearTimeout(waiter.timer);
+    waiter.reject(new Error("Deriv runtime disposed"));
+  }
+  runtime.profitTableWaiters.clear();
   for (const waiter of runtime.buyWaiters.values()) {
     clearTimeout(waiter.timer);
     waiter.reject(new Error("Deriv runtime disposed"));
@@ -343,6 +369,22 @@ function rejectProposalWaiters(message: string) {
     waiter.reject(new Error(message));
   }
   getState().proposalWaiters.clear();
+}
+
+function rejectPortfolioWaiters(message: string) {
+  for (const waiter of getState().portfolioWaiters.values()) {
+    clearTimeout(waiter.timer);
+    waiter.reject(new Error(message));
+  }
+  getState().portfolioWaiters.clear();
+}
+
+function rejectProfitTableWaiters(message: string) {
+  for (const waiter of getState().profitTableWaiters.values()) {
+    clearTimeout(waiter.timer);
+    waiter.reject(new Error(message));
+  }
+  getState().profitTableWaiters.clear();
 }
 
 function rejectBuyWaiters(message: string) {
@@ -384,9 +426,16 @@ function hasActiveContract() {
   return getActiveContractCount() > 0;
 }
 
-function assertNoActiveContract() {
-  if (!getState().openContractsReady) {
+function assertNoActiveContract(useFreshPortfolio = false) {
+  const runtime = getState();
+  if (!runtime.openContractsReady) {
     throw new Error("Deriv is still checking open contracts. Wait for the portfolio check to finish before sending another trade.");
+  }
+  if (useFreshPortfolio) {
+    if (runtime.verifiedPortfolioIds.size || runtime.pendingBuyInputs.size) {
+      throw new Error("Deriv still reports an open contract for this account. Wait for it to settle before sending another trade.");
+    }
+    return;
   }
   if (hasActiveContract()) {
     throw new Error("The previous contract is still settling. Wait for it to finish before sending another trade.");
@@ -1041,6 +1090,18 @@ async function connectInternal() {
           getState().proposalWaiters.delete(reqId);
           proposalWaiter.reject(new Error(errorMessage));
         }
+        const portfolioWaiter = getState().portfolioWaiters.get(reqId);
+        if (portfolioWaiter) {
+          clearTimeout(portfolioWaiter.timer);
+          getState().portfolioWaiters.delete(reqId);
+          portfolioWaiter.reject(new Error(errorMessage));
+        }
+        const profitTableWaiter = getState().profitTableWaiters.get(reqId);
+        if (profitTableWaiter) {
+          clearTimeout(profitTableWaiter.timer);
+          getState().profitTableWaiters.delete(reqId);
+          profitTableWaiter.reject(new Error(errorMessage));
+        }
         const echoedBuyRequestId = Number(message.req_id ?? message.echo_req?.req_id);
         const rejectedProposalId = typeof message.echo_req?.buy === "string" && message.echo_req.buy !== "1"
           ? message.echo_req.buy
@@ -1173,6 +1234,9 @@ async function connectInternal() {
           if (historyItem) upsertHistory(historyItem);
         }
       } else if (message.msg_type === "profit_table") {
+        const reqId = Number(message.req_id ?? message.echo_req?.req_id);
+        const waiter = getState().profitTableWaiters.get(reqId);
+        if (!waiter && getState().profitTableReady) return;
         const transactions = Array.isArray(message.profit_table?.transactions)
           ? message.profit_table.transactions
           : [];
@@ -1180,7 +1244,17 @@ async function connectInternal() {
           const historyItem = normalizeHistory(transaction);
           if (historyItem) upsertHistory(historyItem);
         }
+        getState().profitTableReady = true;
+        if (waiter) {
+          clearTimeout(waiter.timer);
+          getState().profitTableWaiters.delete(reqId);
+          waiter.resolve();
+        }
       } else if (message.msg_type === "portfolio") {
+        const reqId = Number(message.req_id ?? message.echo_req?.req_id);
+        const waiter = getState().portfolioWaiters.get(reqId);
+        const isVerifiedSnapshot = Boolean(waiter) || !getState().openContractsReady;
+        if (!isVerifiedSnapshot) return;
         const contracts = Array.isArray(message.portfolio?.contracts)
           ? message.portfolio.contracts
           : [];
@@ -1199,6 +1273,21 @@ async function connectInternal() {
           }
         }
         const activeAccountId = getState().account?.id ?? getState().selectedAccountId;
+        getState().verifiedPortfolioIds = new Set(portfolioContractIds);
+        for (const [contractId, historyItem] of getState().activeContracts) {
+          if (
+            historyItem.account_id === activeAccountId
+            && !portfolioContractIds.has(contractId)
+          ) {
+            getState().activeContracts.delete(contractId);
+          }
+        }
+        if (
+          getState().lastContract?.status === "open"
+          && !portfolioContractIds.has(getState().lastContract.contract_id)
+        ) {
+          getState().lastContract = null;
+        }
         for (const historyItem of getState().history as DerivHistoryItem[]) {
           if (
             historyItem.account_id === activeAccountId
@@ -1212,6 +1301,11 @@ async function connectInternal() {
           }
         }
         getState().openContractsReady = true;
+        if (waiter) {
+          clearTimeout(waiter.timer);
+          getState().portfolioWaiters.delete(reqId);
+          waiter.resolve([...portfolioContractIds]);
+        }
       }
     });
 
@@ -1224,6 +1318,8 @@ async function connectInternal() {
       getState().account = null;
       getState().openContractsReady = false;
       rejectProposalWaiters("Deriv WebSocket disconnected before the proposal was returned");
+      rejectPortfolioWaiters("Deriv WebSocket disconnected before the account portfolio was confirmed");
+      rejectProfitTableWaiters("Deriv WebSocket disconnected before trade history was refreshed");
       rejectBuyWaiters("Deriv WebSocket disconnected before the contract purchase was acknowledged");
       rejectSellWaiters("Deriv WebSocket disconnected before the contract could be sold");
       logger.warn("Deriv WebSocket closed");
@@ -1264,6 +1360,24 @@ async function connect() {
   return runtime.connecting;
 }
 
+async function refreshOpenContracts(): Promise<string[]> {
+  if (!await connect()) throw new Error("Deriv WebSocket is not ready");
+  const runtime = getState();
+  const reqId = ++runtime.portfolioSequence;
+  return await new Promise<string[]>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      runtime.portfolioWaiters.delete(reqId);
+      reject(new Error("Deriv did not confirm the current open-contract portfolio in time."));
+    }, 5_000);
+    runtime.portfolioWaiters.set(reqId, { resolve, reject, timer });
+    if (!send({ portfolio: 1, req_id: reqId })) {
+      clearTimeout(timer);
+      runtime.portfolioWaiters.delete(reqId);
+      reject(new Error("Deriv WebSocket is not ready"));
+    }
+  });
+}
+
 export function getStatus(): DerivStatus {
   const digitPercentages = getDigitPercentages();
   return {
@@ -1299,6 +1413,34 @@ export async function getLiveStatus() {
     await connect();
   }
   return getStatus();
+}
+
+export async function refreshDerivHistory() {
+  if (!await connect()) throw new Error("Deriv WebSocket is not ready");
+  const runtime = getState();
+  if (runtime.profitTableRefreshPromise) return runtime.profitTableRefreshPromise;
+  if (Date.now() - runtime.profitTableRefreshAt < 1_500) return;
+
+  const reqId = ++runtime.profitTableSequence;
+  runtime.profitTableRefreshAt = Date.now();
+  runtime.profitTableRefreshPromise = new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      runtime.profitTableWaiters.delete(reqId);
+      reject(new Error("Deriv did not refresh trade history in time."));
+    }, 5_000);
+    runtime.profitTableWaiters.set(reqId, { resolve, reject, timer });
+    if (!send({ profit_table: 1, limit: 50, description: 1, sort: "DESC", req_id: reqId })) {
+      clearTimeout(timer);
+      runtime.profitTableWaiters.delete(reqId);
+      reject(new Error("Deriv WebSocket is not ready"));
+    }
+  }).catch((error: unknown) => {
+    runtime.profitTableRefreshAt = 0;
+    throw error;
+  }).finally(() => {
+    runtime.profitTableRefreshPromise = null;
+  });
+  return runtime.profitTableRefreshPromise;
 }
 
 export async function getAccounts() {
@@ -1393,6 +1535,7 @@ export async function selectAccount(accountId: string) {
 
   getState().selectedAccountId = account.id;
   rejectProposalWaiters("Deriv account changed before proposal completed");
+  rejectPortfolioWaiters("Deriv account changed before the portfolio was returned");
   getState().socket?.close();
   getState().socket = null;
   getState().account = null;
@@ -1400,6 +1543,11 @@ export async function selectAccount(accountId: string) {
   getState().lastBuy = null;
   getState().lastContract = null;
   getState().openContractsReady = false;
+  getState().verifiedPortfolioIds.clear();
+  getState().profitTableReady = false;
+  getState().profitTableRefreshAt = 0;
+  getState().profitTableRefreshPromise = null;
+  rejectProfitTableWaiters("Deriv account changed before trade history was returned");
   rejectBuyWaiters("Deriv account changed before the contract purchase was acknowledged");
   getState().lastProposalContractType = "";
   getState().lastProposalSymbol = defaultSymbol;
@@ -1444,7 +1592,8 @@ export async function buyContract(input: BuyInput, assertAuthorized?: TradeAutho
   }
   validateProposalInput(normalizedInput);
   assertTradingProtection(await getTradingProtectionSettings(), getStatus(), normalizedInput);
-  assertNoActiveContract();
+  await refreshOpenContracts();
+  assertNoActiveContract(true);
   const remainingCooldown = 1000 - (Date.now() - getState().lastBuyAt);
   if (remainingCooldown > 0) {
     throw new Error(`Buy cooldown active. Wait ${Math.ceil(remainingCooldown / 1000)} second.`);
@@ -1544,7 +1693,8 @@ export async function bulkBuyContracts(input: {
     growth_rate: input.growth_rate,
     symbol: input.symbol,
   } satisfies ProposalInput;
-  assertNoActiveContract();
+  await refreshOpenContracts();
+  assertNoActiveContract(true);
 
   // Quote the complete batch before buying anything. This prevents a
   // partially-started batch when one contract is unavailable, and lets the
@@ -1674,7 +1824,8 @@ export async function dualBuyContracts(input: {
   const protection = await getTradingProtectionSettings();
   assertTradingProtection(protection, getStatus(), { ...input, contract_type: "DIGITOVER" });
   assertTradingProtection(protection, getStatus(), { ...input, contract_type: "DIGITUNDER" });
-  assertNoActiveContract();
+  await refreshOpenContracts();
+  assertNoActiveContract(true);
 
   const proposals: Array<{ proposal: DerivProposal; input: ProposalInput }> = [];
   for (const contract_type of ["DIGITOVER", "DIGITUNDER"] as const) {

@@ -4,6 +4,7 @@ import { db, derivCredentialsTable } from "@workspace/db";
 import { TestDerivTokenBody, TestDerivTokenResponse, GetDerivTokenStatusResponse, DeleteDerivTokenResponse } from "@workspace/api-zod";
 import { decryptPat, encryptPat } from "../lib/pat-crypto";
 import { disposeUser, setUserPat, withUserSerialized } from "../lib/deriv";
+import { withDistributedUserLock } from "../lib/distributed-user-lock";
 
 const router: IRouter = Router();
 const appId = process.env.DERIV_APP_ID;
@@ -16,7 +17,7 @@ router.post("/token/test", async (req, res): Promise<void> => {
   if (!appId) { res.status(500).json({ error: "DERIV_APP_ID is not configured" }); return; }
   try {
     const userId = res.locals.userId as string;
-    const accounts = await withUserSerialized(userId, async () => {
+    const accounts = await withUserSerialized(userId, () => withDistributedUserLock(userId, async () => {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 12_000);
       let response: Response;
@@ -51,11 +52,13 @@ router.post("/token/test", async (req, res): Promise<void> => {
         clerkUserId: userId, encryptedPat, expiresAt, lastVerifiedAt: new Date(),
       }).onConflictDoUpdate({ target: derivCredentialsTable.clerkUserId, set: {
         encryptedPat, expiresAt, lastVerifiedAt: new Date(), updatedAt: new Date(),
+        selectedAccountId: null,
+        selectedSymbol: null,
       }});
       disposeUser(userId);
        setUserPat(userId, token);
       return normalized;
-    });
+    }));
     res.json(TestDerivTokenResponse.parse({ success: true, message: "Deriv token validated and saved", accounts }));
   } catch (error) {
     const message = error instanceof DOMException && error.name === "AbortError"
@@ -87,10 +90,10 @@ router.get("/token/status", async (_req, res): Promise<void> => {
 
 router.delete("/token", async (_req, res): Promise<void> => {
   const userId = res.locals.userId as string;
-  await withUserSerialized(userId, async () => {
+  await withUserSerialized(userId, () => withDistributedUserLock(userId, async () => {
     await db.delete(derivCredentialsTable).where(eq(derivCredentialsTable.clerkUserId, userId));
     disposeUser(userId);
-  });
+  }));
   res.json(DeleteDerivTokenResponse.parse({ success: true }));
 });
 

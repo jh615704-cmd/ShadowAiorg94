@@ -23,7 +23,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { DerivAccountSwitcher } from "@/components/deriv-account-switcher";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getAccountBalance } from "@/lib/account-balance";
-import { formatSignedDerivProfit } from "@/lib/deriv-history";
+import { formatSignedDerivProfit, isDerivHistoryOpen } from "@/lib/deriv-history";
 import "./auto-trader.css";
 
 type MarketGroup = "regular" | "jump" | "one-sec";
@@ -293,7 +293,7 @@ function AutoTraderContent() {
       && (item.buy_time == null || item.buy_time * 1000 >= todayStart()),
     );
   }, [accountId, history.data, todayIds]);
-  const settled = todaysHistory.filter((item) => item.status !== "open" && item.status !== "pending");
+  const settled = todaysHistory.filter((item) => !isDerivHistoryOpen(item.status));
   const wins = settled.filter((item) => item.profit > 0).length;
   const losses = settled.filter((item) => item.profit < 0).length;
   const dailyProfit = settled.reduce((total, item) => total + item.profit, 0);
@@ -523,7 +523,7 @@ function AutoTraderContent() {
                       {trade.profit > 0 ? <ArrowUpRight size={15} /> : trade.profit < 0 ? <ArrowDownRight size={15} /> : <Clock3 size={13} />}
                     </span>
                     <span className="at-history-market"><strong>{markets.find((market) => market.symbol === trade.symbol)?.name ?? trade.symbol}</strong><small>Differs {trade.barrier ?? "—"} · {trade.status}</small></span>
-                    <span className={`at-history-profit${trade.profit > 0 ? " positive" : trade.profit < 0 ? " negative" : ""}`}>{trade.status === "open" ? "Open" : money(trade.profit, trade.currency)}</span>
+                    <span className={`at-history-profit${trade.profit > 0 ? " positive" : trade.profit < 0 ? " negative" : ""}`}>{isDerivHistoryOpen(trade.status) ? "Open" : money(trade.profit, trade.currency)}</span>
                   </div>
                 ))}
               </div>

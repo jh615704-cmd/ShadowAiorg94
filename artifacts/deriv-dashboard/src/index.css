@@ -627,6 +627,7 @@ body, .app-frame { background: #071b35; color: #e8f3ff; }
 .deriv-history-outcome.win { color:#5ce3ae; background:#104934; }
 .deriv-history-outcome.loss { color:#ff9aa0; background:#552833; }
 .deriv-history-outcome.open { color:#f0ce78; background:#554323; }
+.deriv-history-outcome.even { color:#c4d0e4; background:#293548; }
 .deriv-history-details { display:grid; grid-template-columns:repeat(auto-fit,minmax(100px,1fr)); gap:8px; margin-top:9px; padding-top:8px; border-top:1px solid #203a55; }
 .deriv-history-details span { min-width:0; display:grid; gap:4px; }
 .deriv-history-details b { overflow:hidden; color:#ecf5ff; font:700 10px var(--app-font-mono); font-variant-numeric:tabular-nums; text-overflow:ellipsis; white-space:nowrap; }

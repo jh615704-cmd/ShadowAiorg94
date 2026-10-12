@@ -23,6 +23,7 @@ import {
   getStatus,
   getLiveStatus,
   getHistory,
+  refreshDerivHistory,
   clearHistory,
   requestProposal,
   scanAccumulatorKnockout,
@@ -40,6 +41,7 @@ import {
   DerivCredentialError,
   DerivCapacityError,
 } from "../lib/deriv";
+import { withDistributedUserLock } from "../lib/distributed-user-lock";
 import { assertAccessSessionActive, AccessSessionRevokedError } from "../lib/access-keys";
 import { db, derivCredentialsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -85,6 +87,18 @@ async function withCredential<T>(
         throw new InvalidStoredCredentialError("The saved Deriv token is no longer readable. Enter it again to reconnect.");
       }
       setUserPat(userId, pat);
+      const syncSelectedSession = async () => {
+        if (credential?.selectedAccountId && getStatus().account?.id !== credential.selectedAccountId) {
+          await selectAccount(credential.selectedAccountId);
+        }
+        if (credential?.selectedSymbol && getStatus().symbol !== credential.selectedSymbol) {
+          await selectSymbol(credential.selectedSymbol);
+        }
+      };
+      if (credential?.selectedAccountId || credential?.selectedSymbol) {
+        if (serialize) await syncSelectedSession();
+        else await withUserSerialized(userId, syncSelectedSession);
+      }
     }
     if (!hasStoredCredential) throw new MissingDerivCredentialError("Connect a Deriv token first");
     try {
@@ -97,7 +111,9 @@ async function withCredential<T>(
       throw new InvalidStoredCredentialError("The saved Deriv token was rejected. Enter your PAT again to reconnect.");
     }
   };
-  return serialize ? withUserSerialized(userId, run) : withUser(userId, run);
+  return serialize
+    ? withUserSerialized(userId, () => withDistributedUserLock(userId, run))
+    : withUser(userId, run);
 }
 
 router.get("/deriv/accounts", async (req, res) => {
@@ -139,7 +155,10 @@ router.get("/deriv/status", (_req, res) => {
 
 router.get("/deriv/history", (req, res) => {
   res.set("Cache-Control", "no-store");
-  withCredential(res.locals.userId, async () => getHistory(), false)
+  withCredential(res.locals.userId, async () => {
+    await refreshDerivHistory();
+    return getHistory();
+  }, false)
     .then((history) => res.json(GetDerivHistoryResponse.parse(history)))
      .catch((error) => {
        if (isCapacityError(error)) {
@@ -237,7 +256,13 @@ router.post("/deriv/select-account", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "Invalid account selection" });
 
   try {
-    const result = SelectDerivAccountResponse.parse(await withCredential(res.locals.userId, () => selectAccount(parsed.data.account_id), true));
+    const result = SelectDerivAccountResponse.parse(await withCredential(res.locals.userId, async () => {
+      const selected = await selectAccount(parsed.data.account_id);
+      await db.update(derivCredentialsTable)
+        .set({ selectedAccountId: parsed.data.account_id, updatedAt: new Date() })
+        .where(eq(derivCredentialsTable.clerkUserId, res.locals.userId));
+      return selected;
+    }, true));
     return res.json(result);
   } catch (error) {
     req.log.error({ err: error }, "Deriv account selection failed");
@@ -253,9 +278,13 @@ router.post("/deriv/select-symbol", async (req, res) => {
   const parsed = SelectDerivSymbolBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid market selection" });
   try {
-    const result = SelectDerivSymbolResponse.parse(
-      await withCredential(res.locals.userId, () => selectSymbol(parsed.data.symbol), true),
-    );
+    const result = SelectDerivSymbolResponse.parse(await withCredential(res.locals.userId, async () => {
+      const selected = await selectSymbol(parsed.data.symbol);
+      await db.update(derivCredentialsTable)
+        .set({ selectedSymbol: parsed.data.symbol, updatedAt: new Date() })
+        .where(eq(derivCredentialsTable.clerkUserId, res.locals.userId));
+      return selected;
+    }, true));
     return res.json(result);
   } catch (error) {
     if (isCapacityError(error)) {

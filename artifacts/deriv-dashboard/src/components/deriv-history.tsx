@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Activity, Trash2 } from "lucide-react";
-import { createDerivHistoryRowView, summarizeDerivHistorySession, type DerivHistoryRow } from "../lib/deriv-history";
+import { createDerivHistoryRowView, isDerivHistoryOpen, summarizeDerivHistorySession, type DerivHistoryRow } from "../lib/deriv-history";
 export type { DerivHistoryRow } from "../lib/deriv-history";
 
 function money(amount: number, currency?: string) {
@@ -32,11 +32,11 @@ export default function DerivHistory({ title, strategy, className, rows, session
   const listRef = useRef<HTMLDivElement>(null);
   const [listHeight, setListHeight] = useState<number>();
   const summary = summarizeDerivHistorySession(sessionRows, sessionPnl, sessionTradeCount);
-  const historyWins = rows.filter((row) => row.status.toLowerCase() !== "open" && row.profit > 0).length;
-  const historyLosses = rows.filter((row) => row.status.toLowerCase() !== "open" && row.profit < 0).length;
+  const historyWins = rows.filter((row) => !isDerivHistoryOpen(row.status) && row.profit > 0).length;
+  const historyLosses = rows.filter((row) => !isDerivHistoryOpen(row.status) && row.profit < 0).length;
   const visible = useMemo(() => rows.filter((row) => {
-    if (filter === "win") return row.status.toLowerCase() !== "open" && row.profit > 0;
-    if (filter === "loss") return row.status.toLowerCase() !== "open" && row.profit < 0;
+    if (filter === "win") return !isDerivHistoryOpen(row.status) && row.profit > 0;
+    if (filter === "loss") return !isDerivHistoryOpen(row.status) && row.profit < 0;
     return true;
   }), [filter, rows]);
 

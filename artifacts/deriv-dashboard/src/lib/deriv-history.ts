@@ -27,7 +27,7 @@ export type DerivHistoryRowView = {
   contract: string;
   barrier: string | null;
   outcome: string;
-  outcomeClass: "open" | "loss" | "win";
+  outcomeClass: "open" | "loss" | "win" | "even";
   profit: string;
   profitClass: "negative" | "positive";
   details: DerivHistoryDetail[];
@@ -39,6 +39,19 @@ export function historyRowsForAccount<T extends Pick<DerivHistoryRow, "account_i
 ): T[] {
   if (!accountId) return [];
   return rows.filter((row) => row.account_id === accountId);
+}
+
+export function isDerivHistoryOpen(status: string): boolean {
+  return ["open", "pending", "active"].includes(status.trim().toLowerCase());
+}
+
+export function claimConfirmedDerivContractIds(
+  target: Set<string>,
+  contractIds: readonly string[],
+): void {
+  for (const contractId of contractIds) {
+    if (contractId) target.add(contractId);
+  }
 }
 
 export type DerivHistorySessionSummary = {
@@ -55,16 +68,21 @@ export function summarizeDerivHistorySession(
   sessionPnl?: number,
   sessionTradeCount?: number,
 ): DerivHistorySessionSummary {
-  const settled = rows.filter((row) => row.status.toLowerCase() !== "open");
+  const uniqueRows = [...new Map(rows.map((row) => [`${row.account_id}:${row.contract_id}`, row])).values()];
+  const settled = uniqueRows.filter((row) => !isDerivHistoryOpen(row.status));
   const wins = settled.filter((row) => row.profit > 0).length;
   const losses = settled.filter((row) => row.profit < 0).length;
+  const allTradesHaveSettledRows = sessionTradeCount == null
+    ? uniqueRows.length > 0 && settled.length === uniqueRows.length
+    : settled.length >= sessionTradeCount;
+  const realizedRowsPnl = settled.reduce((total, row) => total + row.profit, 0);
   return {
-    pnl: sessionPnl ?? settled.reduce((total, row) => total + row.profit, 0),
-    trades: sessionTradeCount ?? rows.length,
+    pnl: allTradesHaveSettledRows ? realizedRowsPnl : sessionPnl ?? realizedRowsPnl,
+    trades: Math.max(uniqueRows.length, sessionTradeCount ?? 0),
     wins,
     losses,
     winRate: wins + losses ? (wins / (wins + losses)) * 100 : 0,
-    staked: Math.round(rows.reduce((total, row) => total + Math.max(0, row.buy_price), 0) * 100) / 100,
+    staked: Math.round(uniqueRows.reduce((total, row) => total + Math.max(0, row.buy_price), 0) * 100) / 100,
   };
 }
 
@@ -98,8 +116,7 @@ export function createDerivHistoryRowView(
   currency?: string,
 ): DerivHistoryRowView {
   const rowCurrency = row.currency ?? currency;
-  const status = row.status.toLowerCase();
-  const isOpen = status === "open";
+  const isOpen = isDerivHistoryOpen(row.status);
   const barrier = row.barrier == null
     ? null
     : `${row.contract_type.startsWith("DIGIT") ? "digit" : "barrier"} ${row.barrier}`;
@@ -110,8 +127,8 @@ export function createDerivHistoryRowView(
     accountId: row.account_id,
     contract: row.contract_type.replace("DIGIT", ""),
     barrier,
-    outcome: isOpen ? "OPEN" : row.profit > 0 ? "WON" : row.profit < 0 ? "LOST" : status.toUpperCase(),
-    outcomeClass: isOpen ? "open" : row.profit < 0 ? "loss" : "win",
+    outcome: isOpen ? "OPEN" : row.profit > 0 ? "WON" : row.profit < 0 ? "LOST" : "BREAKEVEN",
+    outcomeClass: isOpen ? "open" : row.profit < 0 ? "loss" : row.profit > 0 ? "win" : "even",
     profit: formatSignedDerivProfit(row.profit, rowCurrency),
     profitClass: row.profit < 0 ? "negative" : "positive",
     details: [

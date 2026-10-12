@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createDerivHistoryRowView,
+  claimConfirmedDerivContractIds,
   formatSignedDerivProfit,
+  isDerivHistoryOpen,
   summarizeDerivHistorySession,
   type DerivHistoryRow,
 } from "./deriv-history.ts";
@@ -50,6 +52,44 @@ test("session summary accepts the feature's live P/L and trade count", () => {
     ),
     { pnl: -3.5, trades: 2, wins: 1, losses: 0, winRate: 100, staked: 2 },
   );
+});
+
+test("history treats pending and active contracts as unsettled and excludes their provisional P/L", () => {
+  const summary = summarizeDerivHistorySession([
+    row({ contract_id: "won", profit: 1, status: "won" }),
+    row({ contract_id: "pending", profit: 0.75, status: "pending" }),
+    row({ contract_id: "active", profit: -0.25, status: "active" }),
+  ]);
+  assert.equal(isDerivHistoryOpen(" OPEN "), true);
+  assert.equal(isDerivHistoryOpen("Pending"), true);
+  assert.equal(isDerivHistoryOpen("active"), true);
+  assert.equal(isDerivHistoryOpen("sold"), false);
+  assert.deepEqual(
+    { pnl: summary.pnl, trades: summary.trades, wins: summary.wins, losses: summary.losses, winRate: summary.winRate },
+    { pnl: 1, trades: 3, wins: 1, losses: 0, winRate: 100 },
+  );
+});
+
+test("history summary deduplicates contract rows and prefers complete settled Deriv results", () => {
+  const won = row({ contract_id: "same", profit: 1, status: "won" });
+  const summary = summarizeDerivHistorySession([won, { ...won, profit: -9 }], -9, 1);
+  assert.deepEqual(
+    { pnl: summary.pnl, trades: summary.trades, wins: summary.wins, losses: summary.losses },
+    { pnl: 1, trades: 1, wins: 1, losses: 0 },
+  );
+});
+
+test("feature ownership claims only exact Deriv-confirmed contract ids", () => {
+  const edge = new Set(["older"]);
+  const cashGrab = new Set<string>();
+  claimConfirmedDerivContractIds(edge, ["edge-contract"]);
+  claimConfirmedDerivContractIds(cashGrab, ["cash-grab-contract"]);
+  assert.deepEqual([...edge].sort(), ["edge-contract", "older"]);
+  assert.deepEqual([...cashGrab], ["cash-grab-contract"]);
+});
+
+test("closed zero-profit contracts are not labeled as wins", () => {
+  assert.equal(createDerivHistoryRowView(row({ profit: 0, status: "closed" })).outcome, "BREAKEVEN");
 });
 
 test("USD history profits put the sign before the US$ currency marker", () => {

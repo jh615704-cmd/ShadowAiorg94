@@ -7,6 +7,8 @@ export const derivCredentialsTable = pgTable("deriv_credentials", {
   clerkUserId: text("clerk_user_id").notNull().unique(),
   encryptedPat: text("encrypted_pat").notNull(),
   expiresAt: text("expires_at"),
+  selectedAccountId: text("selected_account_id"),
+  selectedSymbol: text("selected_symbol"),
   lastVerifiedAt: timestamp("last_verified_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
