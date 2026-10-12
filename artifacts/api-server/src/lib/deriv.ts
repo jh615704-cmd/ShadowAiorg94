@@ -1068,7 +1068,6 @@ async function connectInternal() {
       send({ balance: 1, subscribe: 1 });
       for (const symbol of supportedSymbols) send({ ticks: symbol, subscribe: 1 });
       send({ portfolio: 1 });
-      send({ profit_table: 1, limit: 50, description: 1, sort: "DESC" });
       resolveOnce(true);
     });
 
@@ -1236,7 +1235,9 @@ async function connectInternal() {
       } else if (message.msg_type === "profit_table") {
         const reqId = Number(message.req_id ?? message.echo_req?.req_id);
         const waiter = getState().profitTableWaiters.get(reqId);
-        if (!waiter && getState().profitTableReady) return;
+        // Only correlated refreshes are safe to apply. An unsolicited reply
+        // can belong to the previous account after a cross-server switch.
+        if (!waiter) return;
         const transactions = Array.isArray(message.profit_table?.transactions)
           ? message.profit_table.transactions
           : [];
@@ -1274,12 +1275,12 @@ async function connectInternal() {
         }
         const activeAccountId = getState().account?.id ?? getState().selectedAccountId;
         getState().verifiedPortfolioIds = new Set(portfolioContractIds);
-        for (const [contractId, historyItem] of getState().activeContracts) {
+        for (const [contractKey, historyItem] of getState().activeContracts) {
           if (
             historyItem.account_id === activeAccountId
-            && !portfolioContractIds.has(contractId)
+            && !portfolioContractIds.has(historyItem.contract_id)
           ) {
-            getState().activeContracts.delete(contractId);
+            getState().activeContracts.delete(contractKey);
           }
         }
         if (

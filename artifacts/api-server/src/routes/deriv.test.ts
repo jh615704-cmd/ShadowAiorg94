@@ -157,7 +157,7 @@ mock.module("../lib/deriv", {
       return historyRows;
     },
     refreshDerivHistory: async () => {
-      observePat();
+      return;
     },
     clearHistory: async () => {
       observePat();

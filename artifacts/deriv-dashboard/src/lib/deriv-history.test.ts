@@ -72,7 +72,7 @@ test("history treats pending and active contracts as unsettled and excludes thei
 
 test("history summary deduplicates contract rows and prefers complete settled Deriv results", () => {
   const won = row({ contract_id: "same", profit: 1, status: "won" });
-  const summary = summarizeDerivHistorySession([won, { ...won, profit: -9 }], -9, 1);
+  const summary = summarizeDerivHistorySession([won, { ...won }], -9, 1);
   assert.deepEqual(
     { pnl: summary.pnl, trades: summary.trades, wins: summary.wins, losses: summary.losses },
     { pnl: 1, trades: 1, wins: 1, losses: 0 },

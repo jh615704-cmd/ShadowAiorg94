@@ -18,6 +18,7 @@ let buyPayoutOverride: number | null = null;
 const sockets: FakeWebSocket[] = [];
 const testUserIds = new Set<string>();
 let mockPortfolioContracts: SocketMessage[] = [];
+let mockProfitTableTransactions: SocketMessage[] = [];
 const buySendCountsAtAck: number[] = [];
 
 class FakeWebSocket extends EventEmitter {
@@ -63,6 +64,14 @@ mock.module("ws", {
 const deriv = await import("./deriv.ts");
 
 function emitMessage(socket: FakeWebSocket, message: SocketMessage) {
+  if (
+    message.msg_type === "proposal_open_contract"
+    && (message.proposal_open_contract?.is_sold === 1 || message.proposal_open_contract?.is_sold === true)
+  ) {
+    mockPortfolioContracts = mockPortfolioContracts.filter(
+      (contract) => contract.contract_id !== String(message.proposal_open_contract.contract_id),
+    );
+  }
   socket.emit("message", Buffer.from(JSON.stringify(message)));
 }
 
@@ -80,7 +89,7 @@ function handleClientMessage(socket: FakeWebSocket, message: SocketMessage) {
     emitMessage(socket, {
       msg_type: "profit_table",
       ...(message.req_id == null ? {} : { req_id: message.req_id }),
-      profit_table: { transactions: [] },
+      profit_table: { transactions: mockProfitTableTransactions },
     });
     return;
   }
@@ -129,6 +138,16 @@ function handleClientMessage(socket: FakeWebSocket, message: SocketMessage) {
   }
 
   buySendCountsAtAck.push(socket.sent.filter((sent) => sent.buy).length);
+  const contractId = `contract-${message.buy === "1" ? message.req_id ?? message.buy : message.buy}`;
+  mockPortfolioContracts.push({
+    contract_id: contractId,
+    account_id: "DOT123",
+    contract_type: String(message.contract_type ?? "DIGITEVEN"),
+    underlying: String(message.underlying ?? "R_75"),
+    buy_price: Number(message.price ?? 1),
+    payout: 4.5,
+    status: "open",
+  });
   emitMessage(socket, {
     msg_type: "buy",
     ...(message.req_id == null ? {} : { req_id: message.req_id }),
@@ -137,7 +156,7 @@ function handleClientMessage(socket: FakeWebSocket, message: SocketMessage) {
       ...(message.req_id == null ? {} : { req_id: message.req_id }),
     },
     buy: {
-      contract_id: `contract-${message.buy === "1" ? message.req_id ?? message.buy : message.buy}`,
+      contract_id: contractId,
       buy_price: message.price,
       payout: buyPayoutOverride ?? 4.5,
       start_time: 1_700_000_000,
@@ -228,6 +247,7 @@ beforeEach(() => {
   proposalPayoutOverride = null;
   buyPayoutOverride = null;
   mockPortfolioContracts = [];
+  mockProfitTableTransactions = [];
   buySendCountsAtAck.length = 0;
   sockets.length = 0;
 });
@@ -350,19 +370,22 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       status: "open",
       purchase_time: 1_700_000_000,
     }];
-    await assert.rejects(
-      withSelectedAccount("portfolio-overlap-user", () => deriv.buyContract({
+    await withSelectedAccount("portfolio-overlap-user", async () => {
+      await assert.rejects(
+        deriv.buyContract({
         amount: 1,
         duration: 1,
         duration_unit: "t",
         contract_type: "DIGITODD",
         symbol: "R_75",
-      })),
-      /Deriv still reports an open contract/,
-    );
-    const socket = latestSocket();
-    assert.ok(socket.sent.some((message) => message.portfolio && message.req_id != null));
-    assert.equal(socket.sent.some((message) => message.proposal || message.buy), false);
+        }),
+        /Deriv still reports an open contract/,
+      );
+      const socket = latestSocket();
+      assert.ok(socket.sent.some((message) => message.portfolio && message.req_id != null));
+      assert.equal(deriv.getStatus().active_contract_count, 1);
+      assert.equal(socket.sent.some((message) => message.proposal || message.buy), false);
+    });
   });
 
   test("omits expiry fields and forwards decimal growth for Accumulator contracts", async () => {
@@ -710,6 +733,9 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
     };
     const realRow = {
       ...demoRow,
+      account_id: "CR123",
+      account_type: "real",
+      currency: "EUR",
       contract_type: "DIGITEVEN",
       buy_price: 3,
       payout: 5,
@@ -718,10 +744,8 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
     };
 
     await withSelectedAccount("account-history-user", async () => {
-      emitMessage(latestSocket(), {
-        msg_type: "profit_table",
-        profit_table: { transactions: [demoRow] },
-      });
+      mockProfitTableTransactions = [demoRow];
+      await deriv.refreshDerivHistory();
       const demoHistory = deriv.getHistory();
       assert.equal(demoHistory.length, 1);
       assert.equal(demoHistory[0].account_id, "DOT123");
@@ -730,12 +754,11 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       assert.equal(demoHistory[0].contract_id, "shared-contract-id");
       assert.equal(demoHistory[0].sell_time, 1_700_000_002);
 
+      mockProfitTableTransactions = [];
       await deriv.selectAccount("CR123");
       assert.deepEqual(deriv.getHistory(), []);
-      emitMessage(latestSocket(), {
-        msg_type: "profit_table",
-        profit_table: { transactions: [realRow] },
-      });
+      mockProfitTableTransactions = [realRow];
+      await deriv.refreshDerivHistory();
       const realHistory = deriv.getHistory();
       assert.equal(realHistory.length, 1);
       assert.equal(realHistory[0].account_id, "CR123");
@@ -743,6 +766,16 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       assert.equal(realHistory[0].currency, "EUR");
       assert.equal(realHistory[0].contract_type, "DIGITEVEN");
       assert.equal(realHistory[0].profit, -3);
+
+      emitMessage(latestSocket(), {
+        msg_type: "profit_table",
+        profit_table: { transactions: [demoRow] },
+      });
+      assert.equal(
+        deriv.getHistory().find((entry: { account_id: string }) => entry.account_id === "CR123")?.profit,
+        -3,
+        "uncorrelated history from a previous account must be ignored",
+      );
 
       deriv.clearHistory();
       assert.deepEqual(deriv.getHistory(), []);
@@ -831,7 +864,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
           symbol: "R_75",
           count: 1,
         }),
-        /previous contract is still settling/,
+        /still reports an open contract|previous contract is still settling/,
       );
     });
   });
@@ -930,7 +963,11 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
         "the reconnect must resubscribe to every still-open contract",
       );
       assert.equal(deriv.getStatus().open_contracts_ready, true);
-      assert.equal(deriv.getStatus().active_contract_count, 1);
+      assert.equal(
+        deriv.getStatus().active_contract_count,
+        1,
+        JSON.stringify({ history: deriv.getHistory(), status: deriv.getStatus() }),
+      );
 
       emitMessage(socket, {
         msg_type: "proposal_open_contract",
