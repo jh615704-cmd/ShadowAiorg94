@@ -1194,18 +1194,20 @@ export default function XTraderPage() {
   };
 
   const refreshTradeResults = async () => {
-    // The buy acknowledgement and the contract stream update arrive
-    // independently. Refresh immediately, then once more after the stream
-    // has had time to append the contract to recent history.
-    await Promise.all([
-      queryClient.refetchQueries({ queryKey: getGetDerivStatusQueryKey(), type: "active" }),
-      queryClient.refetchQueries({ queryKey: getGetDerivHistoryQueryKey(), type: "active" }),
-      queryClient.refetchQueries({ queryKey: getGetDerivAccountsQueryKey(), type: "active" }),
-    ]);
+    // A confirmed buy should update the UI immediately; independent history,
+    // balance, and status reads must not hold the next feature action.
+    const refresh = () => {
+      void Promise.all([
+        queryClient.refetchQueries({ queryKey: getGetDerivStatusQueryKey(), type: "active" }),
+        queryClient.refetchQueries({ queryKey: getGetDerivHistoryQueryKey(), type: "active" }),
+        queryClient.refetchQueries({ queryKey: getGetDerivAccountsQueryKey(), type: "active" }),
+      ]).catch((error: unknown) => {
+        console.warn("Could not refresh trade data after the order was confirmed.", error);
+      });
+    };
+    refresh();
     window.setTimeout(() => {
-      void queryClient.refetchQueries({ queryKey: getGetDerivStatusQueryKey(), type: "active" });
-      void queryClient.refetchQueries({ queryKey: getGetDerivHistoryQueryKey(), type: "active" });
-      void queryClient.refetchQueries({ queryKey: getGetDerivAccountsQueryKey(), type: "active" });
+      refresh();
     }, 180);
   };
 
@@ -1656,7 +1658,7 @@ export default function XTraderPage() {
       }
       setConnectionMessage(null);
       setMoneyBankTradeCount((value) => value + 1);
-      await refreshTradeResults();
+      void refreshTradeResults();
     } finally {
       setMoneyBankAutoKnockoutCountdown(null);
       moneyBankActionLockRef.current = false;
@@ -2797,7 +2799,7 @@ export default function XTraderPage() {
       }
       setConnectionMessage(null);
       setDigitFlipTradeCount((value) => value + 1);
-      await refreshTradeResults();
+      void refreshTradeResults();
       return true;
     } catch (error) {
       setConnectionMessage({ kind: "error", text: errorMessage(error) });

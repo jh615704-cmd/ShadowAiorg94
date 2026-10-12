@@ -1729,8 +1729,11 @@ export async function buyContract(input: BuyInput, assertAuthorized?: TradeAutho
     throw new Error("The selected stake exceeds the current account balance");
   }
   validateProposalInput(normalizedInput);
-  assertTradingProtection(await getTradingProtectionSettings(), getStatus(), normalizedInput);
-  await refreshOpenContracts();
+  const [protection] = await Promise.all([
+    getTradingProtectionSettings(),
+    refreshOpenContracts(),
+  ]);
+  assertTradingProtection(protection, getStatus(), normalizedInput);
   assertNoActiveContract(true);
   const proposal = await requestFreshProposal({
     amount: normalizedInput.amount,
@@ -1741,16 +1744,15 @@ export async function buyContract(input: BuyInput, assertAuthorized?: TradeAutho
     growth_rate: normalizedInput.growth_rate,
     symbol: normalizedInput.symbol,
   });
-  await assertAuthorized?.();
   const connected = await connect();
   if (!connected) {
     throw new Error("Deriv WebSocket is not ready");
   }
   await assertAuthorized?.();
-  // Proposal IDs can expire before Deriv processes a later buy frame. Reuse
-  // the fresh ask as the maximum price, but submit the contract parameters
-  // directly and correlate the acknowledgement by req_id.
-  const buy = await sendDirectBuy(proposal, normalizedInput);
+  // Buy the exact fresh proposal returned by Deriv. A separate parameter
+  // purchase can fail with "Unknown contract proposal" even though the
+  // preceding quote succeeded.
+  const buy = await sendProposalBuy(proposal, normalizedInput);
   return {
     ok: true,
     message: getState().account.type === "real"
