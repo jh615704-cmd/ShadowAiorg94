@@ -7,7 +7,7 @@ Live status, account, and history reads should stay outside the per-user mutatio
 
 **Why:** High-frequency dashboard reads can otherwise build a queue in front of a buy acknowledgement, making recent trades and session P/L appear delayed even when the Deriv WebSocket has already delivered the update.
 
-**How to apply:** When adding a Deriv route, classify it as a read or mutation. Use the non-serialized credential path for safe reads and keep state-changing operations on the stable per-user lock.
+**How to apply:** When adding a Deriv route, classify it as a read or mutation. Use the non-serialized credential path for safe reads and keep state-changing operations on the stable per-user lock. Contract settlement must not rely only on push events: resubscribe after reconnect, periodically request `proposal_open_contract` for tracked open rows, and never let a delayed open update revert a confirmed settlement.
 
 DigitFlip and other trade entry paths must not depend on a successful history request. Use cached rows for strategy context and submit buys through the normal API path when history is stale or unavailable; the server's serialized active-contract check remains authoritative.
 

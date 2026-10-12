@@ -19,6 +19,7 @@ const sockets: FakeWebSocket[] = [];
 const testUserIds = new Set<string>();
 let mockPortfolioContracts: SocketMessage[] = [];
 let mockProfitTableTransactions: SocketMessage[] = [];
+const mockOpenContractResponses = new Map<string, SocketMessage>();
 const buySendCountsAtAck: number[] = [];
 
 class FakeWebSocket extends EventEmitter {
@@ -121,6 +122,18 @@ function handleClientMessage(socket: FakeWebSocket, message: SocketMessage) {
         longcode: `proposal ${proposalNumber}`,
       },
     });
+    return;
+  }
+
+  if (message.proposal_open_contract && !message.subscribe) {
+    const contractId = String(message.contract_id ?? "");
+    const contract = mockOpenContractResponses.get(contractId);
+    if (contract) {
+      emitMessage(socket, {
+        msg_type: "proposal_open_contract",
+        proposal_open_contract: contract,
+      });
+    }
     return;
   }
 
@@ -248,6 +261,7 @@ beforeEach(() => {
   buyPayoutOverride = null;
   mockPortfolioContracts = [];
   mockProfitTableTransactions = [];
+  mockOpenContractResponses.clear();
   buySendCountsAtAck.length = 0;
   sockets.length = 0;
 });
@@ -985,6 +999,57 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
           sell_time: 1_700_000_001,
         },
       });
+      assert.equal(deriv.getStatus().active_contract_count, 0);
+    });
+  });
+
+  test("reconnect verifies a missed settlement update and replaces stale open history", async () => {
+    let contractId = "";
+    await withSelectedAccount("reconnect-missed-settlement-user", async () => {
+      const result = await deriv.buyContract({
+        amount: 1,
+        duration: 1,
+        duration_unit: "t",
+        contract_type: "DIGITDIFF",
+        barrier: 5,
+        symbol: "R_75",
+      });
+      contractId = result.buy.contract_id;
+      mockPortfolioContracts = [];
+      mockOpenContractResponses.set(contractId, {
+        contract_id: contractId,
+        account_id: "DOT123",
+        status: "lost",
+        is_sold: 1,
+        buy_price: result.buy.buy_price,
+        payout: result.buy.payout,
+        sell_price: 0,
+        profit: -result.buy.buy_price,
+        contract_type: "DIGITDIFF",
+        underlying: "R_75",
+        sell_time: 1_700_000_001,
+      });
+      latestSocket().close();
+    });
+
+    await new Promise((resolve) => setImmediate(resolve));
+    await inUser("reconnect-missed-settlement-user", () => deriv.selectAccount("DOT123"));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    await inUser("reconnect-missed-settlement-user", async () => {
+      assert.ok(
+        latestSocket().sent.some((message) =>
+          message.proposal_open_contract === 1
+          && message.contract_id === contractId
+          && !message.subscribe,
+        ),
+        "reconnect must explicitly request final state for the stale history row",
+      );
+      const item = deriv.getHistory().find((historyItem: { contract_id: string }) => historyItem.contract_id === contractId);
+      assert.ok(item);
+      assert.equal(item.status, "lost");
+      assert.equal(item.profit, -item.buy_price);
+      assert.equal(item.sell_time, 1_700_000_001);
       assert.equal(deriv.getStatus().active_contract_count, 0);
     });
   });

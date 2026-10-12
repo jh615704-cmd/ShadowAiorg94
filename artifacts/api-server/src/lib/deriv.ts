@@ -12,6 +12,7 @@ const liveTradingEnabled = process.env.DERIV_ALLOW_LIVE_TRADING === "true";
 const proposalTimeoutMs = 8_000;
 const proposalAttempts = 3;
 const buyAckTimeoutMs = 12_000;
+const settlementFallbackIntervalMs = 10_000;
 const maxBulkCount = 6;
 const supportedSymbols = new Set([
   "R_10", "R_25", "R_50", "R_75", "R_100", "R_150", "R_250",
@@ -182,6 +183,8 @@ return {
   socket: null as WebSocket | null,
   connecting: null as Promise<boolean> | null,
   reconnectTimer: null as NodeJS.Timeout | null,
+  settlementFallbackTimer: null as NodeJS.Timeout | null,
+  settlementFallbackContractIds: new Set<string>(),
   balanceRefreshAt: 0,
   balanceRefreshPromise: null as Promise<void> | null,
   account: null as DerivAccount | null,
@@ -359,6 +362,7 @@ export function disposeUser(userId: string) {
   }
   runtime.sellWaiters.clear();
   if (runtime.reconnectTimer) clearTimeout(runtime.reconnectTimer);
+  if (runtime.settlementFallbackTimer) clearTimeout(runtime.settlementFallbackTimer);
   runtime.socket?.close();
   runtimes.delete(userId);
 }
@@ -409,13 +413,13 @@ function getActiveContractCount() {
   const activeAccountId = runtime.account?.id ?? runtime.selectedAccountId;
   const activeContractIds = new Set(
     [...runtime.activeContracts.values()]
-      .filter((item: DerivHistoryItem) => item.account_id === activeAccountId && item.status === "open")
+      .filter((item: DerivHistoryItem) => item.account_id === activeAccountId && isOpenContractStatus(item.status))
       .map((item: DerivHistoryItem) => item.contract_id),
   );
   if (
     runtime.lastContract?.contract_id
     && !runtime.lastContract.is_sold
-    && runtime.lastContract.status === "open"
+    && isOpenContractStatus(runtime.lastContract.status)
   ) {
     activeContractIds.add(runtime.lastContract.contract_id);
   }
@@ -493,16 +497,60 @@ function isDerivFlagSet(value: unknown) {
   return value === true || value === 1 || value === "1" || value === "true";
 }
 
+function isOpenContractStatus(status: string) {
+  return ["open", "pending", "active"].includes(status.trim().toLowerCase());
+}
+
 function upsertHistory(item: DerivHistoryItem) {
   const key = historyKey(item);
-  if (item.status === "open") getState().activeContracts.set(key, item);
-  else getState().activeContracts.delete(key);
-  if (getState().hiddenHistoryIds.has(key)) return;
-  const existing = getState().history.findIndex((entry: DerivHistoryItem) =>
+  const existing = getState().history.find((entry: DerivHistoryItem) =>
     entry.account_id === item.account_id && entry.contract_id === item.contract_id,
   );
-  if (existing >= 0) {
-    getState().history[existing] = { ...getState().history[existing], ...item };
+  const wasOpen = getState().activeContracts.has(key)
+    || Boolean(existing && isOpenContractStatus(existing.status))
+    || getState().verifiedPortfolioIds.has(item.contract_id);
+  const wasFallbackCheck = !isOpenContractStatus(item.status)
+    && getState().settlementFallbackContractIds.has(item.contract_id);
+  if (!isOpenContractStatus(item.status)) {
+    getState().settlementFallbackContractIds.delete(item.contract_id);
+    if (wasOpen) {
+      logger.info({
+        accountId: item.account_id,
+        contractId: item.contract_id,
+        status: item.status,
+        profit: item.profit,
+      }, wasFallbackCheck
+        ? "Fallback check confirmed Deriv contract settlement and cleared the active trade lock"
+        : "Deriv contract settled and the active trade lock was cleared");
+    }
+    getState().verifiedPortfolioIds.delete(item.contract_id);
+    if (getState().lastContract?.contract_id === item.contract_id) {
+      getState().lastContract = {
+        ...getState().lastContract,
+        status: item.status,
+        is_sold: true,
+        profit: item.profit,
+        buy_price: item.buy_price,
+        payout: item.payout,
+        sell_price: item.current_value,
+      };
+    }
+  } else {
+    getState().settlementFallbackContractIds.delete(item.contract_id);
+    if (existing && !isOpenContractStatus(existing.status)) {
+      // A delayed subscription event must not reopen a contract already
+      // confirmed closed by Deriv history or a settlement response.
+      return;
+    }
+  }
+  if (isOpenContractStatus(item.status)) getState().activeContracts.set(key, item);
+  else getState().activeContracts.delete(key);
+  if (getState().hiddenHistoryIds.has(key)) return;
+  const existingIndex = getState().history.findIndex((entry: DerivHistoryItem) =>
+    entry.account_id === item.account_id && entry.contract_id === item.contract_id,
+  );
+  if (existingIndex >= 0) {
+    getState().history[existingIndex] = { ...getState().history[existingIndex], ...item };
   } else {
     getState().history.push(item);
   }
@@ -653,7 +701,7 @@ function normalizeHistory(raw: unknown, fallbackStatus = "closed"): DerivHistory
     // Deriv can briefly report status "open" alongside is_sold=true. Trust the
     // explicit sale flag so an already-closed contract cannot hold the user's
     // single-trade slot indefinitely.
-    status: isSold && reportedStatus === "open" ? "closed" : reportedStatus,
+    status: isSold && isOpenContractStatus(reportedStatus) ? "closed" : reportedStatus,
     buy_time: record.purchase_time == null && record.buy_time == null
       ? null
       : Number(record.purchase_time ?? record.buy_time),
@@ -1029,6 +1077,63 @@ function scheduleReconnect() {
   }, 5000);
 }
 
+function scheduleSettlementFallbackCheck(
+  ownerId: string,
+  ownerRuntime: ReturnType<typeof createState>,
+) {
+  if (ownerRuntime.shuttingDown || runtimes.get(ownerId) !== ownerRuntime) return;
+  if (ownerRuntime.settlementFallbackTimer) clearTimeout(ownerRuntime.settlementFallbackTimer);
+  ownerRuntime.settlementFallbackTimer = setTimeout(() => {
+    ownerRuntime.settlementFallbackTimer = null;
+    void withUserSerialized(ownerId, async () => {
+      if (runtimes.get(ownerId) !== ownerRuntime || ownerRuntime.shuttingDown) return;
+      try {
+        if (ownerRuntime.socket?.readyState !== WebSocket.OPEN && !await connect()) {
+          throw new Error("Deriv WebSocket is not ready for the settlement check");
+        }
+        void refreshOpenContracts().catch((error: unknown) => {
+          logger.warn(
+            { err: error, accountId: ownerRuntime.account?.id ?? ownerRuntime.selectedAccountId },
+            "Deriv portfolio refresh failed during the settlement fallback check",
+          );
+        });
+        const runtime = getState();
+        const accountId = runtime.account?.id ?? runtime.selectedAccountId;
+        const contractIds = new Set([
+          ...[...runtime.activeContracts.values()]
+            .filter((item: DerivHistoryItem) => item.account_id === accountId && isOpenContractStatus(item.status))
+            .map((item: DerivHistoryItem) => item.contract_id),
+          ...runtime.history
+            .filter((item: DerivHistoryItem) => item.account_id === accountId && isOpenContractStatus(item.status))
+            .map((item: DerivHistoryItem) => item.contract_id),
+          ...runtime.verifiedPortfolioIds,
+        ]);
+        for (const contractId of contractIds) {
+          if (!send({ proposal_open_contract: 1, contract_id: contractId })) {
+            runtime.settlementFallbackContractIds.delete(contractId);
+            continue;
+          }
+          runtime.settlementFallbackContractIds.add(contractId);
+        }
+        if (contractIds.size) {
+          logger.debug(
+            { accountId, contractCount: contractIds.size },
+            "Requested fallback Deriv settlement checks for active contracts",
+          );
+        }
+      } catch (error) {
+        logger.warn({ err: error, accountId: ownerRuntime.account?.id ?? ownerRuntime.selectedAccountId }, "Deriv settlement fallback check failed; keeping unresolved contracts blocked");
+      } finally {
+        scheduleSettlementFallbackCheck(ownerId, ownerRuntime);
+      }
+    }).catch((error) => {
+      logger.warn({ err: error, accountId: ownerRuntime.account?.id ?? ownerRuntime.selectedAccountId }, "Deriv settlement fallback check could not run");
+      scheduleSettlementFallbackCheck(ownerId, ownerRuntime);
+    });
+  }, settlementFallbackIntervalMs);
+  ownerRuntime.settlementFallbackTimer.unref();
+}
+
 async function connectInternal() {
   const ownerId = userContext.getStore();
   const ownerRuntime = getState();
@@ -1068,6 +1173,7 @@ async function connectInternal() {
       send({ balance: 1, subscribe: 1 });
       for (const symbol of supportedSymbols) send({ ticks: symbol, subscribe: 1 });
       send({ portfolio: 1 });
+      scheduleSettlementFallbackCheck(ownerId!, ownerRuntime);
       resolveOnce(true);
     });
 
@@ -1206,30 +1312,38 @@ async function connectInternal() {
       } else if (message.msg_type === "proposal_open_contract") {
         const contract = message.proposal_open_contract;
         if (contract) {
+          const contractId = String(contract.contract_id ?? "");
           const isSold = isDerivFlagSet(contract.is_sold);
           const contractStatus = String(contract.status ?? "open");
-          getState().lastContract = {
-            contract_id: String(contract.contract_id ?? ""),
-            status: isSold && contractStatus === "open" ? "closed" : contractStatus,
-            is_sold: isSold,
-            profit: Number(contract.profit ?? 0),
-            buy_price: Number(contract.buy_price ?? getState().lastBuy?.buy_price ?? 0),
-            payout: Number(contract.payout ?? getState().lastBuy?.payout ?? 0),
-            sell_price: Number(contract.sell_price ?? 0),
-            entry_spot: Number(contract.entry_spot ?? 0),
-            current_spot: Number(contract.current_spot ?? 0),
-            expiry_time: contract.expiry_time == null ? null : Number(contract.expiry_time),
-          };
+          const normalizedStatus = isSold && isOpenContractStatus(contractStatus) ? "closed" : contractStatus;
+          const previousHistoryItem = getState().history.find((item: DerivHistoryItem) =>
+            item.account_id === account.id && item.contract_id === contractId,
+          );
+          const isStaleOpenUpdate = isOpenContractStatus(normalizedStatus)
+            && previousHistoryItem
+            && !isOpenContractStatus(previousHistoryItem.status);
+          if (!isStaleOpenUpdate) {
+            getState().lastContract = {
+              contract_id: contractId,
+              status: normalizedStatus,
+              is_sold: isSold,
+              profit: Number(contract.profit ?? 0),
+              buy_price: Number(contract.buy_price ?? getState().lastBuy?.buy_price ?? 0),
+              payout: Number(contract.payout ?? getState().lastBuy?.payout ?? 0),
+              sell_price: Number(contract.sell_price ?? 0),
+              entry_spot: Number(contract.entry_spot ?? 0),
+              current_spot: Number(contract.current_spot ?? 0),
+              expiry_time: contract.expiry_time == null ? null : Number(contract.expiry_time),
+            };
+          }
           const historyItem = normalizeHistory({
             ...contract,
-            buy_price: getState().lastContract.buy_price,
-            payout: getState().lastContract.payout,
-            contract_id: getState().lastContract.contract_id,
-            status: getState().lastContract.status,
+            contract_id: contractId,
+            status: normalizedStatus,
             sell_time: contract.sell_time,
-            contract_type: getState().contractInputs.get(getState().lastContract.contract_id)?.contract_type ?? getState().lastProposalContractType,
-            underlying_symbol: getState().contractInputs.get(getState().lastContract.contract_id)?.symbol ?? getState().lastProposalSymbol,
-          }, getState().lastContract.is_sold ? "closed" : "open");
+            contract_type: getState().contractInputs.get(contractId)?.contract_type ?? getState().lastProposalContractType,
+            underlying_symbol: getState().contractInputs.get(contractId)?.symbol ?? getState().lastProposalSymbol,
+          }, isSold ? "closed" : "open");
           if (historyItem) upsertHistory(historyItem);
         }
       } else if (message.msg_type === "profit_table") {
@@ -1264,7 +1378,7 @@ async function connectInternal() {
           const historyItem = normalizeHistory(contract, "open");
           if (!historyItem) continue;
           upsertHistory(historyItem);
-          if (historyItem.status === "open") {
+          if (isOpenContractStatus(historyItem.status)) {
             portfolioContractIds.add(historyItem.contract_id);
             send({
               proposal_open_contract: 1,
@@ -1284,7 +1398,7 @@ async function connectInternal() {
           }
         }
         if (
-          getState().lastContract?.status === "open"
+          isOpenContractStatus(getState().lastContract?.status ?? "")
           && !portfolioContractIds.has(getState().lastContract.contract_id)
         ) {
           getState().lastContract = null;
@@ -1292,7 +1406,7 @@ async function connectInternal() {
         for (const historyItem of getState().history as DerivHistoryItem[]) {
           if (
             historyItem.account_id === activeAccountId
-            && historyItem.status === "open"
+            && isOpenContractStatus(historyItem.status)
             && !portfolioContractIds.has(historyItem.contract_id)
           ) {
             // A contract may have settled while this socket was disconnected.
