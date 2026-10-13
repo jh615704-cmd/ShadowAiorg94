@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  AlertCircle, ArrowDownRight, ArrowUpRight, BookOpen, Check,
+  AlertCircle, BookOpen, Check,
   ChevronLeft, ChevronRight, CircleHelp, Clock3,
   Pause, Play, Radar, RefreshCw, Settings2, ShieldAlert, Signal, Trash2, X,
 } from "lucide-react";
@@ -71,7 +71,13 @@ const guideCopy = [
   ["Check the outcome", "A Digit Differs contract is settled by Deriv at expiry; it wins only if the final digit differs from its barrier.", "A zero count, a short sample, or waiting for another tick cannot guarantee the result. If an order response is uncertain, check Deriv history before retrying."],
 ] as const;
 
-type LocalContract = { id: string; placedAt: number };
+type LocalContract = {
+  id: string;
+  placedAt: number;
+  batchId?: string;
+  batchIndex?: number;
+  batchCount?: number;
+};
 type FilterKey = "all" | MarketGroup;
 type Frequencies = Record<string, number[]>;
 type TickMap = Record<string, number>;
@@ -299,9 +305,14 @@ function AutoTraderContent() {
   const dailyProfit = settled.reduce((total, item) => total + item.profit, 0);
   const currency = account?.currency ?? status.data?.currency ?? "USD";
   const accountBalance = getAccountBalance(account);
+  const localContractById = useMemo(
+    () => new Map(localContracts.map((contract) => [contract.id, contract])),
+    [localContracts],
+  );
   const visibleContracts = todaysHistory
     .slice()
     .sort((a, b) => (b.buy_time ?? 0) - (a.buy_time ?? 0));
+  const winRate = settled.length > 0 ? `${((wins / settled.length) * 100).toFixed(1)}%` : "—";
   const connected = Boolean(status.data?.connected && status.data?.authorized && hasToken);
 
   const placeTrade = async (market: Market, digit: number, count: 1 | 3 | 6) => {
@@ -339,7 +350,12 @@ function AutoTraderContent() {
     }
 
     const placedAt = Date.now();
-    const fresh = result.buys.map((buy) => ({ id: String(buy.contract_id), placedAt }));
+    const batchId = result.buys.length > 1 ? `auto-trader-${placedAt}-${result.buys[0]?.contract_id ?? "batch"}` : undefined;
+    const fresh = result.buys.map((buy, index) => ({
+      id: String(buy.contract_id),
+      placedAt,
+      ...(batchId ? { batchId, batchIndex: index + 1, batchCount: result.buys.length } : {}),
+    }));
     const updated = [...localContracts.filter((item) => !fresh.some((entry) => entry.id === item.id)), ...fresh];
     setLocalContracts(updated);
     let trackingNote = "";
@@ -460,7 +476,7 @@ function AutoTraderContent() {
           </div>
         )}
 
-        <section className="at-summary" aria-label="Daily trading summary">
+        <section className="at-summary" aria-label="Selected Deriv account">
           <div className="at-account-strip">
             <span className={`at-account-state ${account?.type === "real" ? "real" : ""}`} data-testid="status-account-type">
               <i /> {account?.type ? `${account.type.toUpperCase()} ACCOUNT` : "NO ACCOUNT"}
@@ -468,12 +484,6 @@ function AutoTraderContent() {
             <span className="at-account-name">{account?.id ?? "Select a Deriv account"}</span>
             <span className="at-account-balance" data-testid="text-account-balance">{money(accountBalance, currency)}</span>
             <span className="at-connection-status"><i className={connected ? "connected" : ""} />{connected ? "CONNECTED" : "OFFLINE"}</span>
-          </div>
-          <div className="at-stat-row">
-            <div className="at-stat"><span>TODAY'S BALANCE</span><strong>{money(accountBalance, currency)}</strong><small>Selected account</small></div>
-            <div className="at-stat"><span>DAILY PROFIT / LOSS</span><strong className={dailyProfit >= 0 ? "positive" : "negative"} data-testid="text-daily-profit">{formatSignedDerivProfit(dailyProfit, currency)}</strong><small>{dailyProfit > 0 ? "PROFIT" : dailyProfit < 0 ? "LOSS" : "BREAK EVEN"} · Page-placed contracts</small></div>
-            <div className="at-stat"><span>TRADES</span><strong>{todayIds.size}</strong><small>Contracts placed today</small></div>
-            <div className="at-stat"><span>WINS / LOSSES</span><strong><em>{wins}</em><i>/</i><b>{losses}</b></strong><small>{settled.length ? `${((wins / settled.length) * 100).toFixed(1)}% win rate` : "Win rate —"}</small></div>
           </div>
         </section>
 
@@ -499,9 +509,26 @@ function AutoTraderContent() {
               </div>}
             </section>
 
+            <section className="at-daily-panel" aria-labelledby="daily-stats-title" data-testid="panel-daily-statistics">
+              <div className="at-history-heading">
+                <div>
+                  <div className="at-section-label">SELECTED ACCOUNT · TODAY</div>
+                  <h2 id="daily-stats-title">Daily Statistics</h2>
+                </div>
+              </div>
+              <div className="at-daily-stats">
+                <div className="at-daily-stat" data-testid="stat-daily-balance"><span>BALANCE</span><strong>{money(accountBalance, currency)}</strong></div>
+                <div className="at-daily-stat" data-testid="stat-daily-pnl"><span>P/L</span><strong className={dailyProfit >= 0 ? "positive" : "negative"} data-testid="text-daily-profit">{formatSignedDerivProfit(dailyProfit, currency)}</strong></div>
+                <div className="at-daily-stat" data-testid="stat-daily-trades"><span>TRADES</span><strong>{todayIds.size}</strong></div>
+                <div className="at-daily-stat" data-testid="stat-daily-wins"><span>WINS</span><strong>{wins}</strong></div>
+                <div className="at-daily-stat" data-testid="stat-daily-losses"><span>LOSSES</span><strong>{losses}</strong></div>
+                <div className="at-daily-stat" data-testid="stat-daily-win-rate"><span>WIN RATE</span><strong>{winRate}</strong></div>
+              </div>
+            </section>
+
             <section className="at-history-panel" aria-labelledby="history-title">
               <div className="at-history-heading">
-                <div><div className="at-section-label">ACCOUNT-SCOPED</div><h2 id="history-title">Today's trades <span>{visibleContracts.length}</span></h2></div>
+                <div><div className="at-section-label">ACCOUNT-SCOPED</div><h2 id="history-title">Trading History <span>{visibleContracts.length}</span></h2></div>
                 <button
                   type="button"
                   className={`at-history-icon${historyClearArmed ? " armed" : ""}`}
@@ -517,15 +544,34 @@ function AutoTraderContent() {
               <div className="at-history-list" data-testid="list-trade-history">
                 {history.isLoading && <div className="at-history-state skeleton-line" aria-label="Loading trade history" />}
                 {!history.isLoading && visibleContracts.length === 0 && <div className="at-history-state" data-testid="empty-trade-history">No Auto Trader contracts today.<small>Trades from other features are excluded.</small></div>}
-                {visibleContracts.map((trade) => (
-                  <div className="at-history-row" key={trade.contract_id} data-testid={`row-trade-${trade.contract_id}`}>
-                    <span className={`at-result-icon${trade.profit > 0 ? " won" : trade.profit < 0 ? " lost" : ""}`}>
-                      {trade.profit > 0 ? <ArrowUpRight size={15} /> : trade.profit < 0 ? <ArrowDownRight size={15} /> : <Clock3 size={13} />}
-                    </span>
-                    <span className="at-history-market"><strong>{markets.find((market) => market.symbol === trade.symbol)?.name ?? trade.symbol}</strong><small>Differs {trade.barrier ?? "—"} · {trade.status}</small></span>
-                    <span className={`at-history-profit${trade.profit > 0 ? " positive" : trade.profit < 0 ? " negative" : ""}`}>{isDerivHistoryOpen(trade.status) ? "Open" : money(trade.profit, trade.currency)}</span>
-                  </div>
-                ))}
+                {visibleContracts.map((trade) => {
+                  const metadata = localContractById.get(String(trade.contract_id));
+                  const open = isDerivHistoryOpen(trade.status);
+                  const resultLabel = open ? "OPEN" : trade.profit > 0 ? "WON" : trade.profit < 0 ? "LOST" : "CLOSED";
+                  const marketLabel = (markets.find((market) => market.symbol === trade.symbol)?.name ?? trade.symbol)
+                    .replace("Volatility ", "V")
+                    .replace(" · 1s", " 1s");
+                  return (
+                    <div className="at-history-row" key={trade.contract_id} data-testid={`row-trade-${trade.contract_id}`}>
+                      <span className={`at-result-pill ${open ? "open" : trade.profit > 0 ? "won" : trade.profit < 0 ? "lost" : ""}`}>{resultLabel}</span>
+                      <span className="at-history-market">
+                        <span className="at-history-meta">
+                          <code>{trade.contract_id}</code>
+                          {metadata?.batchCount && metadata.batchCount > 1 && (
+                            <span className="at-batch-tag">Multi Differ ({metadata.batchIndex ?? 1}/{metadata.batchCount})</span>
+                          )}
+                        </span>
+                        <strong>DIFFERS {trade.barrier ?? "—"} on {marketLabel}</strong>
+                      </span>
+                      <span className="at-history-numbers">
+                        <strong className={`at-history-profit${trade.profit > 0 ? " positive" : trade.profit < 0 ? " negative" : ""}`}>
+                          {open ? "Open" : formatSignedDerivProfit(trade.profit, trade.currency)}
+                        </strong>
+                        <small>{money(trade.buy_price, trade.currency)}</small>
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </section>
           </aside>

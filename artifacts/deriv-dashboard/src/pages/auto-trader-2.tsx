@@ -303,7 +303,7 @@ function AutoTrader2Content() {
             : restoredSession.phase === "awaiting-settlement"
               ? "A saved contract still needs a fresh Deriv settlement check before this session can resume."
               : restoredSession.phase === "completed"
-                ? "This saved AI 2 session reached a stop condition. Starting again replaces only this completed checkpoint; Deriv history remains unchanged."
+                ? "This AI 2 session is stopped. Starting again begins a new run; Deriv history remains unchanged."
                 : "A saved AI 2 session was found. Verify its Deriv history and open-contract status before resuming.",
         );
       }
@@ -473,7 +473,7 @@ function AutoTrader2Content() {
             : saved.phase === "awaiting-settlement"
               ? "The accepted contract has not been confirmed as settled. Verify it against Deriv history before resuming."
               : saved.phase === "completed"
-                ? "This saved AI 2 session reached a stop limit. Starting again replaces only this completed checkpoint; Deriv history remains unchanged."
+                ? "This AI 2 session is stopped. Starting again begins a new run; Deriv history remains unchanged."
                 : "The saved AI 2 session is paused. Verify its Deriv history and open-contract status before resuming.",
         );
       }
@@ -746,7 +746,17 @@ function AutoTrader2Content() {
         if (runRef.current.generation === generation) setIsPlacing(false);
       }
 
-      if (!contractId || !runRef.current.active || runRef.current.generation !== generation) return;
+      if (!contractId || runRef.current.generation !== generation) return;
+      if (!runRef.current.active) {
+        const saved = readStoredSession();
+        if (saved) {
+          setSavedSession(saved);
+          setSavedSessionNotice(
+            "Deriv accepted this contract before the stop completed. It remains active with Deriv; verify settlement before starting again.",
+          );
+        }
+        return;
+      }
       let settledRow: DerivHistoryItem | null = null;
       for (let check = 0; check < 90 && runRef.current.active && runRef.current.generation === generation; check += 1) {
         try {
@@ -981,23 +991,32 @@ function AutoTrader2Content() {
 
   const stop = () => {
     if (!runRef.current.active) return;
+    const orderPending = runRef.current.pendingContractId !== null
+      || runRef.current.pendingContractType !== null
+      || isPlacing;
     setStopping(true);
     runRef.current.stopRequested = true;
     runRef.current.active = false;
     setRunning(false);
     setStopping(false);
-    setIsPlacing(false);
+    setIsPlacing(orderPending);
     setDecision("Stopped · any open contract remains with Deriv and may still settle.");
     setMessage({ tone: "info", text: "Auto Trader 2.0 stopped. Any accepted open contract remains active at Deriv and may still settle." });
-    const saved = readStoredSession();
+    let saved = readStoredSession();
+    if (!orderPending && runRef.current.config?.aiEnabled) {
+      persistRunState("completed");
+      saved = readStoredSession();
+    }
     if (saved) {
       setSavedSession(saved);
       setSavedSessionNotice(
-        saved.phase === "awaiting-settlement"
+        saved.phase === "completed"
+          ? "Auto Trader 2.0 is stopped. Starting again begins a new run; Deriv history is unchanged."
+          : saved.phase === "awaiting-settlement"
           ? "The stopped session has a contract awaiting settlement. Verify Deriv history before resuming."
           : saved.phase === "placing" || saved.phase === "manual-review"
             ? "The last order may have been submitted. Check Deriv history and open contracts; no order will be resent."
-            : "The stopped AI 2 session is saved. Verify it against Deriv before resuming.",
+            : "This saved session needs a fresh Deriv check before it can resume.",
       );
     }
   };
@@ -1202,7 +1221,6 @@ function AutoTrader2Content() {
             || Boolean(savedSessionIssue)
             || requiresAutoTrader2SessionReview(savedSession)
           }
-          resumeAvailable={savedSession?.phase === "ready"}
           isPlacingTrade={isPlacing}
           selectedMarket={selectedMarket}
           selectedMarketLabel={selectedLabel}

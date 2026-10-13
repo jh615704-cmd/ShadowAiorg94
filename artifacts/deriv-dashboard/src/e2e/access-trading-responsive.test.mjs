@@ -294,6 +294,119 @@ test("clearing Auto Trader 2.0 resets run metrics and stake without deleting Der
   }
 });
 
+test("Auto Trader Stop returns to Start when no order is pending", async () => {
+  const state = createState(userSession(["auto-trader-2"]));
+  state.hasToken = true;
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/auto-trader-2`);
+    await page.getByTestId("auto-trader-2-panel").waitFor();
+    await page.getByTestId("at2-ai-enabled").check();
+    await page.getByTestId("at2-start").click();
+    await page.getByTestId("at2-stop").waitFor();
+    await page.getByTestId("at2-stop").click();
+
+    const startButton = page.getByTestId("at2-start");
+    await startButton.waitFor();
+    await page.waitForFunction((key) => {
+      const stored = localStorage.getItem(key);
+      return stored ? JSON.parse(stored).phase === "completed" : false;
+    }, `deriv-auto-trader-2-session:${account.id}`);
+    assert.equal((await startButton.innerText()).trim(), "START AUTO TRADER 2.0");
+    assert.equal(await startButton.isEnabled(), true, "A cleanly stopped session should allow a new run.");
+    assert.equal(await page.getByTestId("at2-verify-resume").count(), 0, "A normal Stop must not show Verify & Resume.");
+    assert.deepEqual(state.tradeRequests, [], "Stopping while AI 2 is waiting must not place a contract.");
+    assert.deepEqual(state.unhandledApis, []);
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+});
+
+test("Auto Trader shows daily stats and detailed deep-blue trading history", async () => {
+  const state = createState(userSession(["auto-trader"]));
+  state.hasToken = true;
+  const placedAt = Date.now();
+  const buyTime = Math.floor(placedAt / 1000);
+  state.history = [
+    {
+      account_id: account.id,
+      contract_id: "legacy-win",
+      contract_type: "DIGITDIFF",
+      symbol: "R_10",
+      account_type: "demo",
+      currency: "USD",
+      barrier: 4,
+      buy_price: 1,
+      current_value: 1.06,
+      payout: 1.06,
+      profit: 0.06,
+      status: "won",
+      buy_time: buyTime,
+      sell_time: buyTime + 1,
+    },
+    {
+      account_id: account.id,
+      contract_id: "legacy-loss",
+      contract_type: "DIGITDIFF",
+      symbol: "R_10",
+      account_type: "demo",
+      currency: "USD",
+      barrier: 4,
+      buy_price: 1,
+      current_value: 0,
+      payout: 0,
+      profit: -1,
+      status: "lost",
+      buy_time: buyTime,
+      sell_time: buyTime + 1,
+    },
+  ];
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.addInitScript(({ historyKey, contracts }) => {
+      localStorage.setItem(historyKey, JSON.stringify(contracts));
+    }, {
+      historyKey: `deriv-auto-trader-contracts:${account.id}`,
+      contracts: [
+        { id: "legacy-win", placedAt, batchId: "legacy-batch", batchIndex: 1, batchCount: 2 },
+        { id: "legacy-loss", placedAt, batchId: "legacy-batch", batchIndex: 2, batchCount: 2 },
+      ],
+    });
+    await page.goto(`${baseUrl}/auto-trader`);
+    await page.getByTestId("panel-daily-statistics").waitFor();
+    await page.getByTestId("row-trade-legacy-win").waitFor();
+
+    assert.match(await page.getByTestId("stat-daily-balance").innerText(), /\$1,000\.00/);
+    assert.match(await page.getByTestId("stat-daily-pnl").innerText(), /0\.94/);
+    assert.match(await page.getByTestId("stat-daily-trades").innerText(), /2/);
+    assert.match(await page.getByTestId("stat-daily-wins").innerText(), /1/);
+    assert.match(await page.getByTestId("stat-daily-losses").innerText(), /1/);
+    assert.match(await page.getByTestId("stat-daily-win-rate").innerText(), /50\.0%/);
+    assert.equal(await page.getByText("Multi Differ (1/2)", { exact: true }).count(), 1);
+    assert.equal(await page.getByText("Multi Differ (2/2)", { exact: true }).count(), 1);
+    assert.equal(await page.getByText("DIFFERS 4 on V10", { exact: true }).count(), 2);
+    const backgrounds = await page.locator(".at-daily-panel, .at-history-row").evaluateAll((nodes) =>
+      nodes.map((node) => getComputedStyle(node).backgroundImage),
+    );
+    assert.ok(backgrounds.every((background) => background.includes("linear-gradient")));
+
+    await page.getByTestId("button-settings").click();
+    const [settingsBounds, statsBounds, historyBounds] = await Promise.all([
+      page.getByTestId("panel-settings").boundingBox(),
+      page.getByTestId("panel-daily-statistics").boundingBox(),
+      page.locator(".at-history-panel").boundingBox(),
+    ]);
+    assert.ok(settingsBounds && statsBounds && historyBounds);
+    assert.ok(settingsBounds.y < statsBounds.y && statsBounds.y < historyBounds.y);
+    assert.deepEqual(state.tradeRequests, []);
+    assert.deepEqual(state.unhandledApis, []);
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+});
+
 test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports", async () => {
   const state = createState(userSession(["edge", "trade-x", "auto-trader", "auto-trader-2", "money-bank"]));
   state.hasToken = true;

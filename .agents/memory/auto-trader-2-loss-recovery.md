@@ -20,3 +20,9 @@ For AI 2 direction and parity, score historical expiry outcomes at the configure
 **Why:** The user wants one-loss side changes and a short, non-countdown analysis pause to reduce repeated entries on a side that just lost. Historical evidence must qualify before an order; no market filter guarantees future results.
 
 **How to apply:** Compare each entry point with its quote or digit at the configured expiry offset. Persist the forced opposite side with the verified account-scoped checkpoint so reload recovery cannot silently revert to the prior side. A positive settlement resets that type's loss streak; a zero settlement does not. Differs losses still use the separate recovery target above and may choose qualifying Rise/Fall or Even/Odd candidates.
+
+An explicit Stop should mark an AI 2 checkpoint completed only when no buy is pending and no accepted contract is awaiting settlement. This lets a clean Stop return to Start without a misleading Verify & Resume prompt, while pending, uncertain, or unsettled trades remain blocked for Deriv verification.
+
+**Why:** The user wants Stop to end the automation and allow a fresh run after a clean stop, without treating a live or uncertain Deriv contract as cancelled.
+
+**How to apply:** Keep the saved session review gates intact for `placing`, `manual-review`, and `awaiting-settlement`. Only promote a clean, no-order stop to `completed`; do not close or replay a contract accepted by Deriv.
