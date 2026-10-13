@@ -9,7 +9,7 @@ process.env.DERIV_CURRENCY = "USD";
 process.env.DERIV_ALLOW_LIVE_TRADING = "true";
 
 type SocketMessage = Record<string, any>;
-type BuyBehavior = "ack" | "reject" | "disconnect";
+type BuyBehavior = "ack" | "reject" | "disconnect" | "invalid-proposal-id";
 
 let buyBehavior: BuyBehavior = "ack";
 let proposalNumber = 0;
@@ -147,6 +147,13 @@ function handleClientMessage(socket: FakeWebSocket, message: SocketMessage) {
   }
 
   if (!message.buy) return;
+  if (buyBehavior === "invalid-proposal-id" && message.buy !== "1") {
+    emitMessage(socket, {
+      error: { code: "InvalidContractProposal", message: "Unknown contract proposal" },
+      echo_req: { buy: message.buy },
+    });
+    return;
+  }
   if (buyBehavior === "reject") {
     emitMessage(socket, {
       error: { code: "ContractBuyFailure", message: "buy rejected by Deriv" },
@@ -728,6 +735,51 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
     });
   });
 
+  test("recovers explicit invalid proposal IDs for Money Bank and DigitFlip using a fresh direct quote", async () => {
+    buyBehavior = "invalid-proposal-id";
+    const cases = [
+      {
+        userId: "money-bank-invalid-proposal-user",
+        input: {
+          amount: 1,
+          duration: 5,
+          duration_unit: "t" as const,
+          contract_type: "ACCU" as const,
+          growth_rate: 0.04,
+          symbol: "1HZ90V",
+        },
+      },
+      {
+        userId: "digit-flip-invalid-proposal-user",
+        input: {
+          amount: 1,
+          duration: 1,
+          duration_unit: "t" as const,
+          contract_type: "DIGITEVEN" as const,
+          symbol: "R_75",
+        },
+      },
+    ];
+
+    for (const { userId, input } of cases) {
+      proposalNumber = 0;
+      await withSelectedAccount(userId, async () => {
+        const result = await deriv.buyContract(input);
+        const socket = latestSocket();
+        const buyRequests = socket.sent.filter((message) => message.buy);
+
+        assert.equal(result.ok, true);
+        assert.equal(buyRequests.length, 2);
+        assert.equal(buyRequests[0].buy, "proposal-1");
+        assert.equal(buyRequests[1].buy, "1");
+        assert.equal(buyRequests[1].parameters.contract_type, input.contract_type);
+        assert.equal(socket.sent.filter((message) => message.proposal).length, 2);
+        assert.equal(deriv.getHistory()[0]?.contract_type, input.contract_type);
+      });
+      mockPortfolioContracts = [];
+    }
+  });
+
   test("preserves the complete Deriv payout in quote, buy, and history responses", async () => {
     const fullPayout = 125_000.75;
     proposalPayoutOverride = fullPayout;
@@ -853,6 +905,9 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       })),
       /buy rejected by Deriv/,
     );
+    await inUser("rejected-buy-user", () => {
+      assert.equal(latestSocket().sent.filter((message) => message.buy).length, 1);
+    });
 
     buyBehavior = "ack";
     const result = await withSelectedAccount("rejected-buy-user", () => deriv.bulkBuyContracts({
@@ -878,6 +933,9 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       })),
       /WebSocket disconnected before the contract purchase was acknowledged/,
     );
+    await inUser("disconnected-buy-user", () => {
+      assert.equal(latestSocket().sent.filter((message) => message.buy).length, 1);
+    });
 
     buyBehavior = "ack";
     const result = await withSelectedAccount("disconnected-buy-user", () => deriv.bulkBuyContracts({

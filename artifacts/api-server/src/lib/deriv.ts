@@ -157,6 +157,16 @@ type DerivResponse = {
   accounts?: unknown;
 };
 
+class DerivApiError extends Error {
+  readonly code: string;
+
+  constructor(code: unknown, message: string) {
+    super(message);
+    this.name = "DerivApiError";
+    this.code = String(code ?? "");
+  }
+}
+
 export class DerivCredentialError extends Error {
   readonly status: number;
 
@@ -1203,12 +1213,13 @@ async function connectInternal() {
       }
       if (message.error) {
         const errorMessage = String(message.error.message ?? message.error.code ?? "Deriv rejected the request");
+        const derivError = new DerivApiError(message.error.code, errorMessage);
         const reqId = Number(message.req_id ?? message.echo_req?.req_id);
         const proposalWaiter = getState().proposalWaiters.get(reqId);
         if (proposalWaiter) {
           clearTimeout(proposalWaiter.timer);
           getState().proposalWaiters.delete(reqId);
-          proposalWaiter.reject(new Error(errorMessage));
+          proposalWaiter.reject(derivError);
         }
         const portfolioWaiter = getState().portfolioWaiters.get(reqId);
         if (portfolioWaiter) {
@@ -1243,7 +1254,7 @@ async function connectInternal() {
           if (buyWaiter) {
             clearTimeout(buyWaiter.timer);
             getState().buyWaiters.delete(rejectedBuyKey);
-            buyWaiter.reject(new Error(errorMessage));
+            buyWaiter.reject(derivError);
           }
         }
         logger.warn(
@@ -1735,7 +1746,7 @@ export async function buyContract(input: BuyInput, assertAuthorized?: TradeAutho
   ]);
   assertTradingProtection(protection, getStatus(), normalizedInput);
   assertNoActiveContract(true);
-  const proposal = await requestFreshProposal({
+  const proposalInput: ProposalInput = {
     amount: normalizedInput.amount,
     duration: normalizedInput.duration,
     duration_unit: normalizedInput.duration_unit,
@@ -1743,16 +1754,32 @@ export async function buyContract(input: BuyInput, assertAuthorized?: TradeAutho
     barrier: normalizedInput.barrier,
     growth_rate: normalizedInput.growth_rate,
     symbol: normalizedInput.symbol,
-  });
+  };
+  let proposal = await requestFreshProposal(proposalInput);
   const connected = await connect();
   if (!connected) {
     throw new Error("Deriv WebSocket is not ready");
   }
   await assertAuthorized?.();
-  // Buy the exact fresh proposal returned by Deriv. A separate parameter
-  // purchase can fail with "Unknown contract proposal" even though the
-  // preceding quote succeeded.
-  const buy = await sendProposalBuy(proposal, normalizedInput);
+  let buy: DerivBuy;
+  try {
+    buy = await sendProposalBuy(proposal, normalizedInput);
+  } catch (error) {
+    if (!(error instanceof DerivApiError) || error.code !== "InvalidContractProposal") {
+      throw error;
+    }
+
+    // An explicit InvalidContractProposal confirms Deriv rejected the ID and
+    // did not open a contract. Only this rejection is safe to recover from:
+    // get a new quote, then submit the same parameters as a direct buy.
+    logger.warn(
+      { contractType: normalizedInput.contract_type, symbol: proposalInput.symbol },
+      "Deriv rejected the single-trade proposal ID; requesting a fresh direct quote",
+    );
+    proposal = await requestFreshProposal(proposalInput);
+    await assertAuthorized?.();
+    buy = await sendDirectBuy(proposal, normalizedInput);
+  }
   return {
     ok: true,
     message: getState().account.type === "real"
