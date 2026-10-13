@@ -89,16 +89,14 @@ export default function AppPage() {
   const proposalReady = Boolean(status?.authorized && serverSelected && effectiveSymbol && Number(amount) > 0 && Number(duration) >= 1 && Number(duration) <= 6);
 
   const refreshTradeResults = () => {
+    const options = { cancelRefetch: false };
     void Promise.all([
-      queryClient.refetchQueries({ queryKey: getGetDerivStatusQueryKey(), type: 'active' }),
-      queryClient.refetchQueries({ queryKey: getGetDerivHistoryQueryKey(), type: 'active' }),
-      queryClient.refetchQueries({ queryKey: getGetDerivAccountsQueryKey(), type: 'active' }),
-    ]);
-    window.setTimeout(() => {
-      void queryClient.refetchQueries({ queryKey: getGetDerivStatusQueryKey(), type: 'active' });
-      void queryClient.refetchQueries({ queryKey: getGetDerivHistoryQueryKey(), type: 'active' });
-      void queryClient.refetchQueries({ queryKey: getGetDerivAccountsQueryKey(), type: 'active' });
-    }, 180);
+      queryClient.refetchQueries({ queryKey: getGetDerivStatusQueryKey(), type: 'active' }, options),
+      queryClient.refetchQueries({ queryKey: getGetDerivHistoryQueryKey(), type: 'active' }, options),
+      queryClient.refetchQueries({ queryKey: getGetDerivAccountsQueryKey(), type: 'active' }, options),
+    ]).catch((error: unknown) => {
+      console.warn('Could not refresh trade data after the order was confirmed.', error);
+    });
   };
 
   useEffect(() => {
@@ -110,13 +108,16 @@ export default function AppPage() {
     if (status?.account) {
       const balance = getAccountBalance(status.account);
       if (balance == null) return;
-      queryClient.setQueryData(getGetDerivAccountsQueryKey(), (current: typeof accounts) =>
-        current?.map((account) =>
-          account.id === status.account?.id
-            ? { ...account, balance }
-            : account,
-        ) ?? current,
-      );
+      queryClient.setQueryData(getGetDerivAccountsQueryKey(), (current: typeof accounts) => {
+        if (!current) return current;
+        const account = current.find((entry) => entry.id === status.account?.id);
+        if (!account || account.balance === balance) return current;
+        return current.map((entry) =>
+          entry.id === status.account?.id
+            ? { ...entry, balance }
+            : entry,
+        );
+      });
     }
   }, [accounts, queryClient, status?.account]);
 

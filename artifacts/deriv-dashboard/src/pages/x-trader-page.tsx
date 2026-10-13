@@ -1193,44 +1193,27 @@ export default function XTraderPage() {
     };
   };
 
-  const refreshTradeResults = async () => {
-    // A confirmed buy should update the UI immediately; independent history,
-    // balance, and status reads must not hold the next feature action.
-    const refresh = () => {
-      void Promise.all([
-        queryClient.refetchQueries({ queryKey: getGetDerivStatusQueryKey(), type: "active" }),
-        queryClient.refetchQueries({ queryKey: getGetDerivHistoryQueryKey(), type: "active" }),
-        queryClient.refetchQueries({ queryKey: getGetDerivAccountsQueryKey(), type: "active" }),
-      ]).catch((error: unknown) => {
-        console.warn("Could not refresh trade data after the order was confirmed.", error);
-      });
-    };
-    refresh();
-    window.setTimeout(() => {
-      refresh();
-    }, 180);
+  const refreshTradeResults = () => {
+    // One non-cancelling refresh gives the acknowledged trade a fast UI update
+    // without restarting an in-flight poll or causing a second render burst.
+    const options = { cancelRefetch: false };
+    void Promise.all([
+      queryClient.refetchQueries({ queryKey: getGetDerivStatusQueryKey(), type: "active" }, options),
+      queryClient.refetchQueries({ queryKey: getGetDerivHistoryQueryKey(), type: "active" }, options),
+      queryClient.refetchQueries({ queryKey: getGetDerivAccountsQueryKey(), type: "active" }, options),
+    ]).catch((error: unknown) => {
+      console.warn("Could not refresh trade data after the order was confirmed.", error);
+    });
   };
 
-  const claimFeatureRows = async (
+  const claimFeatureRows = (
     target: Set<string>,
     confirmedContractIds: readonly string[],
   ) => {
     claimConfirmedDerivContractIds(target, confirmedContractIds);
-    let latestRows = queryClient.getQueryData<typeof rows>(getGetDerivHistoryQueryKey()) ?? [];
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      try {
-        latestRows = await getDerivHistory();
-      } catch {
-        // A confirmed buy must not be reported as failed just because its
-        // history row has not arrived or the history endpoint is unavailable.
-        latestRows = queryClient.getQueryData<typeof rows>(getGetDerivHistoryQueryKey()) ?? latestRows;
-        break;
-      }
-      if (confirmedContractIds.some((contractId) => latestRows.some((trade) => trade.contract_id === contractId))) break;
-      await sleep(180);
-    }
-    queryClient.setQueryData(getGetDerivHistoryQueryKey(), latestRows);
-    return latestRows;
+    // Contract IDs come from Deriv's buy acknowledgement. Claim them locally
+    // now; the single background refresh/poll fills in the authoritative row.
+    return queryClient.getQueryData<typeof rows>(getGetDerivHistoryQueryKey()) ?? rows;
   };
 
   const waitForEdgeSettlement = async (contractIds: readonly string[]) => {
@@ -1355,7 +1338,8 @@ export default function XTraderPage() {
         count: 1,
       },
     });
-    await claimFeatureRows(edgeClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
+    claimFeatureRows(edgeClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
+    refreshTradeResults();
     setConnectionMessage(null);
     setSessionTrades((value) => value + 1);
     if (!await waitForEdgeSettlement(result.buys.map((buy) => buy.contract_id))) {
@@ -1365,10 +1349,8 @@ export default function XTraderPage() {
         kind: "info",
         text: "Deriv accepted the EDGE trade. Trade history is temporarily unavailable, so automatic entries are paused; Deriv still checks settlement before another trade.",
       });
-      await refreshTradeResults();
       return;
     }
-    await refreshTradeResults();
     } finally {
       edgeActionLockRef.current = false;
       edgeSettlementLockRef.current = false;
@@ -1410,7 +1392,8 @@ export default function XTraderPage() {
         symbol: config.symbol,
       },
     });
-    await claimFeatureRows(edgeClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
+    claimFeatureRows(edgeClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
+    refreshTradeResults();
     setConnectionMessage(null);
     setSessionTrades((value) => value + 2);
     if (!await waitForEdgeSettlement(result.buys.map((buy) => buy.contract_id))) {
@@ -1420,10 +1403,8 @@ export default function XTraderPage() {
         kind: "info",
         text: "Deriv accepted the EDGE dual trade. Trade history is temporarily unavailable, so automatic entries are paused; Deriv still checks settlement before another trade.",
       });
-      await refreshTradeResults();
       return;
     }
-    await refreshTradeResults();
     } finally {
       edgeActionLockRef.current = false;
       edgeSettlementLockRef.current = false;
@@ -2031,7 +2012,8 @@ export default function XTraderPage() {
       result.buys.forEach((buy) => {
         cashGrabOpenContractIdsRef.current.add(buy.contract_id);
       });
-      let afterRows = await claimFeatureRows(cashGrabClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
+      let afterRows = claimFeatureRows(cashGrabClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
+      refreshTradeResults();
       let completed = reconcileCashGrabSession(afterRows);
       applyCashGrabSettlements(completed);
       for (let attempt = 0; attempt < 60 && cashGrabRunningRef.current; attempt += 1) {
@@ -2051,7 +2033,6 @@ export default function XTraderPage() {
         setConnectionMessage({ kind: "info", text: "Cash Grab is still waiting for the current Rise/Fall contract to settle. No next contract will open until it is cleared." });
         return;
       }
-      await refreshTradeResults();
     } catch (error) {
       if (contractConfirmed) {
         setConnectionMessage({
@@ -2464,11 +2445,11 @@ export default function XTraderPage() {
           count,
         },
       });
-      await claimFeatureRows(tradeXClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
+      claimFeatureRows(tradeXClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
       setTradeXTradesSent((value) => value + count);
       setTradeXMessage(null);
       setConnectionMessage(null);
-      await refreshTradeResults();
+      refreshTradeResults();
       return true;
     } catch (error) {
       setTradeXMessage(errorMessage(error));
@@ -2553,10 +2534,10 @@ export default function XTraderPage() {
         },
       });
       if (!result.buys.length) throw new Error("Deriv did not return a confirmed EDGE contract.");
-      await claimFeatureRows(edgeClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
+      claimFeatureRows(edgeClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
       setSessionTrades((value) => value + result.buys.length);
       setConnectionMessage(null);
-      await refreshTradeResults();
+      refreshTradeResults();
     } finally {
       edgeActionLockRef.current = false;
       edgeSettlementLockRef.current = false;
@@ -2615,8 +2596,8 @@ export default function XTraderPage() {
       });
       if (!result.buys.length) throw new Error("Deriv did not return a confirmed Cash Grab contract.");
       setConnectionMessage(null);
-      await claimFeatureRows(cashGrabClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
-      await refreshTradeResults();
+      claimFeatureRows(cashGrabClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
+      refreshTradeResults();
     } finally {
       cashGrabActionLockRef.current = false;
     }
@@ -3089,9 +3070,9 @@ export default function XTraderPage() {
     try {
       const result = await send(contractType);
       if (!result.buys.length) throw new Error("Deriv did not acknowledge any contracts for this setup.");
-      await claimFeatureRows(bulkClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
+      claimFeatureRows(bulkClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
       setConnectionMessage(null);
-      await refreshTradeResults();
+      refreshTradeResults();
       return true;
     } catch (error) {
       setConnectionMessage({ kind: "error", text: errorMessage(error) });
@@ -3183,19 +3164,18 @@ export default function XTraderPage() {
           count: 1,
         },
       });
-      await claimFeatureRows(edgeClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
+      claimFeatureRows(edgeClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
       setConnectionMessage(null);
       setDirection(contractType);
       setSessionTrades((value) => value + 1);
+      refreshTradeResults();
       if (!await waitForEdgeSettlement(result.buys.map((buy) => buy.contract_id))) {
         setConnectionMessage({
           kind: "info",
           text: "Deriv accepted the EDGE trade. Trade history is temporarily unavailable; Deriv still checks settlement before another trade.",
         });
-        await refreshTradeResults();
         return;
       }
-      await refreshTradeResults();
     } catch (error) {
       martingaleWatchRef.current = null;
       setConnectionMessage({ kind: "error", text: errorMessage(error) });
@@ -3246,18 +3226,17 @@ export default function XTraderPage() {
           symbol: configRef.current.symbol,
         },
       });
-      await claimFeatureRows(edgeClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
+      claimFeatureRows(edgeClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
       setConnectionMessage(null);
       setSessionTrades((value) => value + 2);
+      refreshTradeResults();
       if (!await waitForEdgeSettlement(result.buys.map((buy) => buy.contract_id))) {
         setConnectionMessage({
           kind: "info",
           text: "Deriv accepted the EDGE dual trade. Trade history is temporarily unavailable; Deriv still checks settlement before another trade.",
         });
-        await refreshTradeResults();
         return;
       }
-      await refreshTradeResults();
     } catch (error) {
       martingaleWatchRef.current = null;
       setConnectionMessage({ kind: "error", text: errorMessage(error) });

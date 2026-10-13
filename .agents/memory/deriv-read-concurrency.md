@@ -16,3 +16,9 @@ DigitFlip and other trade entry paths must not depend on a successful history re
 **How to apply:** Treat history freshness separately from buy success. Preserve server-side open-contract, account-balance, and live-trading safeguards; post-buy automation may pause if it cannot confirm settlement.
 
 When Deriv rate-limits `profit_table`, return cached history and back off before retrying; repeated UI polling must not become a retry storm or make all feature histories appear blank.
+
+After Deriv acknowledges a buy, claim its returned contract IDs locally and start one non-cancelling refresh for active status, history, and account queries. Do not keep the action locked while repeatedly polling for the history row or schedule a second near-immediate refresh.
+
+**Why:** Delayed duplicate refetches can cancel in-flight polls and create visible update bursts, while waiting for history to catch up makes an already-confirmed order feel delayed.
+
+**How to apply:** Keep the server's portfolio, balance, authorization, and settlement safeguards authoritative; make the browser responsive to the buy acknowledgement, then let one refresh and normal polling reconcile the full history row.
