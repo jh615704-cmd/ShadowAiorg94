@@ -48,6 +48,7 @@ import type {
   DerivTokenInput,
   DerivTokenStatus,
   DerivTokenTestResponse,
+  DerivTradeEventStream,
   ErrorResponse,
   HealthStatus,
   SuccessResponse,
@@ -1549,6 +1550,84 @@ export function useGetDerivStatus<TData = Awaited<ReturnType<typeof getDerivStat
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetDerivStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getStreamDerivTradeUpdatesUrl = () => {
+
+
+
+
+  return `/api/deriv/events`
+}
+
+/**
+ * Sends an initial account-scoped history snapshot followed by trade-update events over Server-Sent Events.
+ * @summary Stream account history snapshots and live trade updates
+ */
+export const streamDerivTradeUpdates = async ( options?: Parameters<typeof customFetch>[1]): Promise<DerivTradeEventStream> => {
+
+  return customFetch<DerivTradeEventStream>(getStreamDerivTradeUpdatesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getStreamDerivTradeUpdatesQueryKey = () => {
+    return [
+    `/api/deriv/events`
+    ] as const;
+    }
+
+
+export const getStreamDerivTradeUpdatesQueryOptions = <TData = Awaited<ReturnType<typeof streamDerivTradeUpdates>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof streamDerivTradeUpdates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getStreamDerivTradeUpdatesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof streamDerivTradeUpdates>>> = ({ signal }) => streamDerivTradeUpdates({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof streamDerivTradeUpdates>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type StreamDerivTradeUpdatesQueryResult = NonNullable<Awaited<ReturnType<typeof streamDerivTradeUpdates>>>
+export type StreamDerivTradeUpdatesQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Stream account history snapshots and live trade updates
+ */
+
+export function useStreamDerivTradeUpdates<TData = Awaited<ReturnType<typeof streamDerivTradeUpdates>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof streamDerivTradeUpdates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getStreamDerivTradeUpdatesQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

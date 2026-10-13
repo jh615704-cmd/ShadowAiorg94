@@ -220,6 +220,7 @@ return {
   lastContract: null as DerivContract | null,
   openContractsReady: false,
   history: [] as DerivHistoryItem[],
+  historyListeners: new Set<(item: DerivHistoryItem) => void>(),
   profitTableReady: false,
   profitTableRefreshAt: 0,
   profitTableRetryAfter: 0,
@@ -348,6 +349,7 @@ export function disposeUser(userId: string) {
   const runtime = runtimes.get(userId);
   if (!runtime) return;
   runtime.shuttingDown = true;
+  runtime.historyListeners.clear();
   for (const waiter of runtime.proposalWaiters.values()) {
     clearTimeout(waiter.timer);
     waiter.reject(new Error("Deriv runtime disposed"));
@@ -593,6 +595,18 @@ function upsertHistory(item: DerivHistoryItem) {
     accountCounts.set(entry.account_id, count + 1);
     return true;
   });
+  const updatedItem = getState().history.find((entry: DerivHistoryItem) =>
+    entry.account_id === item.account_id && entry.contract_id === item.contract_id,
+  );
+  if (updatedItem) {
+    for (const listener of getState().historyListeners) {
+      try {
+        listener(updatedItem);
+      } catch (error) {
+        logger.warn({ err: error, contractId: item.contract_id }, "Deriv trade update listener failed");
+      }
+    }
+  }
 }
 
 function digitStreaksFor(history: number[]) {
@@ -2044,6 +2058,12 @@ export function getHistory() {
   const accountId = getState().account?.id ?? getState().selectedAccountId;
   if (!accountId) return [];
   return getState().history.filter((item: DerivHistoryItem) => item.account_id === accountId);
+}
+
+export function subscribeDerivHistoryUpdates(listener: (item: DerivHistoryItem) => void) {
+  const runtime = getState();
+  runtime.historyListeners.add(listener);
+  return () => runtime.historyListeners.delete(listener);
 }
 
 export function clearHistory() {

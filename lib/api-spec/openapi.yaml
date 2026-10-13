@@ -503,6 +503,31 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DerivStatus"
+  /deriv/events:
+    get:
+      operationId: streamDerivTradeUpdates
+      tags: [deriv]
+      summary: Stream account history snapshots and live trade updates
+      description: Sends an initial account-scoped history snapshot followed by trade-update events over Server-Sent Events.
+      responses:
+        "200":
+          description: Server-Sent Events stream
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/DerivTradeEventStream"
+        "401":
+          description: Access session or Deriv credential required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Trading feature access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /deriv/test-connection:
     post:
       operationId: testDerivConnection
@@ -1448,6 +1473,9 @@ components:
       type: array
       items:
         $ref: "#/components/schemas/DerivHistoryItem"
+    DerivTradeEventStream:
+      type: string
+      description: "SSE frames use event history-snapshot with a DerivHistoryResponse JSON payload, then trade-update with a DerivHistoryItem JSON payload."
     DerivHistoryClearResponse:
       type: object
       required: [ok, message]

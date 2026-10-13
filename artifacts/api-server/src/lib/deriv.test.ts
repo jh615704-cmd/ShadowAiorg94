@@ -657,17 +657,25 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
   });
 
   test("correlates proposal and buy acknowledgements and tracks open history before settlement", async () => {
-    const result = await withSelectedAccount("correlation-user", () => deriv.buyContract({
-      amount: 1,
-      duration: 1,
-      duration_unit: "t",
-      contract_type: "DIGITDIFF",
-      barrier: 5,
-      symbol: "R_75",
-    }));
+    const tradeUpdates: string[] = [];
+    const { result, unsubscribe } = await withSelectedAccount("correlation-user", async () => {
+      const unsubscribe = deriv.subscribeDerivHistoryUpdates((item) => {
+        tradeUpdates.push(`${item.status}:${item.profit}`);
+      });
+      const result = await deriv.buyContract({
+        amount: 1,
+        duration: 1,
+        duration_unit: "t",
+        contract_type: "DIGITDIFF",
+        barrier: 5,
+        symbol: "R_75",
+      });
+      return { result, unsubscribe };
+    });
 
     assert.equal(result.proposal.id, "proposal-1");
     assert.equal(result.buy.contract_id, "900000001");
+    assert.deepEqual(tradeUpdates, ["open:0"]);
     const socket = latestSocket();
     const buyRequest = socket.sent.find((message) => message.buy);
     assert.deepEqual(buyRequest, { buy: "proposal-1", price: 2.25 });
@@ -710,6 +718,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
        assert.equal(deriv.getHistory()[0].status, "open");
        assert.equal(deriv.getHistory()[0].current_value, 2.8);
        assert.equal(deriv.getHistory()[0].profit, 0.55);
+       assert.equal(tradeUpdates.at(-1), "open:0.55");
 
       emitMessage(socket, {
         msg_type: "proposal_open_contract",
@@ -732,6 +741,8 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       assert.equal(deriv.getHistory()[0].profit, 2.25);
        assert.equal(deriv.getHistory()[0].current_value, 4.5);
       assert.equal(deriv.getHistory()[0].sell_time, 1_700_000_001);
+      assert.equal(tradeUpdates.at(-1), "won:2.25");
+      unsubscribe();
     });
   });
 
@@ -905,7 +916,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       })),
       /buy rejected by Deriv/,
     );
-    await inUser("rejected-buy-user", () => {
+    await inUser("rejected-buy-user", async () => {
       assert.equal(latestSocket().sent.filter((message) => message.buy).length, 1);
     });
 
@@ -933,7 +944,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       })),
       /WebSocket disconnected before the contract purchase was acknowledged/,
     );
-    await inUser("disconnected-buy-user", () => {
+    await inUser("disconnected-buy-user", async () => {
       assert.equal(latestSocket().sent.filter((message) => message.buy).length, 1);
     });
 

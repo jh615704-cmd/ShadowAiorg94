@@ -493,6 +493,13 @@ export const GetDerivStatusResponse = zod.object({
 
 
 /**
+ * Sends an initial account-scoped history snapshot followed by trade-update events over Server-Sent Events.
+ * @summary Stream account history snapshots and live trade updates
+ */
+export const StreamDerivTradeUpdatesResponse = zod.unknown()
+
+
+/**
  * @summary Test the Deriv REST and WebSocket connection
  */
 export const testDerivConnectionResponseStatusActiveContractCountMin = 0;

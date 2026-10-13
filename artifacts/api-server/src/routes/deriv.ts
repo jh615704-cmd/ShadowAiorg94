@@ -23,6 +23,7 @@ import {
   getStatus,
   getLiveStatus,
   getHistory,
+  subscribeDerivHistoryUpdates,
   refreshDerivHistory,
   clearHistory,
   requestProposal,
@@ -170,6 +171,62 @@ router.get("/deriv/history", (req, res) => {
        error: missingCredential ? error.message : "Unable to load Deriv history",
        });
      });
+});
+
+router.get("/deriv/events", async (req, res): Promise<void> => {
+  let unsubscribe: (() => void) | null = null;
+  let heartbeat: NodeJS.Timeout | null = null;
+  const cleanup = () => {
+    unsubscribe?.();
+    unsubscribe = null;
+    if (heartbeat) clearInterval(heartbeat);
+    heartbeat = null;
+  };
+  res.on("close", cleanup);
+
+  try {
+    await withCredential(res.locals.userId, async () => {
+      await getLiveStatus();
+      if (res.destroyed) return;
+
+      res.status(200);
+      res.set({
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "Content-Type": "text/event-stream",
+        "X-Accel-Buffering": "no",
+      });
+      res.flushHeaders();
+
+      unsubscribe = subscribeDerivHistoryUpdates((item) => {
+        if (!res.destroyed) {
+          res.write(`event: trade-update\ndata: ${JSON.stringify(item)}\n\n`);
+        }
+      });
+      res.write(`event: history-snapshot\ndata: ${JSON.stringify(getHistory())}\n\n`);
+      heartbeat = setInterval(() => {
+        if (!res.destroyed) res.write(": keep-alive\n\n");
+        void withUser(res.locals.userId, async () => undefined);
+      }, 25_000);
+      heartbeat.unref();
+    }, false);
+  } catch (error) {
+    cleanup();
+    if (res.headersSent) {
+      req.log.warn({ err: error }, "Deriv trade update stream stopped");
+      res.end();
+      return;
+    }
+    if (isCapacityError(error)) {
+      res.status(503).json({ error: error.message });
+      return;
+    }
+    const missingCredential = isCredentialError(error);
+    if (!missingCredential) req.log.error({ err: error }, "Unable to start Deriv trade update stream");
+    res.status(missingCredential ? credentialHttpStatus(error) : 502).json({
+      error: missingCredential ? error.message : "Unable to start Deriv trade update stream",
+    });
+  }
 });
 
 router.delete("/deriv/history", (_req, res) => {

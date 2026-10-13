@@ -35,3 +35,4 @@
 - [Auto Trader guide boundary](auto-trader-guide-boundary.md) — explain controls and observed data without exposing private strategy logic or implying guaranteed outcomes.
 - [Trading feature connection copy](trading-feature-connection-copy.md) — keep credential setup copy in the shared account flow; don't repeat PAT prompts under each new feature.
 - [Auto Trader 2 loss handling](auto-trader-2-loss-recovery.md) — Differs losses require recovery; paired-family losses require the opposite side after fresh evidence analysis.
+- [Auto Trader 2 live trade feedback](auto-trader-2-live-trade-feedback.md) — keep visible trade updates push-driven and settlement waits abortable; don't restore frequent history polling.

@@ -46,6 +46,7 @@ import {
   type AutoTrader2Family,
   type AutoTrader2Signal,
 } from "@/lib/auto-trader-2-strategy";
+import { mergeDerivTradeUpdate, waitForSettledDerivTrade } from "@/lib/deriv-trade-feed";
 import "./auto-trader-2.css";
 
 type Market = { value: string; label: string };
@@ -107,6 +108,7 @@ type Runtime = {
   pendingContractId: string | null;
   pendingContractType: AutoTrader2ContractType | null;
   pendingStake: number | null;
+  settlementAbortController: AbortController | null;
   lastCandidate: AutoTrader2Candidate | null;
 };
 
@@ -115,6 +117,7 @@ const sessionStoragePrefix = "deriv-auto-trader-2-session:";
 const minimumStake = 0.35;
 const delay = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 const isSettled = (status: string) => !["open", "pending", "active"].includes(status.toLowerCase());
+const derivHistoryQueryKey = getGetDerivHistoryQueryKey();
 
 function amountLabel(value: number, currency: string) {
   try {
@@ -133,6 +136,7 @@ function AutoTrader2Content() {
   const [running, setRunning] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [isPlacing, setIsPlacing] = useState(false);
+  const [tradeUpdatesConnected, setTradeUpdatesConnected] = useState(false);
   const [family, setFamily] = useState<AutoTrader2Family>("differs");
   const [contractType, setContractType] = useState<AutoTrader2ContractType>("DIGITDIFF");
   const [barrier, setBarrier] = useState(0);
@@ -182,6 +186,7 @@ function AutoTrader2Content() {
     pendingContractId: null,
     pendingContractType: null,
     pendingStake: null,
+    settlementAbortController: null,
     lastCandidate: null,
   });
   const buyMutation = useBuyDerivContract();
@@ -200,7 +205,7 @@ function AutoTrader2Content() {
     },
   });
   const history = useGetDerivHistory({
-    query: { queryKey: getGetDerivHistoryQueryKey(), enabled: hasAccess && hasToken, retry: false, refetchInterval: hasAccess && hasToken ? 2_000 : false },
+    query: { queryKey: derivHistoryQueryKey, enabled: hasAccess && hasToken, retry: false, refetchInterval: false },
   });
   const statusRef = useRef(status);
   statusRef.current = status;
@@ -233,6 +238,42 @@ function AutoTrader2Content() {
   const observedSampleCount = selectedSignal?.recent_digits?.length ?? 0;
   const aiStatus = !aiEnabled ? "off" : !running ? "paused" : decision.toLowerCase().includes("waiting") ? "waiting" : "working";
   localContractsRef.current = localContracts;
+
+  useEffect(() => {
+    setTradeUpdatesConnected(false);
+    if (!hasAccess || !hasToken || !accountId || !history.isFetched) return;
+
+    const source = new EventSource("/api/deriv/events", { withCredentials: true });
+    source.onopen = () => setTradeUpdatesConnected(true);
+    source.onerror = () => setTradeUpdatesConnected(false);
+    source.addEventListener("history-snapshot", (event) => {
+      try {
+        const rows = JSON.parse((event as MessageEvent<string>).data) as DerivHistoryItem[];
+        if (!Array.isArray(rows)) return;
+        queryClient.setQueryData(
+          derivHistoryQueryKey,
+          rows.filter((row) => row.account_id === accountId),
+        );
+      } catch {
+        // A malformed snapshot is ignored; EventSource will reconnect and send a fresh one.
+      }
+    });
+    source.addEventListener("trade-update", (event) => {
+      try {
+        const row = JSON.parse((event as MessageEvent<string>).data) as DerivHistoryItem;
+        if (!row || row.account_id !== accountId || typeof row.contract_id !== "string") return;
+        queryClient.setQueryData<DerivHistoryItem[]>(
+          derivHistoryQueryKey,
+          (current) => mergeDerivTradeUpdate(current, row),
+        );
+      } catch {
+        // Ignore malformed frames and keep the stream available for later updates.
+      }
+    });
+    return () => {
+      source.close();
+    };
+  }, [accountId, hasAccess, hasToken, history.isFetched, queryClient]);
 
   useEffect(() => {
     if (!message || message.tone === "error") return;
@@ -319,6 +360,7 @@ function AutoTrader2Content() {
   useEffect(() => () => {
     runRef.current.active = false;
     runRef.current.stopRequested = true;
+    runRef.current.settlementAbortController?.abort();
     runRef.current.generation += 1;
     if (clearTimer.current !== null) window.clearTimeout(clearTimer.current);
   }, []);
@@ -459,6 +501,7 @@ function AutoTrader2Content() {
     if (runRef.current.generation !== generation) return;
     runRef.current.active = false;
     runRef.current.stopRequested = true;
+    runRef.current.settlementAbortController?.abort();
     setRunning(false);
     setStopping(false);
     setIsPlacing(false);
@@ -481,7 +524,7 @@ function AutoTrader2Content() {
   };
 
   const start = async () => {
-    if (runRef.current.active || !connected || !accountId || tradeSlotBlocked) return;
+    if (runRef.current.active || !connected || !tradeUpdatesConnected || !accountId || tradeSlotBlocked) return;
     if (sessionLoadingForAccount) {
       setMessage({ tone: "info", text: "Auto Trader 2.0 is still checking this account's saved recovery state. No order was sent." });
       return;
@@ -540,6 +583,7 @@ function AutoTrader2Content() {
       pendingContractId: null,
       pendingContractType: null,
       pendingStake: null,
+      settlementAbortController: null,
       lastCandidate: null,
     };
     setRunContractIds([]);
@@ -727,7 +771,6 @@ function AutoTrader2Content() {
         }
         void Promise.all([
           queryClient.invalidateQueries({ queryKey: getGetDerivStatusQueryKey() }),
-          queryClient.invalidateQueries({ queryKey: getGetDerivHistoryQueryKey() }),
           queryClient.invalidateQueries({ queryKey: getGetDerivAccountsQueryKey() }),
         ]).catch((error: unknown) => console.warn("Could not refresh Auto Trader 2.0 data after an accepted order.", error));
       } catch (error) {
@@ -758,25 +801,21 @@ function AutoTrader2Content() {
         return;
       }
       let settledRow: DerivHistoryItem | null = null;
-      for (let check = 0; check < 90 && runRef.current.active && runRef.current.generation === generation; check += 1) {
-        try {
-          const refreshed = await historyRef.current.refetch();
-          const row = (refreshed.data as DerivHistoryItem[] | undefined)?.find((entry) =>
-            entry.account_id === accountId && entry.contract_id === contractId,
-          );
-          if (row && isSettled(row.status)) {
-            settledRow = row;
-            break;
-          }
-        } catch {
-          finishLoop(generation, {
-            tone: "error",
-            text: "Deriv history could not verify settlement. Auto Trader 2.0 paused without sending another order; check the account history before restarting.",
-          });
-          setDecision("Paused · Deriv settlement could not be verified.");
-          return;
-        }
-        await delay(1_500);
+      const settlementController = new AbortController();
+      runRef.current.settlementAbortController = settlementController;
+      settledRow = await waitForSettledDerivTrade({
+        accountId,
+        contractId,
+        getRows: () => queryClient.getQueryData<DerivHistoryItem[]>(derivHistoryQueryKey),
+        subscribe: (listener) => queryClient.getQueryCache().subscribe((event) => {
+          if (event.query.queryKey[0] === derivHistoryQueryKey[0]) listener();
+        }),
+        isSettled,
+        signal: settlementController.signal,
+        timeoutMs: 135_000,
+      });
+      if (runRef.current.settlementAbortController === settlementController) {
+        runRef.current.settlementAbortController = null;
       }
       if (!runRef.current.active || runRef.current.generation !== generation) return;
       if (!settledRow) {
@@ -951,6 +990,7 @@ function AutoTrader2Content() {
         pendingContractId: null,
         pendingContractType: null,
         pendingStake: null,
+        settlementAbortController: null,
         lastCandidate: null,
       };
       localContractsRef.current = historyLinks;
@@ -997,6 +1037,7 @@ function AutoTrader2Content() {
     setStopping(true);
     runRef.current.stopRequested = true;
     runRef.current.active = false;
+    runRef.current.settlementAbortController?.abort();
     setRunning(false);
     setStopping(false);
     setIsPlacing(orderPending);
@@ -1215,6 +1256,7 @@ function AutoTrader2Content() {
           running={running}
           stopping={stopping}
           connected={connected}
+          tradeUpdatesConnected={tradeUpdatesConnected}
           tradeSlotBlocked={tradeSlotBlocked}
           sessionNeedsReview={
             sessionLoadingForAccount

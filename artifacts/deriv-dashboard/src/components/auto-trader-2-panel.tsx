@@ -28,6 +28,7 @@ export interface AutoTrader2PanelProps {
   running: boolean;
   stopping: boolean;
   connected: boolean;
+  tradeUpdatesConnected: boolean;
   tradeSlotBlocked: boolean;
   sessionNeedsReview: boolean;
   isPlacingTrade: boolean;
@@ -89,6 +90,7 @@ export default function AutoTrader2Panel({
   running,
   stopping,
   connected,
+  tradeUpdatesConnected,
   tradeSlotBlocked,
   sessionNeedsReview,
   isPlacingTrade,
@@ -114,7 +116,7 @@ export default function AutoTrader2Panel({
   onOpenGuide,
 }: AutoTrader2PanelProps) {
   const controlsLocked = running || stopping || isPlacingTrade || clearingHistory;
-  const canStart = connected && !tradeSlotBlocked && !sessionNeedsReview && !controlsLocked && stake > 0;
+  const canStart = connected && tradeUpdatesConnected && !tradeSlotBlocked && !sessionNeedsReview && !controlsLocked && stake > 0;
   const aiLabel = !aiEnabled
     ? "OFF"
     : aiStatus === "waiting"
@@ -296,11 +298,6 @@ export default function AutoTrader2Panel({
         </label>
       </div>
 
-      <div className="at2-session-strip" aria-live="polite">
-        <span>SESSION P/L <strong className={sessionPnl < 0 ? "negative" : "positive"}>{sessionPnl > 0 ? "+" : ""}{amount(sessionPnl, currency)}</strong></span>
-        <span>TRADES <strong>{sessionTradeCount}</strong></span>
-      </div>
-
       <section className="at2-stake-plan" aria-label="Stake progression">
         <div className="at2-field-heading">
           <span className="at2-label">STAKE PLAN</span>
@@ -372,6 +369,7 @@ export default function AutoTrader2Panel({
           </button>
         )}
         {!connected && <p className="at2-action-note" role="status">Connect to Deriv before starting this trading mode.</p>}
+        {connected && !tradeUpdatesConnected && <p className="at2-action-note" role="status">Live trade updates are reconnecting. Wait before starting Auto Trader 2.0.</p>}
         {tradeSlotBlocked && <p className="at2-action-note" role="status">New entries are paused while an open contract is settling.</p>}
         {sessionNeedsReview && <p className="at2-action-note" role="status">Review the saved recovery session before starting or resuming automation.</p>}
         {connected && !tradeSlotBlocked && stake <= 0 && <p className="at2-action-note" role="status">Enter a stake greater than zero to start.</p>}

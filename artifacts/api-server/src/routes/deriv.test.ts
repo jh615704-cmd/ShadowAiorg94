@@ -156,6 +156,7 @@ mock.module("../lib/deriv", {
       observePat();
       return historyRows;
     },
+    subscribeDerivHistoryUpdates: () => () => {},
     refreshDerivHistory: async () => {
       return;
     },

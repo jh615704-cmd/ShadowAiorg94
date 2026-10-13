@@ -636,6 +636,11 @@ export interface DerivHistoryItem {
 
 export type DerivHistoryResponse = DerivHistoryItem[];
 
+/**
+ * SSE frames use event history-snapshot with a DerivHistoryResponse JSON payload, then trade-update with a DerivHistoryItem JSON payload.
+ */
+export type DerivTradeEventStream = string;
+
 export interface DerivHistoryClearResponse {
   ok: boolean;
   message: string;
