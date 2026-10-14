@@ -16,7 +16,7 @@
 - [EDGE visual verification](edge-visual-verification.md) — the access gate blocks authenticated cockpit screenshots unless a valid access-key session is available.
 - [API test runtime](api-test-runtime.md) — run API TypeScript tests through the workspace TSX runner because source imports use bundler-style extensionless paths.
 - [PostgreSQL pool instrumentation](pg-pool-callback-overload.md) — preserve both promise and callback forms; `pool.query()` relies on callback-style `connect()`.
-- [Admin PAT separation](admin-pat-separation.md) — access-key authorization must never inject or fall back to a Replit-secret Deriv PAT; every admin session enters its own PAT.
+- [Admin PAT separation](admin-pat-separation.md) — workspace Deriv secret rotation does not change per-user PATs; verify secret presence and API health, then reconnect expired user credentials.
 - [Runtime health checks](runtime-health-check.md) — restart stale workflows before diagnosing missing bootstrap secrets; API health is served at `/api/healthz`.
 - [Deriv Accumulator contract](deriv-accumulator-contract.md) — Accumulator trades use ACCU with decimal growth_rate in both proposal and buy payloads.
 - [Money Bank JDY gate](money-bank-jdy-gate.md) — evaluate the user-selected setup at entry; alternatives are advisory and must never be auto-applied.
