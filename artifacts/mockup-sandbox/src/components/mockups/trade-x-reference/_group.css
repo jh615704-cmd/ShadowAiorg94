@@ -1,0 +1,28 @@
+:root {
+  --app-font-sans: "Manrope", sans-serif;
+  --app-font-mono: "DM Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #060b15;
+  font-family: var(--app-font-sans);
+}
+
+.trade-x-reference-frame {
+  min-height: 100vh;
+  padding: 24px;
+  background:
+    radial-gradient(ellipse at 50% -15%, rgba(25, 61, 97, 0.32), transparent 52%),
+    linear-gradient(160deg, #07101b, #050911 68%);
+}
+
+@media (max-width: 560px) {
+  .trade-x-reference-frame {
+    padding: 10px;
+  }
+}

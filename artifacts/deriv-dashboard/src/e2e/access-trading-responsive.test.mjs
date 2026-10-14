@@ -30,6 +30,10 @@ const bulkViewports = [
   ...viewports,
   { name: "small-phone", width: 320, height: 740 },
 ];
+const tradeXViewports = [
+  ...viewports,
+  { name: "small-phone", width: 320, height: 740 },
+];
 
 let browser;
 let viteServer;
@@ -449,6 +453,32 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
     assert.equal(await autoTrader2NavLink.locator(".nav-live").count(), 0);
 
     await page.goto(`${baseUrl}/app`);
+    const strategyCards = page.locator(".xt-feature-card");
+    assert.ok(await strategyCards.count() >= 6, "The homepage should render the complete trading feature card set.");
+    for (const viewport of bulkViewports) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await assertNoHorizontalOverflow(page, viewport, "trading feature cards and switches");
+      const cardControls = await strategyCards.evaluateAll((cards) =>
+        cards.map((card) => {
+          const cardRect = card.getBoundingClientRect();
+          const rect = (element) => {
+            const bounds = element.getBoundingClientRect();
+            return { left: bounds.left, right: bounds.right, top: bounds.top, bottom: bounds.bottom, width: bounds.width };
+          };
+          return {
+            card: rect(card),
+            controls: [...card.querySelectorAll("button, .xt-switch")].map(rect),
+          };
+        }),
+      );
+      for (const { card, controls } of cardControls) {
+        assert.ok(card.width > 0 && card.left >= -1 && card.right <= viewport.width + 1, `A trading feature card escaped at ${viewport.name} width.`);
+        for (const control of controls) {
+          assert.ok(control.width > 0, `A feature-card button or switch is hidden at ${viewport.name} width.`);
+          assert.ok(control.left >= card.left - 1 && control.right <= card.right + 1, `A feature-card button or switch overflowed its card at ${viewport.name} width.`);
+        }
+      }
+    }
     const tradeXGrant = page.getByRole("checkbox", { name: "Toggle Trade X" });
     await tradeXGrant.waitFor();
     await page.locator(".xt-feature-card-trade-x .xt-switch").click();
@@ -476,9 +506,23 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
     assert.equal(sharedSurface.distributionBackground, "rgba(0, 0, 0, 0)");
     assert.equal(sharedSurface.rankingBackground, "rgba(0, 0, 0, 0)");
 
-    const digitLabels = await page.locator(".tx-digit-meta, .tx-rank-metrics > small").allTextContents();
-    assert.ok(digitLabels.length > 0);
-    assert.ok(digitLabels.every((label) => !/absent/i.test(label)), "Digit streak captions should show a compact count, not the word absent.");
+    const digitLabels = await page.locator(".tx-digit-meta").allTextContents();
+    assert.equal(digitLabels.length, 10);
+    assert.ok(digitLabels.every((label) => /^\d+×$|^—$/.test(label.trim())), "Digit pills should show a compact numeric streak.");
+    const rankedDetails = await page.locator(".tx-rank-metrics > small").allTextContents();
+    assert.equal(rankedDetails.length, 3);
+    assert.ok(rankedDetails.every((label) => /freq/i.test(label) && /absent/i.test(label)), "Each safest digit card should show its frequency and absence streak.");
+    const selectedDetail = await page.locator(".tx-signal-metrics").innerText();
+    assert.match(selectedDetail, /Frequency/);
+    assert.match(selectedDetail, /Absence streak/);
+    assert.match(selectedDetail, /Occurrences/);
+    assert.match(selectedDetail, /ticks without appearing/);
+    assert.equal(await page.locator(".tx-tap-trade").count(), 3);
+    const visualOrder = await page.locator(".tx-signal-detail, .tx-safe-panel, .tx-distribution-foot").evaluateAll((elements) =>
+      elements.map((element) => element.getBoundingClientRect().top),
+    );
+    assert.equal(visualOrder.length, 3);
+    assert.ok(visualOrder[0] < visualOrder[1] && visualOrder[1] < visualOrder[2], "Safe-entry detail, top-three cards, and the legend should follow the reference order.");
 
     const liveDigit = page.locator(".tx-digit-market").first();
     await liveDigit.waitFor({ state: "visible", timeout: 10_000 });
@@ -496,11 +540,11 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
     assert.equal(liveDigitStyle.insideDashboardTheme, true);
     assert.ok(
       borderChannels && Math.max(...borderChannels) - Math.min(...borderChannels) > 20,
-      `The current market digit should have a distinct accent outline: ${JSON.stringify(liveDigitStyle)}`,
+      `The current market digit should have a distinct cyan treatment: ${JSON.stringify(liveDigitStyle)}`,
     );
     assert.notEqual(liveDigitStyle.boxShadow, "none", "A subtle edge glow should reinforce the current market marker.");
 
-    for (const viewport of viewports) {
+    for (const viewport of tradeXViewports) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await tradeXPanel.scrollIntoViewIfNeeded();
       await analysisSurface.scrollIntoViewIfNeeded();
@@ -517,9 +561,36 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
         await control.waitFor({ state: "visible" });
         await assertWithinViewport(page, selector, viewport.width, `Trade X control ${selector}`);
       }
+      const tapButtonLayout = await page.locator(".tx-tap-trade").evaluateAll((buttons) =>
+        buttons.map((button) => {
+          const rect = button.getBoundingClientRect();
+          return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height };
+        }),
+      );
+      assert.equal(tapButtonLayout.length, 3, "Each of the three safest-digit cards should have its own trade action.");
+      for (const button of tapButtonLayout) {
+        assert.ok(button.width > 0 && button.left >= -1 && button.right <= viewport.width + 1, `A Trade X tap-to-trade button escaped at ${viewport.name} width: ${JSON.stringify(button)}`);
+        assert.ok(button.height >= 40, `A Trade X tap-to-trade target is too short at ${viewport.name} width.`);
+      }
+      const cardLayout = await page.locator(".tx-ranking-list").evaluate((list) => {
+        const cards = [...list.querySelectorAll(".tx-rank-row")];
+        return cards.map((card) => {
+          const rect = card.getBoundingClientRect();
+          return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, height: rect.height };
+        });
+      });
+      assert.equal(cardLayout.length, 3);
+      for (const card of cardLayout) {
+        assert.ok(card.left >= -1 && card.right <= viewport.width + 1, `A safest-digit card escaped at ${viewport.name} width.`);
+        assert.ok(card.height >= 100, `Safest-digit cards should remain spacious enough to use at ${viewport.name} width.`);
+      }
+      if (viewport.width >= 381) {
+        assert.ok(Math.abs(cardLayout[0].top - cardLayout[1].top) <= 1 && Math.abs(cardLayout[1].top - cardLayout[2].top) <= 1, `The three reference cards should stay in one row at ${viewport.name} width.`);
+      }
 
       await page.locator('[data-testid="input-trade-x-stake"]').fill("2.50");
       await page.locator('[data-testid="button-trade-x-digit-4"]').click();
+      assert.equal(await page.locator('[data-testid="button-trade-x-digit-4"] .tx-market-touch').innerText(), "✓");
       await page.locator('[data-testid="button-trade-x-duration-2"]').click();
       assert.equal(await page.locator('[data-testid="button-place-trade-x"]').isEnabled(), true, "The configured Trade X trade button should be usable.");
       const readableStyles = await page.evaluate(() => {
@@ -527,7 +598,7 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
           digit: ".tx-digit-number",
           percentage: ".tx-digit-percent",
           streak: ".tx-digit-meta",
-          rankScore: ".tx-rank-metrics b small",
+          rankScore: ".tx-rank-metrics b",
           rankFrequency: ".tx-rank-metrics > small",
         };
         return Object.fromEntries(Object.entries(selectors).map(([name, selector]) => {
@@ -544,12 +615,13 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
       });
       for (const [name, style] of Object.entries(readableStyles)) {
         assert.ok(style, `${name} should be visible in the Trade X analysis.`);
-        assert.ok(style.fontSize >= (name === "digit" ? 20 : 10), `${name} should remain readable at ${viewport.name} width.`);
+        const minimumFontSize = name === "digit" ? 20 : name === "rankFrequency" ? 8 : name === "rankScore" ? 12 : 10;
+        assert.ok(style.fontSize >= minimumFontSize, `${name} should remain readable at ${viewport.name} width.`);
         assert.equal(style.opacity, 1, `${name} should not be faded at ${viewport.name} width.`);
         assert.equal(style.filter, "none", `${name} should not be blurred at ${viewport.name} width.`);
         assert.equal(style.textShadow, "none", `${name} should not have a soft text shadow at ${viewport.name} width.`);
       }
-      await page.screenshot({ path: path.join(screenshotsDir, `trade-x-${viewport.name}.png`) });
+      await page.screenshot({ path: path.join(screenshotsDir, `trade-x-${viewport.name}.png`), fullPage: true });
     }
 
     await page.goto(`${baseUrl}/auto-trader`);
@@ -788,6 +860,48 @@ async function createMockPage(state, viewport) {
       return;
     }
     await mockApiRequest(route, state, url.pathname, route.request().method());
+  });
+  await context.addInitScript(() => {
+    const openSources = new Set();
+
+    class FixtureEventSource extends EventTarget {
+      static CONNECTING = 0;
+      static OPEN = 1;
+      static CLOSED = 2;
+
+      constructor(url, options = {}) {
+        super();
+        this.url = String(url);
+        this.withCredentials = Boolean(options.withCredentials);
+        this.readyState = FixtureEventSource.CONNECTING;
+        this.onopen = null;
+        this.onerror = null;
+        openSources.add(this);
+        queueMicrotask(() => {
+          if (this.readyState === FixtureEventSource.CLOSED) return;
+          this.readyState = FixtureEventSource.OPEN;
+          this.onopen?.(new Event("open"));
+        });
+      }
+
+      close() {
+        this.readyState = FixtureEventSource.CLOSED;
+        openSources.delete(this);
+      }
+    }
+
+    Object.defineProperty(window, "EventSource", {
+      configurable: true,
+      value: FixtureEventSource,
+    });
+    Object.defineProperty(window, "__dispatchDerivEvent", {
+      configurable: true,
+      value: (name, payload) => {
+        const data = typeof payload === "string" ? payload : JSON.stringify(payload);
+        const event = new MessageEvent(name, { data });
+        for (const source of openSources) source.dispatchEvent(event);
+      },
+    });
   });
   const page = await context.newPage();
   page.on("pageerror", (error) => {

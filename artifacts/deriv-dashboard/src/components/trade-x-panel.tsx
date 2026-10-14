@@ -1,9 +1,7 @@
 import {
-  Activity,
   ChevronRight,
   Gauge,
   GitCompare,
-  Layers3,
   Medal,
   Play,
   RefreshCw,
@@ -127,6 +125,15 @@ export default function TradeXPanel({
   ).slice(0, 3);
   const selectedData = digitData[selectedDigit] ?? digitData[0];
   const currentSymbolLabel = symbols.find((option) => option.value === symbol)?.label ?? symbol;
+  const selectedSafetyScore = analysisTickCount
+    ? clamp(100 - selectedData.percentage * 4 + Math.min(selectedData.streak, 10) * 2, 0, 100)
+    : null;
+  const selectedSafetyBand = selectedSafetyScore === null
+    ? "unknown"
+    : selectedSafetyScore >= 75 ? "safe" : selectedSafetyScore >= 50 ? "moderate" : selectedSafetyScore >= 26 ? "risky" : "avoid";
+  const selectedSafetyLabel = selectedSafetyBand === "unknown"
+    ? "WAITING"
+    : selectedSafetyBand === "safe" ? "SAFE" : selectedSafetyBand === "moderate" ? "MODERATE" : selectedSafetyBand === "risky" ? "RISKY" : "AVOID";
 
   const selectMarketType = (nextMarketType: TradeXMarketType) => {
     onMarketTypeChange(nextMarketType);
@@ -250,8 +257,7 @@ export default function TradeXPanel({
               <div>
                 <span className="tx-index">02</span>
                 <div>
-                    <h3>Digit Distribution &amp; Safe Entry</h3>
-                   <p>Recent frequency and live market touch.</p>
+                  <h3>Digit Distribution &amp; Safe Entry</h3>
                 </div>
               </div>
               <div className="tx-distribution-actions">
@@ -262,18 +268,6 @@ export default function TradeXPanel({
                   <RefreshCw size={15} className={isRefreshingAnalysis ? "tx-spin" : ""} />
                 </button>
               </div>
-            </div>
-            <div className="tx-distribution-readout">
-              <div>
-                <span className="tx-micro-label">SIGNAL SAMPLE</span>
-                <strong data-testid="text-trade-x-sample-count">{analysisTickCount} <small>ticks</small></strong>
-              </div>
-              <div className="tx-readout-divider" />
-              <div>
-                <span className="tx-micro-label">SELECTED DIGIT</span>
-                 <strong data-testid="text-trade-x-selected-digit">{selectedDigit}<small>{manualSelectMode ? "manual entry" : "ranked entry"}</small></strong>
-              </div>
-               <div className="tx-distribution-state"><Activity size={14} />LIVE TICKS</div>
             </div>
             <div className="tx-digit-grid" role="group" aria-label="Select a digit">
               {digitData.map((item) => {
@@ -292,7 +286,7 @@ export default function TradeXPanel({
                       aria-label={`Digit ${item.digit}, ${analysisTickCount ? `${item.percentage.toFixed(1)} percent frequency` : "waiting for frequency sample"}${isMarketDigit ? ", current market digit" : ""}`}
                     data-testid={`button-trade-x-digit-${item.digit}`}
                   >
-                    <span className={`tx-market-touch ${isMarketDigit ? "is-live" : ""}`} aria-hidden="true">{isMarketDigit ? "LIVE" : ""}</span>
+                    <span className={`tx-market-touch ${isMarketDigit || isSelected ? "is-live" : ""}`} aria-hidden="true">{isSelected ? "✓" : ""}</span>
                      <span className="tx-digit-number">{item.digit}</span>
                       <span className="tx-digit-percent">{analysisTickCount ? `${item.percentage.toFixed(1)}%` : "—"}</span>
                        <span className={`tx-digit-meta tx-digit-meta-${item.momentum ?? "flat"}`}>{analysisTickCount ? `${item.streak}×` : "—"}</span>
@@ -300,25 +294,24 @@ export default function TradeXPanel({
                 );
               })}
             </div>
-             <div className="tx-signal-detail">
+              <div className={`tx-signal-detail tx-signal-detail-${selectedSafetyBand}`}>
               <div className="tx-signal-detail-head">
-                  <div><b>DIFFERS {selectedDigit}</b><span className="tx-risk-label">MARKET CONTEXT</span></div>
-                  <strong>{analysisTickCount ? clamp(100 - selectedData.percentage * 4 + Math.min(selectedData.streak, 10) * 2, 0, 100).toFixed(1) : "—"}</strong>
+                   <div><b>DIFFERS {selectedDigit}</b><span className={`tx-risk-label tx-risk-${selectedSafetyBand}`}>{selectedSafetyLabel}</span></div>
+                   <strong>{selectedSafetyScore === null ? "—" : `${selectedSafetyScore.toFixed(0)}%`}</strong>
               </div>
                <div className="tx-signal-metrics">
-                 <span>Safety score <b>{analysisTickCount ? "heuristic only" : "waiting for samples"}</b></span>
-                 <span>Frequency <b>{analysisTickCount ? `${selectedData.percentage.toFixed(1)}%` : "—"} {analysisTickCount > 0 && <small>(avg 10%)</small>}</b></span>
-                  <span>Absence streak <b>{analysisTickCount ? `${selectedData.streak} ticks` : "—"}</b></span>
-                  <span>Sample <b>{analysisTickCount ? `${selectedData.sampleCount ?? analysisTickCount} ticks observed` : "waiting"}</b></span>
+                  <span>Frequency <b>{analysisTickCount ? `${selectedData.percentage.toFixed(1)}%` : "—"} {analysisTickCount > 0 && <small>(avg 10%)</small>}</b></span>
+                  <span>Absence streak <b>{analysisTickCount ? `${selectedData.streak} ticks without appearing` : "—"}</b></span>
                   <span>Occurrences <b>{analysisTickCount ? `${Math.round((selectedData.sampleCount ?? analysisTickCount) * selectedData.percentage / 100)} / ${selectedData.sampleCount ?? analysisTickCount}` : "—"}</b></span>
               </div>
-                <div className="tx-signal-progress"><i style={{ width: `${clamp(selectedData.percentage * 10, 2, 100)}%` }} /></div>
-                   <p>The current selection is available for manual trading at any time.</p>
-            </div>
-            <div className="tx-distribution-foot">
-               <span><i className="tx-key tx-key-ranked" /> ranked differ candidate</span>
-              <span><i className="tx-key tx-key-selected" /> current selection</span>
-               <span className="tx-foot-note">× = consecutive ticks without this digit · descriptive only.</span>
+                <div className="tx-signal-progress" aria-hidden="true"><i style={{ width: `${selectedSafetyScore ?? 0}%` }} /></div>
+                <p>
+                  {selectedSafetyScore === null
+                    ? "Collecting live ticks. Safety context will appear after observations."
+                    : selectedSafetyBand === "risky" || selectedSafetyBand === "avoid"
+                      ? `Risky entry — Digit ${selectedDigit} is close to or above average frequency. Wait for better conditions.`
+                      : "Recent frequency is below average. This descriptive signal is not a prediction of the next tick."}
+                </p>
             </div>
           </section>
 
@@ -327,18 +320,15 @@ export default function TradeXPanel({
               <div>
                 <span className="tx-index">03</span>
                 <div>
-                    <h3>Top 3 Safest DIFFERS Digits</h3>
-                   <p>Lowest observed frequency in the current window.</p>
+                  <h3><Target size={16} aria-hidden="true" />Top 3 Safest DIFFERS Digits</h3>
                 </div>
               </div>
-               <Target size={18} />
             </div>
             <div className="tx-ranking-list">
               {ranking.length ? ranking.map((digit, index) => {
                 const item = digitData[digit] ?? { digit, percentage: 0, streak: 0, momentum: "flat" as const };
                 const safetyScore = clamp(100 - item.percentage * 4 + Math.min(item.streak, 10) * 2, 0, 100);
                 const safetyBand = safetyScore >= 75 ? "safe" : safetyScore >= 50 ? "moderate" : safetyScore >= 26 ? "risky" : "avoid";
-                const safetyLabel = safetyBand === "safe" ? "SAFE" : safetyBand === "moderate" ? "MODERATE" : safetyBand === "risky" ? "RISKY" : "AVOID";
                 return (
                   <div
                     className={`tx-rank-row tx-rank-${safetyBand} ${selectedDigit === digit ? "tx-rank-row-selected" : ""}`}
@@ -350,23 +340,20 @@ export default function TradeXPanel({
                         <span className={`tx-rank-medal medal-${index + 1}`} aria-hidden="true"><Medal size={18} /></span>
                        <span className="tx-rank-digit">{digit}</span>
                      </button>
-                       <span className="tx-rank-metrics"><b>{safetyScore.toFixed(1)} <small>score · {safetyLabel}</small></b><small>{item.percentage.toFixed(1)}% · {item.streak}×</small></span>
+                        <span className="tx-rank-metrics"><b aria-label={`${safetyScore.toFixed(0)}% heuristic safety score`}>{safetyScore.toFixed(0)}%</b><small>{item.percentage.toFixed(1)}% freq · {item.streak}× absent</small></span>
                     <button type="button" className="tx-tap-trade" onClick={() => onTradeSelect(digit)} disabled={disabled || isPlacingTrade || !enabled} data-testid={`button-trade-x-tap-${digit}`}>TAP TO TRADE</button>
                   </div>
                 );
               }) : <div className="tx-rank-empty">Collecting live ticks. Ranked safety scores appear after the first observations.</div>}
             </div>
-            <div className="tx-tick-hint">
-              <Layers3 size={16} />
-               <span><b>Safety score is a heuristic, not win probability or a guarantee.</b> Manual selection sends the exact digit you choose.</span>
-            </div>
-            <div className="tx-selection-line">
-               <span>ACTIVE BARRIER</span>
-              <strong>Digit {selectedDigit}</strong>
-              <span className="tx-selection-separator">/</span>
-              <span>{selectedData.percentage.toFixed(1)}% observed</span>
-            </div>
           </section>
+          <div className="tx-distribution-foot" aria-label="Safety score legend">
+            <span><i className="tx-key tx-key-ranked" /> ≥75 Safe</span>
+            <span><i className="tx-key tx-key-selected" /> 50–74 Moderate</span>
+            <span><i className="tx-key tx-key-risky" /> 25–49 Risky</span>
+            <span><i className="tx-key tx-key-avoid" /> &lt;25 Avoid</span>
+            <span className="tx-foot-note">× = absence streak · score is a heuristic, not win probability.</span>
+          </div>
         </div>
 
         <section className="tx-execution tx-section">
