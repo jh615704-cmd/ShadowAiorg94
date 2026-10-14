@@ -718,7 +718,7 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
   }
 });
 
-test("Bulk Trader digit distribution matches Trade X sizing and fits phone, tablet, and laptop widths", async () => {
+test("Bulk Trader digits match Trade X pill styling and fit phone, tablet, and laptop widths", async () => {
   const state = createState(userSession(["bulk-trader"]));
   state.hasToken = true;
   const { context, page, pageErrors } = await createMockPage(state, bulkViewports[0]);
@@ -762,6 +762,23 @@ test("Bulk Trader digit distribution matches Trade X sizing and fits phone, tabl
       }
       assert.ok(layout.boxes[5].top >= layout.boxes[0].bottom - 1, `Digits 5–9 should wrap cleanly to the next row at ${viewport.name}.`);
 
+      const pillStyles = await distribution.locator(".bulk-digit").evaluateAll((digits) =>
+        digits.map((digit) => {
+          const style = getComputedStyle(digit);
+          const histogram = digit.querySelector("i");
+          return {
+            borderRadius: Number.parseFloat(style.borderRadius),
+            backgroundImage: style.backgroundImage,
+            opacity: Number.parseFloat(style.opacity),
+            histogramDisplay: histogram instanceof HTMLElement ? getComputedStyle(histogram).display : "missing",
+          };
+        }),
+      );
+      assert.ok(pillStyles.every((style) => style.borderRadius >= 30), "Bulk Trader digits should use the same clean pill shape as Trade X.");
+      assert.ok(pillStyles.every((style) => !style.backgroundImage.includes("repeating-linear-gradient")), "Digit pills should use a smooth fill, not a striped texture.");
+      assert.ok(pillStyles.every((style) => style.opacity === 1), "Absence markers should stay readable rather than dimming their digits.");
+      assert.ok(pillStyles.every((style) => style.histogramDisplay === "none"), "Percentages remain the distribution readout; remove the extra bars from the digit pills.");
+
       const streakLabels = await panel.locator(".bulk-digit-streak").allTextContents();
       assert.equal(streakLabels.length, 10);
       assert.ok(streakLabels.every((label) => /^\d+×$|^—$/.test(label.trim())), "Streaks should use the same compact numeric marker as Trade X.");
@@ -793,6 +810,12 @@ test("Bulk Trader digit distribution matches Trade X sizing and fits phone, tabl
       const selectedDigit = page.getByTestId("button-digit-4");
       await selectedDigit.click();
       assert.equal(await selectedDigit.getAttribute("aria-pressed"), "true");
+      const selectedPillStyle = await selectedDigit.evaluate((digit) => {
+        const style = getComputedStyle(digit);
+        return { backgroundImage: style.backgroundImage, selectedMark: getComputedStyle(digit, "::before").content };
+      });
+      assert.ok(selectedPillStyle.backgroundImage.includes("linear-gradient"), "The selected Bulk Trader digit should share Trade X's smooth cyan fill.");
+      assert.match(selectedPillStyle.selectedMark, /✓/, "The selected digit should have a clean, compact selected marker.");
       await page.screenshot({ path: path.join(screenshotsDir, `bulk-trader-${viewport.name}.png`) });
     }
 

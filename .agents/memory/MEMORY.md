@@ -12,7 +12,7 @@
 - [Trade contract selection](trade-contract-selection.md) — Digit Differs uses the selected barrier only at expiry; keep manual, ranked, and open-settlement states explicit.
 - [Auto Trader history clearing](auto-trader-history-clearing.md) — clear only local rows for the selected account; keep Deriv’s authoritative account history intact.
 - [DigitFlip scanner isolation](digitflip-scanner-isolation.md) — parity samples and visible history must remain separate from EDGE and Trade X.
-- [Trade X distribution visual language](trade-x-distribution-style.md) — use one soft navy panel with 5×2 digits, selected-entry context, and three ranked cards with frequency, absence, and trade action.
+- [Trade X and Bulk Trader digit grids](trade-x-distribution-style.md) — reuse Trade X’s smooth navy 5×2 pill treatment in Bulk Trader, preserving its contract markers and readable frequency/streak values.
 - [EDGE visual verification](edge-visual-verification.md) — the access gate blocks authenticated cockpit screenshots unless a valid access-key session is available.
 - [API test runtime](api-test-runtime.md) — run API TypeScript tests through the workspace TSX runner because source imports use bundler-style extensionless paths.
 - [PostgreSQL pool instrumentation](pg-pool-callback-overload.md) — preserve both promise and callback forms; `pool.query()` relies on callback-style `connect()`.

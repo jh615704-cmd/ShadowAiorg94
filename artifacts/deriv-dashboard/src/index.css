@@ -2604,3 +2604,131 @@ body { overflow-x: hidden; }
   .xt-guide-button { min-width: 62px; min-height: 32px; padding: 0 9px; font-size: 9px; }
   .xt-navigation-menu .xt-navigation-link-restricted > span { max-width: 132px; }
 }
+
+/* Keep Bulk Trader's digit distribution in the same smooth pill language as Trade X. */
+.bulk-trader-panel .bulk-trader-tick-card {
+  border-color: rgba(126, 146, 197, .28);
+  border-radius: 15px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(65, 121, 190, .13), transparent 34%),
+    radial-gradient(circle at 96% 100%, rgba(42, 76, 135, .15), transparent 36%),
+    linear-gradient(145deg, rgba(20, 30, 53, .98), rgba(14, 23, 43, .98));
+  box-shadow: 0 12px 26px rgba(0, 0, 0, .16), inset 0 1px 0 rgba(255, 255, 255, .035);
+}
+.bulk-trader-panel .bulk-trader-digit-row {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 9px 8px;
+}
+.bulk-trader-panel .bulk-digit {
+  position: relative;
+  min-width: 0;
+  min-height: 68px;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 4px 7px;
+  overflow: hidden;
+  border: 1px solid rgba(121, 144, 184, .34) !important;
+  border-radius: 999px !important;
+  background: rgba(20, 28, 49, .74) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035) !important;
+  color: #f2f5ff;
+  opacity: 1 !important;
+  text-align: center;
+  touch-action: manipulation;
+  transition: border-color .18s ease, background .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+.bulk-trader-panel .bulk-digit.selected,
+.bulk-trader-panel .bulk-digit.current {
+  border-color: #34d8ff !important;
+  background: linear-gradient(180deg, #19a8df, #168bc5) !important;
+  box-shadow: 0 0 0 2px rgba(82, 207, 255, .18), 0 7px 16px rgba(0, 160, 236, .19) !important;
+  color: #f5fbff;
+}
+.bulk-trader-panel .bulk-digit.selected::before {
+  position: absolute;
+  z-index: 2;
+  top: 4px;
+  right: 7px;
+  color: #fff;
+  content: "✓";
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+}
+.bulk-trader-panel .bulk-digit:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: #68dfff !important;
+  box-shadow: 0 6px 14px rgba(0, 160, 236, .17) !important;
+}
+.bulk-trader-panel .bulk-digit.absent {
+  border-style: solid !important;
+  opacity: 1 !important;
+}
+.bulk-trader-panel .bulk-digit-marker {
+  top: 5px;
+  right: 0;
+  left: 0;
+  z-index: 1;
+  color: #9ab1ca !important;
+  font-size: 8px;
+  line-height: 1;
+  text-align: center;
+}
+.bulk-trader-panel .bulk-digit.selected .bulk-digit-marker,
+.bulk-trader-panel .bulk-digit.current .bulk-digit-marker {
+  color: #dcf7ff !important;
+}
+.bulk-trader-panel .bulk-digit b {
+  z-index: 1;
+  margin: 9px 0 0;
+  color: #f5fbff !important;
+  font-size: 25px !important;
+  font-weight: 900;
+  line-height: .95;
+  -webkit-font-smoothing: antialiased;
+}
+.bulk-trader-panel .bulk-digit > small {
+  z-index: 1;
+  margin-top: 3px;
+  color: #9dfff0 !important;
+  font-size: 12px !important;
+  font-weight: 900;
+  line-height: 1;
+  opacity: 1 !important;
+  text-shadow: none !important;
+  -webkit-font-smoothing: antialiased;
+}
+.bulk-trader-panel .bulk-digit > .bulk-digit-streak {
+  margin-top: 4px;
+  color: #e6efff !important;
+  font-size: 10px !important;
+  font-weight: 800;
+}
+.bulk-trader-panel .bulk-digit > i {
+  display: none !important;
+}
+.bulk-trader-panel .bulk-digit em {
+  top: 6px;
+  right: auto;
+  bottom: auto;
+  left: 7px;
+  width: 5px;
+  height: 5px;
+  border: 0;
+  border-radius: 50%;
+  background: #e8faff;
+  box-shadow: 0 0 0 3px rgba(226, 249, 255, .16);
+  transform: none;
+}
+.bulk-trader-panel .bulk-current-digit {
+  color: #67dfff !important;
+  font-size: 20px !important;
+}
+
+@media (max-width: 520px) {
+  .bulk-trader-panel .bulk-trader-digit-row { gap: 7px 5px; }
+  .bulk-trader-panel .bulk-digit { min-height: 66px; padding-inline: 3px; }
+  .bulk-trader-panel .bulk-digit b { font-size: 22px !important; }
+  .bulk-trader-panel .bulk-digit > small { font-size: 11px !important; }
+  .bulk-trader-panel .bulk-digit > .bulk-digit-streak { font-size: 10px !important; }
+}
