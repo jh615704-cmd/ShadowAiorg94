@@ -93,6 +93,11 @@ import { buildCashGrabBulkBuyPayload } from "../lib/cash-grab-order";
 import { getCashGrabLimitReached } from "../lib/cash-grab-limits";
 import { readCachedHistorySnapshot } from "../lib/history-snapshot";
 import { claimConfirmedDerivContractIds, isDerivHistoryOpen } from "../lib/deriv-history";
+import {
+  validateBulkTraderEntry,
+  validateEdgeEntry,
+  validateTradeXEntry,
+} from "../lib/trade-entry-guards";
 
 const markets = [
   ["R_10", "Volatility 10 Index"], ["R_25", "Volatility 25 Index"],
@@ -1295,6 +1300,18 @@ export default function XTraderPage() {
     try {
     const config = configRef.current;
     const entryDigit = config.barrier;
+    const amount = config.strategy === "martingale" ? nextStakeRef.current : config.stake;
+    const entryError = validateEdgeEntry({
+      stake: amount,
+      balance: currentAccountBalanceRef.current,
+      symbol: config.symbol,
+      supportedSymbols: markets.map(([marketSymbol]) => marketSymbol),
+      contractType: config.direction,
+      barrier: entryDigit,
+      duration: config.duration,
+      count: 1,
+    });
+    if (entryError) throw new Error(entryError);
     // Do not decide the next stake from an older settled result while the
     // immediately preceding contract is still open.
     let historySnapshot = await readHistorySnapshot();
@@ -1314,7 +1331,6 @@ export default function XTraderPage() {
     }
     if (historySnapshot.fresh) queryClient.setQueryData(getGetDerivHistoryQueryKey(), latestRows);
     if (!runningRef.current) return;
-    const amount = config.strategy === "martingale" ? nextStakeRef.current : config.stake;
     const declaredAccountBalance = currentAccountBalance ?? 0;
     if (!Number.isFinite(declaredAccountBalance) || declaredAccountBalance <= 0) {
       throw new Error("Sync the connected account balance before EDGE places another trade.");
@@ -1363,6 +1379,18 @@ export default function XTraderPage() {
     edgeActionLockRef.current = true;
     try {
     const config = configRef.current;
+    const amount = config.strategy === "martingale" ? nextStakeRef.current : config.stake;
+    const entryError = validateEdgeEntry({
+      stake: amount,
+      balance: currentAccountBalanceRef.current,
+      symbol: config.symbol,
+      supportedSymbols: markets.map(([marketSymbol]) => marketSymbol),
+      contractType: "DUAL",
+      barrier: config.barrier,
+      duration: config.duration,
+      count: 2,
+    });
+    if (entryError) throw new Error(entryError);
     let historySnapshot = await readHistorySnapshot();
     let latestRows = historySnapshot.rows;
     for (let attempt = 0; historySnapshot.fresh && latestRows.some((trade) => isDerivHistoryOpen(trade.status)) && attempt < 20; attempt += 1) {
@@ -1374,7 +1402,6 @@ export default function XTraderPage() {
       throw new Error("The previous contract is still settling. EDGE stopped without sending another dual trade.");
     }
     if (!runningRef.current) return;
-    const amount = config.strategy === "martingale" ? nextStakeRef.current : config.stake;
     const declaredAccountBalance = Number(edgeAccountBalance);
     if (!Number.isFinite(declaredAccountBalance) || declaredAccountBalance <= 0) {
       throw new Error("Sync the connected account balance before EDGE places another dual trade.");
@@ -2427,8 +2454,18 @@ export default function XTraderPage() {
       setTradeXMessage("Trade X is outside its configured trading calendar.");
       return false;
     }
-    if (currentAccountBalance == null || config.stake * count > currentAccountBalance) {
-      setTradeXMessage("The selected Trade X batch is higher than the available account balance.");
+    const symbol = symbolOverride ?? config.symbol;
+    const orderError = validateTradeXEntry({
+      stake: config.stake,
+      balance: currentAccountBalance,
+      symbol,
+      supportedSymbols: tradeXSymbols.map((market) => market.value),
+      digit: entryDigit,
+      duration: durationOverride,
+      count,
+    });
+    if (orderError) {
+      setTradeXMessage(orderError);
       return false;
     }
     const latestRows = queryClient.getQueryData<typeof rows>(getGetDerivHistoryQueryKey()) ?? [];
@@ -2441,7 +2478,7 @@ export default function XTraderPage() {
           duration_unit: "t",
           contract_type: "DIGITDIFF",
           barrier: entryDigit,
-          symbol: symbolOverride ?? config.symbol,
+          symbol,
           count,
         },
       });
@@ -2465,8 +2502,8 @@ export default function XTraderPage() {
     if (edgeActionLockRef.current || edgeSettlementLockRef.current || bulkBuyMutation.isPending) {
       throw new Error("EDGE is already sending or settling a contract.");
     }
-    if (!Number.isInteger(duration) || duration < 1 || duration > 6) {
-      throw new Error("Choose an EDGE duration from 1 to 6 ticks first.");
+    if (!Number.isInteger(duration) || duration < 1 || duration > 5) {
+      throw new Error("Choose an EDGE duration from 1 to 5 ticks first.");
     }
     if (!Number.isFinite(stake) || stake < 0.35) throw new Error("Set an EDGE stake of at least 0.35 first.");
     if (!Number.isInteger(barrier) || barrier < 0 || barrier > 9) {
@@ -3051,6 +3088,22 @@ export default function XTraderPage() {
       setConnectionMessage({ kind: "error", text: "Bulk Trader is paused until the selected account balance is available." });
       return false;
     }
+    const barrier = barrierOverride ?? bulkTraderPrediction;
+    const symbol = symbolOverride ?? bulkTraderSymbol;
+    const orderError = validateBulkTraderEntry({
+      stake: bulkTraderStake,
+      balance: currentAccountBalance,
+      symbol,
+      supportedSymbols: tradeXSymbols.map((market) => market.value),
+      contractType,
+      barrier,
+      duration: bulkTraderDuration,
+      count: bulkTraderCount,
+    });
+    if (orderError) {
+      setConnectionMessage({ kind: "error", text: orderError });
+      return false;
+    }
     const beforeRows = queryClient.getQueryData<typeof rows>(getGetDerivHistoryQueryKey()) ?? [];
     if (bulkSessionKnownIdsRef.current == null) {
       bulkSessionKnownIdsRef.current = new Set(beforeRows.map((trade) => trade.contract_id));
@@ -3061,8 +3114,8 @@ export default function XTraderPage() {
         duration: bulkTraderDuration,
         duration_unit: "t",
         contract_type: type,
-        ...(barrierOverride == null ? {} : { barrier: barrierOverride }),
-        symbol: symbolOverride ?? bulkTraderSymbol,
+        barrier,
+        symbol,
         count: bulkTraderCount,
       },
     });

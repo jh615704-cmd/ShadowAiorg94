@@ -118,7 +118,7 @@ export default function EdgeReferencePanel({
     && !running
     && Number.isInteger(duration)
     && duration >= 1
-    && duration <= 6
+    && duration <= 5
     && Number.isFinite(stake)
     && stake >= 0.35
     && Number.isInteger(barrier)
@@ -251,7 +251,7 @@ export default function EdgeReferencePanel({
       <div className="edge-ref-duration-field">
         <span>Duration · ticks</span>
         <div className="edge-ref-duration-options" role="group" aria-label="EDGE duration in ticks">
-          {[1, 2, 3, 4, 5, 6].map((ticks) => (
+          {[1, 2, 3, 4, 5].map((ticks) => (
             <button
               type="button"
               key={ticks}

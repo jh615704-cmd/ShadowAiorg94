@@ -24,6 +24,7 @@ import { DerivAccountSwitcher } from "@/components/deriv-account-switcher";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getAccountBalance } from "@/lib/account-balance";
 import { formatSignedDerivProfit, isDerivHistoryOpen } from "@/lib/deriv-history";
+import { validateAutoTraderBatch } from "@/lib/trade-entry-guards";
 import "./auto-trader.css";
 
 type MarketGroup = "regular" | "jump" | "one-sec";
@@ -328,6 +329,19 @@ function AutoTraderContent() {
     }
     if (!Number.isInteger(duration) || duration < 1 || duration > 5) {
       setMessage({ tone: "error", text: "Enter a whole-number duration from 1 to 5 ticks." });
+      return;
+    }
+    const orderError = validateAutoTraderBatch({
+      stake: amount,
+      balance: accountBalance,
+      symbol: market.symbol,
+      supportedSymbols: markets.map((item) => item.symbol),
+      digit,
+      duration,
+      count,
+    });
+    if (orderError) {
+      setMessage({ tone: "error", text: orderError });
       return;
     }
     setMessage(null);

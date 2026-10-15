@@ -1,0 +1,111 @@
+type SharedEntryInput = {
+  stake: number;
+  balance: number | null | undefined;
+  symbol: string;
+  supportedSymbols: readonly string[];
+};
+
+function validateStakeAndBalance(
+  input: SharedEntryInput,
+  count: number,
+  minimumStake: number,
+  feature: string,
+): string | null {
+  if (!Number.isFinite(input.stake) || input.stake < minimumStake) {
+    return `${feature} stake must be at least ${minimumStake.toFixed(2)}.`;
+  }
+  const roundedStake = Number((Math.round((input.stake + Number.EPSILON) * 100) / 100).toFixed(2));
+  if (!Number.isFinite(input.balance) || (input.balance ?? 0) <= 0) {
+    return `${feature} is paused until the selected account balance is available.`;
+  }
+  if (roundedStake * count > (input.balance ?? 0)) {
+    return `${feature} total stake exceeds the selected account balance.`;
+  }
+  if (!input.supportedSymbols.includes(input.symbol)) {
+    return `${feature} market is not supported.`;
+  }
+  return null;
+}
+
+export function validateAutoTraderBatch(input: SharedEntryInput & {
+  digit: number;
+  duration: number;
+  count: number;
+}): string | null {
+  if (!Number.isInteger(input.digit) || input.digit < 0 || input.digit > 9) {
+    return "Auto Trader needs a Digit Differs barrier from 0 to 9.";
+  }
+  if (!Number.isInteger(input.duration) || input.duration < 1 || input.duration > 5) {
+    return "Auto Trader duration must be from 1 to 5 ticks.";
+  }
+  if (input.count !== 3 && input.count !== 6) {
+    return "Auto Trader batch size must be 3 or 6 contracts.";
+  }
+  return validateStakeAndBalance(input, input.count, 0.01, "Auto Trader");
+}
+
+export function validateTradeXEntry(input: SharedEntryInput & {
+  digit: number;
+  duration: number;
+  count: number;
+}): string | null {
+  if (!Number.isInteger(input.digit) || input.digit < 0 || input.digit > 9) {
+    return "Trade X needs a Digit Differs barrier from 0 to 9.";
+  }
+  if (!Number.isInteger(input.duration) || input.duration < 1 || input.duration > 5) {
+    return "Trade X supports Digit Differs durations from 1 to 5 ticks.";
+  }
+  if (input.count !== 1) {
+    return "Trade X sends one Digit Differs contract per action.";
+  }
+  return validateStakeAndBalance(input, input.count, 0.35, "Trade X");
+}
+
+export function validateBulkTraderEntry(input: SharedEntryInput & {
+  contractType: "DIGITOVER" | "DIGITUNDER" | "DIGITDIFF";
+  barrier: number;
+  duration: number;
+  count: number;
+}): string | null {
+  if (!Number.isInteger(input.barrier) || input.barrier < 0 || input.barrier > 9) {
+    return "Bulk Trader needs a digit barrier from 0 to 9.";
+  }
+  if (input.contractType === "DIGITOVER" && input.barrier === 9) {
+    return "Bulk Trader Over 9 has no winning digit. Choose a barrier from 0 to 8.";
+  }
+  if (input.contractType === "DIGITUNDER" && input.barrier === 0) {
+    return "Bulk Trader Under 0 has no winning digit. Choose a barrier from 1 to 9.";
+  }
+  if (!Number.isInteger(input.duration) || input.duration < 1 || input.duration > 5) {
+    return "Bulk Trader supports digit-contract durations from 1 to 5 ticks.";
+  }
+  if (!Number.isInteger(input.count) || input.count < 1 || input.count > 6) {
+    return "Bulk Trader batch size must be from 1 to 6 contracts.";
+  }
+  return validateStakeAndBalance(input, input.count, 0.35, "Bulk Trader");
+}
+
+export function validateEdgeEntry(input: SharedEntryInput & {
+  contractType: "DIGITOVER" | "DIGITUNDER" | "DUAL";
+  barrier: number;
+  duration: number;
+  count: number;
+}): string | null {
+  if (!Number.isInteger(input.barrier) || input.barrier < 0 || input.barrier > 9) {
+    return "EDGE needs a digit barrier from 0 to 9.";
+  }
+  if (
+    (input.contractType === "DIGITOVER" && input.barrier === 9)
+    || (input.contractType === "DIGITUNDER" && input.barrier === 0)
+    || (input.contractType === "DUAL" && (input.barrier === 0 || input.barrier === 9))
+  ) {
+    return "EDGE cannot use a barrier that leaves one selected contract with no possible winning digit.";
+  }
+  if (!Number.isInteger(input.duration) || input.duration < 1 || input.duration > 5) {
+    return "EDGE duration must be from 1 to 5 ticks.";
+  }
+  if (!Number.isInteger(input.count) || input.count < 1 || input.count > 2) {
+    return "EDGE sends one contract per side, with at most two contracts in a dual entry.";
+  }
+  return validateStakeAndBalance(input, input.count, 0.35, "EDGE");
+}

@@ -14,7 +14,7 @@ import "./trade-x-panel.css";
 export type TradeXMarketType = "volatility" | "jumps";
 export type TradeXTradeType = "DIGITDIFF";
 export type TradeXMomentum = "up" | "down" | "flat";
-export type TradeXDuration = 1 | 2 | 3 | 4 | 5 | 6;
+export type TradeXDuration = 1 | 2 | 3 | 4 | 5;
 export type TradeXTradeCount = 1 | 2 | 3;
 
 export interface TradeXSymbolOption {
@@ -75,7 +75,7 @@ const defaultSymbols: readonly TradeXSymbolOption[] = [
   { value: "JD100", label: "Jump 100", marketType: "jumps" },
 ];
 
-const durations: readonly TradeXDuration[] = [1, 2, 3, 4, 5, 6];
+const durations: readonly TradeXDuration[] = [1, 2, 3, 4, 5];
 
 const clamp = (value: number, minimum: number, maximum: number) =>
   Math.min(maximum, Math.max(minimum, value));
