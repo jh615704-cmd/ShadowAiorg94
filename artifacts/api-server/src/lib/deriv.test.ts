@@ -813,7 +813,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
 
   test("keeps complete trade history isolated and retained per account", async () => {
     const demoRow = {
-      contract_id: "shared-contract-id",
+      contract_id: 4_867_502_908,
       contract_type: "DIGITDIFF",
       underlying_symbol: "R_75",
       buy_price: 2,
@@ -844,7 +844,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       assert.equal(demoHistory[0].account_id, "DOT123");
       assert.equal(demoHistory[0].account_type, "demo");
       assert.equal(demoHistory[0].currency, "USD");
-      assert.equal(demoHistory[0].contract_id, "shared-contract-id");
+      assert.equal(demoHistory[0].contract_id, "4867502908");
       assert.equal(demoHistory[0].sell_time, 1_700_000_002);
 
       mockProfitTableTransactions = [];

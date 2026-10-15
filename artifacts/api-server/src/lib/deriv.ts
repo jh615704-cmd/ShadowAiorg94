@@ -715,8 +715,13 @@ function getDigitPercentages() {
 function normalizeHistory(raw: unknown, fallbackStatus = "closed"): DerivHistoryItem | null {
   if (!raw || typeof raw !== "object" || !getState().account) return null;
   const record = raw as Record<string, unknown>;
-  const contractId = record.contract_id ?? record.id;
-  if (typeof contractId !== "string" || !contractId) return null;
+  const rawContractId = record.contract_id ?? record.id;
+  const contractId = typeof rawContractId === "string"
+    ? rawContractId.trim()
+    : typeof rawContractId === "number" && Number.isSafeInteger(rawContractId)
+      ? String(rawContractId)
+      : "";
+  if (!contractId) return null;
   const isSold = isDerivFlagSet(record.is_sold);
   const reportedStatus = String(record.status ?? (isSold ? "closed" : fallbackStatus));
 
