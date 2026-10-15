@@ -327,6 +327,101 @@ test("Auto Trader Stop returns to Start when no order is pending", async () => {
   }
 });
 
+test("stopped Auto Trader 2.0 uses Start while a contract settles, then allows verified history clearing", async () => {
+  const state = createState(userSession(["auto-trader-2"]));
+  state.hasToken = true;
+  state.activeContractCount = 1;
+  const contractId = "at2-stopped-open";
+  state.history = [{
+    account_id: account.id,
+    contract_id: contractId,
+    contract_type: "DIGITDIFF",
+    symbol: "R_10",
+    account_type: "demo",
+    currency: "USD",
+    barrier: 2,
+    buy_price: 2,
+    current_value: 1,
+    payout: 3.5,
+    profit: 0,
+    status: "open",
+    buy_time: 1_700_000_000,
+    sell_time: null,
+  }];
+  const savedSession = {
+    version: 3,
+    accountId: account.id,
+    phase: "awaiting-settlement",
+    config: {
+      family: "differs",
+      contractType: "DIGITDIFF",
+      barrier: 2,
+      stake: 2,
+      duration: 1,
+      takeProfit: 10,
+      lossLimit: 100,
+      stakeMode: "flat",
+      multiplier: 2,
+      aiEnabled: true,
+      autoSelect: false,
+      selectedMarket: "R_10",
+    },
+    contractIds: [contractId],
+    sessionPnl: 0,
+    currentStake: 2,
+    recoveryTargetPnl: null,
+    lossStreaks: {},
+    pausedContractTypes: [],
+    forcedNextType: null,
+    pendingContractId: contractId,
+    pendingContractType: "DIGITDIFF",
+    pendingStake: 2,
+    updatedAt: 1_700_000_001,
+  };
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.addInitScript(({ historyKey, sessionKey, historyLinks, session }) => {
+      localStorage.setItem(historyKey, JSON.stringify(historyLinks));
+      localStorage.setItem(sessionKey, JSON.stringify(session));
+    }, {
+      historyKey: `deriv-auto-trader-2-contracts:${account.id}`,
+      sessionKey: `deriv-auto-trader-2-session:${account.id}`,
+      historyLinks: [{ id: contractId, placedAt: 1_700_000_000 }],
+      session: savedSession,
+    });
+    await page.goto(`${baseUrl}/auto-trader-2`);
+    await page.getByTestId("auto-trader-2-panel").waitFor();
+    await page.getByText("STOPPED · CONTRACT SETTLING").waitFor();
+
+    const startButton = page.getByTestId("at2-start");
+    assert.equal((await startButton.innerText()).trim(), "START AUTO TRADER 2.0");
+    assert.equal(await startButton.isEnabled(), false, "An accepted open contract must settle before another run.");
+    assert.equal(await page.getByTestId("at2-verify-resume").count(), 0);
+    assert.equal(await page.getByTestId("at2-discard-session").count(), 0);
+
+    const clearButton = page.getByRole("button", { name: "Clear Auto Trader 2.0 History session" });
+    await clearButton.click();
+    await page.getByRole("button", { name: "Tap again to clear Auto Trader 2.0 History session" }).click();
+    await page.getByText(/only after Deriv confirms this account is connected and has no open contract/).waitFor();
+    assert.ok(await page.evaluate((key) => localStorage.getItem(key), `deriv-auto-trader-2-session:${account.id}`));
+
+    state.activeContractCount = 0;
+    state.history = [{ ...state.history[0], current_value: 3.5, profit: 1.5, status: "won", sell_time: 1_700_000_001 }];
+    await clearButton.click();
+    await page.getByRole("button", { name: "Tap again to clear Auto Trader 2.0 History session" }).click();
+    await page.waitForFunction(() => /\bTRADES\s+0\b/.test(document.querySelector(".deriv-history-session")?.innerText ?? ""));
+    assert.equal(await page.evaluate((key) => localStorage.getItem(key), `deriv-auto-trader-2-session:${account.id}`), null);
+    assert.equal(await startButton.isEnabled(), true, "A verified, settled session can be cleared before a new run.");
+    assert.equal(await page.getByTestId("at2-verify-resume").count(), 0);
+    assert.equal(state.history.length, 1, "Clearing local rows must preserve Deriv's authoritative history.");
+    assert.deepEqual(state.tradeRequests, []);
+    assert.deepEqual(state.unhandledApis, []);
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+});
+
 test("Auto Trader shows daily stats and detailed deep-blue trading history", async () => {
   const state = createState(userSession(["auto-trader"]));
   state.hasToken = true;
@@ -836,6 +931,7 @@ function createState(session) {
     tradeRequests: [],
     createdKeyBody: null,
     statusVersion: 0,
+    activeContractCount: 0,
   };
 }
 
@@ -986,7 +1082,7 @@ async function mockApiRequest(route, state, pathname, method) {
   }
   if (pathname === "/api/deriv/status" && method === "GET") {
     state.statusVersion += 1;
-    await fulfillJson(route, makeDerivStatus(state.statusVersion));
+    await fulfillJson(route, makeDerivStatus(state.statusVersion, state.activeContractCount));
     return;
   }
   if (pathname === "/api/deriv/history" && method === "GET") {
@@ -1011,7 +1107,7 @@ async function mockApiRequest(route, state, pathname, method) {
   await fulfillJson(route, { error: "Unhandled fixture API request." }, 501);
 }
 
-function makeDerivStatus(version) {
+function makeDerivStatus(version, activeContractCount = 0) {
   const signals = symbols.map((symbol, index) => {
     const digit = (version + index) % 10;
     return {
@@ -1037,7 +1133,7 @@ function makeDerivStatus(version) {
     connected: true,
     authorized: true,
     account,
-    active_contract_count: 0,
+    active_contract_count: activeContractCount,
     last_digit: version % 10,
     open_contracts_ready: true,
     last_tick: { symbol: "R_75", quote: 100_000 + version, epoch: 1_700_000_000 + version },

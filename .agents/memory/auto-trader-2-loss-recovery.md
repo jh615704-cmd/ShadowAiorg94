@@ -13,7 +13,7 @@ For reload safety, save AI 2 session checkpoints in account-scoped browser stora
 
 **Why:** A browser reload can interrupt an in-flight buy or settlement check; without a durable checkpoint, the bot could forget recovery state or duplicate an order.
 
-**How to apply:** On reload, require a fresh Deriv status and history check, matching account ID, no open contracts, and settled saved contract IDs with a matching session total before resuming. A clean `ready` checkpoint should remain resumable from Start without a manual clear; only awaiting-settlement, interrupted placement, or ambiguous history should keep Start blocked for review.
+**How to apply:** On reload, require a fresh Deriv status and history check, matching account ID, no open contracts, and settled saved contract IDs with a matching session total before continuing. Resolve `ready` and known `awaiting-settlement` checkpoints from the Start button; keep Start blocked only while Deriv reports an open contract, then reconcile history before continuing. Reserve manual review for interrupted placement, ambiguous orders, or invalid saved state. Do not show a separate Verify & Resume or I Checked History action for an ordinary stopped or settling session.
 
 For AI 2 direction and parity, score historical expiry outcomes at the configured contract duration rather than raw one-tick frequencies. Use the stronger confidence filter and sample requirement in the strategy module; if evidence does not qualify, wait without buying. After a loss on Rise/Fall or Even/Odd, require the paired opposite contract type for the next entry. Spend a quiet three-second analysis window, then fetch fresh market status before choosing the next eligible market. If that opposite side does not qualify, keep waiting rather than switching back to the losing side. After three losses on one contract type without a positive settlement, pause that type for the rest of the AI 2 session.
 
@@ -25,4 +25,4 @@ An explicit Stop should mark an AI 2 checkpoint completed only when no buy is pe
 
 **Why:** The user wants Stop to end the automation and allow a fresh run after a clean stop, without treating a live or uncertain Deriv contract as cancelled.
 
-**How to apply:** Keep the saved session review gates intact for `placing`, `manual-review`, and `awaiting-settlement`. Only promote a clean, no-order stop to `completed`; do not close or replay a contract accepted by Deriv.
+**How to apply:** Keep manual-review gates for `placing` and `manual-review`. Only promote a clean, no-order stop to `completed`; do not close or replay a contract accepted by Deriv. When a stopped contract is known and awaiting settlement, show Start as the primary action and describe that Deriv still owns the open contract. Allow clearing the local session/history only after fresh status confirms no open contracts and the saved IDs reconcile as settled in Deriv history.

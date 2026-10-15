@@ -86,10 +86,10 @@ test("version-three checkpoints preserve the forced opposite direction", () => {
   );
 });
 
-test("a clean or completed stop does not require a manual clear before starting again", () => {
+test("ready and settling sessions use Start, while uncertain orders still require review", () => {
   assert.equal(requiresAutoTrader2SessionReview(session()), false);
   assert.equal(requiresAutoTrader2SessionReview(session({ phase: "completed" })), false);
-  assert.equal(requiresAutoTrader2SessionReview(session({ phase: "awaiting-settlement" })), true);
+  assert.equal(requiresAutoTrader2SessionReview(session({ phase: "awaiting-settlement" })), false);
   assert.equal(requiresAutoTrader2SessionReview(session({ phase: "placing" })), true);
   assert.equal(requiresAutoTrader2SessionReview(session({ phase: "manual-review" })), true);
   assert.equal(requiresAutoTrader2SessionReview(null), false);

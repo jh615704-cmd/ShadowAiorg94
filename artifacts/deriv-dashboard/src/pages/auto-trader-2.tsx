@@ -87,7 +87,7 @@ const guideCopy = [
   ["Differs loss response", "After any AI 2 Differs loss settles, recovery selection switches to qualifying Rise/Fall or Even/Odd candidates and can auto-select the strongest market. It remains in recovery until settled session P/L rises above the P/L level from just before that loss.", "Recovery does not guarantee a profit. If no qualifying setup is available, AI 2 waits without placing an order."],
   ["One open contract at a time", "The loop waits for Deriv history to show the active contract as settled before considering another entry. Other open contracts also block new entries.", "If settlement cannot be verified, the loop pauses instead of guessing or sending another order."],
   ["Reading Auto Trader 2.0 History", "History uses the same session summary and trade-row design as Cash Grab. It only includes contracts this feature recorded for the currently selected account.", "The history list is a dashboard view. Deriv remains the authoritative account record."],
-  ["Clear this feature's history", "The two-step clear removes this browser's Auto Trader 2.0 rows and verified local run state. It resets this run's totals and next stake to the configured stake; Deriv account history is unchanged.", "A saved session with an unsettled or uncertain contract must be verified before it can be cleared. Clearing never closes or cancels a contract."],
+  ["Clear this feature's history", "The two-step clear removes this browser's Auto Trader 2.0 rows and verified local run state. It resets this run's totals and next stake to the configured stake; Deriv account history is unchanged.", "If a stopped contract is settling, Deriv must first confirm it is closed. An uncertain order still requires review; clearing never closes or cancels a contract."],
   ["Declines, uncertain orders & reloads", "Deriv may decline unavailable contracts; Auto Trader 2.0 stops after a rejection and never retries an uncertain order. AI 2 saves account-scoped recovery state in this browser. After reload, verify Deriv history and open contracts before resuming; an order that may have been submitted is never resent.", "A saved checkpoint is not proof of settlement. If history, account identity, or open-contract status cannot be confirmed, keep the session paused and review Deriv directly."],
 ] as const;
 
@@ -342,10 +342,10 @@ function AutoTrader2Content() {
           restoredSession.phase === "placing" || restoredSession.phase === "manual-review"
             ? "The last order may have been submitted before the page reloaded. Check Deriv history and open contracts; no order will be resent."
             : restoredSession.phase === "awaiting-settlement"
-              ? "A saved contract still needs a fresh Deriv settlement check before this session can resume."
+              ? "Auto Trader 2.0 is stopped. The accepted contract remains with Deriv; Start will check its settlement before continuing."
               : restoredSession.phase === "completed"
                 ? "This AI 2 session is stopped. Starting again begins a new run; Deriv history remains unchanged."
-                : "A saved AI 2 session was found. Verify its Deriv history and open-contract status before resuming.",
+                : "A saved AI 2 session was found. Press Start to check Deriv history and continue safely.",
         );
       }
     } catch {
@@ -514,7 +514,7 @@ function AutoTrader2Content() {
           saved.phase === "placing" || saved.phase === "manual-review"
             ? "The last order may have been submitted. Check Deriv history and open contracts before deciding what to do; Auto Trader 2.0 will not resend it."
             : saved.phase === "awaiting-settlement"
-              ? "The accepted contract has not been confirmed as settled. Verify it against Deriv history before resuming."
+              ? "The accepted contract is still settling. Press Start after it settles; Auto Trader 2.0 will check Deriv before continuing."
               : saved.phase === "completed"
                 ? "This AI 2 session is stopped. Starting again begins a new run; Deriv history remains unchanged."
                 : "The saved AI 2 session is paused. Verify its Deriv history and open-contract status before resuming.",
@@ -534,7 +534,7 @@ function AutoTrader2Content() {
       return;
     }
     if (savedSession) {
-      if (savedSession.phase === "ready") {
+      if (savedSession.phase === "ready" || savedSession.phase === "awaiting-settlement") {
         await verifyAndResumeSavedSession();
         return;
       }
@@ -548,7 +548,7 @@ function AutoTrader2Content() {
           return;
         }
       } else {
-        setMessage({ tone: "info", text: "This session has an unsettled or uncertain contract. Verify it in Deriv before resuming; no order will be retried." });
+        setMessage({ tone: "info", text: "This session has an uncertain order. Review Deriv history before starting; no order will be retried." });
         return;
       }
     }
@@ -795,7 +795,7 @@ function AutoTrader2Content() {
         if (saved) {
           setSavedSession(saved);
           setSavedSessionNotice(
-            "Deriv accepted this contract before the stop completed. It remains active with Deriv; verify settlement before starting again.",
+            "Auto Trader 2.0 is stopped. The accepted contract remains with Deriv; Start will check its settlement before continuing.",
           );
         }
         return;
@@ -1034,15 +1034,17 @@ function AutoTrader2Content() {
     const orderPending = runRef.current.pendingContractId !== null
       || runRef.current.pendingContractType !== null
       || isPlacing;
+    const orderStillSubmitting = runRef.current.pendingContractId === null
+      && (runRef.current.pendingContractType !== null || isPlacing);
     setStopping(true);
     runRef.current.stopRequested = true;
     runRef.current.active = false;
     runRef.current.settlementAbortController?.abort();
     setRunning(false);
     setStopping(false);
-    setIsPlacing(orderPending);
+    setIsPlacing(orderStillSubmitting);
     setDecision("Stopped · any open contract remains with Deriv and may still settle.");
-    setMessage({ tone: "info", text: "Auto Trader 2.0 stopped. Any accepted open contract remains active at Deriv and may still settle." });
+    setMessage({ tone: "info", text: "Auto Trader 2.0 stopped. Any accepted contract remains with Deriv and will settle; new entries are paused." });
     let saved = readStoredSession();
     if (!orderPending && runRef.current.config?.aiEnabled) {
       persistRunState("completed");
@@ -1054,7 +1056,7 @@ function AutoTrader2Content() {
         saved.phase === "completed"
           ? "Auto Trader 2.0 is stopped. Starting again begins a new run; Deriv history is unchanged."
           : saved.phase === "awaiting-settlement"
-          ? "The stopped session has a contract awaiting settlement. Verify Deriv history before resuming."
+          ? "Auto Trader 2.0 is stopped. Its accepted contract remains with Deriv; Start will check settlement before continuing."
           : saved.phase === "placing" || saved.phase === "manual-review"
             ? "The last order may have been submitted. Check Deriv history and open contracts; no order will be resent."
             : "This saved session needs a fresh Deriv check before it can resume.",
@@ -1085,11 +1087,12 @@ function AutoTrader2Content() {
       || sessionLoadedForAccount !== accountId
       || savedSessionIssue
       || requiresAutoTrader2SessionReview(savedSession)
-      || runRef.current.pendingContractId !== null
+      || (runRef.current.pendingContractId === null
+        && (runRef.current.pendingContractType !== null || isPlacing))
     ) {
       setMessage({
         tone: "info",
-        text: "Verify or review the saved Auto Trader 2.0 session before clearing its run totals. No Deriv contracts or account history were changed.",
+        text: "A pending or uncertain order must be checked before clearing this feature's history. No Deriv contracts or account history were changed.",
       });
       setClearingHistory(false);
       return;
@@ -1110,6 +1113,37 @@ function AutoTrader2Content() {
           text: "Auto Trader 2.0 can reset its run totals only after Deriv confirms this account is connected and has no open contract. No contract was closed or cancelled.",
         });
         return;
+      }
+      if (
+        savedSession
+        && (savedSession.phase === "ready" || savedSession.phase === "awaiting-settlement")
+      ) {
+        const historyResult = await historyRef.current.refetch();
+        if (historyResult.isError || !Array.isArray(historyResult.data)) {
+          setMessage({
+            tone: "info",
+            text: "Deriv history could not verify the saved Auto Trader 2.0 contracts. The history and session were left unchanged.",
+          });
+          return;
+        }
+        const assessment = reconcileAutoTrader2SavedSession({
+          session: savedSession,
+          history: historyResult.data as DerivHistoryItem[],
+          openContracts: {
+            accountId,
+            ready: currentStatus.open_contracts_ready === true,
+            activeCount: currentStatus.active_contract_count ?? 0,
+          },
+        });
+        if (assessment.kind === "waiting" || assessment.kind === "uncertain") {
+          setSavedSession(assessment.session);
+          setSavedSessionNotice(assessment.reason);
+          setMessage({
+            tone: "info",
+            text: `${assessment.reason} The history and session were left unchanged.`,
+          });
+          return;
+        }
       }
       const historyKey = `${storagePrefix}${accountId}`;
       const sessionKey = `${sessionStoragePrefix}${accountId}`;
@@ -1213,17 +1247,24 @@ function AutoTrader2Content() {
 
         {(savedSession || savedSessionIssue || sessionLoadingForAccount) && <section className="at2-session-recovery" role={savedSessionIssue ? "alert" : "status"} aria-label="Saved Auto Trader 2.0 session">
           <div className="at2-session-recovery-copy">
-            <strong>{sessionLoadingForAccount ? "CHECKING SAVED SESSION" : savedSessionIssue ? "RECOVERY CHECK NEEDED" : savedSession?.phase === "completed" ? "SESSION STOPPED" : "SAVED AI 2 SESSION"}</strong>
-            <p>{sessionLoadingForAccount ? "Checking account-scoped browser state before enabling new trades." : savedSessionIssue || savedSessionNotice || "Verify this account's Deriv history and open-contract status before resuming."}</p>
+            <strong>
+              {sessionLoadingForAccount
+                ? "CHECKING SAVED SESSION"
+                : savedSessionIssue
+                  ? "RECOVERY CHECK NEEDED"
+                  : savedSession?.phase === "completed"
+                    ? "SESSION STOPPED"
+                    : savedSession?.phase === "awaiting-settlement"
+                      ? "STOPPED · CONTRACT SETTLING"
+                      : "SAVED AI 2 SESSION"}
+            </strong>
+            <p>{sessionLoadingForAccount ? "Checking account-scoped browser state before enabling new trades." : savedSessionIssue || savedSessionNotice || "Press Start to check this account's Deriv history before continuing."}</p>
             {savedSession && <small>
               {savedSession.contractIds.length} saved contract{savedSession.contractIds.length === 1 ? "" : "s"} · session P/L {amountLabel(savedSession.sessionPnl, currency)}
               {savedSession.recoveryTargetPnl !== null ? ` · Differs recovery target ${amountLabel(savedSession.recoveryTargetPnl, currency)}` : ""}
             </small>}
           </div>
           <div className="at2-session-recovery-actions">
-            {savedSession && (savedSession.phase === "ready" || savedSession.phase === "awaiting-settlement") && <button type="button" onClick={() => void verifyAndResumeSavedSession()} disabled={verifyingSavedSession || !connected} data-testid="at2-verify-resume">
-              {verifyingSavedSession ? "VERIFYING…" : "VERIFY DERIV & RESUME"}
-            </button>}
             {(savedSessionIssue || requiresAutoTrader2SessionReview(savedSession)) && <button type="button" className="secondary" onClick={discardSavedSession} disabled={verifyingSavedSession} data-testid="at2-discard-session">
               {discardSessionArmed ? "CONFIRM CLEAR LOCAL STATE" : "I CHECKED HISTORY"}
             </button>}

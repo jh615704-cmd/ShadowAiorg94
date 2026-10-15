@@ -67,7 +67,7 @@ export type AutoTrader2ResumeAssessment =
   | { kind: "completed"; session: AutoTrader2SavedSession };
 
 export function requiresAutoTrader2SessionReview(session: AutoTrader2SavedSession | null): boolean {
-  return session !== null && session.phase !== "ready" && session.phase !== "completed";
+  return session !== null && (session.phase === "placing" || session.phase === "manual-review");
 }
 
 const contractTypes: AutoTrader2ContractType[] = ["DIGITDIFF", "CALL", "PUT", "DIGITEVEN", "DIGITODD"];
