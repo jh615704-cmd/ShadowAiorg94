@@ -250,9 +250,26 @@ function AutoTrader2Content() {
       try {
         const rows = JSON.parse((event as MessageEvent<string>).data) as DerivHistoryItem[];
         if (!Array.isArray(rows)) return;
-        queryClient.setQueryData(
+        const featureContractIds = new Set(localContractsRef.current.map((entry) => entry.id));
+        queryClient.setQueryData<DerivHistoryItem[]>(
           derivHistoryQueryKey,
-          rows.filter((row) => row.account_id === accountId),
+          (current) => {
+            const merged = new Map(
+              rows
+                .filter((row) => row.account_id === accountId)
+                .map((row) => [row.contract_id, row]),
+            );
+            for (const row of current ?? []) {
+              if (
+                row.account_id === accountId
+                && featureContractIds.has(row.contract_id)
+                && !merged.has(row.contract_id)
+              ) {
+                merged.set(row.contract_id, row);
+              }
+            }
+            return [...merged.values()];
+          },
         );
       } catch {
         // A malformed snapshot is ignored; EventSource will reconnect and send a fresh one.

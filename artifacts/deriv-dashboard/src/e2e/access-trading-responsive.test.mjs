@@ -270,6 +270,13 @@ test("clearing Auto Trader 2.0 resets run metrics and stake without deleting Der
     assert.match(await summary.innerText(), /WON \/ LOST\s+1\s*\/\s*1/);
     assert.match(await summary.innerText(), /STAKED\s+US\$4\.00/);
 
+    await page.evaluate(() => window.__dispatchDerivEvent("history-snapshot", []));
+    await page.waitForTimeout(4_200);
+    assert.equal(await page.locator(".deriv-history-row").count(), 2, "A later account-history snapshot must not blank this feature's saved rows.");
+    const persistentSummary = await summary.innerText();
+    assert.match(persistentSummary, /0\.25/);
+    assert.match(persistentSummary, /TRADES\s+2/);
+
     await page.getByRole("button", { name: "Clear Auto Trader 2.0 History session" }).click();
     assert.equal(await page.getByTestId("at2-message").count(), 0, "The clear confirmation should stay on the button, not create a blocking banner.");
     await page.getByRole("button", { name: "Tap again to clear Auto Trader 2.0 History session" }).click();
