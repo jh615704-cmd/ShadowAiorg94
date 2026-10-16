@@ -22,12 +22,11 @@ type Props = {
   onClear?: () => void;
   sessionPnl?: number;
   sessionTradeCount?: number;
-  currentStake?: number;
   summaryMode?: "full" | "pnl-only" | "hidden";
   actions?: ReactNode;
 };
 
-export default function DerivHistory({ title, strategy, className, rows, sessionRows = rows, currency, clearArmed = false, fading = false, onClear, sessionPnl, sessionTradeCount, currentStake, summaryMode = "full", actions }: Props) {
+export default function DerivHistory({ title, strategy, className, rows, sessionRows = rows, currency, clearArmed = false, fading = false, onClear, sessionPnl, sessionTradeCount, summaryMode = "full", actions }: Props) {
   const [filter, setFilter] = useState<"all" | "win" | "loss">("all");
   const listRef = useRef<HTMLDivElement>(null);
   const [listHeight, setListHeight] = useState<number>();
@@ -86,7 +85,7 @@ export default function DerivHistory({ title, strategy, className, rows, session
           <div><small>TRADES</small><b>{summary.trades}</b></div>
           <div><small>WON / LOST</small><b><span className="positive">{summary.wins}</span><i> / </i><span className="negative">{summary.losses}</span></b></div>
           <div><small>WIN RATE</small><b>{summary.winRate.toFixed(1)}%</b></div>
-          <div><small>STAKED</small><b>{money(currentStake ?? summary.staked, currency)}</b></div>
+          <div><small>STAKED</small><b>{money(summary.staked, currency)}</b></div>
         </div>}
       </div>}
       <nav className="deriv-history-filters" aria-label={`Filter ${title} history`}>
@@ -96,7 +95,7 @@ export default function DerivHistory({ title, strategy, className, rows, session
         {!visible.length ? <div className="deriv-history-empty">{rows.length ? "No contracts match this filter." : "Deriv contracts will appear here when this feature trades."}</div> : visible.map((row) => {
           const view = createDerivHistoryRowView(row, currency);
           return <article className="deriv-history-row" key={`${row.account_id}-${row.contract_id}`} data-testid={`deriv-history-${row.account_id}-${row.contract_id}`}>
-            <div className="deriv-history-rowtop"><span className="deriv-history-feature">{strategy}</span><b className={`deriv-history-profit ${view.profitClass}`}>{view.profit}</b></div>
+            <div className="deriv-history-rowtop"><span className="deriv-history-feature">{strategy}</span><div className="deriv-history-result"><small>{view.resultLabel}</small><b className={`deriv-history-profit ${view.profitClass}`}>{view.profit}</b></div></div>
             <div className="deriv-history-market"><b>{view.symbol}</b><span className="deriv-history-account">{view.account}</span><small className="deriv-history-account-id">{view.accountId}</small><span className={`deriv-history-outcome ${view.outcomeClass}`}>{view.outcome}</span><strong>{view.contract}{view.barrier ? ` · ${view.barrier}` : ""}</strong></div>
             <div className="deriv-history-details">
               {view.details.map((detail) => <span key={detail.label}><small>{detail.label}</small><b>{detail.value}</b></span>)}

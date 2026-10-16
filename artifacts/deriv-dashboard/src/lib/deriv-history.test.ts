@@ -97,6 +97,23 @@ test("USD history profits put the sign before the US$ currency marker", () => {
   assert.equal(createDerivHistoryRowView(row({ profit: -0.35 }), "USD").profit, "-US$0.35");
 });
 
+test("history rows label net profit and show the amount returned after settlement", () => {
+  const won = createDerivHistoryRowView(row({
+    buy_price: 2,
+    current_value: 4,
+    payout: 4,
+    profit: 2,
+    status: "closed",
+  }));
+  assert.equal(won.resultLabel, "NET P/L");
+  assert.equal(won.profit, "+US$2.00");
+  assert.equal(won.details.find((detail) => detail.label === "AMOUNT RETURNED")?.value, "US$4.00");
+
+  const open = createDerivHistoryRowView(row({ status: "open", current_value: 1.25 }));
+  assert.equal(open.resultLabel, "LIVE P/L");
+  assert.equal(open.details.find((detail) => detail.label === "CURRENT VALUE")?.value, "US$1.25");
+});
+
 test("signed daily profit includes the signed currency amount before its outcome label", () => {
   assert.equal(formatSignedDerivProfit(2.5, "USD"), "+US$2.50");
   assert.equal(formatSignedDerivProfit(-0.35, "USD"), "-US$0.35");

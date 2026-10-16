@@ -724,12 +724,19 @@ function normalizeHistory(raw: unknown, fallbackStatus = "closed"): DerivHistory
   if (!contractId) return null;
   const isSold = isDerivFlagSet(record.is_sold);
   const reportedStatus = String(record.status ?? (isSold ? "closed" : fallbackStatus));
-
   const buyPrice = Number(record.buy_price ?? record.purchase_price ?? 0);
-  const profit = Number(record.profit ?? 0);
+  const status = isSold && isOpenContractStatus(reportedStatus) ? "closed" : reportedStatus;
+  const settled = !isOpenContractStatus(status);
+  const returnedValue = record.sell_price == null ? null : Number(record.sell_price);
+  const hasReportedProfit = record.profit != null && Number.isFinite(Number(record.profit));
+  const profit = hasReportedProfit
+    ? Number(record.profit)
+    : settled && returnedValue != null && Number.isFinite(returnedValue) && Number.isFinite(buyPrice)
+      ? Number((returnedValue - buyPrice).toFixed(2))
+      : 0;
   const reportedCurrentValue = record.bid_price
     ?? record.current_value
-    ?? (isSold ? record.sell_price : undefined);
+    ?? (settled ? returnedValue ?? undefined : undefined);
   const currentValue = reportedCurrentValue == null
     ? buyPrice + profit
     : Number(reportedCurrentValue);
@@ -751,7 +758,7 @@ function normalizeHistory(raw: unknown, fallbackStatus = "closed"): DerivHistory
     // Deriv can briefly report status "open" alongside is_sold=true. Trust the
     // explicit sale flag so an already-closed contract cannot hold the user's
     // single-trade slot indefinitely.
-    status: isSold && isOpenContractStatus(reportedStatus) ? "closed" : reportedStatus,
+    status,
     buy_time: record.purchase_time == null && record.buy_time == null
       ? null
       : Number(record.purchase_time ?? record.buy_time),

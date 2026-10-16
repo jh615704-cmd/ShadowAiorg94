@@ -479,7 +479,6 @@ export function MoneyBankPanel({
           rows={visibleTrades}
           sessionRows={visibleSessionRows}
           currency={currency}
-          currentStake={selectedStake}
           clearArmed={historyClearArmed}
           fading={historyFading}
           onClear={clearHistory}

@@ -28,6 +28,7 @@ export type DerivHistoryRowView = {
   barrier: string | null;
   outcome: string;
   outcomeClass: "open" | "loss" | "win" | "even";
+  resultLabel: string;
   profit: string;
   profitClass: "negative" | "positive";
   details: DerivHistoryDetail[];
@@ -129,13 +130,14 @@ export function createDerivHistoryRowView(
     barrier,
     outcome: isOpen ? "OPEN" : row.profit > 0 ? "WON" : row.profit < 0 ? "LOST" : "BREAKEVEN",
     outcomeClass: isOpen ? "open" : row.profit < 0 ? "loss" : row.profit > 0 ? "win" : "even",
+    resultLabel: isOpen ? "LIVE P/L" : "NET P/L",
     profit: formatSignedDerivProfit(row.profit, rowCurrency),
     profitClass: row.profit < 0 ? "negative" : "positive",
     details: [
       { label: "OPENED", value: timeLabel(row.buy_time) },
       { label: "SETTLED", value: timeLabel(row.sell_time) },
       { label: "STAKE", value: money(row.buy_price, rowCurrency) },
-      { label: "CURRENT VALUE", value: money(row.current_value, rowCurrency) },
+      { label: isOpen ? "CURRENT VALUE" : "AMOUNT RETURNED", value: money(row.current_value, rowCurrency) },
       { label: "FULL PAYOUT", value: money(row.payout, rowCurrency) },
       { label: "STATUS", value: row.status },
     ],

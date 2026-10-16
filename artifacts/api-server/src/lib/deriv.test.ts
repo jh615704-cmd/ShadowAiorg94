@@ -818,8 +818,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       underlying_symbol: "R_75",
       buy_price: 2,
       payout: 4,
-      profit: 2,
-      status: "won",
+      sell_price: 4,
       purchase_time: 1_700_000_001,
       sell_time: 1_700_000_002,
       barrier: 5,
@@ -832,8 +831,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       contract_type: "DIGITEVEN",
       buy_price: 3,
       payout: 5,
-      profit: -3,
-      status: "lost",
+      sell_price: 0,
     };
 
     await withSelectedAccount("account-history-user", async () => {
@@ -845,6 +843,9 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       assert.equal(demoHistory[0].account_type, "demo");
       assert.equal(demoHistory[0].currency, "USD");
       assert.equal(demoHistory[0].contract_id, "4867502908");
+      assert.equal(demoHistory[0].profit, 2, "profit-table sell price minus buy price should be the net profit");
+      assert.equal(demoHistory[0].current_value, 4, "settled value should use Deriv's sell price");
+      assert.equal(demoHistory[0].status, "closed");
       assert.equal(demoHistory[0].sell_time, 1_700_000_002);
 
       mockProfitTableTransactions = [];
@@ -859,6 +860,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       assert.equal(realHistory[0].currency, "EUR");
       assert.equal(realHistory[0].contract_type, "DIGITEVEN");
       assert.equal(realHistory[0].profit, -3);
+      assert.equal(realHistory[0].status, "closed");
 
       emitMessage(latestSocket(), {
         msg_type: "profit_table",

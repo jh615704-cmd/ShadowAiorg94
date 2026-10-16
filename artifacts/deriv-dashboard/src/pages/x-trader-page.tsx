@@ -3879,7 +3879,7 @@ export default function XTraderPage() {
             onRefreshAnalysis={refreshAnalysis}
           />
           {tradeXMessage && <p className="tx-parent-message" role="status">{tradeXMessage}</p>}
-          {canViewHistory && <DerivHistory title="Trade X History" strategy="Trade X Strategy" rows={tradeXRows} sessionRows={tradeXVisibleSessionRows} currency={currentAccount?.currency} currentStake={tradeXStake} clearArmed={tradeXHistoryClearArmed} fading={historyFading} onClear={clearTradeXHistory} />}
+          {canViewHistory && <DerivHistory title="Trade X History" strategy="Trade X Strategy" rows={tradeXRows} sessionRows={tradeXVisibleSessionRows} currency={currentAccount?.currency} clearArmed={tradeXHistoryClearArmed} fading={historyFading} onClear={clearTradeXHistory} />}
         </section>
       )}
 

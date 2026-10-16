@@ -241,7 +241,7 @@ test("clearing Auto Trader 2.0 resets run metrics and stake without deleting Der
     },
     contractIds: ["at2-win", "at2-loss"],
     sessionPnl: 0.25,
-    currentStake: 4,
+    currentStake: 5.5,
     recoveryTargetPnl: 0.5,
     lossStreaks: { CALL: 3 },
     pausedContractTypes: ["CALL"],
@@ -268,7 +268,11 @@ test("clearing Auto Trader 2.0 resets run metrics and stake without deleting Der
     assert.match(await summary.innerText(), /0\.25/);
     assert.match(await summary.innerText(), /TRADES\s+2/);
     assert.match(await summary.innerText(), /WON \/ LOST\s+1\s*\/\s*1/);
-    assert.match(await summary.innerText(), /STAKED\s+US\$4\.00/);
+    assert.match(await summary.innerText(), /STAKED\s+US\$4\.00/, "Staked must total the two recorded $2 contracts, not the next stake.");
+    assert.equal(await page.getByText("NET P/L", { exact: true }).count(), 2);
+    assert.equal(await page.getByText("+US$1.50", { exact: true }).count(), 1);
+    assert.equal(await page.getByText("-US$1.25", { exact: true }).count(), 1);
+    assert.equal(await page.getByText("AMOUNT RETURNED", { exact: true }).count(), 2);
 
     await page.evaluate(() => window.__dispatchDerivEvent("history-snapshot", []));
     await page.waitForTimeout(4_200);
@@ -289,7 +293,7 @@ test("clearing Auto Trader 2.0 resets run metrics and stake without deleting Der
     assert.match(clearedSummary, /WON \/ LOST\s+0\s+\/\s+0/);
     assert.match(clearedSummary, /WIN RATE\s+0\.0%/);
     assert.match(clearedSummary, /US\$0\.00/);
-    assert.match(clearedSummary, /STAKED\s+US\$2\.50/);
+    assert.match(clearedSummary, /STAKED\s+US\$0\.00/);
     assert.match(await page.locator(".at2-stake-plan .at2-field-note").innerText(), /USD 2\.50/);
     assert.equal(await page.locator(".deriv-history-row").count(), 0);
     assert.equal(state.history.length, 2, "The local clear must leave Deriv's returned account history unchanged.");

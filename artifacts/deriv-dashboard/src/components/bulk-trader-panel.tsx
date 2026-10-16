@@ -236,7 +236,7 @@ export default function BulkTraderPanel({
         </aside>
       </div>
 
-      <DerivHistory title="Bulk Trader History" strategy="Bulk Trader Strategy" rows={recentTrades} sessionRows={sessionRows} currency={currency} currentStake={stake} clearArmed={clearArmed} fading={historyFading} onClear={onClearHistory} />
+      <DerivHistory title="Bulk Trader History" strategy="Bulk Trader Strategy" rows={recentTrades} sessionRows={sessionRows} currency={currency} clearArmed={clearArmed} fading={historyFading} onClear={onClearHistory} />
     </section>
   );
 }

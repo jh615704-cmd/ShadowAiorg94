@@ -374,7 +374,7 @@ export default function DigitFlipPanel({
         </div>
       </section>
 
-      <DerivHistory className="digit-flip-history" title="DigitFlip History" strategy="DigitFlip Strategy" rows={recentTrades} sessionRows={sessionRows} currency={currency} currentStake={currentStake} clearArmed={clearTradesArmed} fading={historyFading} onClear={onClearTrades} />
+      <DerivHistory className="digit-flip-history" title="DigitFlip History" strategy="DigitFlip Strategy" rows={recentTrades} sessionRows={sessionRows} currency={currency} clearArmed={clearTradesArmed} fading={historyFading} onClear={onClearTrades} />
     </section>
   );
 }

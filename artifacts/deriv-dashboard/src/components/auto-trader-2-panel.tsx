@@ -382,7 +382,6 @@ export default function AutoTrader2Panel({
           rows={recentTrades}
           sessionRows={sessionRows}
           currency={currency}
-          currentStake={nextStake}
           sessionPnl={sessionPnl}
           sessionTradeCount={sessionTradeCount}
           clearArmed={clearArmed}
