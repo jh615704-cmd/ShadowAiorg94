@@ -73,6 +73,7 @@ export const AccessFeature = {
   'digit-flip': 'digit-flip',
   'trade-x': 'trade-x',
   'bulk-trader': 'bulk-trader',
+  'clock-work': 'clock-work',
   'cash-grab': 'cash-grab',
   'money-bank': 'money-bank',
   'jdy-ai-3': 'jdy-ai-3',
@@ -556,6 +557,121 @@ export interface DerivBulkBuyInput {
      * @maximum 6
      */
   count: number;
+}
+
+export type ClockWorkContractOrderDuration = typeof ClockWorkContractOrderDuration[keyof typeof ClockWorkContractOrderDuration];
+
+
+export const ClockWorkContractOrderDuration = {
+  NUMBER_5: 5,
+} as const;
+
+export type ClockWorkContractOrderDurationUnit = typeof ClockWorkContractOrderDurationUnit[keyof typeof ClockWorkContractOrderDurationUnit];
+
+
+export const ClockWorkContractOrderDurationUnit = {
+  t: 't',
+} as const;
+
+export type ClockWorkContractOrderContractType = typeof ClockWorkContractOrderContractType[keyof typeof ClockWorkContractOrderContractType];
+
+
+export const ClockWorkContractOrderContractType = {
+  HIGHER: 'HIGHER',
+  LOWER: 'LOWER',
+} as const;
+
+export interface ClockWorkContractOrder {
+  /**
+     * @minLength 1
+     * @maxLength 32
+     */
+  key: string;
+  /** @minimum 1 */
+  amount: number;
+  duration: ClockWorkContractOrderDuration;
+  duration_unit: ClockWorkContractOrderDurationUnit;
+  contract_type: ClockWorkContractOrderContractType;
+  /**
+     * Signed relative barrier for Offset mode or unsigned absolute price barrier for Absolute mode.
+     * @pattern ^[+-]?[0-9]+([.][0-9]+)?$
+     */
+  barrier: string;
+  symbol: string;
+}
+
+export interface ClockWorkBatchInput {
+  /**
+     * @minItems 1
+     * @maxItems 4
+     */
+  contracts: ClockWorkContractOrder[];
+}
+
+export type ClockWorkQuoteContractType = typeof ClockWorkQuoteContractType[keyof typeof ClockWorkQuoteContractType];
+
+
+export const ClockWorkQuoteContractType = {
+  HIGHER: 'HIGHER',
+  LOWER: 'LOWER',
+} as const;
+
+export interface ClockWorkQuote {
+  key: string;
+  amount: number;
+  contract_type: ClockWorkQuoteContractType;
+  barrier: string;
+  symbol: string;
+  ask_price: number;
+  payout: number;
+  spot: number;
+  /** @nullable */
+  longcode: string | null;
+}
+
+export interface ClockWorkQuoteResponse {
+  quotes: ClockWorkQuote[];
+}
+
+export type ClockWorkCompletedBuyContractType = typeof ClockWorkCompletedBuyContractType[keyof typeof ClockWorkCompletedBuyContractType];
+
+
+export const ClockWorkCompletedBuyContractType = {
+  HIGHER: 'HIGHER',
+  LOWER: 'LOWER',
+} as const;
+
+export interface ClockWorkCompletedBuy {
+  key: string;
+  amount: number;
+  contract_type: ClockWorkCompletedBuyContractType;
+  barrier: string;
+  symbol: string;
+  proposal: DerivProposal;
+  buy: DerivBuy;
+}
+
+export type ClockWorkFailedBuyContractType = typeof ClockWorkFailedBuyContractType[keyof typeof ClockWorkFailedBuyContractType];
+
+
+export const ClockWorkFailedBuyContractType = {
+  HIGHER: 'HIGHER',
+  LOWER: 'LOWER',
+} as const;
+
+export interface ClockWorkFailedBuy {
+  key: string;
+  contract_type: ClockWorkFailedBuyContractType;
+  error: string;
+}
+
+export interface ClockWorkBatchBuyResponse {
+  ok: boolean;
+  message: string;
+  requested_count: number;
+  completed_count: number;
+  contracts: ClockWorkCompletedBuy[];
+  failed: ClockWorkFailedBuy[];
 }
 
 export type DerivDualBuyInputDurationUnit = typeof DerivDualBuyInputDurationUnit[keyof typeof DerivDualBuyInputDurationUnit];

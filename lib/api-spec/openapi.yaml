@@ -740,6 +740,79 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /deriv/clock-work/quotes:
+    post:
+      operationId: quoteClockWorkContracts
+      tags: [deriv]
+      summary: Request live Higher and Lower contract quotes for Clock Work
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClockWorkBatchInput"
+      responses:
+        "200":
+          description: Fresh proposal prices for the requested Clock Work contracts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClockWorkQuoteResponse"
+        "400":
+          description: Invalid Clock Work quote request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Deriv could not return a complete fresh quote set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /deriv/clock-work/buy:
+    post:
+      operationId: buyClockWorkContracts
+      tags: [deriv]
+      summary: Buy one to four Clock Work Higher and Lower contracts
+      description: Requests fresh proposals for every contract before sending any buy. Partial acknowledgements are returned explicitly; an unconfirmed buy must not be replayed until Deriv history is checked.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClockWorkBatchInput"
+      responses:
+        "202":
+          description: Clock Work buy requests sent; inspect completed and failed entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClockWorkBatchBuyResponse"
+        "400":
+          description: Invalid Clock Work buy request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Live trading is disabled or the selected account is not allowed to buy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Another Deriv contract is still open
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Deriv could not return fresh proposals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /deriv/sell:
     post:
       operationId: sellDerivContract
@@ -908,7 +981,7 @@ components:
             $ref: "#/components/schemas/AccessFeature"
     AccessFeature:
       type: string
-      enum: [edge, digit-flip, trade-x, bulk-trader, cash-grab, money-bank, jdy-ai-3, auto-trader, auto-trader-2, settings, history, admin]
+      enum: [edge, digit-flip, trade-x, bulk-trader, clock-work, cash-grab, money-bank, jdy-ai-3, auto-trader, auto-trader-2, settings, history, admin]
     AccessSession:
       type: object
       required: [key_id, key_prefix, label, kind, is_admin, status, max_devices, features, online, last_seen_at]
@@ -1329,6 +1402,123 @@ components:
           type: integer
           minimum: 1
           maximum: 6
+    ClockWorkContractOrder:
+      type: object
+      required: [key, amount, duration, duration_unit, contract_type, barrier, symbol]
+      properties:
+        key:
+          type: string
+          minLength: 1
+          maxLength: 32
+        amount:
+          type: number
+          minimum: 1
+        duration:
+          type: integer
+          enum: [5]
+        duration_unit:
+          type: string
+          enum: [t]
+        contract_type:
+          type: string
+          enum: [HIGHER, LOWER]
+        barrier:
+          type: string
+          pattern: '^[+-]?[0-9]+([.][0-9]+)?$'
+          description: Signed relative barrier for Offset mode or unsigned absolute price barrier for Absolute mode.
+        symbol:
+          type: string
+    ClockWorkBatchInput:
+      type: object
+      required: [contracts]
+      properties:
+        contracts:
+          type: array
+          minItems: 1
+          maxItems: 4
+          items:
+            $ref: "#/components/schemas/ClockWorkContractOrder"
+    ClockWorkQuote:
+      type: object
+      required: [key, amount, contract_type, barrier, symbol, ask_price, payout, spot, longcode]
+      properties:
+        key:
+          type: string
+        amount:
+          type: number
+        contract_type:
+          type: string
+          enum: [HIGHER, LOWER]
+        barrier:
+          type: string
+        symbol:
+          type: string
+        ask_price:
+          type: number
+        payout:
+          type: number
+        spot:
+          type: number
+        longcode:
+          type: ["string", "null"]
+    ClockWorkQuoteResponse:
+      type: object
+      required: [quotes]
+      properties:
+        quotes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClockWorkQuote"
+    ClockWorkCompletedBuy:
+      type: object
+      required: [key, amount, contract_type, barrier, symbol, proposal, buy]
+      properties:
+        key:
+          type: string
+        amount:
+          type: number
+        contract_type:
+          type: string
+          enum: [HIGHER, LOWER]
+        barrier:
+          type: string
+        symbol:
+          type: string
+        proposal:
+          $ref: "#/components/schemas/DerivProposal"
+        buy:
+          $ref: "#/components/schemas/DerivBuy"
+    ClockWorkFailedBuy:
+      type: object
+      required: [key, contract_type, error]
+      properties:
+        key:
+          type: string
+        contract_type:
+          type: string
+          enum: [HIGHER, LOWER]
+        error:
+          type: string
+    ClockWorkBatchBuyResponse:
+      type: object
+      required: [ok, message, requested_count, completed_count, contracts, failed]
+      properties:
+        ok:
+          type: boolean
+        message:
+          type: string
+        requested_count:
+          type: integer
+        completed_count:
+          type: integer
+        contracts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClockWorkCompletedBuy"
+        failed:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClockWorkFailedBuy"
     DerivDualBuyInput:
       type: object
       required: [amount, duration, duration_unit, barrier]

@@ -3,6 +3,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetAccessSessionQueryKey,
   ApiTransportError,
+  type ClockWorkContractOrder,
+  useQuoteClockWorkContracts,
+  useBuyClockWorkContracts,
   useGetAccessSession,
   useDeleteDerivToken,
   useGetDerivAccounts,
@@ -28,7 +31,7 @@ import { DerivAccountSwitcher } from "@/components/deriv-account-switcher";
 import { useAccessSessionLogout } from "@/hooks/use-access-session-logout";
 import {
   Activity, BookOpen, Bot, ChevronDown, ChevronLeft, ChevronRight, Gauge, Link2, Loader2,
-  LogOut, Menu, Pause, Play, Power, RefreshCw, RotateCcw, Settings, ShieldAlert, ShieldCheck, X, Zap,
+  Clock3, LogOut, Menu, Pause, Play, Power, RefreshCw, RotateCcw, Settings, ShieldAlert, ShieldCheck, X, Zap,
 } from "lucide-react";
 import {
   chooseBestDigitSignal,
@@ -87,8 +90,17 @@ import CashGrabPanel, {
   type CashGrabStakeMode,
   type CashGrabTrade,
 } from "../components/cash-grab-panel";
+import ClockWorkPanel from "../components/clock-work-panel";
+import type { ClockWorkPanelProps } from "../components/clock-work-panel";
 import DerivHistory from "../components/deriv-history";
 import { getAccountBalance } from "../lib/account-balance";
+import {
+  estimateClockWorkBarrierRates,
+  formatClockWorkBarrier,
+  getClockWorkFourSequence,
+  getClockWorkPushDirection,
+  getClockWorkRecentMoves,
+} from "../lib/clock-work-logic";
 import { buildCashGrabBulkBuyPayload } from "../lib/cash-grab-order";
 import { getCashGrabLimitReached } from "../lib/cash-grab-limits";
 import { readCachedHistorySnapshot } from "../lib/history-snapshot";
@@ -154,6 +166,29 @@ const tradeXGuidePages = [
   { title: "Reset the sample", body: "Refreshing analysis starts a new local sample window so the distribution reflects the next stream of ticks.", points: ["Wait for enough observations after refresh.", "Avoid making decisions from an empty sample.", "The account and contract history remain unchanged."] },
   { title: "Safe first session", body: "Start with one small demo Digit Differs contract, a fresh sample, and manual selection.", points: ["Confirm market, digit, duration, and stake.", "Watch the returned row settle.", "Stop if the signal no longer matches your plan."] },
   { title: "Final checklist", body: "Trade X is ready when the market, sample, digit, duration, stake, and automation state are all intentional.", points: ["Start small.", "Check the selected account before trading.", "Use observed data as context, never as certainty."] },
+] as const;
+
+const clockWorkGuidePages = [
+  { title: "Welcome to Clock Work", body: "Clock Work is the Hybrid Analysis workspace for five-tick Higher and Lower contracts. Its live chart, recent moves, and barrier estimates describe the selected market and do not predict or guarantee the next result.", points: ["Start on a demo account while learning.", "The feature uses the market, barriers, and stakes shown on screen.", "Only one trading feature can be active at a time."] },
+  { title: "Connect and choose an account", body: "Connect a Deriv account and confirm which account is selected before enabling Clock Work. Real-account orders are still subject to the server's live-trading and balance checks.", points: ["The selected account receives the orders.", "A disconnected or unsettled account blocks new entries.", "Use demo mode to learn the controls."] },
+  { title: "Select the market", body: "Market selects the live synthetic index used for ticks, the price chart, estimates, quotes, and contracts.", points: ["Switching markets changes the live data source.", "Wait for fresh ticks and quotes after changing markets.", "Past market movement does not guarantee future movement."] },
+  { title: "Five-tick duration", body: "Every Clock Work Higher or Lower contract uses a fixed duration of five ticks.", points: ["The display shows 5; there is no duration selector.", "The selected market determines the tick stream.", "A short duration can still settle at a loss."] },
+  { title: "Higher and Lower stakes", body: "Higher Stake and Lower Stake set the amount for their matching manual and paired contracts. The four-trade action uses its separate H1, L1, L2, and H2 stake fields.", points: ["Each stake must be at least 1.00.", "The account balance must cover the complete batch.", "The server rechecks the balance before submitting orders."] },
+  { title: "Offset barriers", body: "Offset uses a signed distance from the contract's entry price. Higher uses a positive offset and Lower uses a negative offset.", points: ["The displayed pad values are selectable barriers.", "Changing the market can change the entry price, not the selected offset.", "Deriv receives the signed relative barrier."] },
+  { title: "Absolute barriers", body: "Absolute converts the selected distance into a price level using the current quote when a fresh proposal is requested.", points: ["The level is recalculated from the live quote before an order.", "Higher and Lower levels remain separate selections.", "A new quote can change the displayed absolute level."] },
+  { title: "Half Barrier", body: "Half Barrier cuts the selected distance in half. In Absolute mode this means halfway between the current quote and the selected level, not half of the instrument's entire price.", points: ["The chart uses the effective, halved level.", "The order request uses the same effective barrier.", "Turn it off to restore the full selected distance."] },
+  { title: "Read the barrier pads", body: "The two barrier pads select Higher and Lower independently. Their labels and the chart show the effective levels used by the current mode.", points: ["Higher and Lower may use different offsets.", "The selections are sent with their matching contract types.", "Review the values again after changing mode or market."] },
+  { title: "Price Chart", body: "The chart plots recent live quotes and overlays the selected Higher and Lower barrier levels.", points: ["The chart needs at least two live quotes.", "Price history is descriptive and does not guarantee a settlement.", "The chart follows the selected market."] },
+  { title: "Higher and Lower percentages", body: "The percentages estimate how often recent five-tick windows crossed the selected barrier levels, using the available quote sample.", points: ["Small samples can change quickly.", "The estimate is not Deriv's contract probability.", "A percentage is not a promised return."] },
+  { title: "Recent Moves", body: "Recent Moves labels each observed quote change as H for Higher or L for Lower.", points: ["Moves come from consecutive live quotes.", "Flat or unavailable ticks do not create a direction.", "A run of H or L marks is not a reliable forecast."] },
+  { title: "Prediction and lean strength", body: "Prediction shows which selected barrier has the stronger estimated hit rate in the current sample. Lean strength shows that side's measured percentage.", points: ["Not enough data leaves the prediction blank.", "The stronger side can change as quotes arrive.", "Lean strength is an observation, not certainty."] },
+  { title: "Manual Higher and Lower", body: "The green Higher and red Lower buttons each send one five-tick contract using its own selected barrier, stake, and a fresh Deriv proposal.", points: ["The quote panel shows Deriv's current payout and estimated profit.", "Quotes can change before the order is accepted.", "Check the account, market, stake, and barrier before placing."] },
+  { title: "Higher & Lower together", body: "Higher & Lower submits one Higher and one Lower contract using their respective stakes and barriers.", points: ["Both proposals are requested before any buy is sent.", "The pair can have a partial or unconfirmed result; check history.", "The last contract to settle is not guaranteed to win or cover losses."] },
+  { title: "All 4 Trades", body: "All 4 Trades submits H1, L1, L2, and H2 contracts in alternating Higher and Lower order, starting with the side that currently has the stronger lean.", points: ["Each leg has its own selected stake and barrier.", "All four quotes must be available before the batch is sent.", "The order sequence cannot guarantee the final settlement outcome."] },
+  { title: "Auto Trading modes", body: "Choose H&L (2) for a paired batch, A to select the side with the stronger measured rate, or All (4) for four alternating contracts.", points: ["Automation also requires a minimum lean selection.", "The switch starts and stops new automatic entries.", "An open Deriv contract pauses the next entry."] },
+  { title: "Minimum lean", body: "Minimum lean sets the observed percentage threshold required before an automatic batch can start.", points: ["Select one of 50%, 67%, 78%, 88%, 92%, or 95%.", "Higher thresholds can mean fewer entries.", "Passing the threshold does not make a contract certain to win."] },
+  { title: "Aggressive Auto Trading", body: "Aggressive mode uses a selected share of the current account balance and waits for five consecutive ticks in one direction before considering an entry.", points: ["Choose 5%, 15%, 25%, or 50%.", "The total planned amount is divided across the selected mode's contracts.", "The balance and minimum stake checks can pause an entry."] },
+  { title: "History and risk", body: "Clock Work History shows contracts submitted by this feature, with actual settled profit, result, win rate, and recorded stake. Open contracts remain unsettled until Deriv reports a final result.", points: ["Clearing hides Clock Work rows from this dashboard only; it does not delete Deriv's account history.", "Paired trades and four-trade batches can lose money.", "No sequence can guarantee a final winning contract or recovery."] },
 ] as const;
 
 const digitFlipGuidePages = [
@@ -299,11 +334,12 @@ export default function XTraderPage() {
   const canUseDigitFlip = isAdmin || accessSession.data?.features.includes("digit-flip") === true;
   const canUseTradeX = isAdmin || accessSession.data?.features.includes("trade-x") === true;
   const canUseBulkTrader = isAdmin || accessSession.data?.features.includes("bulk-trader") === true;
+  const canUseClockWork = isAdmin || accessSession.data?.features.includes("clock-work") === true;
   const canUseCashGrab = isAdmin || accessSession.data?.features.includes("cash-grab") === true;
   const canUseMoneyBank = isAdmin || accessSession.data?.features.includes("money-bank") === true;
   const canUseAutoTrader = isAdmin || accessSession.data?.features.includes("auto-trader") === true;
   const canUseAutoTrader2 = isAdmin || accessSession.data?.features.includes("auto-trader-2") === true;
-  const canUseDeriv = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseCashGrab || canUseMoneyBank || canUseAutoTrader || canUseAutoTrader2;
+  const canUseDeriv = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseClockWork || canUseCashGrab || canUseMoneyBank || canUseAutoTrader || canUseAutoTrader2;
   const canViewHistory = canUseDeriv || accessSession.data?.features.includes("history") === true;
   const tokenStatus = useGetDerivTokenStatus({ query: { enabled: canUseDeriv, retry: false, queryKey: getGetDerivTokenStatusQueryKey() } });
   const connectedToken = Boolean(tokenStatus.data?.has_token);
@@ -324,6 +360,8 @@ export default function XTraderPage() {
   const moneyBankBuyMutation = useBuyDerivContract();
   const moneyBankSellMutation = useSellDerivContract();
   const cashGrabSellMutation = useSellDerivContract();
+  const clockWorkQuoteMutation = useQuoteClockWorkContracts();
+  const clockWorkBuyMutation = useBuyClockWorkContracts();
 
   const [pat, setPat] = useState("");
   const [symbol, setSymbol] = useState("R_75");
@@ -381,6 +419,32 @@ export default function XTraderPage() {
   const [bulkTraderAutoSelectBest, setBulkTraderAutoSelectBest] = useState(false);
   const [bulkTraderHiddenHistoryIds, setBulkTraderHiddenHistoryIds] = useState<Set<string>>(new Set());
   const [cashGrabEnabled, setCashGrabEnabled] = useState(false);
+  const [clockWorkEnabled, setClockWorkEnabled] = useState(false);
+  const [clockWorkSymbol, setClockWorkSymbol] = useState("R_75");
+  const [clockWorkBarrierMode, setClockWorkBarrierMode] = useState<"offset" | "absolute">("offset");
+  const [clockWorkHalfBarrier, setClockWorkHalfBarrier] = useState(false);
+  const [clockWorkHigherBarrier, setClockWorkHigherBarrier] = useState(.12);
+  const [clockWorkLowerBarrier, setClockWorkLowerBarrier] = useState(-.12);
+  const [clockWorkHigherStake, setClockWorkHigherStake] = useState(1);
+  const [clockWorkLowerStake, setClockWorkLowerStake] = useState(1);
+  const [clockWorkH1Stake, setClockWorkH1Stake] = useState(1);
+  const [clockWorkL1Stake, setClockWorkL1Stake] = useState(1);
+  const [clockWorkL2Stake, setClockWorkL2Stake] = useState(1);
+  const [clockWorkH2Stake, setClockWorkH2Stake] = useState(1);
+  const [clockWorkQuotes, setClockWorkQuotes] = useState<{ pair: { higher: { payout: number; ask_price: number; spot: number } | null; lower: { payout: number; ask_price: number; spot: number } | null }; allFour: { payout: number; ask_price: number; spot: number } | null }>({
+    pair: { higher: null, lower: null },
+    allFour: null,
+  });
+  const [clockWorkStatusMessage, setClockWorkStatusMessage] = useState<string | null>(null);
+  const [clockWorkBusy, setClockWorkBusy] = useState(false);
+  const [clockWorkAutoMode, setClockWorkAutoMode] = useState<ClockWorkPanelProps["autoMode"]>(null);
+  const [clockWorkMinLean, setClockWorkMinLean] = useState<number | null>(null);
+  const [clockWorkAutoEnabled, setClockWorkAutoEnabled] = useState(false);
+  const [clockWorkAggressiveEnabled, setClockWorkAggressiveEnabled] = useState(false);
+  const [clockWorkAggressivePercent, setClockWorkAggressivePercent] = useState(5);
+  const [clockWorkAutoStatus, setClockWorkAutoStatus] = useState("Select a mode and minimum lean to begin.");
+  const [clockWorkHistoryClearArmed, setClockWorkHistoryClearArmed] = useState(false);
+  const [clockWorkHiddenHistoryIds, setClockWorkHiddenHistoryIds] = useState<Set<string>>(new Set());
   const [cashGrabDirection, setCashGrabDirection] = useState<CashGrabDirection>("CALL");
   const [cashGrabSymbol, setCashGrabSymbol] = useState("R_75");
   const [cashGrabStake, setCashGrabStake] = useState(.35);
@@ -427,7 +491,7 @@ export default function XTraderPage() {
   const [guideOpen, setGuideOpen] = useState(false);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [guidePage, setGuidePage] = useState(0);
-  const [guideMode, setGuideMode] = useState<"edge" | "trade-x" | "digit-flip" | "bulk-trader" | "money-bank" | "cash-grab">("edge");
+  const [guideMode, setGuideMode] = useState<"edge" | "trade-x" | "digit-flip" | "bulk-trader" | "money-bank" | "cash-grab" | "clock-work">("edge");
   const [clearHistoryArmed, setClearHistoryArmed] = useState(false);
   const [historyFading, setHistoryFading] = useState(false);
   const [tradeXHistoryClearArmed, setTradeXHistoryClearArmed] = useState(false);
@@ -525,6 +589,14 @@ export default function XTraderPage() {
   const digitFlipClaimedHistoryIdsRef = useRef(new Set<string>());
   const bulkClaimedHistoryIdsRef = useRef(new Set<string>());
   const cashGrabClaimedHistoryIdsRef = useRef(new Set<string>());
+  const clockWorkClaimedHistoryIdsRef = useRef(new Set<string>());
+  const clockWorkActionLockRef = useRef(false);
+  const clockWorkAutoAttemptAtRef = useRef(0);
+  const clockWorkAutomationRef = useRef<(() => void) | null>(null);
+  const clockWorkQuoteOrderBuilderRef = useRef<(() => {
+    pair: ClockWorkContractOrder[];
+    allFour: ClockWorkContractOrder[];
+  }) | null>(null);
   const configRef = useRef({
     direction,
     barrier,
@@ -594,6 +666,7 @@ export default function XTraderPage() {
     || trade.contract_type === "PUT"
   ));
   const moneyBankAllRows = rows.filter((trade) => trade.contract_type === "ACCU");
+  const clockWorkAllRows = rows.filter((trade) => trade.contract_type === "HIGHER" || trade.contract_type === "LOWER");
   const cashGrabAllRows = rows.filter((trade) => (
     trade.contract_type === "DIGITEVEN"
     || trade.contract_type === "DIGITODD"
@@ -613,7 +686,150 @@ export default function XTraderPage() {
   const cashGrabRows = cashGrabAllRows
     .filter((trade) => !cashGrabHiddenHistoryIds.has(trade.contract_id))
     .filter((trade) => cashGrabClaimedHistoryIdsRef.current.has(trade.contract_id)) as CashGrabTrade[];
+  const clockWorkSessionRows = clockWorkAllRows.filter((trade) => clockWorkClaimedHistoryIdsRef.current.has(trade.contract_id));
+  const clockWorkRows = clockWorkSessionRows.filter((trade) => !clockWorkHiddenHistoryIds.has(trade.contract_id));
   const cashGrabSymbols = markets.map(([value, label]) => ({ value, label }));
+  const clockWorkSymbols = markets.map(([value, label]) => ({ value, label }));
+  const clockWorkSignal = status.data?.market_signals?.find((signal) => signal.symbol === clockWorkSymbol);
+  const clockWorkQuoteHistory = clockWorkSignal?.recent_quotes ?? [];
+  const clockWorkCurrentQuote = status.data?.last_tick?.symbol === clockWorkSymbol
+    ? status.data.last_tick.quote ?? null
+    : clockWorkQuoteHistory[clockWorkQuoteHistory.length - 1] ?? null;
+  const clockWorkRates = estimateClockWorkBarrierRates({
+    quotes: clockWorkQuoteHistory,
+    spot: clockWorkCurrentQuote,
+    mode: clockWorkBarrierMode,
+    higherOffset: clockWorkHigherBarrier,
+    lowerOffset: clockWorkLowerBarrier,
+    halfBarrier: clockWorkHalfBarrier,
+  });
+  const clockWorkRecentMoves = getClockWorkRecentMoves(clockWorkQuoteHistory);
+  const clockWorkPushDirection = getClockWorkPushDirection(clockWorkQuoteHistory);
+  const clockWorkTickEpoch = status.data?.last_tick?.symbol === clockWorkSymbol ? status.data.last_tick.epoch : null;
+  const clockWorkQuoteUpdatedAt = clockWorkTickEpoch == null ? "" : new Date(Number(clockWorkTickEpoch) * 1000).toISOString();
+  const clockWorkBarrierValues = [.5, .25, .12, .05];
+  const clockWorkBarrierOptions = (side: "higher" | "lower") => {
+    const selected = side === "higher" ? clockWorkHigherBarrier : clockWorkLowerBarrier;
+    return clockWorkBarrierValues.map((magnitude) => {
+      const offset = side === "higher" ? magnitude : -magnitude;
+      const effectiveOffset = clockWorkHalfBarrier ? offset / 2 : offset;
+      const absolute = clockWorkCurrentQuote == null ? null : clockWorkCurrentQuote + effectiveOffset;
+      return {
+        value: offset,
+        label: clockWorkBarrierMode === "offset"
+          ? `${effectiveOffset > 0 ? "+" : ""}${effectiveOffset.toFixed(2)}`
+          : absolute == null ? "—" : absolute.toFixed(2),
+        selected: selected === offset,
+      };
+    });
+  };
+  const makeClockWorkOrder = (
+    key: string,
+    contractType: "HIGHER" | "LOWER",
+    amount: number,
+  ): ClockWorkContractOrder => {
+    const offset = contractType === "HIGHER" ? clockWorkHigherBarrier : clockWorkLowerBarrier;
+    const barrier = formatClockWorkBarrier(clockWorkBarrierMode, clockWorkCurrentQuote, offset, clockWorkHalfBarrier) ?? "1";
+    return {
+      key,
+      amount: Number(Math.max(1, amount).toFixed(2)),
+      duration: 5,
+      duration_unit: "t",
+      contract_type: contractType,
+      barrier,
+      symbol: clockWorkSymbol,
+    };
+  };
+  const clockWorkPairOrders = useMemo(() => [
+    makeClockWorkOrder("higher", "HIGHER", clockWorkHigherStake),
+    makeClockWorkOrder("lower", "LOWER", clockWorkLowerStake),
+  ], [clockWorkSymbol, clockWorkBarrierMode, clockWorkHigherBarrier, clockWorkLowerBarrier, clockWorkHalfBarrier, clockWorkCurrentQuote, clockWorkHigherStake, clockWorkLowerStake]);
+  const makeClockWorkFourOrders = (lead: "HIGHER" | "LOWER" | null) => {
+    const sequence = getClockWorkFourSequence(lead);
+    let higherIndex = 0;
+    let lowerIndex = 0;
+    return sequence.map((contractType) => {
+      const index = contractType === "HIGHER" ? ++higherIndex : ++lowerIndex;
+      const key = `${contractType === "HIGHER" ? "h" : "l"}${index}`;
+      const amount = contractType === "HIGHER"
+        ? index === 1 ? clockWorkH1Stake : clockWorkH2Stake
+        : index === 1 ? clockWorkL1Stake : clockWorkL2Stake;
+      return makeClockWorkOrder(key, contractType, amount);
+    });
+  };
+  const clockWorkFourOrders = useMemo(
+    () => makeClockWorkFourOrders(clockWorkRates.prediction),
+    [clockWorkSymbol, clockWorkBarrierMode, clockWorkHigherBarrier, clockWorkLowerBarrier, clockWorkHalfBarrier, clockWorkCurrentQuote, clockWorkH1Stake, clockWorkH2Stake, clockWorkL1Stake, clockWorkL2Stake, clockWorkRates.prediction],
+  );
+  clockWorkQuoteOrderBuilderRef.current = () => ({
+    pair: [
+      makeClockWorkOrder("higher", "HIGHER", clockWorkHigherStake),
+      makeClockWorkOrder("lower", "LOWER", clockWorkLowerStake),
+    ],
+    allFour: makeClockWorkFourOrders("HIGHER"),
+  });
+
+  useEffect(() => {
+    if (!clockWorkEnabled || !canUseClockWork || !isConnected) {
+      setClockWorkQuotes({ pair: { higher: null, lower: null }, allFour: null });
+      if (!clockWorkEnabled) setClockWorkStatusMessage(null);
+      return;
+    }
+    let cancelled = false;
+    const refreshQuotes = async () => {
+      const orderSets = clockWorkQuoteOrderBuilderRef.current?.();
+      if (!orderSets) return;
+      try {
+        const pairResult = await clockWorkQuoteMutation.mutateAsync({ data: { contracts: orderSets.pair } });
+        const fourResult = await clockWorkQuoteMutation.mutateAsync({ data: { contracts: orderSets.allFour } });
+        if (cancelled) return;
+        const pairByKey = new Map(pairResult.quotes.map((quote) => [quote.key, quote]));
+        const higher = pairByKey.get("higher");
+        const lower = pairByKey.get("lower");
+        const allFourTotal = fourResult.quotes.reduce(
+          (total, quote) => ({
+            payout: total.payout + quote.payout,
+            ask_price: total.ask_price + quote.ask_price,
+            spot: quote.spot,
+          }),
+          { payout: 0, ask_price: 0, spot: 0 },
+        );
+        setClockWorkQuotes({
+          pair: {
+            higher: higher ? { payout: higher.payout, ask_price: higher.ask_price, spot: higher.spot } : null,
+            lower: lower ? { payout: lower.payout, ask_price: lower.ask_price, spot: lower.spot } : null,
+          },
+          allFour: fourResult.quotes.length === 4 ? allFourTotal : null,
+        });
+      } catch (error) {
+        if (cancelled) return;
+        setClockWorkQuotes({ pair: { higher: null, lower: null }, allFour: null });
+        setClockWorkStatusMessage(`Live Clock Work quotes are unavailable: ${errorMessage(error)}`);
+      }
+    };
+    void refreshQuotes();
+    const timer = window.setInterval(() => void refreshQuotes(), 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [
+    clockWorkEnabled,
+    canUseClockWork,
+    isConnected,
+    clockWorkSymbol,
+    clockWorkBarrierMode,
+    clockWorkHigherBarrier,
+    clockWorkLowerBarrier,
+    clockWorkHalfBarrier,
+    clockWorkHigherStake,
+    clockWorkLowerStake,
+    clockWorkH1Stake,
+    clockWorkL1Stake,
+    clockWorkL2Stake,
+    clockWorkH2Stake,
+    clockWorkQuoteMutation.mutateAsync,
+  ]);
   const cashGrabBestSymbol = useMemo(() => {
     const supported = new Set<string>(cashGrabSymbols.map((item) => item.value));
     const signals = (status.data?.market_signals ?? [])
@@ -3048,6 +3264,38 @@ export default function XTraderPage() {
     setTradeXMessage("Trade X paused.");
   };
 
+  const toggleClockWork = (enabled: boolean) => {
+    if (enabled && !canUseClockWork) return;
+    if (enabled && !isConnected) {
+      setConnectionMessage({ kind: "error", text: "Connect Deriv before enabling Clock Work." });
+      return;
+    }
+    setClockWorkEnabled(enabled);
+    if (!enabled) {
+      setClockWorkAutoEnabled(false);
+      setClockWorkAggressiveEnabled(false);
+      setClockWorkAutoStatus("Clock Work automation is stopped. Open contracts can continue to settle.");
+      return;
+    }
+    deactivateMoneyBank();
+    deactivateCashGrab();
+    toggleXTrader(false);
+    setTradeXEnabled(false);
+    setDigitFlipEnabled(false);
+    setBulkTraderEnabled(false);
+    runningRef.current = false;
+    digitFlipRunningRef.current = false;
+    setRunning(false);
+    setDigitFlipRunning(false);
+    autoSwitchRef.current = false;
+    setAutoSwitch(false);
+    setClockWorkAutoEnabled(false);
+    setClockWorkAggressiveEnabled(false);
+    setClockWorkStatusMessage(null);
+    setClockWorkAutoStatus("Select a mode and minimum lean to begin.");
+    void selectMarket(clockWorkSymbol);
+  };
+
   const toggleBulkTrader = (enabled: boolean) => {
     if (enabled && !isConnected) {
       setConnectionMessage({ kind: "error", text: "Connect Deriv before enabling Bulk Trader." });
@@ -3065,6 +3313,57 @@ export default function XTraderPage() {
     setRunning(false);
     setDigitFlipRunning(false);
     void selectMarket(bulkTraderSymbol);
+  };
+
+  const executeClockWorkBatch = async (
+    contracts: ClockWorkContractOrder[],
+    source: "manual" | "auto" = "manual",
+  ) => {
+    if (!clockWorkEnabled || !canUseClockWork || !isConnected || !currentAccount) {
+      setClockWorkStatusMessage("Enable Clock Work and connect a Deriv account before placing orders.");
+      return false;
+    }
+    if (isReal && !status.data?.live_trading_enabled) {
+      setClockWorkStatusMessage("Live-account trading is disabled for this workspace.");
+      return false;
+    }
+    if (tradeSlotBlocked) {
+      setClockWorkStatusMessage(tradeSlotMessage ?? "Wait for open Deriv contracts to settle before placing another order.");
+      return false;
+    }
+    if (clockWorkActionLockRef.current) return false;
+    clockWorkActionLockRef.current = true;
+    setClockWorkBusy(true);
+    setClockWorkStatusMessage(null);
+    if (source === "auto") setClockWorkAutoStatus("Sending the selected Clock Work orders to Deriv.");
+    try {
+      const result = await clockWorkBuyMutation.mutateAsync({ data: { contracts } });
+      for (const contract of result.contracts) {
+        clockWorkClaimedHistoryIdsRef.current.add(String(contract.buy.contract_id));
+      }
+      setClockWorkStatusMessage(result.message);
+      void queryClient.invalidateQueries({ queryKey: getGetDerivHistoryQueryKey() });
+      if (!result.ok) {
+        setClockWorkAutoEnabled(false);
+        setClockWorkAggressiveEnabled(false);
+        setClockWorkAutoStatus("Automation paused. Check Deriv history before retrying an unconfirmed order.");
+      } else if (source === "auto") {
+        setClockWorkAutoStatus("Orders submitted. Waiting for all contracts to settle before another entry.");
+      }
+      return result.ok;
+    } catch (error) {
+      const message = errorMessage(error);
+      setClockWorkStatusMessage(message);
+      if (source === "auto") {
+        setClockWorkAutoEnabled(false);
+        setClockWorkAggressiveEnabled(false);
+        setClockWorkAutoStatus(`Automation paused: ${message}`);
+      }
+      return false;
+    } finally {
+      clockWorkActionLockRef.current = false;
+      setClockWorkBusy(false);
+    }
   };
 
   const executeBulkTrade = async (
@@ -3332,6 +3631,23 @@ export default function XTraderPage() {
     setHistoryFading(false);
   };
 
+  const clearClockWorkHistory = async () => {
+    if (!clockWorkHistoryClearArmed) {
+      setClockWorkHistoryClearArmed(true);
+      window.setTimeout(() => setClockWorkHistoryClearArmed(false), 2_500);
+      return;
+    }
+    setClockWorkHistoryClearArmed(false);
+    setHistoryFading(true);
+    await sleep(260);
+    setClockWorkHiddenHistoryIds((current) => {
+      const next = new Set(current);
+      clockWorkRows.forEach((trade) => next.add(trade.contract_id));
+      return next;
+    });
+    setHistoryFading(false);
+  };
+
   const clearBulkTraderHistory = async () => {
     if (!bulkTraderClearArmed) {
       setBulkTraderClearArmed(true);
@@ -3356,7 +3672,9 @@ export default function XTraderPage() {
     || bulkTraderEnabled
     || cashGrabRunning
     || cashGrabStopping
-    || moneyBankRunning;
+    || moneyBankRunning
+    || clockWorkAutoEnabled
+    || clockWorkAggressiveEnabled;
   const entryDigit = barrier;
   const activeGuidePages = guideMode === "trade-x"
     ? tradeXGuidePages
@@ -3368,6 +3686,8 @@ export default function XTraderPage() {
           ? moneyBankGuidePages
           : guideMode === "cash-grab"
             ? cashGrabGuidePages
+            : guideMode === "clock-work"
+              ? clockWorkGuidePages
         : guidePages;
   const canUseGuideFeature = guideMode === "trade-x"
     ? canUseTradeX
@@ -3379,7 +3699,9 @@ export default function XTraderPage() {
           ? canUseMoneyBank
           : guideMode === "cash-grab"
             ? canUseCashGrab
-            : canUseEdge;
+            : guideMode === "clock-work"
+              ? canUseClockWork
+              : canUseEdge;
   const statusText = isConnected ? "CONNECTED" : connectedToken ? "CONNECTING" : "DISCONNECTED";
   const activityText = running ? "EDGE RUNNING" : "EDGE STOPPED";
   const edgeBalanceReady = currentAccountBalance != null && currentAccountBalance > 0;
@@ -3388,6 +3710,98 @@ export default function XTraderPage() {
     && (!isReal || Boolean(status.data?.live_trading_enabled))
     && Boolean(currentAccount) && stake <= Number(edgeAccountBalance)
     && stake <= (currentAccountBalance ?? 0);
+  const clockWorkControlsDisabled = !canUseClockWork
+    || !isConnected
+    || !currentAccount
+    || (isReal && !status.data?.live_trading_enabled);
+  const clockWorkAggressiveUsingBalance = currentAccountBalance == null
+    ? null
+    : Number((currentAccountBalance * clockWorkAggressivePercent / 100).toFixed(2));
+  const clockWorkAggressiveEachSide = clockWorkAggressiveUsingBalance == null
+    ? null
+    : Number((clockWorkAggressiveUsingBalance / 2).toFixed(2));
+
+  clockWorkAutomationRef.current = () => {
+    const aggressive = clockWorkAggressiveEnabled;
+    if (!clockWorkEnabled || (!clockWorkAutoEnabled && !aggressive)) return;
+    if (!clockWorkAutoMode || clockWorkMinLean == null) {
+      setClockWorkAutoStatus("Choose a mode and minimum lean before automatic trading can run.");
+      return;
+    }
+    if (!isConnected || !currentAccount || !canUseClockWork) {
+      setClockWorkAutoStatus("Waiting for the Clock Work account connection.");
+      return;
+    }
+    if (isReal && !status.data?.live_trading_enabled) {
+      setClockWorkAutoStatus("Live-account trading is disabled for this workspace.");
+      return;
+    }
+    if (Date.now() < clockWorkAutoAttemptAtRef.current) return;
+    if (tradeSlotBlocked) {
+      setClockWorkAutoStatus(tradeSlotMessage ?? "Waiting for open contracts to settle.");
+      return;
+    }
+    if (clockWorkCurrentQuote == null || clockWorkRates.leanStrength == null) {
+      setClockWorkAutoStatus("Waiting for enough live price history to estimate a lean.");
+      return;
+    }
+    const lead = aggressive ? clockWorkPushDirection : clockWorkRates.prediction;
+    if (aggressive && !lead) {
+      setClockWorkAutoStatus("Waiting for five consecutive ticks in one direction.");
+      return;
+    }
+    if (clockWorkAutoMode === "auto" && !lead) {
+      setClockWorkAutoStatus("The Higher and Lower estimates are tied; waiting for a clear lean.");
+      return;
+    }
+    const measuredLean = clockWorkAutoMode === "auto"
+      ? lead === "HIGHER" ? clockWorkRates.higherPercent : clockWorkRates.lowerPercent
+      : clockWorkRates.leanStrength;
+    if (measuredLean == null || measuredLean < clockWorkMinLean) {
+      setClockWorkAutoStatus(`Waiting for ${clockWorkMinLean}% lean. Current measured lean: ${measuredLean == null ? "—" : `${measuredLean.toFixed(1)}%`}.`);
+      return;
+    }
+
+    let plannedOrders: ClockWorkContractOrder[];
+    if (clockWorkAutoMode === "pair") {
+      plannedOrders = aggressive && lead === "LOWER"
+        ? [...clockWorkPairOrders].reverse()
+        : [...clockWorkPairOrders];
+    } else if (clockWorkAutoMode === "auto") {
+      plannedOrders = [makeClockWorkOrder("auto", lead as "HIGHER" | "LOWER", lead === "HIGHER" ? clockWorkHigherStake : clockWorkLowerStake)];
+    } else {
+      plannedOrders = makeClockWorkFourOrders(lead);
+    }
+
+    if (aggressive) {
+      if (currentAccountBalance == null || currentAccountBalance <= 0) {
+        setClockWorkAutoStatus("Waiting for an available account balance.");
+        return;
+      }
+      const budgetCents = Math.min(
+        Math.floor(currentAccountBalance * 100),
+        Math.floor(currentAccountBalance * clockWorkAggressivePercent),
+      );
+      if (budgetCents < plannedOrders.length * 100) {
+        setClockWorkAutoStatus(`The ${clockWorkAggressivePercent}% balance budget is too small for the $1 minimum on each contract.`);
+        return;
+      }
+      const baseCents = Math.floor(budgetCents / plannedOrders.length);
+      const extraCents = budgetCents % plannedOrders.length;
+      plannedOrders = plannedOrders.map((order, index) => ({
+        ...order,
+        amount: (baseCents + (index < extraCents ? 1 : 0)) / 100,
+      }));
+    }
+
+    clockWorkAutoAttemptAtRef.current = Date.now() + 5_000;
+    void executeClockWorkBatch(plannedOrders, "auto");
+  };
+  useEffect(() => {
+    if (!clockWorkEnabled || (!clockWorkAutoEnabled && !clockWorkAggressiveEnabled)) return;
+    const timer = window.setInterval(() => clockWorkAutomationRef.current?.(), 1_000);
+    return () => window.clearInterval(timer);
+  }, [clockWorkEnabled, clockWorkAutoEnabled, clockWorkAggressiveEnabled]);
 
   return (
     <main className="xt-app">
@@ -3491,6 +3905,20 @@ export default function XTraderPage() {
       </section>
 
       <h2 className="xt-trading-strategies-heading">Trading Strategies</h2>
+
+      <section className={`xt-feature-card xt-feature-card-clock-work ${!canUseClockWork ? "xt-feature-card-restricted" : ""}`} id="clock-work-feature">
+        <div><Clock3 size={18} /><span><b>Clock Work</b><small>{canUseClockWork ? "Hybrid Analysis" : "Restricted — admin access only"}</small></span></div>
+        <div className="xt-feature-actions">
+          {!canUseClockWork && <span className="xt-feature-locked">RESTRICTED</span>}
+          <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("clock-work"); setGuidePage(0); setGuideOpen(true); }}>
+            <BookOpen size={14} />Guide
+          </button>
+          <label className="xt-switch">
+            <input type="checkbox" checked={clockWorkEnabled} onChange={(event) => toggleClockWork(event.target.checked)} aria-label="Toggle Clock Work" disabled={!canUseClockWork || !isConnected} />
+            <span />
+          </label>
+        </div>
+      </section>
 
       <section className={`xt-feature-card xt-feature-card-cash-grab ${!canUseCashGrab ? "xt-feature-card-restricted" : ""}`} id="cash-grab-feature">
         <div><Activity size={18} /><span><b>Cash Grab</b><small>{canUseCashGrab ? "Rise/Fall contracts · one at a time" : "Restricted — admin access only"}</small></span></div>
@@ -4014,16 +4442,132 @@ export default function XTraderPage() {
         />
       )}
 
+      {clockWorkEnabled && canUseClockWork && (
+        <section className="xt-bottom-feature">
+          <ClockWorkPanel
+            enabled={clockWorkEnabled}
+            symbol={clockWorkSymbol}
+            markets={clockWorkSymbols}
+            onSymbolChange={(next) => {
+              setClockWorkSymbol(next);
+              setClockWorkAutoEnabled(false);
+              setClockWorkAggressiveEnabled(false);
+              setClockWorkAutoStatus("Automation stopped because the selected market changed.");
+              void selectMarket(next);
+            }}
+            quote={clockWorkCurrentQuote}
+            quoteHistory={clockWorkQuoteHistory}
+            quoteUpdatedAt={clockWorkQuoteUpdatedAt}
+            tradeSlotBlocked={tradeSlotBlocked}
+            barrierMode={clockWorkBarrierMode}
+            onBarrierModeChange={setClockWorkBarrierMode}
+            halfBarrier={clockWorkHalfBarrier}
+            onHalfBarrierChange={setClockWorkHalfBarrier}
+            higherBarrierLabel="↑ Higher barrier"
+            lowerBarrierLabel="↓ Lower barrier"
+            higherBarrierOptions={clockWorkBarrierOptions("higher")}
+            lowerBarrierOptions={clockWorkBarrierOptions("lower")}
+            onHigherBarrierChange={setClockWorkHigherBarrier}
+            onLowerBarrierChange={setClockWorkLowerBarrier}
+            higherStake={clockWorkHigherStake}
+            lowerStake={clockWorkLowerStake}
+            h1Stake={clockWorkH1Stake}
+            l1Stake={clockWorkL1Stake}
+            l2Stake={clockWorkL2Stake}
+            h2Stake={clockWorkH2Stake}
+            onHigherStakeChange={(value) => setClockWorkHigherStake(Math.max(1, value))}
+            onLowerStakeChange={(value) => setClockWorkLowerStake(Math.max(1, value))}
+            onH1StakeChange={(value) => setClockWorkH1Stake(Math.max(1, value))}
+            onL1StakeChange={(value) => setClockWorkL1Stake(Math.max(1, value))}
+            onL2StakeChange={(value) => setClockWorkL2Stake(Math.max(1, value))}
+            onH2StakeChange={(value) => setClockWorkH2Stake(Math.max(1, value))}
+            higherPercent={clockWorkRates.higherPercent}
+            lowerPercent={clockWorkRates.lowerPercent}
+            recentMoves={clockWorkRecentMoves}
+            prediction={clockWorkRates.prediction}
+            leanStrength={clockWorkRates.leanStrength}
+            busy={clockWorkBusy || clockWorkBuyMutation.isPending}
+            disabled={clockWorkControlsDisabled}
+            statusMessage={clockWorkStatusMessage}
+            higherQuote={clockWorkQuotes.pair.higher}
+            lowerQuote={clockWorkQuotes.pair.lower}
+            allFourQuote={clockWorkQuotes.allFour}
+            onPlaceHigher={() => void executeClockWorkBatch([makeClockWorkOrder("higher", "HIGHER", clockWorkHigherStake)])}
+            onPlaceLower={() => void executeClockWorkBatch([makeClockWorkOrder("lower", "LOWER", clockWorkLowerStake)])}
+            onPlacePair={() => void executeClockWorkBatch([...clockWorkPairOrders])}
+            onPlaceAllFour={() => void executeClockWorkBatch([...clockWorkFourOrders])}
+            autoMode={clockWorkAutoMode}
+            onAutoModeChange={setClockWorkAutoMode}
+            minLean={clockWorkMinLean}
+            onMinLeanChange={(value) => {
+              setClockWorkMinLean(value);
+              if (value == null) {
+                setClockWorkAutoEnabled(false);
+                setClockWorkAggressiveEnabled(false);
+                setClockWorkAutoStatus("Choose a minimum lean to resume automation.");
+              }
+            }}
+            autoEnabled={clockWorkAutoEnabled}
+            onAutoEnabledChange={(enabled) => {
+              if (enabled && (!clockWorkAutoMode || clockWorkMinLean == null)) {
+                setClockWorkStatusMessage("Select H&L (2), A, or All (4), then choose a minimum lean before starting Auto Trading.");
+                return;
+              }
+              setClockWorkAutoEnabled(enabled);
+              if (enabled) {
+                setClockWorkAggressiveEnabled(false);
+                setClockWorkAutoStatus("Auto Trading is active and waiting for the selected lean.");
+              } else {
+                setClockWorkAutoStatus("Auto Trading is stopped. Open contracts can continue to settle.");
+              }
+            }}
+            aggressiveEnabled={clockWorkAggressiveEnabled}
+            onAggressiveEnabledChange={(enabled) => {
+              if (enabled && (!clockWorkAutoMode || clockWorkMinLean == null)) {
+                setClockWorkStatusMessage("Select an automatic mode and minimum lean before starting Aggressive Auto Trading.");
+                return;
+              }
+              setClockWorkAggressiveEnabled(enabled);
+              if (enabled) {
+                setClockWorkAutoEnabled(false);
+                setClockWorkAutoStatus("Aggressive Auto Trading is active and waiting for a five-tick directional push.");
+              } else {
+                setClockWorkAutoStatus("Aggressive Auto Trading is stopped. Open contracts can continue to settle.");
+              }
+            }}
+            aggressiveBalancePercent={clockWorkAggressivePercent}
+            onAggressiveBalancePercentChange={setClockWorkAggressivePercent}
+            accountBalance={currentAccountBalance ?? null}
+            currency={currentAccount?.currency ?? "USD"}
+            aggressiveUsingBalance={clockWorkAggressiveUsingBalance}
+            aggressiveEachSide={clockWorkAggressiveEachSide}
+            autoStatus={clockWorkAutoStatus}
+          />
+          {canViewHistory && (
+            <DerivHistory
+              title="Clock Work History"
+              strategy="Hybrid Analysis"
+              rows={clockWorkRows}
+              sessionRows={clockWorkRows}
+              currency={currentAccount?.currency}
+              clearArmed={clockWorkHistoryClearArmed}
+              fading={historyFading}
+              onClear={clearClockWorkHistory}
+            />
+          )}
+        </section>
+      )}
+
       {guideOpen && (
         <div className="xt-guide-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setGuideOpen(false); }}>
           <section className="xt-guide" role="dialog" aria-modal="true" aria-labelledby="xt-guide-title">
             <header className="xt-guide-header">
-              <div><BookOpen size={18} /><span><b>{guideMode === "trade-x" ? "Trade X Guide" : guideMode === "digit-flip" ? "DigitFlip Guide" : guideMode === "bulk-trader" ? "Bulk Trader Guide" : guideMode === "money-bank" ? "Money Bank Guide" : guideMode === "cash-grab" ? "Cash Grab Guide" : "EDGE Guide"}</b><small>Page {guidePage + 1} of {activeGuidePages.length}</small></span></div>
+              <div><BookOpen size={18} /><span><b>{guideMode === "trade-x" ? "Trade X Guide" : guideMode === "digit-flip" ? "DigitFlip Guide" : guideMode === "bulk-trader" ? "Bulk Trader Guide" : guideMode === "money-bank" ? "Money Bank Guide" : guideMode === "cash-grab" ? "Cash Grab Guide" : guideMode === "clock-work" ? "Clock Work Guide" : "EDGE Guide"}</b><small>Page {guidePage + 1} of {activeGuidePages.length}</small></span></div>
               <button type="button" aria-label="Close guide" onClick={() => setGuideOpen(false)}><X size={17} /></button>
             </header>
             <div className="xt-guide-progress"><span style={{ width: `${((guidePage + 1) / activeGuidePages.length) * 100}%` }} /></div>
             <article className="xt-guide-page">
-               <small className="xt-guide-kicker">{guideMode === "trade-x" ? "TRADE X FIELD GUIDE" : guideMode === "digit-flip" ? "DIGITFLIP FIELD GUIDE" : guideMode === "bulk-trader" ? "BULK TRADER FIELD GUIDE" : guideMode === "money-bank" ? "MONEY BANK FIELD GUIDE" : guideMode === "cash-grab" ? "CASH GRAB FIELD GUIDE" : "EDGE FIELD GUIDE"}</small>
+               <small className="xt-guide-kicker">{guideMode === "trade-x" ? "TRADE X FIELD GUIDE" : guideMode === "digit-flip" ? "DIGITFLIP FIELD GUIDE" : guideMode === "bulk-trader" ? "BULK TRADER FIELD GUIDE" : guideMode === "money-bank" ? "MONEY BANK FIELD GUIDE" : guideMode === "cash-grab" ? "CASH GRAB FIELD GUIDE" : guideMode === "clock-work" ? "CLOCK WORK FIELD GUIDE" : "EDGE FIELD GUIDE"}</small>
               <h2 id="xt-guide-title">{activeGuidePages[guidePage].title}</h2>
               <p>{activeGuidePages[guidePage].body}</p>
               <ul>{activeGuidePages[guidePage].points.map((point) => <li key={point}>{point}</li>)}</ul>
@@ -4035,7 +4579,7 @@ export default function XTraderPage() {
                 <button type="button" className="xt-guide-start" onClick={() => {
                   setGuideOpen(false);
                   if (!canUseGuideFeature) return;
-                  guideMode === "trade-x" ? toggleTradeX(true) : guideMode === "digit-flip" ? toggleDigitFlip(true) : guideMode === "bulk-trader" ? toggleBulkTrader(true) : guideMode === "money-bank" ? toggleMoneyBank(true) : guideMode === "cash-grab" ? toggleCashGrab(true) : toggleXTrader(true);
+                  guideMode === "trade-x" ? toggleTradeX(true) : guideMode === "digit-flip" ? toggleDigitFlip(true) : guideMode === "bulk-trader" ? toggleBulkTrader(true) : guideMode === "money-bank" ? toggleMoneyBank(true) : guideMode === "cash-grab" ? toggleCashGrab(true) : guideMode === "clock-work" ? toggleClockWork(true) : toggleXTrader(true);
                 }}>{canUseGuideFeature ? "Let's start trading" : "Close guide"}</button>
               ) : (
                 <button type="button" className="xt-guide-nav next" onClick={() => setGuidePage((page) => Math.min(activeGuidePages.length - 1, page + 1))}>Next<ChevronRight size={15} /></button>

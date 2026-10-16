@@ -21,7 +21,7 @@ const supportedSymbols = new Set([
   "1HZ10V", "1HZ15V", "1HZ25V", "1HZ30V", "1HZ50V", "1HZ75V", "1HZ90V", "1HZ100V",
   "JD10", "JD25", "JD50", "JD75", "JD100",
 ]);
-type DigitContractType = "DIGITEVEN" | "DIGITODD" | "DIGITOVER" | "DIGITUNDER" | "DIGITDIFF" | "CALL" | "PUT" | "ACCU";
+type DigitContractType = "DIGITEVEN" | "DIGITODD" | "DIGITOVER" | "DIGITUNDER" | "DIGITDIFF" | "CALL" | "PUT" | "HIGHER" | "LOWER" | "ACCU";
 
 export type DerivAccount = {
   id: string;
@@ -129,7 +129,7 @@ type ProposalInput = {
   duration: number;
   duration_unit: "t" | "s" | "m";
   contract_type: DigitContractType;
-  barrier?: number;
+  barrier?: number | string;
   growth_rate?: number;
   symbol?: string;
 };
@@ -1101,6 +1101,7 @@ export async function scanAccumulatorKnockout(
 
   const scanInput: BuyInput = {
     ...input,
+    barrier: typeof input.barrier === "number" ? input.barrier : undefined,
     duration_unit: "t",
     auto_knockout: true,
   };
@@ -1924,7 +1925,176 @@ export async function bulkBuyContracts(input: {
   };
 }
 
-function validateContractBarrier(input: { contract_type: DigitContractType; barrier?: number }) {
+export type ClockWorkOrder = {
+  key: string;
+  amount: number;
+  duration: 5;
+  duration_unit: "t";
+  contract_type: "HIGHER" | "LOWER";
+  barrier: string;
+  symbol: string;
+};
+
+function normalizeClockWorkOrders(contracts: readonly ClockWorkOrder[]) {
+  if (!Array.isArray(contracts) || contracts.length < 1 || contracts.length > 4) {
+    throw new Error("Clock Work needs between one and four contracts.");
+  }
+  const normalized = contracts.map((contract) => ({
+    ...contract,
+    amount: roundCents(contract.amount),
+  }));
+  const keys = normalized.map((contract) => contract.key);
+  if (keys.some((key) => !key.trim()) || new Set(keys).size !== keys.length) {
+    throw new Error("Clock Work contract keys must be unique and non-empty.");
+  }
+  const symbols = new Set(normalized.map((contract) => contract.symbol));
+  if (symbols.size !== 1) {
+    throw new Error("All Clock Work contracts in one action must use the same market.");
+  }
+  for (const contract of normalized) {
+    if (!Number.isFinite(contract.amount) || contract.amount < 1) {
+      throw new Error("Clock Work stakes must be at least 1.00.");
+    }
+    if (contract.duration !== 5 || contract.duration_unit !== "t") {
+      throw new Error("Clock Work supports five-tick contracts only.");
+    }
+    if (contract.contract_type !== "HIGHER" && contract.contract_type !== "LOWER") {
+      throw new Error("Clock Work supports Higher and Lower contracts only.");
+    }
+    if (typeof contract.barrier !== "string" || !/^[+-]?\d+(?:\.\d+)?$/.test(contract.barrier)) {
+      throw new Error("Clock Work needs a valid signed offset or absolute price barrier.");
+    }
+    validateProposalInput({
+      amount: contract.amount,
+      duration: contract.duration,
+      duration_unit: contract.duration_unit,
+      contract_type: contract.contract_type,
+      barrier: contract.barrier,
+      symbol: contract.symbol,
+    });
+  }
+  return normalized;
+}
+
+function toClockWorkQuote(contract: ClockWorkOrder, proposal: DerivProposal) {
+  return {
+    key: contract.key,
+    amount: contract.amount,
+    contract_type: contract.contract_type,
+    barrier: contract.barrier,
+    symbol: contract.symbol,
+    ask_price: proposal.ask_price,
+    payout: proposal.payout,
+    spot: proposal.spot,
+    longcode: proposal.longcode,
+  };
+}
+
+export async function quoteClockWorkContracts(input: { contracts: readonly ClockWorkOrder[] }) {
+  const contracts = normalizeClockWorkOrders(input.contracts);
+  if (!getState().account) throw new Error("Select a Deriv account before requesting Clock Work quotes.");
+  const proposals = await Promise.all(contracts.map((contract) => requestFreshProposal({
+    amount: contract.amount,
+    duration: contract.duration,
+    duration_unit: contract.duration_unit,
+    contract_type: contract.contract_type,
+    barrier: contract.barrier,
+    symbol: contract.symbol,
+  })));
+  return { quotes: contracts.map((contract, index) => toClockWorkQuote(contract, proposals[index])) };
+}
+
+export async function buyClockWorkContracts(
+  input: { contracts: readonly ClockWorkOrder[] },
+  assertAuthorized?: TradeAuthorizationCheck,
+) {
+  await assertAuthorized?.();
+  const contracts = normalizeClockWorkOrders(input.contracts);
+  const account = getState().account;
+  if (!account) throw new Error("Select a Deriv account before buying Clock Work contracts.");
+  if (account.type === "real" && !liveTradingEnabled) {
+    throw new Error("Live trading is disabled on this server.");
+  }
+  const totalStake = roundCents(contracts.reduce((total, contract) => total + contract.amount, 0));
+  if (totalStake > account.balance) {
+    throw new Error("The total Clock Work stake exceeds the current account balance.");
+  }
+
+  const protection = await getTradingProtectionSettings();
+  for (const contract of contracts) {
+    assertTradingProtection(protection, getStatus(), {
+      contract_type: contract.contract_type,
+      symbol: contract.symbol,
+    });
+  }
+
+  await refreshOpenContracts();
+  assertNoActiveContract(true);
+  const proposals = await Promise.all(contracts.map(async (contract) => ({
+    contract,
+    proposal: await requestFreshProposal({
+      amount: contract.amount,
+      duration: contract.duration,
+      duration_unit: contract.duration_unit,
+      contract_type: contract.contract_type,
+      barrier: contract.barrier,
+      symbol: contract.symbol,
+    }),
+  })));
+  await assertAuthorized?.();
+  if (!await connect()) throw new Error("Deriv WebSocket is not ready");
+  await assertAuthorized?.();
+
+  // All prices are quoted before any buy. Do not retry or auto-close a partial
+  // batch: a buy acknowledgement timeout can be ambiguous, so the account
+  // history must be checked before a user resubmits.
+  const results = await Promise.allSettled(proposals.map(({ contract, proposal }) => sendDirectBuy(proposal, {
+    amount: contract.amount,
+    duration: contract.duration,
+    duration_unit: contract.duration_unit,
+    contract_type: contract.contract_type,
+    barrier: contract.barrier,
+    symbol: contract.symbol,
+  })));
+  const completed = results.flatMap((result, index) => result.status === "fulfilled"
+    ? [{
+        key: proposals[index].contract.key,
+        amount: proposals[index].contract.amount,
+        contract_type: proposals[index].contract.contract_type,
+        barrier: proposals[index].contract.barrier,
+        symbol: proposals[index].contract.symbol,
+        proposal: proposals[index].proposal,
+        buy: result.value,
+      }]
+    : []);
+  const failed = results.flatMap((result, index) => result.status === "rejected"
+    ? [{
+        key: proposals[index].contract.key,
+        contract_type: proposals[index].contract.contract_type,
+        error: result.reason instanceof Error ? result.reason.message : "Deriv did not confirm this buy.",
+      }]
+    : []);
+  const ok = failed.length === 0;
+  return {
+    ok,
+    message: ok
+      ? `${completed.length} Clock Work contract${completed.length === 1 ? "" : "s"} sent to Deriv.`
+      : `${completed.length} of ${contracts.length} Clock Work contracts were confirmed. Check Deriv history before retrying any unconfirmed order.`,
+    requested_count: contracts.length,
+    completed_count: completed.length,
+    contracts: completed,
+    failed,
+  };
+}
+
+function validateContractBarrier(input: { contract_type: DigitContractType; barrier?: number | string }) {
+  if (input.contract_type === "HIGHER" || input.contract_type === "LOWER") {
+    const barrier = input.barrier;
+    if (typeof barrier !== "string" || !/^[+-]?\d+(?:\.\d+)?$/.test(barrier)) {
+      throw new Error(`A relative or absolute price barrier is required for ${input.contract_type}.`);
+    }
+    return;
+  }
   const requiresBarrier = input.contract_type === "DIGITDIFF"
     || input.contract_type === "DIGITOVER"
     || input.contract_type === "DIGITUNDER";

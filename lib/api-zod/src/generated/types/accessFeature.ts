@@ -14,6 +14,7 @@ export const AccessFeature = {
   'digit-flip': 'digit-flip',
   'trade-x': 'trade-x',
   'bulk-trader': 'bulk-trader',
+  'clock-work': 'clock-work',
   'cash-grab': 'cash-grab',
   'money-bank': 'money-bank',
   'jdy-ai-3': 'jdy-ai-3',

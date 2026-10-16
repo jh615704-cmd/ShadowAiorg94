@@ -41,6 +41,7 @@ const featureLabels: Partial<Record<AccessFeatureValue, string>> = {
   "digit-flip": "DigitFlip",
   "trade-x": "Trade X",
   "bulk-trader": "Bulk Trader",
+  "clock-work": "Clock Work",
   "cash-grab": "Cash Grab",
   "money-bank": "Money Bank",
   "jdy-ai-3": "Shadows 3",
@@ -55,6 +56,7 @@ const featureDescriptions: Partial<Record<AccessFeatureValue, string>> = {
   "digit-flip": "Even / Odd parity trading and automation",
   "trade-x": "Digit Differs trading and automation",
   "bulk-trader": "Send 1–6 contracts across four trade types",
+  "clock-work": "Five-tick Higher and Lower analysis and trading",
   "cash-grab": "Controlled batch trading with risk gates",
   "money-bank": "Accumulator automation with recovery controls",
   "jdy-ai-3": "Cash Grab live gate and immediate stop control",
@@ -446,7 +448,7 @@ export default function AdminUsersPage() {
               <button type="submit" className="primary-button admin-create-submit" disabled={!canCreate}><KeyRound size={16} />{createKey.isPending ? "Generating…" : `Generate ${kind === "admin" ? "admin" : "user"} key`}</button>
             </form>
           </div>
-            <div className="admin-safety-note admin-key-features-note"><div className="admin-safety-icon"><KeyRound size={20} /></div><h3>Key features</h3><ul><li>Grant EDGE, DigitFlip, Trade X, Bulk Trader, Cash Grab, Money Bank, Auto Trader, Auto Trader 2.0, Settings, or History independently.</li><li>Shadows 3 is an additional Cash Grab gate and immediate-stop control.</li><li>If a feature is not granted, the workspace shows “Restricted — admin access only.”</li><li>Edit access later to unlock a feature without issuing a replacement key.</li><li>Delete permanently revokes the key. Its name can be reused, but the old key can never sign in again.</li></ul></div>
+            <div className="admin-safety-note admin-key-features-note"><div className="admin-safety-icon"><KeyRound size={20} /></div><h3>Key features</h3><ul><li>Grant EDGE, DigitFlip, Trade X, Bulk Trader, Clock Work, Cash Grab, Money Bank, Auto Trader, Auto Trader 2.0, Settings, or History independently.</li><li>Shadows 3 is an additional Cash Grab gate and immediate-stop control.</li><li>If a feature is not granted, the workspace shows “Restricted — admin access only.”</li><li>Edit access later to unlock a feature without issuing a replacement key.</li><li>Delete permanently revokes the key. Its name can be reused, but the old key can never sign in again.</li></ul></div>
         </section>
 
         <section className="panel admin-directory">

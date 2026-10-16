@@ -29,6 +29,9 @@ import type {
   AdminUserInput,
   ApprovedUser,
   AuthAccess,
+  ClockWorkBatchBuyResponse,
+  ClockWorkBatchInput,
+  ClockWorkQuoteResponse,
   DerivAccount,
   DerivAccountSelection,
   DerivBulkBuyInput,
@@ -2137,6 +2140,149 @@ export const useBulkBuyDerivContracts = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getBulkBuyDerivContractsMutationOptions(options));
+    }
+
+export const getQuoteClockWorkContractsUrl = () => {
+
+
+
+
+  return `/api/deriv/clock-work/quotes`
+}
+
+/**
+ * @summary Request live Higher and Lower contract quotes for Clock Work
+ */
+export const quoteClockWorkContracts = async (clockWorkBatchInput: ClockWorkBatchInput, options?: Parameters<typeof customFetch>[1]): Promise<ClockWorkQuoteResponse> => {
+
+  return customFetch<ClockWorkQuoteResponse>(getQuoteClockWorkContractsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(clockWorkBatchInput)
+  }
+);}
+
+
+
+
+
+export const getQuoteClockWorkContractsMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof quoteClockWorkContracts>>, TError,{data: BodyType<ClockWorkBatchInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof quoteClockWorkContracts>>, TError,{data: BodyType<ClockWorkBatchInput>}, TContext> => {
+
+const mutationKey = ['quoteClockWorkContracts'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof quoteClockWorkContracts>>, {data: BodyType<ClockWorkBatchInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  quoteClockWorkContracts(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type QuoteClockWorkContractsMutationResult = NonNullable<Awaited<ReturnType<typeof quoteClockWorkContracts>>>
+    export type QuoteClockWorkContractsMutationBody = BodyType<ClockWorkBatchInput>
+    export type QuoteClockWorkContractsMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Request live Higher and Lower contract quotes for Clock Work
+ */
+export const useQuoteClockWorkContracts = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof quoteClockWorkContracts>>, TError,{data: BodyType<ClockWorkBatchInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof quoteClockWorkContracts>>,
+        TError,
+        {data: BodyType<ClockWorkBatchInput>},
+        TContext
+      > => {
+      return useMutation(getQuoteClockWorkContractsMutationOptions(options));
+    }
+
+export const getBuyClockWorkContractsUrl = () => {
+
+
+
+
+  return `/api/deriv/clock-work/buy`
+}
+
+/**
+ * Requests fresh proposals for every contract before sending any buy. Partial acknowledgements are returned explicitly; an unconfirmed buy must not be replayed until Deriv history is checked.
+ * @summary Buy one to four Clock Work Higher and Lower contracts
+ */
+export const buyClockWorkContracts = async (clockWorkBatchInput: ClockWorkBatchInput, options?: Parameters<typeof customFetch>[1]): Promise<ClockWorkBatchBuyResponse> => {
+
+  return customFetch<ClockWorkBatchBuyResponse>(getBuyClockWorkContractsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(clockWorkBatchInput)
+  }
+);}
+
+
+
+
+
+export const getBuyClockWorkContractsMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof buyClockWorkContracts>>, TError,{data: BodyType<ClockWorkBatchInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof buyClockWorkContracts>>, TError,{data: BodyType<ClockWorkBatchInput>}, TContext> => {
+
+const mutationKey = ['buyClockWorkContracts'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof buyClockWorkContracts>>, {data: BodyType<ClockWorkBatchInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  buyClockWorkContracts(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BuyClockWorkContractsMutationResult = NonNullable<Awaited<ReturnType<typeof buyClockWorkContracts>>>
+    export type BuyClockWorkContractsMutationBody = BodyType<ClockWorkBatchInput>
+    export type BuyClockWorkContractsMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Buy one to four Clock Work Higher and Lower contracts
+ */
+export const useBuyClockWorkContracts = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof buyClockWorkContracts>>, TError,{data: BodyType<ClockWorkBatchInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof buyClockWorkContracts>>,
+        TError,
+        {data: BodyType<ClockWorkBatchInput>},
+        TContext
+      > => {
+      return useMutation(getBuyClockWorkContractsMutationOptions(options));
     }
 
 export const getSellDerivContractUrl = () => {

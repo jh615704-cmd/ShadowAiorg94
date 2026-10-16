@@ -72,9 +72,11 @@ export function assertTradingProtection(
       observedRate = signal.digit_odd_percentage;
       break;
     case "CALL":
+    case "HIGHER":
       observedRate = signal.rise_percentage;
       break;
     case "PUT":
+    case "LOWER":
       observedRate = signal.fall_percentage;
       break;
     case "ACCU":

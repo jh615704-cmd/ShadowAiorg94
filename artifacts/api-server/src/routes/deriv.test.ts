@@ -195,6 +195,14 @@ mock.module("../lib/deriv", {
       dualBuyInvocations += 1;
       return { ok: true, message: "contracts bought", count: 2, results: [] };
     },
+    quoteClockWorkContracts: async () => {
+      observePat();
+      return { quotes: [] };
+    },
+    buyClockWorkContracts: async () => {
+      observePat();
+      return { ok: true, message: "contracts bought", requested_count: 0, completed_count: 0, contracts: [], failed: [] };
+    },
     selectAccount: async () => {
       observePat();
       return status;

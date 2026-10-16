@@ -17,8 +17,32 @@ import {
 
 const autoTraderFeature = "auto-trader";
 const autoTrader2Feature = "auto-trader-2";
+const clockWorkFeature = "clock-work";
 
 describe("Auto Trader access-key feature path", () => {
+  it("accepts Clock Work grants and includes them on trading routes", () => {
+    const create = CreateAccessKeyBody.parse({
+      label: "Clock Work user",
+      kind: "user",
+      max_devices: 1,
+      features: [clockWorkFeature],
+    });
+    const update = UpdateAccessKeyBody.parse({ features: [clockWorkFeature] });
+
+    assert.deepEqual(create.features, [clockWorkFeature]);
+    assert.deepEqual(update.features, [clockWorkFeature]);
+    assert.ok(ACCESS_FEATURES.includes(clockWorkFeature));
+    assert.ok(TRADING_ACCESS_FEATURES.includes(clockWorkFeature));
+    assert.equal(
+      runGuard(requireAccessFeature(clockWorkFeature), [clockWorkFeature]).nextCalled,
+      true,
+    );
+    assert.equal(
+      runGuard(requireAccessFeature(clockWorkFeature), ["trade-x"]).statusCode,
+      403,
+    );
+  });
+
   it("accepts Auto Trader in both create and edit requests", () => {
     const create = CreateAccessKeyBody.parse({
       label: "Fixture user",

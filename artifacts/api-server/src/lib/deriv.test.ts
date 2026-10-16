@@ -1187,4 +1187,42 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       assert.ok(deriv.getHistory().every((trade: { status: string }) => trade.status === "open"));
     });
   });
+
+  test("Clock Work quotes send signed price barriers for the selected Higher and Lower contracts", async () => {
+    const result = await withSelectedAccount("clock-work-quote-user", () => deriv.quoteClockWorkContracts({
+      contracts: [
+        { key: "higher", amount: 1, duration: 5, duration_unit: "t", contract_type: "HIGHER", barrier: "+0.12", symbol: "R_75" },
+        { key: "lower", amount: 1, duration: 5, duration_unit: "t", contract_type: "LOWER", barrier: "-0.12", symbol: "R_75" },
+      ],
+    }));
+
+    assert.equal(result.quotes.length, 2);
+    assert.ok(result.quotes.every((quote: { payout: number; ask_price: number }) => quote.payout > quote.ask_price));
+    const proposals = latestSocket().sent.filter((message) => message.proposal);
+    assert.ok(proposals.some((message) => message.contract_type === "HIGHER" && message.barrier === "+0.12"));
+    assert.ok(proposals.some((message) => message.contract_type === "LOWER" && message.barrier === "-0.12"));
+  });
+
+  test("Clock Work buys four mixed stakes without replaying or selling an acknowledged order", async () => {
+    const contracts = [
+      { key: "h1", amount: 1, duration: 5 as const, duration_unit: "t" as const, contract_type: "HIGHER" as const, barrier: "+0.12", symbol: "R_75" },
+      { key: "l1", amount: 1.2, duration: 5 as const, duration_unit: "t" as const, contract_type: "LOWER" as const, barrier: "-0.12", symbol: "R_75" },
+      { key: "h2", amount: 1.4, duration: 5 as const, duration_unit: "t" as const, contract_type: "HIGHER" as const, barrier: "+0.06", symbol: "R_75" },
+      { key: "l2", amount: 1.6, duration: 5 as const, duration_unit: "t" as const, contract_type: "LOWER" as const, barrier: "-0.06", symbol: "R_75" },
+    ];
+    const result = await withSelectedAccount("clock-work-four-user", () => deriv.buyClockWorkContracts({ contracts }));
+
+    assert.equal(result.ok, true);
+    assert.equal(result.requested_count, 4);
+    assert.equal(result.completed_count, 4);
+    assert.equal(result.contracts.length, 4);
+    assert.equal(result.failed.length, 0);
+    const buyMessages = latestSocket().sent.filter((message) => message.buy);
+    assert.equal(buyMessages.length, 4);
+    assert.deepEqual(
+      buyMessages.map((message) => message.parameters.contract_type).sort(),
+      ["HIGHER", "HIGHER", "LOWER", "LOWER"],
+    );
+    assert.equal(latestSocket().sent.some((message) => message.sell), false);
+  });
 });

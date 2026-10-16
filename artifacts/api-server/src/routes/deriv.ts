@@ -12,6 +12,10 @@ import {
   BulkBuyDerivContractsBody,
   BulkBuyDerivContractsResponse,
   DualBuyDerivContractsBody,
+  QuoteClockWorkContractsBody,
+  QuoteClockWorkContractsResponse,
+  BuyClockWorkContractsBody,
+  BuyClockWorkContractsResponse,
   SelectDerivAccountBody,
   SelectDerivAccountResponse,
   SelectDerivSymbolBody,
@@ -32,6 +36,8 @@ import {
   sellContract,
   bulkBuyContracts,
   dualBuyContracts,
+  quoteClockWorkContracts,
+  buyClockWorkContracts,
   selectAccount,
   selectSymbol,
   testConnection,
@@ -47,6 +53,7 @@ import { assertAccessSessionActive, AccessSessionRevokedError } from "../lib/acc
 import { db, derivCredentialsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { decryptPat } from "../lib/pat-crypto";
+import { requireAccessFeature } from "../middlewares/requireAccess.ts";
 
 const router: IRouter = Router();
 class MissingDerivCredentialError extends Error {}
@@ -481,6 +488,62 @@ router.post("/deriv/dual-buy", async (req, res) => {
         : message.includes("did not return a proposal") || message.includes("WebSocket is not ready")
           ? 504
         : 502;
+    return res.status(status).json({ error: message });
+  }
+});
+
+router.post("/deriv/clock-work/quotes", requireAccessFeature("clock-work"), async (req, res) => {
+  const parsed = QuoteClockWorkContractsBody.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid Clock Work quote request" });
+
+  try {
+    const result = QuoteClockWorkContractsResponse.parse(
+      await withCredential(res.locals.userId, () => quoteClockWorkContracts(parsed.data), true),
+    );
+    return res.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Clock Work quote request failed";
+    if (isCapacityError(error)) return res.status(503).json({ error: error.message });
+    if (isCredentialError(error)) return res.status(credentialHttpStatus(error)).json({ error: error.message });
+    req.log.warn({ err: error }, "Clock Work quote request failed");
+    return res.status(message.includes("needs") || message.includes("must") || message.includes("supported") ? 400 : 503)
+      .json({ error: message });
+  }
+});
+
+router.post("/deriv/clock-work/buy", requireAccessFeature("clock-work"), async (req, res) => {
+  const parsed = BuyClockWorkContractsBody.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid Clock Work buy request" });
+
+  try {
+    const assertAuthorized = () => assertAccessSessionActive(res.locals.accessSessionId, res.locals.accessKeyId);
+    const result = BuyClockWorkContractsResponse.parse(await withCredential(
+      res.locals.userId,
+      async () => {
+        await assertAuthorized();
+        return buyClockWorkContracts(parsed.data, assertAuthorized);
+      },
+      true,
+    ));
+    return res.status(202).json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Clock Work buy request failed";
+    req.log.error({ err: error }, "Clock Work buy request failed");
+    const status = isCapacityError(error)
+      ? 503
+      : isCredentialError(error)
+      ? credentialHttpStatus(error)
+      : error instanceof AccessSessionRevokedError
+      ? 403
+      : message.includes("disabled")
+      ? 403
+      : message.includes("still settling") || message.includes("checking open contracts") || message.includes("safety timeout")
+      ? 409
+      : message.includes("stake") || message.includes("market") || message.includes("barrier") || message.includes("five-tick") || message.includes("supports") || message.includes("contract keys")
+      ? 400
+      : message.includes("did not return a proposal") || message.includes("WebSocket is not ready")
+      ? 503
+      : 502;
     return res.status(status).json({ error: message });
   }
 });
