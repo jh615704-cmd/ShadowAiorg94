@@ -1421,7 +1421,7 @@ components:
           minimum: 1
         duration:
           type: integer
-          enum: [5]
+          enum: [3, 5]
         duration_unit:
           type: string
           enum: [t]

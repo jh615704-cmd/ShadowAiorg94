@@ -1191,7 +1191,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
   test("Clock Work quotes send signed price barriers for the selected Higher and Lower contracts", async () => {
     const result = await withSelectedAccount("clock-work-quote-user", () => deriv.quoteClockWorkContracts({
       contracts: [
-        { key: "higher", amount: 1, duration: 5, duration_unit: "t", contract_type: "HIGHER", barrier: "+0.12", symbol: "R_75" },
+        { key: "higher", amount: 1, duration: 3, duration_unit: "t", contract_type: "HIGHER", barrier: "+0.12", symbol: "R_75" },
         { key: "lower", amount: 1, duration: 5, duration_unit: "t", contract_type: "LOWER", barrier: "-0.12", symbol: "R_75" },
       ],
     }));
@@ -1199,13 +1199,13 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
     assert.equal(result.quotes.length, 2);
     assert.ok(result.quotes.every((quote: { payout: number; ask_price: number }) => quote.payout > quote.ask_price));
     const proposals = latestSocket().sent.filter((message) => message.proposal);
-    assert.ok(proposals.some((message) => message.contract_type === "HIGHER" && message.barrier === "+0.12"));
-    assert.ok(proposals.some((message) => message.contract_type === "LOWER" && message.barrier === "-0.12"));
+    assert.ok(proposals.some((message) => message.contract_type === "HIGHER" && message.barrier === "+0.12" && message.duration === 3));
+    assert.ok(proposals.some((message) => message.contract_type === "LOWER" && message.barrier === "-0.12" && message.duration === 5));
   });
 
   test("Clock Work buys four mixed stakes without replaying or selling an acknowledged order", async () => {
     const contracts = [
-      { key: "h1", amount: 1, duration: 5 as const, duration_unit: "t" as const, contract_type: "HIGHER" as const, barrier: "+0.12", symbol: "R_75" },
+      { key: "h1", amount: 1, duration: 3 as const, duration_unit: "t" as const, contract_type: "HIGHER" as const, barrier: "+0.12", symbol: "R_75" },
       { key: "l1", amount: 1.2, duration: 5 as const, duration_unit: "t" as const, contract_type: "LOWER" as const, barrier: "-0.12", symbol: "R_75" },
       { key: "h2", amount: 1.4, duration: 5 as const, duration_unit: "t" as const, contract_type: "HIGHER" as const, barrier: "+0.06", symbol: "R_75" },
       { key: "l2", amount: 1.6, duration: 5 as const, duration_unit: "t" as const, contract_type: "LOWER" as const, barrier: "-0.06", symbol: "R_75" },

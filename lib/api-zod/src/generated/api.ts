@@ -1146,7 +1146,7 @@ export const QuoteClockWorkContractsBody = zod.object({
   "contracts": zod.array(zod.object({
   "key": zod.string().min(1).max(quoteClockWorkContractsBodyContractsItemKeyMax),
   "amount": zod.number().min(1),
-  "duration": zod.literal(5),
+  "duration": zod.union([zod.literal(3),zod.literal(5)]),
   "duration_unit": zod.enum(['t']),
   "contract_type": zod.enum(['HIGHER', 'LOWER']),
   "barrier": zod.string().regex(quoteClockWorkContractsBodyContractsItemBarrierRegExp).describe('Signed relative barrier for Offset mode or unsigned absolute price barrier for Absolute mode.'),
@@ -1185,7 +1185,7 @@ export const BuyClockWorkContractsBody = zod.object({
   "contracts": zod.array(zod.object({
   "key": zod.string().min(1).max(buyClockWorkContractsBodyContractsItemKeyMax),
   "amount": zod.number().min(1),
-  "duration": zod.literal(5),
+  "duration": zod.union([zod.literal(3),zod.literal(5)]),
   "duration_unit": zod.enum(['t']),
   "contract_type": zod.enum(['HIGHER', 'LOWER']),
   "barrier": zod.string().regex(buyClockWorkContractsBodyContractsItemBarrierRegExp).describe('Signed relative barrier for Offset mode or unsigned absolute price barrier for Absolute mode.'),

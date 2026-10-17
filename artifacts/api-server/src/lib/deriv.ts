@@ -1928,7 +1928,7 @@ export async function bulkBuyContracts(input: {
 export type ClockWorkOrder = {
   key: string;
   amount: number;
-  duration: 5;
+  duration: 3 | 5;
   duration_unit: "t";
   contract_type: "HIGHER" | "LOWER";
   barrier: string;
@@ -1955,8 +1955,8 @@ function normalizeClockWorkOrders(contracts: readonly ClockWorkOrder[]) {
     if (!Number.isFinite(contract.amount) || contract.amount < 1) {
       throw new Error("Clock Work stakes must be at least 1.00.");
     }
-    if (contract.duration !== 5 || contract.duration_unit !== "t") {
-      throw new Error("Clock Work supports five-tick contracts only.");
+    if ((contract.duration !== 3 && contract.duration !== 5) || contract.duration_unit !== "t") {
+      throw new Error("Clock Work supports three- or five-tick contracts only.");
     }
     if (contract.contract_type !== "HIGHER" && contract.contract_type !== "LOWER") {
       throw new Error("Clock Work supports Higher and Lower contracts only.");

@@ -1,4 +1,9 @@
 import { Activity, ChartNoAxesCombined, Clock3, Minus, Plus, Zap } from "lucide-react";
+import { useState } from "react";
+import {
+  getClockWorkChartZoneBand,
+  type ClockWorkChartZone,
+} from "../lib/clock-work-logic";
 import "./clock-work-panel.css";
 
 export interface ClockWorkOption {
@@ -23,6 +28,8 @@ export interface ClockWorkPanelProps {
   symbol: string;
   markets: { value: string; label: string }[];
   onSymbolChange: (value: string) => void;
+  duration: 3 | 5;
+  onDurationChange: (value: 3 | 5) => void;
   quote: number | null;
   quoteHistory: number[];
   quoteUpdatedAt: string;
@@ -80,6 +87,7 @@ export interface ClockWorkPanelProps {
   onAggressiveEnabledChange: (value: boolean) => void;
   aggressiveBalancePercent: number;
   onAggressiveBalancePercentChange: (value: number) => void;
+  aggressiveMinWinRate: number;
   aggressivePushTicks: number;
   onAggressivePushTicksChange: (value: number) => void;
   aggressivePushProgress: number;
@@ -117,8 +125,10 @@ function Toggle({ checked, onChange, disabled, label }: { checked: boolean; onCh
 }
 
 export default function ClockWorkPanel(props: ClockWorkPanelProps) {
+  const [chartFocusZone, setChartFocusZone] = useState<ClockWorkChartZone | null>(null);
   const {
-    enabled, symbol, markets, onSymbolChange, quote, quoteHistory, quoteUpdatedAt, tradeSlotBlocked,
+    enabled, symbol, markets, onSymbolChange, duration, onDurationChange, quote, quoteHistory,
+    quoteUpdatedAt, tradeSlotBlocked,
     barrierMode, onBarrierModeChange, halfBarrier, onHalfBarrierChange, higherBarrierLabel,
     lowerBarrierLabel, higherBarrierOffset, lowerBarrierOffset, barrierAnchor, onResetBarrierAnchor,
     higherBarrierOptions, lowerBarrierOptions, onHigherBarrierChange,
@@ -130,7 +140,8 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
     onPlaceLower, onPlacePair, onPlaceAllFour, autoMode, onAutoModeChange, minLean,
     onMinLeanChange, autoEnabled, onAutoEnabledChange, aggressiveEnabled,
     onAggressiveEnabledChange, aggressiveBalancePercent, onAggressiveBalancePercentChange,
-    aggressivePushTicks, onAggressivePushTicksChange, aggressivePushProgress, aggressiveRounds,
+    aggressiveMinWinRate, aggressivePushTicks, onAggressivePushTicksChange,
+    aggressivePushProgress, aggressiveRounds,
     aggressiveStakeLabel, accountBalance, currency, aggressiveUsingBalance, aggressiveEachSide,
     autoStatus,
   } = props;
@@ -151,6 +162,9 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
     `${count < 2 ? 58 : plotLeft + index * (plotRight - plotLeft) / (count - 1)},${plotBottom - (value - min) / span * (plotBottom - plotTop)}`;
   const points = chartValues.map((value, index) => point(value, index, chartValues.length)).join(" ");
   const yFor = (value: number) => plotBottom - (value - min) / span * (plotBottom - plotTop);
+  const selectedZoneBand = chartFocusZone && higherLevel != null && lowerLevel != null
+    ? getClockWorkChartZoneBand(chartFocusZone, yFor(higherLevel), yFor(lowerLevel), plotTop, plotBottom)
+    : null;
   const fmt = (value: number | null) => value == null ? "—" : value.toFixed(2);
   const fmtPercent = (value: number | null) => value == null ? "—" : `${Math.round(value)}%`;
   const chartReady = chartValues.length >= 2;
@@ -173,6 +187,8 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
       : chartZone === "between"
         ? "PRICE IS BETWEEN YOUR BARRIERS"
         : "WAITING FOR LIVE PRICE AND BARRIERS";
+  const chartZoneLabel = (zone: ClockWorkChartZone) =>
+    zone === "higher" ? "Above Higher" : zone === "between" ? "Between" : "Below Lower";
   const pairQuoteDetail = higherQuote && lowerQuote
     ? `Payout ${money(higherQuote.payout + lowerQuote.payout, currency)} · profit ${money((higherQuote.payout - higherQuote.ask_price) + (lowerQuote.payout - lowerQuote.ask_price), currency)}`
     : "Quote unavailable";
@@ -212,8 +228,10 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
     <div className="cw-content">
       <section className="cw-setup cw-surface">
         <div className="cw-setup-top">
-          <label className="cw-control"><span>MARKET</span><select value={symbol} onChange={(event) => onSymbolChange(event.target.value)} disabled={disabled} aria-label="Market" data-testid="select-clock-market">{markets.map((market) => <option key={market.value} value={market.value}>{market.label}</option>)}</select></label>
-           <div className="cw-control"><span>DURATION</span><div className="cw-fixed-duration"><b>5</b></div></div>
+          <label className="cw-control"><span>MARKET</span><select value={symbol} onChange={(event) => { setChartFocusZone(null); onSymbolChange(event.target.value); }} disabled={disabled} aria-label="Market" data-testid="select-clock-market">{markets.map((market) => <option key={market.value} value={market.value}>{market.label}</option>)}</select></label>
+          <div className="cw-control"><span>DURATION</span><div className="cw-duration-choice" role="group" aria-label="Clock Work duration">
+            {([3, 5] as const).map((ticks) => <button key={ticks} type="button" aria-pressed={duration === ticks} className={duration === ticks ? "selected" : ""} onClick={() => onDurationChange(ticks)} disabled={disabled} data-testid={`button-clock-duration-${ticks}`}>{ticks} Ticks</button>)}
+          </div></div>
         </div>
         <div className="cw-stakes">
           <StakeInput id="cw-higher-stake" label="↑ Higher Stake ($)" value={higherStake} onChange={onHigherStakeChange} disabled={disabled} />
@@ -239,7 +257,8 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
         </div>
         <div className={`cw-chart-signal ${chartZone ?? "waiting"}`} aria-live="polite"><i />{chartSignal}</div>
         <div className="cw-chart-area">
-          {chartReady ? <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label={`Price chart for ${symbol} showing ${chartValues.length} recent ticks and selected barriers`}>
+          {chartReady ? <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label={`Price chart for ${symbol} showing ${chartValues.length} recent ticks and selected barriers${chartFocusZone ? `, highlighting ${chartZoneLabel(chartFocusZone)}` : ""}`}>
+            {selectedZoneBand && <rect x={plotLeft} y={selectedZoneBand.y} width={plotRight - plotLeft} height={selectedZoneBand.height} className={`cw-zone-band zone-${chartFocusZone}`} />}
             {[0, 1, 2, 3].map((index) => {
               const y = plotTop + index * (plotBottom - plotTop) / 3;
               const value = max - index * span / 3;
@@ -254,9 +273,17 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
           </svg> : <div className="cw-chart-empty"><Activity size={17} /><b>Waiting for price history</b><span>Live ticks will draw here once at least two quotes arrive.</span></div>}
         </div>
         <div className="cw-chart-legend"><span><i className="cw-legend-price" />Price</span><span><i className="cw-legend-high" />Higher barrier</span><span><i className="cw-legend-low" />Lower barrier</span></div>
-        <div className="cw-chart-zones" aria-label="Current price zone">
-          {(["higher", "between", "lower"] as const).map((zone) => <span key={zone} className={chartZone === zone ? "active" : ""}>{zone === "higher" ? "Above Higher" : zone === "between" ? "Between" : "Below Lower"}</span>)}
+        <div className="cw-chart-zones" role="group" aria-label="Select a price chart zone">
+          {(["higher", "between", "lower"] as const).map((zone) => <button
+            key={zone}
+            type="button"
+            aria-pressed={chartFocusZone === zone}
+            aria-label={`Highlight ${chartZoneLabel(zone)} area in the price chart`}
+            className={`${chartZone === zone ? "active" : ""} ${chartFocusZone === zone ? "selected" : ""}`.trim()}
+            onClick={() => setChartFocusZone((current) => current === zone ? null : zone)}
+          >{chartZoneLabel(zone)}</button>)}
         </div>
+        <small className="cw-chart-focus-note">{chartFocusZone ? `Highlighted chart zone: ${chartZoneLabel(chartFocusZone)}` : "Select a zone to highlight it in the chart."}</small>
       </section>
 
       <div className="cw-readouts">
@@ -274,7 +301,7 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
       <div className="cw-trade-actions">
         <button type="button" className="cw-trade-button trade-high" onClick={onPlaceHigher} disabled={actionsDisabled} data-testid="button-clock-place-higher"><b>↑ HIGHER</b><small>{quoteDetail(higherQuote, currency)}</small><span>{busy ? "Sending…" : "Place Higher"}</span></button>
         <button type="button" className="cw-trade-button trade-low" onClick={onPlaceLower} disabled={actionsDisabled} data-testid="button-clock-place-lower"><b>↓ LOWER</b><small>{quoteDetail(lowerQuote, currency)}</small><span>{busy ? "Sending…" : "Place Lower"}</span></button>
-        <button type="button" className="cw-pair-button" onClick={onPlacePair} disabled={actionsDisabled} data-testid="button-clock-place-pair"><b>↑ HIGHER &amp; LOWER</b><small>{pairQuoteDetail}</small><span>Combined stake {money(higherStake + lowerStake, currency)} · 5 ticks each</span></button>
+        <button type="button" className="cw-pair-button" onClick={onPlacePair} disabled={actionsDisabled} data-testid="button-clock-place-pair"><b>↑ HIGHER &amp; LOWER</b><small>{pairQuoteDetail}</small><span>Combined stake {money(higherStake + lowerStake, currency)} · {duration} ticks each</span></button>
       </div>
 
       <section className={`cw-auto cw-surface ${autoEnabled ? "is-running" : ""}`}>
@@ -295,6 +322,7 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
       <section className={`cw-aggressive cw-surface ${aggressiveEnabled ? "is-running" : ""}`}>
         <div className="cw-auto-head"><div><Zap size={15} /><b>Aggressive Auto Trading</b><span className="cw-admin-badge">ADMIN</span>{aggressiveEnabled && <span className="cw-active-badge">ACTIVE</span>}</div><Toggle checked={aggressiveEnabled} onChange={onAggressiveEnabledChange} disabled={disabled} label="Enable aggressive auto trading" /></div>
         <div className="cw-aggressive-controls">
+          <span className="cw-win-rate-threshold">Min win rate <b>{aggressiveMinWinRate}%</b></span>
           <span className="cw-inline-label">Balance %</span>
           <div className="cw-choice-row" role="group" aria-label="Aggressive balance percentage">{[5,10,25,50].map((value) => <button key={value} type="button" aria-pressed={aggressiveBalancePercent === value} className={aggressiveBalancePercent === value ? "selected" : ""} onClick={() => onAggressiveBalancePercentChange(value)} disabled={disabled}>{value}%</button>)}</div>
           <div className="cw-aggressive-push" role="group" aria-label="Consecutive tick push">
@@ -310,7 +338,7 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
         <div className="cw-push-progress" style={{ gridTemplateColumns: `repeat(${aggressivePushTicks}, minmax(0, 1fr))` }} role="progressbar" aria-label="Consecutive tick push progress" aria-valuemin={0} aria-valuemax={aggressivePushTicks} aria-valuenow={Math.min(aggressivePushTicks, aggressivePushProgress)}>
           {Array.from({ length: aggressivePushTicks }, (_, index) => <i key={index} className={index < aggressivePushProgress ? "reached" : ""} />)}
         </div>
-        <p className="cw-auto-note">The selected percentage sets a per-cycle balance budget. Equal stakes are rounded down to cents; results and win rates are not guaranteed.</p>
+        <p className="cw-auto-note">Aggressive entries require at least {aggressiveMinWinRate}% observed win rate for the push direction. This historical threshold does not guarantee future results.</p>
       </section>
 
       <section className="cw-four cw-surface">

@@ -1,5 +1,17 @@
 export type ClockWorkDirection = "HIGHER" | "LOWER";
 export type ClockWorkBarrierMode = "offset" | "absolute";
+export type ClockWorkChartZone = "higher" | "between" | "lower";
+export const CLOCK_WORK_AGGRESSIVE_MIN_WIN_RATE = 50;
+
+export function meetsClockWorkMinimumWinRate(
+  winRate: number | null | undefined,
+  minimum = CLOCK_WORK_AGGRESSIVE_MIN_WIN_RATE,
+) {
+  return winRate != null
+    && Number.isFinite(winRate)
+    && Number.isFinite(minimum)
+    && winRate >= minimum;
+}
 
 export interface ClockWorkQuoteBuffer {
   symbol: string;
@@ -156,6 +168,26 @@ export function getClockWorkBarrierTickCounts(
     higherPercent: totalCount === 0 ? null : (higherCount / totalCount) * 100,
     lowerPercent: totalCount === 0 ? null : (lowerCount / totalCount) * 100,
   } as const;
+}
+
+export function getClockWorkChartZoneBand(
+  zone: ClockWorkChartZone,
+  higherY: number,
+  lowerY: number,
+  plotTop: number,
+  plotBottom: number,
+) {
+  const clamp = (value: number) => Math.max(plotTop, Math.min(plotBottom, value));
+  const highLine = clamp(higherY);
+  const lowLine = clamp(lowerY);
+  if (zone === "higher") {
+    return { y: plotTop, height: Math.max(0, highLine - plotTop) };
+  }
+  if (zone === "between") {
+    const y = Math.min(highLine, lowLine);
+    return { y, height: Math.abs(lowLine - highLine) };
+  }
+  return { y: lowLine, height: Math.max(0, plotBottom - lowLine) };
 }
 
 export function getClockWorkRecentMoves(quotes: readonly number[], limit = 20) {

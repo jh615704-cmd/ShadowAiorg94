@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  CLOCK_WORK_AGGRESSIVE_MIN_WIN_RATE,
   appendClockWorkQuote,
   getClockWorkBarrierTickCounts,
+  getClockWorkChartZoneBand,
   estimateClockWorkBarrierRates,
   getClockWorkAggressiveBudget,
   getClockWorkPushProgress,
+  meetsClockWorkMinimumWinRate,
 } from "./clock-work-logic.ts";
 
 test("Clock Work quote buffer resets by market and retains at most 900 fresh ticks", () => {
@@ -55,6 +58,29 @@ test("Clock Work barrier estimates expose per-side tick counts", () => {
   assert.equal(rates.lowerPercent, 50);
 });
 
+test("Clock Work win-rate gate opens at exactly 50 percent", () => {
+  assert.equal(CLOCK_WORK_AGGRESSIVE_MIN_WIN_RATE, 50);
+  assert.equal(meetsClockWorkMinimumWinRate(49.99), false);
+  assert.equal(meetsClockWorkMinimumWinRate(50), true);
+  assert.equal(meetsClockWorkMinimumWinRate(50.01), true);
+  assert.equal(meetsClockWorkMinimumWinRate(null), false);
+  assert.equal(meetsClockWorkMinimumWinRate(Number.NaN), false);
+});
+
+test("Clock Work estimates use the selected 3-tick or 5-tick expiry", () => {
+  const input = {
+    quotes: [100, 101, 99, 102, 98, 103, 97, 100, 105, 95],
+    spot: 100,
+    mode: "offset" as const,
+    higherOffset: 0.1,
+    lowerOffset: -0.1,
+    halfBarrier: false,
+    minimumSamples: 1,
+  };
+  assert.equal(estimateClockWorkBarrierRates({ ...input, duration: 3 }).sampleCount, 7);
+  assert.equal(estimateClockWorkBarrierRates({ ...input, duration: 5 }).sampleCount, 5);
+});
+
 test("Clock Work observed higher/lower percentages count session ticks outside anchored barriers", () => {
   const counts = getClockWorkBarrierTickCounts(
     [100, 101, 102, 103, 99, 97, Number.NaN],
@@ -67,6 +93,21 @@ test("Clock Work observed higher/lower percentages count session ticks outside a
     totalCount: 2,
     higherPercent: 50,
     lowerPercent: 50,
+  });
+});
+
+test("Clock Work chart zone selection maps to the correct highlighted price band", () => {
+  assert.deepEqual(getClockWorkChartZoneBand("higher", 30, 70, 10, 90), {
+    y: 10,
+    height: 20,
+  });
+  assert.deepEqual(getClockWorkChartZoneBand("between", 30, 70, 10, 90), {
+    y: 30,
+    height: 40,
+  });
+  assert.deepEqual(getClockWorkChartZoneBand("lower", 30, 70, 10, 90), {
+    y: 70,
+    height: 20,
   });
 });
 
