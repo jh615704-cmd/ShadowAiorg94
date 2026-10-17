@@ -32,7 +32,7 @@
 - [Trading feature blue surfaces](trading-feature-blue-surfaces.md) — use Cash Grab’s smooth deep blue on feature shells and nested cards, not only outer wrappers.
 - [Responsive trading controls](responsive-trading-controls.md) — keep trading panels and future controls usable across laptop, tablet, and phone sizes.
 - [Deriv quote display](deriv-quote-display.md) — Cash Grab, DigitFlip, and EDGE quotes use at least four integer digits and exactly two decimals.
-- [Trading history results](trading-history-results.md) — show settled net P/L per contract and calculate cumulative staked from actual recorded buys for every feature.
+- [Trading history results](trading-history-results.md) — show accurate P/L and stakes; serve explicitly stale account snapshots on transient Deriv refresh failures.
 - [Auto Trader guide boundary](auto-trader-guide-boundary.md) — explain controls and observed data without exposing private strategy logic or implying guaranteed outcomes.
 - [Trading feature connection copy](trading-feature-connection-copy.md) — keep credential setup copy in the shared account flow; don't repeat PAT prompts under each new feature.
 - [Auto Trader 2 loss handling](auto-trader-2-loss-recovery.md) — Differs losses require recovery; paired-family losses require the opposite side after fresh evidence analysis.

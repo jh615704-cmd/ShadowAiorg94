@@ -346,7 +346,7 @@ export default function XTraderPage() {
   const accounts = useGetDerivAccounts({ query: { enabled: connectedToken && canUseDeriv, retry: false, refetchInterval: 10_000, queryKey: getGetDerivAccountsQueryKey() } });
   const storedPatInvalid = errorMessage(accounts.error).includes("saved Deriv token is no longer readable");
   const status = useGetDerivStatus({ query: { enabled: connectedToken && canUseDeriv, retry: false, refetchInterval: 500, queryKey: getGetDerivStatusQueryKey() } });
-  const history = useGetDerivHistory({ query: { enabled: connectedToken && canViewHistory, retry: false, refetchInterval: 1_000, queryKey: getGetDerivHistoryQueryKey() } });
+  const history = useGetDerivHistory({ query: { enabled: connectedToken && canViewHistory, retry: false, refetchInterval: 5_000, queryKey: getGetDerivHistoryQueryKey() } });
   const derivCapacityError = [accounts.error, status.error]
     .map(errorMessage)
     .find((message) => message.includes("Deriv session limit"));
@@ -4483,6 +4483,7 @@ export default function XTraderPage() {
             onH2StakeChange={(value) => setClockWorkH2Stake(Math.max(1, value))}
             higherPercent={clockWorkRates.higherPercent}
             lowerPercent={clockWorkRates.lowerPercent}
+            sampleCount={clockWorkRates.sampleCount}
             recentMoves={clockWorkRecentMoves}
             prediction={clockWorkRates.prediction}
             leanStrength={clockWorkRates.leanStrength}

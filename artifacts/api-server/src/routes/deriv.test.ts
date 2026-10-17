@@ -24,6 +24,7 @@ let forceCapacityError = false;
 let forcePermissionError = false;
 let forceInvalidCredentialError = false;
 let forceAccessRevoked = false;
+let forceHistoryRefreshError = false;
 let buyInvocations = 0;
 let bulkBuyInvocations = 0;
 let dualBuyInvocations = 0;
@@ -93,6 +94,11 @@ mock.module("drizzle-orm", {
 mock.module("../lib/access-keys", {
   namedExports: {
     AccessSessionRevokedError: MockAccessSessionRevokedError,
+    findSessionByToken: async () => null,
+    featureList: (features: string[] | null | undefined) => features ?? [],
+    hashSecret: (value: string) => value,
+    isPrimaryAdminKeyHash: () => false,
+    parseAccessCookie: () => null,
     assertAccessSessionActive: async () => {
       if (forceAccessRevoked) {
         throw new MockAccessSessionRevokedError("This access key is blocked");
@@ -158,6 +164,7 @@ mock.module("../lib/deriv", {
     },
     subscribeDerivHistoryUpdates: () => () => {},
     refreshDerivHistory: async () => {
+      if (forceHistoryRefreshError) throw new Error("Deriv history refresh timed out");
       return;
     },
     clearHistory: async () => {
@@ -236,6 +243,7 @@ app.use(express.json());
 app.use((req, res, next) => {
   Object.assign(req, { log: { error() {}, warn() {} } });
   res.locals.userId = sessionId;
+  res.locals.accessKey = { features: ["clock-work"] };
   next();
 });
 app.use(derivRouter);
@@ -454,10 +462,28 @@ test("history route accepts decimal Rise/Fall price barriers outside the digit r
   try {
     const response = await fetch(`http://127.0.0.1:${address.port}/deriv/history`);
     assert.equal(response.status, 200);
+    assert.equal(response.headers.get("x-deriv-history-stale"), "false");
     const history = await response.json() as Array<{ barrier: number | null }>;
     assert.equal(history[0]?.barrier, 12_345.678);
     assert.deepEqual(observedPats, [enteredPat]);
+
+    forceHistoryRefreshError = true;
+    const cachedResponse = await fetch(`http://127.0.0.1:${address.port}/deriv/history`);
+    assert.equal(cachedResponse.status, 200);
+    assert.equal(cachedResponse.headers.get("x-deriv-history-stale"), "true");
+    const cachedHistory = await cachedResponse.json() as Array<{ barrier: number | null }>;
+    assert.equal(cachedHistory[0]?.barrier, 12_345.678);
+
+    forceHistoryRefreshError = false;
+    historyRows.push({ contract_id: "malformed-history-row" });
+    const sanitizedResponse = await fetch(`http://127.0.0.1:${address.port}/deriv/history`);
+    assert.equal(sanitizedResponse.status, 200);
+    assert.equal(sanitizedResponse.headers.get("x-deriv-history-stale"), "true");
+    const sanitizedHistory = await sanitizedResponse.json() as Array<{ barrier: number | null }>;
+    assert.equal(sanitizedHistory.length, 1);
+    assert.equal(sanitizedHistory[0]?.barrier, 12_345.678);
   } finally {
+    forceHistoryRefreshError = false;
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     historyRows.length = 0;
     credentials.clear();

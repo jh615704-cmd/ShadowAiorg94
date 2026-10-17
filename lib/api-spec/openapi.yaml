@@ -888,6 +888,12 @@ paths:
       responses:
         "200":
           description: Trade history
+          headers:
+            X-Deriv-History-Stale:
+              description: "true when the response uses this account's cached history because Deriv temporarily could not refresh it"
+              schema:
+                type: string
+                enum: ["true", "false"]
           content:
             application/json:
               schema:

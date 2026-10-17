@@ -115,7 +115,7 @@ function AutoTraderContent() {
     },
   });
   const history = useGetDerivHistory({
-    query: { queryKey: getGetDerivHistoryQueryKey(), enabled: hasAutoTraderAccess && hasToken, retry: false, refetchInterval: hasAutoTraderAccess && hasToken ? 2_000 : false },
+    query: { queryKey: getGetDerivHistoryQueryKey(), enabled: hasAutoTraderAccess && hasToken, retry: false, refetchInterval: hasAutoTraderAccess && hasToken ? 5_000 : false },
   });
   const bulkBuy = useBulkBuyDerivContracts();
 

@@ -161,23 +161,54 @@ router.get("/deriv/status", (_req, res) => {
     });
 });
 
-router.get("/deriv/history", (req, res) => {
+router.get("/deriv/history", async (req, res) => {
   res.set("Cache-Control", "no-store");
-  withCredential(res.locals.userId, async () => {
-    await refreshDerivHistory();
-    return getHistory();
-  }, false)
-    .then((history) => res.json(GetDerivHistoryResponse.parse(history)))
-     .catch((error) => {
-       if (isCapacityError(error)) {
-         return res.status(503).json({ error: error.message });
-       }
-       const missingCredential = isCredentialError(error);
-       if (!missingCredential) req.log.error({ err: error }, "Unable to load Deriv history");
-        return res.status(missingCredential ? credentialHttpStatus(error) : 502).json({
-       error: missingCredential ? error.message : "Unable to load Deriv history",
-       });
-     });
+  try {
+    const snapshot = await withCredential(res.locals.userId, async () => {
+      let refreshError: unknown = null;
+      try {
+        await refreshDerivHistory();
+      } catch (error) {
+        if (isCredentialError(error) || isCapacityError(error)) throw error;
+        refreshError = error;
+      }
+      return { history: await getHistory(), refreshError };
+    }, false);
+    let historyResult = GetDerivHistoryResponse.safeParse(snapshot.history);
+    let stale = snapshot.refreshError != null;
+    if (!historyResult.success) {
+      if (!Array.isArray(snapshot.history)) throw historyResult.error;
+      const validationError = historyResult.error;
+      const validRows = snapshot.history.flatMap((row) => {
+        const parsedRow = GetDerivHistoryResponse.safeParse([row]);
+        return parsedRow.success ? parsedRow.data : [];
+      });
+      historyResult = GetDerivHistoryResponse.safeParse(validRows);
+      if (!historyResult.success) throw historyResult.error;
+      stale = true;
+      req.log.warn(
+        { err: validationError, receivedRows: snapshot.history.length, returnedRows: validRows.length },
+        "Filtered invalid rows from the cached Deriv history snapshot",
+      );
+    }
+    res.set("X-Deriv-History-Stale", stale ? "true" : "false");
+    if (stale) {
+      req.log.warn(
+        { err: snapshot.refreshError },
+        "Serving the account-scoped cached Deriv history after a temporary refresh failure",
+      );
+    }
+    return res.json(historyResult.data);
+  } catch (error) {
+    if (isCapacityError(error)) {
+      return res.status(503).json({ error: error.message });
+    }
+    const missingCredential = isCredentialError(error);
+    if (!missingCredential) req.log.error({ err: error }, "Unable to load Deriv history");
+    return res.status(missingCredential ? credentialHttpStatus(error) : 502).json({
+      error: missingCredential ? error.message : "Unable to load Deriv history",
+    });
+  }
 });
 
 router.get("/deriv/events", async (req, res): Promise<void> => {

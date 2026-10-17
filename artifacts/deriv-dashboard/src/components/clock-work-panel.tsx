@@ -51,6 +51,7 @@ export interface ClockWorkPanelProps {
   onH2StakeChange: (value: number) => void;
   higherPercent: number | null;
   lowerPercent: number | null;
+  sampleCount: number;
   recentMoves: ClockWorkMove[];
   prediction: "HIGHER" | "LOWER" | null;
   leanStrength: number | null;
@@ -112,7 +113,7 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
     lowerBarrierLabel, higherBarrierOptions, lowerBarrierOptions, onHigherBarrierChange,
     onLowerBarrierChange, higherStake, lowerStake, h1Stake, l1Stake, l2Stake, h2Stake,
     onHigherStakeChange, onLowerStakeChange, onH1StakeChange, onL1StakeChange, onL2StakeChange,
-    onH2StakeChange, higherPercent, lowerPercent, recentMoves, prediction, leanStrength,
+    onH2StakeChange, higherPercent, lowerPercent, sampleCount, recentMoves, prediction, leanStrength,
     busy, disabled, statusMessage, higherQuote, lowerQuote, allFourQuote, onPlaceHigher,
     onPlaceLower, onPlacePair, onPlaceAllFour, autoMode, onAutoModeChange, minLean,
     onMinLeanChange, autoEnabled, onAutoEnabledChange, aggressiveEnabled,
@@ -190,10 +191,10 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
       </section>
 
       <div className="cw-readouts">
-        <div className="cw-percent cw-percent-high"><span>↑ Higher</span><b>{higherPercent == null ? "—" : `${higherPercent.toFixed(1)}%`}</b><small>Recent distribution</small></div>
-        <div className="cw-percent cw-percent-low"><span>↓ Lower</span><b>{lowerPercent == null ? "—" : `${lowerPercent.toFixed(1)}%`}</b><small>Recent distribution</small></div>
+        <div className="cw-percent cw-percent-high"><span>↑ Higher</span><b>{higherPercent == null ? "—" : `${higherPercent.toFixed(1)}%`}</b><small>{sampleCount} ticks</small></div>
+        <div className="cw-percent cw-percent-low"><span>↓ Lower</span><b>{lowerPercent == null ? "—" : `${lowerPercent.toFixed(1)}%`}</b><small>{sampleCount} ticks</small></div>
       </div>
-      <section className="cw-moves cw-surface"><div className="cw-label-row"><b>Recent Moves</b><small>{recentMoves.length} observed</small></div><div className="cw-move-list">{recentMoves.length ? recentMoves.map((move, index) => <span key={`${move.direction}-${index}`} className={move.direction === "H" ? "move-high" : "move-low"} title={`${move.direction === "H" ? "Higher" : "Lower"} · ${move.quote}`}>{move.direction}<small>{move.quote.toFixed(2)}</small></span>) : <p>No recent moves yet.</p>}</div></section>
+      <section className="cw-moves cw-surface"><div className="cw-label-row"><b>Recent Moves</b></div><div className="cw-move-list">{recentMoves.length ? recentMoves.map((move, index) => <span key={`${move.direction}-${index}`} className={move.direction === "H" ? "move-high" : "move-low"} title={`${move.direction === "H" ? "Higher" : "Lower"} · ${move.quote}`}>{move.direction}</span>) : <p>No recent moves yet.</p>}</div></section>
       <section className={`cw-prediction ${prediction === "HIGHER" ? "prediction-high" : prediction === "LOWER" ? "prediction-low" : ""}`} aria-live="polite">
         <div className="cw-prediction-head"><div><span className="cw-section-kicker">OBSERVED LEAN</span><b>{prediction ?? "NOT ENOUGH DATA"}</b></div><strong>{leanStrength == null ? "—" : `${leanStrength}%`}<small> lean strength</small></strong></div>
         <div className="cw-lean-meter"><i style={{ width: `${Math.max(0, Math.min(100, leanStrength ?? 0))}%` }} /></div>
@@ -223,7 +224,7 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
       </section>
 
       <section className={`cw-aggressive cw-surface ${aggressiveEnabled ? "is-running" : ""}`}>
-        <div className="cw-auto-head"><div><Zap size={15} /><b>Aggressive Auto Trading</b><span className="cw-admin-badge">CONTROL</span>{aggressiveEnabled && <span className="cw-active-badge">ACTIVE</span>}</div><Toggle checked={aggressiveEnabled} onChange={onAggressiveEnabledChange} disabled={disabled} label="Enable aggressive auto trading" /></div>
+        <div className="cw-auto-head"><div><Zap size={15} /><b>Aggressive Auto Trading</b><span className="cw-admin-badge">ADMIN</span>{aggressiveEnabled && <span className="cw-active-badge">ACTIVE</span>}</div><Toggle checked={aggressiveEnabled} onChange={onAggressiveEnabledChange} disabled={disabled} label="Enable aggressive auto trading" /></div>
         <div className="cw-aggressive-controls"><span className="cw-inline-label">Balance %</span><div className="cw-choice-row" role="group" aria-label="Aggressive balance percentage">{[5,15,25,50].map((value) => <button key={value} type="button" aria-pressed={aggressiveBalancePercent === value} className={aggressiveBalancePercent === value ? "selected" : ""} onClick={() => onAggressiveBalancePercentChange(value)} disabled={disabled}>{value}%</button>)}</div><span className="cw-push-label">Push: <b>5T</b></span></div>
         <div className="cw-balance-strip"><span>Balance <b>{money(accountBalance, currency)}</b></span><span>Using <b>{money(aggressiveUsingBalance, currency)}</b></span><span>Each side <b>{money(aggressiveEachSide, currency)}</b></span></div>
         <p className="cw-auto-note">Aggressive mode uses the configured share of available balance for each 5-tick cycle. Balance and quote availability can change.</p>
