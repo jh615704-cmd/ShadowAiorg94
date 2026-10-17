@@ -439,7 +439,7 @@ test("history route accepts decimal Rise/Fall price barriers outside the digit r
     account_type: "demo",
     currency: "USD",
     contract_type: "CALL",
-    barrier: 12_345.678,
+    barrier: "12345.678",
     symbol: "R_75",
     buy_price: 1,
     current_value: 1.25,

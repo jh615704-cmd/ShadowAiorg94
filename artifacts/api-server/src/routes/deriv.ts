@@ -73,6 +73,14 @@ function isCapacityError(error: unknown): error is DerivCapacityError {
   return error instanceof DerivCapacityError;
 }
 
+function normalizeHistoryBarrier(row: unknown): unknown {
+  if (!row || typeof row !== "object" || Array.isArray(row)) return row;
+  const barrier = (row as { barrier?: unknown }).barrier;
+  if (typeof barrier !== "string" || barrier.trim() === "") return row;
+  const numericBarrier = Number(barrier);
+  return Number.isFinite(numericBarrier) ? { ...row, barrier: numericBarrier } : row;
+}
+
 async function withCredential<T>(
   userId: string,
   operation: () => Promise<T>,
@@ -174,12 +182,15 @@ router.get("/deriv/history", async (req, res) => {
       }
       return { history: await getHistory(), refreshError };
     }, false);
-    let historyResult = GetDerivHistoryResponse.safeParse(snapshot.history);
+    const historySnapshot = Array.isArray(snapshot.history)
+      ? snapshot.history.map(normalizeHistoryBarrier)
+      : snapshot.history;
+    let historyResult = GetDerivHistoryResponse.safeParse(historySnapshot);
     let stale = snapshot.refreshError != null;
     if (!historyResult.success) {
-      if (!Array.isArray(snapshot.history)) throw historyResult.error;
+      if (!Array.isArray(historySnapshot)) throw historyResult.error;
       const validationError = historyResult.error;
-      const validRows = snapshot.history.flatMap((row) => {
+      const validRows = historySnapshot.flatMap((row) => {
         const parsedRow = GetDerivHistoryResponse.safeParse([row]);
         return parsedRow.success ? parsedRow.data : [];
       });
@@ -187,7 +198,7 @@ router.get("/deriv/history", async (req, res) => {
       if (!historyResult.success) throw historyResult.error;
       stale = true;
       req.log.warn(
-        { err: validationError, receivedRows: snapshot.history.length, returnedRows: validRows.length },
+        { err: validationError, receivedRows: historySnapshot.length, returnedRows: validRows.length },
         "Filtered invalid rows from the cached Deriv history snapshot",
       );
     }
