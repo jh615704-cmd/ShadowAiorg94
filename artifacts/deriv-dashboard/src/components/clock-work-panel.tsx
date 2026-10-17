@@ -1,4 +1,4 @@
-import { Activity, ChartNoAxesCombined, Clock3, Zap } from "lucide-react";
+import { Activity, ChartNoAxesCombined, Clock3, Minus, Plus, Zap } from "lucide-react";
 import "./clock-work-panel.css";
 
 export interface ClockWorkOption {
@@ -33,6 +33,10 @@ export interface ClockWorkPanelProps {
   onHalfBarrierChange: (value: boolean) => void;
   higherBarrierLabel: string;
   lowerBarrierLabel: string;
+  higherBarrierOffset: number;
+  lowerBarrierOffset: number;
+  barrierAnchor: number | null;
+  onResetBarrierAnchor: () => void;
   higherBarrierOptions: ClockWorkOption[];
   lowerBarrierOptions: ClockWorkOption[];
   onHigherBarrierChange: (value: number) => void;
@@ -51,7 +55,8 @@ export interface ClockWorkPanelProps {
   onH2StakeChange: (value: number) => void;
   higherPercent: number | null;
   lowerPercent: number | null;
-  sampleCount: number;
+  higherTicks: number;
+  lowerTicks: number;
   recentMoves: ClockWorkMove[];
   prediction: "HIGHER" | "LOWER" | null;
   leanStrength: number | null;
@@ -75,6 +80,11 @@ export interface ClockWorkPanelProps {
   onAggressiveEnabledChange: (value: boolean) => void;
   aggressiveBalancePercent: number;
   onAggressiveBalancePercentChange: (value: number) => void;
+  aggressivePushTicks: number;
+  onAggressivePushTicksChange: (value: number) => void;
+  aggressivePushProgress: number;
+  aggressiveRounds: number;
+  aggressiveStakeLabel: string;
   accountBalance: number | null;
   currency: string;
   aggressiveUsingBalance: number | null;
@@ -110,46 +120,88 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
   const {
     enabled, symbol, markets, onSymbolChange, quote, quoteHistory, quoteUpdatedAt, tradeSlotBlocked,
     barrierMode, onBarrierModeChange, halfBarrier, onHalfBarrierChange, higherBarrierLabel,
-    lowerBarrierLabel, higherBarrierOptions, lowerBarrierOptions, onHigherBarrierChange,
+    lowerBarrierLabel, higherBarrierOffset, lowerBarrierOffset, barrierAnchor, onResetBarrierAnchor,
+    higherBarrierOptions, lowerBarrierOptions, onHigherBarrierChange,
     onLowerBarrierChange, higherStake, lowerStake, h1Stake, l1Stake, l2Stake, h2Stake,
     onHigherStakeChange, onLowerStakeChange, onH1StakeChange, onL1StakeChange, onL2StakeChange,
-    onH2StakeChange, higherPercent, lowerPercent, sampleCount, recentMoves, prediction, leanStrength,
+    onH2StakeChange, higherPercent, lowerPercent, higherTicks, lowerTicks,
+    recentMoves, prediction, leanStrength,
     busy, disabled, statusMessage, higherQuote, lowerQuote, allFourQuote, onPlaceHigher,
     onPlaceLower, onPlacePair, onPlaceAllFour, autoMode, onAutoModeChange, minLean,
     onMinLeanChange, autoEnabled, onAutoEnabledChange, aggressiveEnabled,
     onAggressiveEnabledChange, aggressiveBalancePercent, onAggressiveBalancePercentChange,
-    accountBalance, currency, aggressiveUsingBalance, aggressiveEachSide, autoStatus,
+    aggressivePushTicks, onAggressivePushTicksChange, aggressivePushProgress, aggressiveRounds,
+    aggressiveStakeLabel, accountBalance, currency, aggressiveUsingBalance, aggressiveEachSide,
+    autoStatus,
   } = props;
-  const chartValues = quoteHistory.filter(Number.isFinite);
-  const selectedHigher = higherBarrierOptions.find((option) => option.selected)?.value;
-  const selectedLower = lowerBarrierOptions.find((option) => option.selected)?.value;
+  const chartValues = quoteHistory.filter(Number.isFinite).slice(-30);
   const halfScale = halfBarrier ? 0.5 : 1;
-  const higherLevel = quote == null || selectedHigher == null ? null : quote + selectedHigher * halfScale;
-  const lowerLevel = quote == null || selectedLower == null ? null : quote + selectedLower * halfScale;
+  const anchor = barrierAnchor ?? quote;
+  const higherLevel = anchor == null ? null : anchor + higherBarrierOffset * halfScale;
+  const lowerLevel = anchor == null ? null : anchor + lowerBarrierOffset * halfScale;
   const levels = [...chartValues, ...(quote == null ? [] : [quote]), ...(higherLevel == null ? [] : [higherLevel]), ...(lowerLevel == null ? [] : [lowerLevel])];
   const min = levels.length ? Math.min(...levels) : 0;
   const max = levels.length ? Math.max(...levels) : 1;
   const span = max - min || Math.max(Math.abs(max) * 0.001, 1);
-  const point = (value: number, index: number, count: number) => `${count < 2 ? 50 : 12 + index * 76 / (count - 1)},${84 - (value - min) / span * 66}`;
+  const plotLeft = 20;
+  const plotRight = 97;
+  const plotTop = 12;
+  const plotBottom = 82;
+  const point = (value: number, index: number, count: number) =>
+    `${count < 2 ? 58 : plotLeft + index * (plotRight - plotLeft) / (count - 1)},${plotBottom - (value - min) / span * (plotBottom - plotTop)}`;
   const points = chartValues.map((value, index) => point(value, index, chartValues.length)).join(" ");
-  const yFor = (value: number) => 84 - (value - min) / span * 66;
+  const yFor = (value: number) => plotBottom - (value - min) / span * (plotBottom - plotTop);
   const fmt = (value: number | null) => value == null ? "—" : value.toFixed(2);
+  const fmtPercent = (value: number | null) => value == null ? "—" : `${Math.round(value)}%`;
   const chartReady = chartValues.length >= 2;
   const freshStamp = quoteUpdatedAt ? Date.parse(quoteUpdatedAt) : NaN;
   const quoteStale = Number.isFinite(freshStamp) && Date.now() - freshStamp > 60_000;
   const quoteState = quote == null ? "Waiting for live quote" : quoteStale ? "Quote may be stale" : `Updated ${quoteUpdatedAt || "just now"}`;
   const actionsDisabled = disabled || busy || tradeSlotBlocked || !enabled || quote == null || quoteStale;
   const fourTotal = h1Stake + l1Stake + l2Stake + h2Stake;
+  const chartZone = quote == null || higherLevel == null || lowerLevel == null
+    ? null
+    : quote > higherLevel
+      ? "higher"
+      : quote < lowerLevel
+        ? "lower"
+        : "between";
+  const chartSignal = chartZone === "higher"
+    ? `PRICE IS ABOVE YOUR HIGHER BARRIER (${fmt(higherLevel)})`
+    : chartZone === "lower"
+      ? `PRICE IS BELOW YOUR LOWER BARRIER (${fmt(lowerLevel)})`
+      : chartZone === "between"
+        ? "PRICE IS BETWEEN YOUR BARRIERS"
+        : "WAITING FOR LIVE PRICE AND BARRIERS";
   const pairQuoteDetail = higherQuote && lowerQuote
     ? `Payout ${money(higherQuote.payout + lowerQuote.payout, currency)} · profit ${money((higherQuote.payout - higherQuote.ask_price) + (lowerQuote.payout - lowerQuote.ask_price), currency)}`
     : "Quote unavailable";
-  const barrierOptionPad = (side: "higher" | "lower", options: ClockWorkOption[], change: (value: number) => void) =>
-    <div className={`cw-barrier-card cw-${side}`}>
+  const barrierOptionPad = (
+    side: "higher" | "lower",
+    options: ClockWorkOption[],
+    value: number,
+    change: (value: number) => void,
+  ) => {
+    const effectiveOffset = value * halfScale;
+    const displayValue = barrierMode === "offset"
+      ? `${effectiveOffset > 0 ? "+" : ""}${effectiveOffset.toFixed(2)}`
+      : fmt(anchor == null ? null : anchor + effectiveOffset);
+    const adjust = (delta: number) => {
+      const nextValue = value + delta;
+      change(side === "higher" ? Math.max(0.01, nextValue) : Math.min(-0.01, nextValue));
+    };
+    return <div className={`cw-barrier-card cw-${side}`}>
       <div className="cw-barrier-title"><b>{side === "higher" ? higherBarrierLabel || "↑ Higher barrier" : lowerBarrierLabel || "↓ Lower barrier"}</b><span>{side === "higher" ? fmt(higherLevel) : fmt(lowerLevel)}</span></div>
+      <div className="cw-barrier-stepper" role="group" aria-label={`${side} barrier adjustment`}>
+        <button type="button" onClick={() => adjust(-0.01)} disabled={disabled} aria-label={`Decrease ${side} barrier`}><Minus size={12} /></button>
+        <output aria-live="polite">{displayValue}</output>
+        <button type="button" onClick={() => adjust(0.01)} disabled={disabled} aria-label={`Increase ${side} barrier`}><Plus size={12} /></button>
+      </div>
       <div className="cw-barrier-options" role="group" aria-label={`${side} barrier options`}>
         {options.map((option, index) => <button type="button" key={`${option.value}-${index}`} aria-pressed={option.selected} className={option.selected ? "selected" : ""} onClick={() => change(option.value)} disabled={disabled} data-testid={`button-clock-${side}-barrier-${index}`}>{option.label}</button>)}
       </div>
     </div>;
+  };
 
   return <section className={`cw-panel ${enabled ? "cw-live" : ""}`} data-testid="clock-work-panel">
     <header className="cw-header">
@@ -173,31 +225,48 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
           </div></div>
           <div className="cw-half"><span>Half Barrier</span><Toggle checked={halfBarrier} onChange={onHalfBarrierChange} disabled={disabled} label="Half barrier" /></div>
         </div>
-        <div className="cw-barrier-grid">{barrierOptionPad("higher", higherBarrierOptions, onHigherBarrierChange)}{barrierOptionPad("lower", lowerBarrierOptions, onLowerBarrierChange)}</div>
+        <div className="cw-barrier-grid">
+          {barrierOptionPad("higher", higherBarrierOptions, higherBarrierOffset, onHigherBarrierChange)}
+          {barrierOptionPad("lower", lowerBarrierOptions, lowerBarrierOffset, onLowerBarrierChange)}
+        </div>
       </section>
 
       <section className="cw-chart-card cw-surface">
         <div className="cw-card-heading"><div><ChartNoAxesCombined size={15} /><b>Price Chart</b><small>Last {chartValues.length} ticks</small></div><div className="cw-quote-readout"><b>{fmt(quote)}</b><small>{quoteState}</small></div></div>
+        <div className="cw-barrier-anchor">
+          <span>Barrier anchor: <b>{fmt(barrierAnchor ?? quote)}</b></span>
+          <button type="button" onClick={onResetBarrierAnchor} disabled={quote == null}>Reset to current</button>
+        </div>
+        <div className={`cw-chart-signal ${chartZone ?? "waiting"}`} aria-live="polite"><i />{chartSignal}</div>
         <div className="cw-chart-area">
           {chartReady ? <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label={`Price chart for ${symbol} showing ${chartValues.length} recent ticks and selected barriers`}>
-            {[18, 40, 62, 84].map((y) => <line key={y} x1="7" x2="94" y1={y} y2={y} className="cw-grid-line" />)}
-            {higherLevel != null && <><line x1="7" x2="94" y1={yFor(higherLevel)} y2={yFor(higherLevel)} className="cw-higher-line" /><text x="8" y={Math.max(8, yFor(higherLevel) - 2)} className="cw-higher-text">HIGHER {fmt(higherLevel)}</text></>}
-            {lowerLevel != null && <><line x1="7" x2="94" y1={yFor(lowerLevel)} y2={yFor(lowerLevel)} className="cw-lower-line" /><text x="8" y={Math.max(8, yFor(lowerLevel) - 2)} className="cw-lower-text">LOWER {fmt(lowerLevel)}</text></>}
+            {[0, 1, 2, 3].map((index) => {
+              const y = plotTop + index * (plotBottom - plotTop) / 3;
+              const value = max - index * span / 3;
+              return <g key={index}><line x1={plotLeft} x2={plotRight} y1={y} y2={y} className="cw-grid-line" /><text x="1" y={y + 1.5} className="cw-axis-label">{fmt(value)}</text></g>;
+            })}
+            <line x1={plotLeft} x2={plotLeft} y1={plotTop} y2={plotBottom} className="cw-axis-line" />
+            <line x1={plotLeft} x2={plotRight} y1={plotBottom} y2={plotBottom} className="cw-axis-line" />
+            {higherLevel != null && <><line x1={plotLeft} x2={plotRight} y1={yFor(higherLevel)} y2={yFor(higherLevel)} className="cw-higher-line" /><text x={plotLeft + 2} y={Math.max(8, yFor(higherLevel) - 2)} className="cw-higher-text">HIGHER {fmt(higherLevel)}</text></>}
+            {lowerLevel != null && <><line x1={plotLeft} x2={plotRight} y1={yFor(lowerLevel)} y2={yFor(lowerLevel)} className="cw-lower-line" /><text x={plotLeft + 2} y={Math.max(8, yFor(lowerLevel) - 2)} className="cw-lower-text">LOWER {fmt(lowerLevel)}</text></>}
             <polyline points={points} className="cw-price-line" />
             {chartValues.length > 0 && <circle cx={point(chartValues[chartValues.length - 1], chartValues.length - 1, chartValues.length).split(",")[0]} cy={point(chartValues[chartValues.length - 1], chartValues.length - 1, chartValues.length).split(",")[1]} r="1.4" className="cw-chart-dot" />}
           </svg> : <div className="cw-chart-empty"><Activity size={17} /><b>Waiting for price history</b><span>Live ticks will draw here once at least two quotes arrive.</span></div>}
         </div>
         <div className="cw-chart-legend"><span><i className="cw-legend-price" />Price</span><span><i className="cw-legend-high" />Higher barrier</span><span><i className="cw-legend-low" />Lower barrier</span></div>
+        <div className="cw-chart-zones" aria-label="Current price zone">
+          {(["higher", "between", "lower"] as const).map((zone) => <span key={zone} className={chartZone === zone ? "active" : ""}>{zone === "higher" ? "Above Higher" : zone === "between" ? "Between" : "Below Lower"}</span>)}
+        </div>
       </section>
 
       <div className="cw-readouts">
-        <div className="cw-percent cw-percent-high"><span>↑ Higher</span><b>{higherPercent == null ? "—" : `${higherPercent.toFixed(1)}%`}</b><small>{sampleCount} ticks</small></div>
-        <div className="cw-percent cw-percent-low"><span>↓ Lower</span><b>{lowerPercent == null ? "—" : `${lowerPercent.toFixed(1)}%`}</b><small>{sampleCount} ticks</small></div>
+        <div className="cw-percent cw-percent-high"><span>↑ Higher</span><b>{fmtPercent(higherPercent)}</b><small>{higherTicks} ticks</small></div>
+        <div className="cw-percent cw-percent-low"><span>↓ Lower</span><b>{fmtPercent(lowerPercent)}</b><small>{lowerTicks} ticks</small></div>
       </div>
       <section className="cw-moves cw-surface"><div className="cw-label-row"><b>Recent Moves</b></div><div className="cw-move-list">{recentMoves.length ? recentMoves.map((move, index) => <span key={`${move.direction}-${index}`} className={move.direction === "H" ? "move-high" : "move-low"} title={`${move.direction === "H" ? "Higher" : "Lower"} · ${move.quote}`}>{move.direction}</span>) : <p>No recent moves yet.</p>}</div></section>
       <section className={`cw-prediction ${prediction === "HIGHER" ? "prediction-high" : prediction === "LOWER" ? "prediction-low" : ""}`} aria-live="polite">
-        <div className="cw-prediction-head"><div><span className="cw-section-kicker">OBSERVED LEAN</span><b>{prediction ?? "NOT ENOUGH DATA"}</b></div><strong>{leanStrength == null ? "—" : `${leanStrength}%`}<small> lean strength</small></strong></div>
-        <div className="cw-lean-meter"><i style={{ width: `${Math.max(0, Math.min(100, leanStrength ?? 0))}%` }} /></div>
+        <div className="cw-prediction-head"><div><span className="cw-section-kicker">OBSERVED LEAN</span><b>{prediction ?? "NOT ENOUGH DATA"}</b></div><strong>{leanStrength == null ? "—" : `${Math.round(leanStrength)}%`}<small> lean strength</small></strong></div>
+        <div className="cw-lean-meter"><i style={{ width: `${Math.max(0, Math.min(100, leanStrength == null ? 0 : Math.round(leanStrength)))}%` }} /></div>
         <p>Recent price movement is descriptive, not a forecast or guarantee.</p>
       </section>
       {statusMessage && <p className="cw-status" role="status" aria-live="polite">{statusMessage}</p>}
@@ -216,7 +285,7 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
           </div>
           <span className="cw-inline-label">Min lean</span>
           <div className="cw-choice-row cw-lean-choices" role="group" aria-label="Minimum lean strength">
-            {[50,67,78,88,92,95].map((value) => <button type="button" key={value} aria-pressed={minLean === value} className={minLean === value ? "selected" : ""} onClick={() => onMinLeanChange(minLean === value ? null : value)} disabled={disabled}>{value}%</button>)}
+            {[55,60,65,70,75].map((value) => <button type="button" key={value} aria-pressed={minLean === value} className={minLean === value ? "selected" : ""} onClick={() => onMinLeanChange(minLean === value ? null : value)} disabled={disabled}>{value}%</button>)}
           </div>
         </div>
         <div className="cw-auto-status"><i className={autoEnabled ? "status-on" : ""} /><span>{autoStatus || (autoEnabled ? "Automation enabled" : "Automation is off")}</span></div>
@@ -225,9 +294,23 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
 
       <section className={`cw-aggressive cw-surface ${aggressiveEnabled ? "is-running" : ""}`}>
         <div className="cw-auto-head"><div><Zap size={15} /><b>Aggressive Auto Trading</b><span className="cw-admin-badge">ADMIN</span>{aggressiveEnabled && <span className="cw-active-badge">ACTIVE</span>}</div><Toggle checked={aggressiveEnabled} onChange={onAggressiveEnabledChange} disabled={disabled} label="Enable aggressive auto trading" /></div>
-        <div className="cw-aggressive-controls"><span className="cw-inline-label">Balance %</span><div className="cw-choice-row" role="group" aria-label="Aggressive balance percentage">{[5,15,25,50].map((value) => <button key={value} type="button" aria-pressed={aggressiveBalancePercent === value} className={aggressiveBalancePercent === value ? "selected" : ""} onClick={() => onAggressiveBalancePercentChange(value)} disabled={disabled}>{value}%</button>)}</div><span className="cw-push-label">Push: <b>5T</b></span></div>
-        <div className="cw-balance-strip"><span>Balance <b>{money(accountBalance, currency)}</b></span><span>Using <b>{money(aggressiveUsingBalance, currency)}</b></span><span>Each side <b>{money(aggressiveEachSide, currency)}</b></span></div>
-        <p className="cw-auto-note">Aggressive mode uses the configured share of available balance for each 5-tick cycle. Balance and quote availability can change.</p>
+        <div className="cw-aggressive-controls">
+          <span className="cw-inline-label">Balance %</span>
+          <div className="cw-choice-row" role="group" aria-label="Aggressive balance percentage">{[5,10,25,50].map((value) => <button key={value} type="button" aria-pressed={aggressiveBalancePercent === value} className={aggressiveBalancePercent === value ? "selected" : ""} onClick={() => onAggressiveBalancePercentChange(value)} disabled={disabled}>{value}%</button>)}</div>
+          <div className="cw-aggressive-push" role="group" aria-label="Consecutive tick push">
+            <span className="cw-inline-label">Push</span>
+            {[3,4,5,6,7].map((value) => <button key={value} type="button" aria-pressed={aggressivePushTicks === value} className={aggressivePushTicks === value ? "selected" : ""} onClick={() => onAggressivePushTicksChange(value)} disabled={disabled}>{value}t</button>)}
+          </div>
+        </div>
+        <div className="cw-balance-strip"><span>Balance <b>{money(accountBalance, currency)}</b></span><span>Using <b>{money(aggressiveUsingBalance, currency)}</b></span><span>{aggressiveStakeLabel} <b>{money(aggressiveEachSide, currency)}</b></span></div>
+        <div className="cw-aggressive-status">
+          <div className="cw-auto-status"><i className={aggressiveEnabled ? "status-on" : ""} /><span>{autoStatus || (aggressiveEnabled ? `Waiting for ${aggressivePushTicks}+ tick push.` : "Aggressive automation is off.")}</span></div>
+          <span className="cw-rounds">{aggressiveRounds} rounds</span>
+        </div>
+        <div className="cw-push-progress" style={{ gridTemplateColumns: `repeat(${aggressivePushTicks}, minmax(0, 1fr))` }} role="progressbar" aria-label="Consecutive tick push progress" aria-valuemin={0} aria-valuemax={aggressivePushTicks} aria-valuenow={Math.min(aggressivePushTicks, aggressivePushProgress)}>
+          {Array.from({ length: aggressivePushTicks }, (_, index) => <i key={index} className={index < aggressivePushProgress ? "reached" : ""} />)}
+        </div>
+        <p className="cw-auto-note">The selected percentage sets a per-cycle balance budget. Equal stakes are rounded down to cents; results and win rates are not guaranteed.</p>
       </section>
 
       <section className="cw-four cw-surface">
