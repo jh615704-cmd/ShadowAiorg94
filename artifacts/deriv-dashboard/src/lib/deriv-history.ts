@@ -55,6 +55,34 @@ export function claimConfirmedDerivContractIds(
   }
 }
 
+export type DerivHistoryFeature =
+  | "edge"
+  | "trade-x"
+  | "digit-flip"
+  | "bulk-trader"
+  | "cash-grab"
+  | "clock-work"
+  | "money-bank";
+
+export function claimDerivHistoryFeatureContractIds(
+  owners: Map<string, DerivHistoryFeature>,
+  accountId: string | null | undefined,
+  feature: DerivHistoryFeature,
+  target: Set<string>,
+  contractIds: readonly string[],
+): void {
+  if (!accountId) return;
+
+  for (const contractId of contractIds) {
+    if (!contractId) continue;
+    const key = JSON.stringify([accountId, contractId]);
+    const owner = owners.get(key);
+    if (owner && owner !== feature) continue;
+    owners.set(key, feature);
+    target.add(contractId);
+  }
+}
+
 export type DerivHistorySessionSummary = {
   pnl: number;
   trades: number;

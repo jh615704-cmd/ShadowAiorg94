@@ -24,6 +24,8 @@
 .cw-panel * { box-sizing: border-box; }
 .cw-panel button, .cw-panel input, .cw-panel select { font: inherit; }
 .cw-panel button:focus-visible, .cw-panel input:focus-visible, .cw-panel select:focus-visible { outline: 2px solid var(--cw-cyan); outline-offset: 2px; }
+.cw-stake-input:focus-within { border-color: rgba(49, 200, 237, .66); }
+.cw-stake-input input:focus-visible { outline: none; }
 .cw-panel button:disabled, .cw-panel input:disabled, .cw-panel select:disabled { cursor: not-allowed; opacity: .48; }
 .cw-header { min-height: 78px; padding: 15px 19px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--cw-border); background: rgba(4, 19, 37, .67); }
 .cw-brand-mark { width: 38px; height: 38px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid #27658b; border-radius: 11px; color: #63e3f4; background: linear-gradient(145deg, #133c68, #092944); }
@@ -67,6 +69,7 @@
 .cw-toggle input:checked + .cw-toggle-track { border-color: #188c7b; background: #087f70; }
 .cw-toggle input:checked + .cw-toggle-track i { transform: translateX(15px); background: #b7ffe3; }
 .cw-toggle input:focus-visible + .cw-toggle-track { outline: 2px solid var(--cw-cyan); outline-offset: 2px; }
+.cw-toggle input:focus-visible { outline: none; }
 .cw-toggle-label { color: #7795af; font: 700 8px var(--app-font-mono, monospace); }
 .cw-barrier-grid { margin-top: 10px; }
 .cw-barrier-card { min-width: 0; padding: 10px; border: 1px solid rgba(79, 126, 163, .21); border-radius: 8px; background: #091a30; }

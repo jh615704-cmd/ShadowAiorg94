@@ -382,10 +382,11 @@ function AutoTraderContent() {
       tone: "success",
       text: `${result.buys.length} contract${result.buys.length === 1 ? "" : "s"} accepted for ${market.name}, digit ${digit}, ${duration} tick${duration === 1 ? "" : "s"}. Separate contracts can settle differently.${trackingNote}`,
     });
+    const refetchOptions = { cancelRefetch: false };
     void Promise.all([
-      queryClient.invalidateQueries({ queryKey: getGetDerivStatusQueryKey() }),
-      queryClient.invalidateQueries({ queryKey: getGetDerivHistoryQueryKey() }),
-      queryClient.invalidateQueries({ queryKey: getGetDerivAccountsQueryKey() }),
+      queryClient.refetchQueries({ queryKey: getGetDerivStatusQueryKey(), type: "active" }, refetchOptions),
+      queryClient.refetchQueries({ queryKey: getGetDerivHistoryQueryKey(), type: "active" }, refetchOptions),
+      queryClient.refetchQueries({ queryKey: getGetDerivAccountsQueryKey(), type: "active" }, refetchOptions),
     ]).catch((error: unknown) => {
       console.warn("Could not refresh Auto Trader data after an accepted order.", error);
     });

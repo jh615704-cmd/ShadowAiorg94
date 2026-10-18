@@ -3,9 +3,11 @@ import test from "node:test";
 import {
   createDerivHistoryRowView,
   claimConfirmedDerivContractIds,
+  claimDerivHistoryFeatureContractIds,
   formatSignedDerivProfit,
   isDerivHistoryOpen,
   summarizeDerivHistorySession,
+  type DerivHistoryFeature,
   type DerivHistoryRow,
 } from "./deriv-history.ts";
 
@@ -41,6 +43,21 @@ test("session summary totals wins, losses, open stakes, and realized profit", ()
     winRate: 50,
     staked: 4.1,
   });
+});
+
+test("history contract ownership stays exclusive per feature and Deriv account", () => {
+  const owners = new Map<string, DerivHistoryFeature>();
+  const edgeIds = new Set<string>();
+  const tradeXIds = new Set<string>();
+  const otherAccountIds = new Set<string>();
+
+  claimDerivHistoryFeatureContractIds(owners, "account-1", "edge", edgeIds, ["contract-1"]);
+  claimDerivHistoryFeatureContractIds(owners, "account-1", "trade-x", tradeXIds, ["contract-1"]);
+  claimDerivHistoryFeatureContractIds(owners, "account-2", "trade-x", otherAccountIds, ["contract-1"]);
+
+  assert.deepEqual([...edgeIds], ["contract-1"]);
+  assert.deepEqual([...tradeXIds], []);
+  assert.deepEqual([...otherAccountIds], ["contract-1"]);
 });
 
 test("session summary accepts the feature's live P/L and trade count", () => {

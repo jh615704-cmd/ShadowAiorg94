@@ -310,6 +310,8 @@
   font-family: var(--app-font-mono, "DM Mono", monospace);
   font-size: 11px;
 }
+.tx-input-prefix:focus-within { border-color: var(--tx-teal-dark); }
+.tx-panel .tx-input-prefix input:focus-visible { outline: none; box-shadow: none; }
 
 .tx-main-grid {
   display: grid;

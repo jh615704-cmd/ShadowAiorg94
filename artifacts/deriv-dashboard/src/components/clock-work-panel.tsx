@@ -281,6 +281,7 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
             aria-label={`Highlight ${chartZoneLabel(zone)} area in the price chart`}
             className={`${chartZone === zone ? "active" : ""} ${chartFocusZone === zone ? "selected" : ""}`.trim()}
             onClick={() => setChartFocusZone((current) => current === zone ? null : zone)}
+            data-testid={`button-clock-chart-zone-${zone}`}
           >{chartZoneLabel(zone)}</button>)}
         </div>
         <small className="cw-chart-focus-note">{chartFocusZone ? `Highlighted chart zone: ${chartZoneLabel(chartFocusZone)}` : "Select a zone to highlight it in the chart."}</small>
