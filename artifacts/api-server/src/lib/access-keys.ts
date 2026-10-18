@@ -18,6 +18,7 @@ export const TRADING_ACCESS_FEATURES = [
   "digit-flip",
   "trade-x",
   "bulk-trader",
+  "matches-analysis",
   "clock-work",
   "cash-grab",
   "money-bank",

@@ -21,7 +21,7 @@ const supportedSymbols = new Set([
   "1HZ10V", "1HZ15V", "1HZ25V", "1HZ30V", "1HZ50V", "1HZ75V", "1HZ90V", "1HZ100V",
   "JD10", "JD25", "JD50", "JD75", "JD100",
 ]);
-type DigitContractType = "DIGITEVEN" | "DIGITODD" | "DIGITOVER" | "DIGITUNDER" | "DIGITDIFF" | "CALL" | "PUT" | "HIGHER" | "LOWER" | "ACCU";
+type DigitContractType = "DIGITEVEN" | "DIGITODD" | "DIGITOVER" | "DIGITUNDER" | "DIGITDIFF" | "DIGITMATCH" | "CALL" | "PUT" | "HIGHER" | "LOWER" | "ACCU";
 
 export type DerivAccount = {
   id: string;
@@ -1928,7 +1928,7 @@ export async function bulkBuyContracts(input: {
 export type ClockWorkOrder = {
   key: string;
   amount: number;
-  duration: 3 | 5;
+  duration: 5;
   duration_unit: "t";
   contract_type: "HIGHER" | "LOWER";
   barrier: string;
@@ -1955,8 +1955,8 @@ function normalizeClockWorkOrders(contracts: readonly ClockWorkOrder[]) {
     if (!Number.isFinite(contract.amount) || contract.amount < 1) {
       throw new Error("Clock Work stakes must be at least 1.00.");
     }
-    if ((contract.duration !== 3 && contract.duration !== 5) || contract.duration_unit !== "t") {
-      throw new Error("Clock Work supports three- or five-tick contracts only.");
+    if (contract.duration !== 5 || contract.duration_unit !== "t") {
+      throw new Error("Clock Work supports five-tick contracts only.");
     }
     if (contract.contract_type !== "HIGHER" && contract.contract_type !== "LOWER") {
       throw new Error("Clock Work supports Higher and Lower contracts only.");
@@ -2087,6 +2087,140 @@ export async function buyClockWorkContracts(
   };
 }
 
+export type MatchesOrder = {
+  key: string;
+  amount: number;
+  duration: 1 | 2 | 3 | 4 | 5;
+  duration_unit: "t";
+  contract_type: "DIGITMATCH";
+  barrier: number;
+  symbol: string;
+};
+
+function normalizeMatchesOrders(contracts: readonly MatchesOrder[]) {
+  if (!Array.isArray(contracts) || contracts.length < 1 || contracts.length > 3) {
+    throw new Error("Matches needs between one and three contracts.");
+  }
+  const normalized = contracts.map((contract) => ({
+    ...contract,
+    amount: roundCents(contract.amount),
+  }));
+  const keys = normalized.map((contract) => contract.key);
+  if (keys.some((key) => !key.trim()) || new Set(keys).size !== keys.length) {
+    throw new Error("Matches contract keys must be unique and non-empty.");
+  }
+  const symbols = new Set(normalized.map((contract) => contract.symbol));
+  if (symbols.size !== 1) {
+    throw new Error("All Matches contracts in one action must use the same market.");
+  }
+  for (const contract of normalized) {
+    if (!Number.isFinite(contract.amount) || contract.amount < 0.35) {
+      throw new Error("Matches stakes must be at least 0.35.");
+    }
+    if (!Number.isInteger(contract.duration) || contract.duration < 1 || contract.duration > 5 || contract.duration_unit !== "t") {
+      throw new Error("Matches supports one- through five-tick contracts only.");
+    }
+    if (contract.contract_type !== "DIGITMATCH") {
+      throw new Error("Matches supports Digit Match contracts only.");
+    }
+    if (!Number.isInteger(contract.barrier) || contract.barrier < 0 || contract.barrier > 9) {
+      throw new Error("Matches needs a selected digit from 0 to 9.");
+    }
+    validateProposalInput({
+      amount: contract.amount,
+      duration: contract.duration,
+      duration_unit: contract.duration_unit,
+      contract_type: contract.contract_type,
+      barrier: contract.barrier,
+      symbol: contract.symbol,
+    });
+  }
+  return normalized;
+}
+
+export async function buyMatchesContracts(
+  input: { contracts: readonly MatchesOrder[] },
+  assertAuthorized?: TradeAuthorizationCheck,
+) {
+  await assertAuthorized?.();
+  const contracts = normalizeMatchesOrders(input.contracts);
+  const account = getState().account;
+  if (!account) throw new Error("Select a Deriv account before buying Matches contracts.");
+  if (account.type === "real" && !liveTradingEnabled) {
+    throw new Error("Live trading is disabled on this server.");
+  }
+  const totalStake = roundCents(contracts.reduce((total, contract) => total + contract.amount, 0));
+  if (totalStake > account.balance) {
+    throw new Error("The total Matches stake exceeds the current account balance.");
+  }
+
+  const protection = await getTradingProtectionSettings();
+  for (const contract of contracts) {
+    assertTradingProtection(protection, getStatus(), {
+      contract_type: contract.contract_type,
+      barrier: contract.barrier,
+      symbol: contract.symbol,
+    });
+  }
+
+  await refreshOpenContracts();
+  assertNoActiveContract(true);
+  const proposals = await Promise.all(contracts.map(async (contract) => ({
+    contract,
+    proposal: await requestFreshProposal({
+      amount: contract.amount,
+      duration: contract.duration,
+      duration_unit: contract.duration_unit,
+      contract_type: contract.contract_type,
+      barrier: contract.barrier,
+      symbol: contract.symbol,
+    }),
+  })));
+  await assertAuthorized?.();
+  if (!await connect()) throw new Error("Deriv WebSocket is not ready");
+  await assertAuthorized?.();
+
+  // Acknowledgement failures are returned for history verification. Never
+  // retry or auto-sell an order whose acceptance is uncertain.
+  const results = await Promise.allSettled(proposals.map(({ contract, proposal }) => sendDirectBuy(proposal, {
+    amount: contract.amount,
+    duration: contract.duration,
+    duration_unit: contract.duration_unit,
+    contract_type: contract.contract_type,
+    barrier: contract.barrier,
+    symbol: contract.symbol,
+  })));
+  const completed = results.flatMap((result, index) => result.status === "fulfilled"
+    ? [{
+        key: proposals[index].contract.key,
+        amount: proposals[index].contract.amount,
+        contract_type: proposals[index].contract.contract_type,
+        barrier: proposals[index].contract.barrier,
+        symbol: proposals[index].contract.symbol,
+        proposal: proposals[index].proposal,
+        buy: result.value,
+      }]
+    : []);
+  const failed = results.flatMap((result, index) => result.status === "rejected"
+    ? [{
+        key: proposals[index].contract.key,
+        contract_type: proposals[index].contract.contract_type,
+        error: result.reason instanceof Error ? result.reason.message : "Deriv did not confirm this buy.",
+      }]
+    : []);
+  const ok = failed.length === 0;
+  return {
+    ok,
+    message: ok
+      ? `${completed.length} Matches contract${completed.length === 1 ? "" : "s"} sent to Deriv.`
+      : `${completed.length} of ${contracts.length} Matches contracts were confirmed. Check Deriv history before retrying any unconfirmed order.`,
+    requested_count: contracts.length,
+    completed_count: completed.length,
+    contracts: completed,
+    failed,
+  };
+}
+
 function validateContractBarrier(input: { contract_type: DigitContractType; barrier?: number | string }) {
   if (input.contract_type === "HIGHER" || input.contract_type === "LOWER") {
     const barrier = input.barrier;
@@ -2097,7 +2231,8 @@ function validateContractBarrier(input: { contract_type: DigitContractType; barr
   }
   const requiresBarrier = input.contract_type === "DIGITDIFF"
     || input.contract_type === "DIGITOVER"
-    || input.contract_type === "DIGITUNDER";
+    || input.contract_type === "DIGITUNDER"
+    || input.contract_type === "DIGITMATCH";
   const barrier = input.barrier;
   if (requiresBarrier && (typeof barrier !== "number" || !Number.isInteger(barrier) || barrier < 0 || barrier > 9)) {
     throw new Error(`A digit barrier from 0 to 9 is required for ${input.contract_type}.`);

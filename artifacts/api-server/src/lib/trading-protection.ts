@@ -91,6 +91,13 @@ export function assertTradingProtection(
     case "DIGITUNDER":
       observedRate = signal.digit_outcomes?.find((entry) => entry.digit === input.barrier)?.under_percentage ?? Number.NaN;
       break;
+    case "DIGITMATCH": {
+      const selectedDigit = signal.digit_outcomes?.find((entry) => entry.digit === input.barrier);
+      observedRate = selectedDigit
+        ? 100 - selectedDigit.over_percentage - selectedDigit.under_percentage
+        : Number.NaN;
+      break;
+    }
     case "DIGITDIFF": {
       const outcome = signal.digit_outcomes?.find((entry) => entry.digit === input.barrier);
       observedRate = outcome && finitePercentage(outcome.over_percentage) && finitePercentage(outcome.under_percentage)

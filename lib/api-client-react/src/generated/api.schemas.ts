@@ -73,6 +73,7 @@ export const AccessFeature = {
   'digit-flip': 'digit-flip',
   'trade-x': 'trade-x',
   'bulk-trader': 'bulk-trader',
+  'matches-analysis': 'matches-analysis',
   'clock-work': 'clock-work',
   'cash-grab': 'cash-grab',
   'money-bank': 'money-bank',
@@ -563,7 +564,6 @@ export type ClockWorkContractOrderDuration = typeof ClockWorkContractOrderDurati
 
 
 export const ClockWorkContractOrderDuration = {
-  NUMBER_3: 3,
   NUMBER_5: 5,
 } as const;
 
@@ -673,6 +673,101 @@ export interface ClockWorkBatchBuyResponse {
   completed_count: number;
   contracts: ClockWorkCompletedBuy[];
   failed: ClockWorkFailedBuy[];
+}
+
+export type MatchesContractOrderDuration = typeof MatchesContractOrderDuration[keyof typeof MatchesContractOrderDuration];
+
+
+export const MatchesContractOrderDuration = {
+  NUMBER_1: 1,
+  NUMBER_2: 2,
+  NUMBER_3: 3,
+  NUMBER_4: 4,
+  NUMBER_5: 5,
+} as const;
+
+export type MatchesContractOrderDurationUnit = typeof MatchesContractOrderDurationUnit[keyof typeof MatchesContractOrderDurationUnit];
+
+
+export const MatchesContractOrderDurationUnit = {
+  t: 't',
+} as const;
+
+export type MatchesContractOrderContractType = typeof MatchesContractOrderContractType[keyof typeof MatchesContractOrderContractType];
+
+
+export const MatchesContractOrderContractType = {
+  DIGITMATCH: 'DIGITMATCH',
+} as const;
+
+export interface MatchesContractOrder {
+  /**
+     * @minLength 1
+     * @maxLength 32
+     */
+  key: string;
+  /** @minimum 0.35 */
+  amount: number;
+  duration: MatchesContractOrderDuration;
+  duration_unit: MatchesContractOrderDurationUnit;
+  contract_type: MatchesContractOrderContractType;
+  /**
+     * @minimum 0
+     * @maximum 9
+     */
+  barrier: number;
+  symbol: string;
+}
+
+export interface MatchesBatchInput {
+  /**
+     * @minItems 1
+     * @maxItems 3
+     */
+  contracts: MatchesContractOrder[];
+}
+
+export type MatchesCompletedBuyContractType = typeof MatchesCompletedBuyContractType[keyof typeof MatchesCompletedBuyContractType];
+
+
+export const MatchesCompletedBuyContractType = {
+  DIGITMATCH: 'DIGITMATCH',
+} as const;
+
+export interface MatchesCompletedBuy {
+  key: string;
+  amount: number;
+  contract_type: MatchesCompletedBuyContractType;
+  /**
+     * @minimum 0
+     * @maximum 9
+     */
+  barrier: number;
+  symbol: string;
+  proposal: DerivProposal;
+  buy: DerivBuy;
+}
+
+export type MatchesFailedBuyContractType = typeof MatchesFailedBuyContractType[keyof typeof MatchesFailedBuyContractType];
+
+
+export const MatchesFailedBuyContractType = {
+  DIGITMATCH: 'DIGITMATCH',
+} as const;
+
+export interface MatchesFailedBuy {
+  key: string;
+  contract_type: MatchesFailedBuyContractType;
+  error: string;
+}
+
+export interface MatchesBatchBuyResponse {
+  ok: boolean;
+  message: string;
+  requested_count: number;
+  completed_count: number;
+  contracts: MatchesCompletedBuy[];
+  failed: MatchesFailedBuy[];
 }
 
 export type DerivDualBuyInputDurationUnit = typeof DerivDualBuyInputDurationUnit[keyof typeof DerivDualBuyInputDurationUnit];

@@ -4,6 +4,7 @@ import {
   getGetAccessSessionQueryKey,
   ApiTransportError,
   type ClockWorkContractOrder,
+  useBuyMatchesContracts,
   useQuoteClockWorkContracts,
   useBuyClockWorkContracts,
   useGetAccessSession,
@@ -92,6 +93,12 @@ import CashGrabPanel, {
 } from "../components/cash-grab-panel";
 import ClockWorkPanel from "../components/clock-work-panel";
 import type { ClockWorkPanelProps } from "../components/clock-work-panel";
+import MatchesAnalysisPanel, {
+  type MatchesAiDigits,
+  type MatchesDuration,
+  type MatchesMarketOption,
+  type MatchesMarketType,
+} from "../components/matches-analysis-panel";
 import DerivHistory from "../components/deriv-history";
 import { getAccountBalance } from "../lib/account-balance";
 import {
@@ -116,6 +123,13 @@ import {
   type DerivHistoryFeature,
 } from "../lib/deriv-history";
 import {
+  chooseObservedMatchDigits,
+  MATCHES_HISTORY_LIMIT,
+  MATCHES_MINIMUM_SAMPLE_SIZE,
+  rankObservedMatchDigits,
+  type MatchesDigitStat as ObservedMatchesDigitStat,
+} from "../lib/matches-analysis";
+import {
   validateBulkTraderEntry,
   validateEdgeEntry,
   validateTradeXEntry,
@@ -132,6 +146,29 @@ const markets = [
   ["JD10", "Jump 10 Index"], ["JD25", "Jump 25 Index"], ["JD50", "Jump 50 Index"],
   ["JD75", "Jump 75 Index"], ["JD100", "Jump 100 Index"],
 ] as const;
+
+const matchesMarkets: MatchesMarketOption[] = [
+  { value: "R_10", label: "Volatility 10 Index", marketType: "volatility" },
+  { value: "R_25", label: "Volatility 25 Index", marketType: "volatility" },
+  { value: "R_50", label: "Volatility 50 Index", marketType: "volatility" },
+  { value: "R_75", label: "Volatility 75 Index", marketType: "volatility" },
+  { value: "R_100", label: "Volatility 100 Index", marketType: "volatility" },
+  { value: "R_150", label: "Volatility 150 Index", marketType: "volatility" },
+  { value: "R_250", label: "Volatility 250 Index", marketType: "volatility" },
+  { value: "1HZ10V", label: "Volatility 10 (1s)", marketType: "volatility" },
+  { value: "1HZ15V", label: "Volatility 15 (1s)", marketType: "volatility" },
+  { value: "1HZ25V", label: "Volatility 25 (1s)", marketType: "volatility" },
+  { value: "1HZ30V", label: "Volatility 30 (1s)", marketType: "volatility" },
+  { value: "1HZ50V", label: "Volatility 50 (1s)", marketType: "volatility" },
+  { value: "1HZ75V", label: "Volatility 75 (1s)", marketType: "volatility" },
+  { value: "1HZ90V", label: "Volatility 90 (1s)", marketType: "volatility" },
+  { value: "1HZ100V", label: "Volatility 100 (1s)", marketType: "volatility" },
+  { value: "JD10", label: "Jump 10 Index", marketType: "jumps" },
+  { value: "JD25", label: "Jump 25 Index", marketType: "jumps" },
+  { value: "JD50", label: "Jump 50 Index", marketType: "jumps" },
+  { value: "JD75", label: "Jump 75 Index", marketType: "jumps" },
+  { value: "JD100", label: "Jump 100 Index", marketType: "jumps" },
+];
 
 const realizedProfit = (trades: readonly { status: string; profit: number }[]) =>
   trades.reduce((sum, trade) => sum + (isDerivHistoryOpen(trade.status) ? 0 : trade.profit), 0);
@@ -179,10 +216,10 @@ const tradeXGuidePages = [
 ] as const;
 
 const clockWorkGuidePages = [
-  { title: "Welcome to Clock Work", body: "Clock Work is the Hybrid Analysis workspace for three- or five-tick Higher and Lower contracts. Its live chart, recent moves, and barrier estimates describe the selected market and do not predict or guarantee the next result.", points: ["Start on a demo account while learning.", "The feature uses the market, barriers, duration, and stakes shown on screen.", "Only one trading feature can be active at a time."] },
+  { title: "Welcome to Clock Work", body: "Clock Work is the Hybrid Analysis workspace for five-tick Higher and Lower contracts. Its live chart, recent moves, and barrier estimates describe the selected market and do not predict or guarantee the next result.", points: ["Start on a demo account while learning.", "The feature uses the market, barriers, duration, and stakes shown on screen.", "Only one trading feature can be active at a time."] },
   { title: "Connect and choose an account", body: "Connect a Deriv account and confirm which account is selected before enabling Clock Work. Real-account orders are still subject to the server's live-trading and balance checks.", points: ["The selected account receives the orders.", "A disconnected or unsettled account blocks new entries.", "Use demo mode to learn the controls."] },
   { title: "Select the market", body: "Market selects the live synthetic index used for ticks, the price chart, estimates, quotes, and contracts.", points: ["Switching markets changes the live data source.", "Wait for fresh ticks and quotes after changing markets.", "Past market movement does not guarantee future movement."] },
-  { title: "Contract duration", body: "Choose either three or five ticks. The selected duration is used for the chart estimates, quote requests, and placed contracts.", points: ["The active choice is shown in the setup controls.", "The selected market determines the tick stream.", "A short duration can still settle at a loss."] },
+  { title: "Contract duration", body: "Clock Work uses a fixed five-tick duration for quotes, chart estimates, and all placed contracts.", points: ["There is no three-tick option.", "The selected market determines the tick stream.", "A short duration can still settle at a loss."] },
   { title: "Higher and Lower stakes", body: "Higher Stake and Lower Stake set the amount for their matching manual and paired contracts. The four-trade action uses its separate H1, L1, L2, and H2 stake fields.", points: ["Each stake must be at least 1.00.", "The account balance must cover the complete batch.", "The server rechecks the balance before submitting orders."] },
   { title: "Offset barriers", body: "Offset uses a signed distance from the contract's entry price. Higher uses a positive offset and Lower uses a negative offset.", points: ["The displayed pad values are selectable barriers.", "Changing the market can change the entry price, not the selected offset.", "Deriv receives the signed relative barrier."] },
   { title: "Absolute barriers", body: "Absolute converts the selected distance into a price level using the current quote when a fresh proposal is requested.", points: ["The level is recalculated from the live quote before an order.", "Higher and Lower levels remain separate selections.", "A new quote can change the displayed absolute level."] },
@@ -199,6 +236,29 @@ const clockWorkGuidePages = [
   { title: "Minimum lean", body: "Minimum lean sets the observed percentage threshold required before an automatic batch can start.", points: ["Select one of 50%, 67%, 78%, 88%, 92%, or 95%.", "Higher thresholds can mean fewer entries.", "Passing the threshold does not make a contract certain to win."] },
   { title: "Aggressive Auto Trading", body: "Aggressive mode uses a selected share of the current account balance and waits for five consecutive ticks in one direction before considering an entry.", points: ["Choose 5%, 15%, 25%, or 50%.", "The total planned amount is divided across the selected mode's contracts.", "The balance and minimum stake checks can pause an entry."] },
   { title: "History and risk", body: "Clock Work History shows contracts submitted by this feature, with actual settled profit, result, win rate, and recorded stake. Open contracts remain unsettled until Deriv reports a final result.", points: ["Clearing hides Clock Work rows from this dashboard only; it does not delete Deriv's account history.", "Paired trades and four-trade batches can lose money.", "No sequence can guarantee a final winning contract or recovery."] },
+] as const;
+
+const matchesAnalysisGuidePages = [
+  { title: "Welcome to Matches Analysis", body: "Matches Analysis displays recent final-digit frequencies for the selected market and lets you place Digit Match contracts. Its observed rankings are descriptive, not guarantees or reliable predictions of the next tick.", points: ["Use a demo account while learning.", "Only one trading feature can be active at a time.", "A Digit Match contract can lose its full stake."] },
+  { title: "Connect and choose an account", body: "Connect Deriv and check the active account before turning on Matches Analysis. Real-account trades remain subject to workspace permission, account balance, and Deriv's limits.", points: ["The selected account receives the trades.", "Account changes stop new automatic entries.", "Use demo trading to learn the controls."] },
+  { title: "Choose a market family", body: "Choose Volatility for a volatility index or Jumps for a Jump index. The market list changes to show instruments in that family.", points: ["Every index has its own tick stream.", "Changing the market starts a fresh local sample.", "Past ticks do not determine the next result."] },
+  { title: "Select a market", body: "The selected symbol supplies the live quotes and final digits shown by the radar and frequency list.", points: ["Wait for the selected market to connect.", "The server checks the symbol again before a buy.", "The same market is used for every contract in an AI batch."] },
+  { title: "Read the live tick count", body: "The counter reports fresh ticks collected since the last rescan or market change.", points: ["A new scan starts at zero.", "The sample contains up to the most recent 120 collected digits.", "The AI runner waits for at least 20 fresh ticks."] },
+  { title: "Rescan the market", body: "Rescan clears Matches' local digit sample and resets its tick counter. It does not change Deriv history or any open contract.", points: ["Use Rescan after changing how you want to inspect the data.", "The next live ticks begin the new sample.", "A rescan does not improve or guarantee an outcome."] },
+  { title: "The digit circle", body: "The radar places digits 0 through 9 around a circle. Select a digit on the radar or from the matching digit controls.", points: ["The selected digit is highlighted.", "Radar size reflects the number of times each digit appeared in this sample.", "It is a frequency display, not a probability guarantee."] },
+  { title: "The spider-net plot", body: "The connected radar shape compares the observed counts for digits 0 through 9 in the current sample.", points: ["A farther point means more observations in this sample.", "The plot changes as new ticks arrive.", "A larger historical count does not ensure a future match."] },
+  { title: "Top three observed digits", body: "The top three list ranks digits by their frequency in the current fresh sample. Recent frequency is not a dependable forecast of the next digit.", points: ["Counts and percentages use only the current sample.", "Ties use the most recently observed digit as a display tie-breaker.", "The list can change as ticks arrive."] },
+  { title: "Choose a manual digit", body: "Select any digit from 0 to 9 for a manual Matches trade. The selected number becomes the contract barrier.", points: ["Check the highlighted digit before buying.", "The button submits only the selected digit.", "The expiry digit decides the contract result."] },
+  { title: "What Digit Match means", body: "A Digit Match contract wins only when the final digit at expiry equals the selected barrier.", points: ["A different final digit loses the stake.", "The contract's displayed payout is set by Deriv.", "Observed frequency does not change the contract's rules."] },
+  { title: "Choose duration", body: "Select 1, 2, 3, 4, or 5 ticks. Duration is sent with each order and is checked by the server.", points: ["Short duration settles sooner but can change quickly.", "The duration does not make a digit more likely.", "Open contracts block the next automatic batch until settlement."] },
+  { title: "Set the stake", body: "Enter the amount to risk per selected digit. The minimum is 0.35; the connected account balance and Deriv's own rules still apply.", points: ["For a batch, the amount is applied to each selected digit.", "The server checks total batch stake against the balance.", "There is no promise that every entered amount will be accepted by Deriv."] },
+  { title: "Place a manual trade", body: "The manual Matches button submits one Digit Match contract for the selected digit, stake, market, and duration.", points: ["Confirm the selected account and setup first.", "Wait for the buy acknowledgement.", "If an acknowledgement is uncertain, check Deriv history before trying again."] },
+  { title: "Turn on AI Matches", body: "AI Matches can submit trades using the top one, two, or three digits from the current observed-frequency ranking.", points: ["The label does not mean an AI model knows the next result.", "Automatic trading waits for a fresh sample and available settlement slot.", "A losing trade is possible on every entry."] },
+  { title: "Select one, two, or three digits", body: "The AI digit-count setting controls how many of the current top-ranked digits are included in one batch.", points: ["Each selected digit becomes a separate contract.", "The stake is charged per contract, so a three-digit batch uses three stakes.", "The server limits a batch to three contracts and checks total balance."] },
+  { title: "Start continuous Matches", body: "Start Matches enables repeated automatic entries. It waits for live data, the sample floor, and all prior contracts to settle before sending another batch.", points: ["The AI toggle also starts or stops automatic entries.", "Stop Matches prevents future entries but does not close open contracts.", "An ambiguous buy pauses the runner for history verification."] },
+  { title: "Stop and pause safely", body: "Stop Matches pauses future automatic entries. An already-sent buy cannot be cancelled by the page and may still settle normally.", points: ["Check Deriv history if a request status is uncertain.", "Do not resubmit an unconfirmed buy.", "Open contracts can continue to settle after stopping."] },
+  { title: "Matches trading history", body: "Matches history shows only contract IDs acknowledged by the Matches feature for the selected account, using the same history display as Trade X.", points: ["Other features' contracts are excluded.", "History is sourced from Deriv and can update after settlement.", "Clearing the local display does not delete Deriv account records."] },
+  { title: "Risk and responsible use", body: "No frequency ranking or automated rule can promise accuracy, profit, or rare losses. Random digit outcomes can differ from the recent sample.", points: ["Never stake money you cannot afford to lose.", "Set an amount and stop when it reaches your own limit.", "Review results on a demo account before considering real funds."] },
 ] as const;
 
 const digitFlipGuidePages = [
@@ -344,12 +404,13 @@ export default function XTraderPage() {
   const canUseDigitFlip = isAdmin || accessSession.data?.features.includes("digit-flip") === true;
   const canUseTradeX = isAdmin || accessSession.data?.features.includes("trade-x") === true;
   const canUseBulkTrader = isAdmin || accessSession.data?.features.includes("bulk-trader") === true;
+  const canUseMatchesAnalysis = isAdmin || accessSession.data?.features.includes("matches-analysis") === true;
   const canUseClockWork = isAdmin || accessSession.data?.features.includes("clock-work") === true;
   const canUseCashGrab = isAdmin || accessSession.data?.features.includes("cash-grab") === true;
   const canUseMoneyBank = isAdmin || accessSession.data?.features.includes("money-bank") === true;
   const canUseAutoTrader = isAdmin || accessSession.data?.features.includes("auto-trader") === true;
   const canUseAutoTrader2 = isAdmin || accessSession.data?.features.includes("auto-trader-2") === true;
-  const canUseDeriv = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseClockWork || canUseCashGrab || canUseMoneyBank || canUseAutoTrader || canUseAutoTrader2;
+  const canUseDeriv = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseMatchesAnalysis || canUseClockWork || canUseCashGrab || canUseMoneyBank || canUseAutoTrader || canUseAutoTrader2;
   const canViewHistory = canUseDeriv || accessSession.data?.features.includes("history") === true;
   const tokenStatus = useGetDerivTokenStatus({ query: { enabled: canUseDeriv, retry: false, queryKey: getGetDerivTokenStatusQueryKey() } });
   const connectedToken = Boolean(tokenStatus.data?.has_token);
@@ -372,6 +433,7 @@ export default function XTraderPage() {
   const cashGrabSellMutation = useSellDerivContract();
   const clockWorkQuoteMutation = useQuoteClockWorkContracts();
   const clockWorkBuyMutation = useBuyClockWorkContracts();
+  const matchesBuyMutation = useBuyMatchesContracts();
 
   const [pat, setPat] = useState("");
   const [symbol, setSymbol] = useState("R_75");
@@ -429,6 +491,19 @@ export default function XTraderPage() {
   const [bulkTraderAutoSelectBest, setBulkTraderAutoSelectBest] = useState(false);
   const [bulkTraderHiddenHistoryIds, setBulkTraderHiddenHistoryIds] = useState<Set<string>>(new Set());
   const [cashGrabEnabled, setCashGrabEnabled] = useState(false);
+  const [matchesAnalysisEnabled, setMatchesAnalysisEnabled] = useState(false);
+  const [matchesMarketType, setMatchesMarketType] = useState<MatchesMarketType>("volatility");
+  const [matchesSymbol, setMatchesSymbol] = useState("R_75");
+  const [matchesDuration, setMatchesDuration] = useState<MatchesDuration>(1);
+  const [matchesStake, setMatchesStake] = useState(0.35);
+  const [matchesSelectedDigit, setMatchesSelectedDigit] = useState(5);
+  const [matchesAiEnabled, setMatchesAiEnabled] = useState(false);
+  const [matchesAiDigits, setMatchesAiDigits] = useState<MatchesAiDigits>(1);
+  const [matchesObservedDigits, setMatchesObservedDigits] = useState<number[]>([]);
+  const [matchesTickCount, setMatchesTickCount] = useState(0);
+  const [matchesStatusMessage, setMatchesStatusMessage] = useState("Rescan to start a fresh digit sample.");
+  const [matchesHistoryClearArmed, setMatchesHistoryClearArmed] = useState(false);
+  const [matchesHiddenHistoryIds, setMatchesHiddenHistoryIds] = useState<Set<string>>(new Set());
   const [clockWorkEnabled, setClockWorkEnabled] = useState(false);
   const [clockWorkSymbol, setClockWorkSymbol] = useState("R_75");
   const [clockWorkDuration, setClockWorkDuration] = useState<ClockWorkPanelProps["duration"]>(5);
@@ -610,8 +685,14 @@ export default function XTraderPage() {
   const bulkClaimedHistoryIdsRef = useRef(new Set<string>());
   const cashGrabClaimedHistoryIdsRef = useRef(new Set<string>());
   const clockWorkClaimedHistoryIdsRef = useRef(new Set<string>());
+  const matchesClaimedHistoryIdsRef = useRef(new Set<string>());
   const moneyBankClaimedHistoryIdsRef = useRef(new Set<string>());
+  const matchesSessionKnownIdsRef = useRef<Set<string> | null>(null);
   const historyFeatureOwnersRef = useRef(new Map<string, DerivHistoryFeature>());
+  const matchesAiRunningRef = useRef(false);
+  const matchesActionLockRef = useRef(false);
+  const matchesAutomationAttemptTickRef = useRef(-1);
+  const matchesSampleCursorRef = useRef({ symbol: "", tickCount: 0 });
   const clockWorkActionLockRef = useRef(false);
   const clockWorkAutoAttemptAtRef = useRef(0);
   const clockWorkAutomationRef = useRef<(() => void) | null>(null);

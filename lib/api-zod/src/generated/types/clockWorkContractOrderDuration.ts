@@ -10,6 +10,5 @@ export type ClockWorkContractOrderDuration = typeof ClockWorkContractOrderDurati
 
 
 export const ClockWorkContractOrderDuration = {
-  NUMBER_3: 3,
   NUMBER_5: 5,
 } as const;

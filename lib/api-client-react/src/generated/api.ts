@@ -54,6 +54,8 @@ import type {
   DerivTradeEventStream,
   ErrorResponse,
   HealthStatus,
+  MatchesBatchBuyResponse,
+  MatchesBatchInput,
   SuccessResponse,
   TokenDeleteResponse,
   TradingProtectionSettings,
@@ -2283,6 +2285,78 @@ export const useBuyClockWorkContracts = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getBuyClockWorkContractsMutationOptions(options));
+    }
+
+export const getBuyMatchesContractsUrl = () => {
+
+
+
+
+  return `/api/deriv/matches/buy`
+}
+
+/**
+ * Requests a fresh proposal for every selected digit before buying. Partial acknowledgements are returned explicitly; do not replay an unconfirmed buy until Deriv history is checked.
+ * @summary Buy one to three exact-digit Matches contracts
+ */
+export const buyMatchesContracts = async (matchesBatchInput: MatchesBatchInput, options?: Parameters<typeof customFetch>[1]): Promise<MatchesBatchBuyResponse> => {
+
+  return customFetch<MatchesBatchBuyResponse>(getBuyMatchesContractsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(matchesBatchInput)
+  }
+);}
+
+
+
+
+
+export const getBuyMatchesContractsMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof buyMatchesContracts>>, TError,{data: BodyType<MatchesBatchInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof buyMatchesContracts>>, TError,{data: BodyType<MatchesBatchInput>}, TContext> => {
+
+const mutationKey = ['buyMatchesContracts'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof buyMatchesContracts>>, {data: BodyType<MatchesBatchInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  buyMatchesContracts(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BuyMatchesContractsMutationResult = NonNullable<Awaited<ReturnType<typeof buyMatchesContracts>>>
+    export type BuyMatchesContractsMutationBody = BodyType<MatchesBatchInput>
+    export type BuyMatchesContractsMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Buy one to three exact-digit Matches contracts
+ */
+export const useBuyMatchesContracts = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof buyMatchesContracts>>, TError,{data: BodyType<MatchesBatchInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof buyMatchesContracts>>,
+        TError,
+        {data: BodyType<MatchesBatchInput>},
+        TContext
+      > => {
+      return useMutation(getBuyMatchesContractsMutationOptions(options));
     }
 
 export const getSellDerivContractUrl = () => {

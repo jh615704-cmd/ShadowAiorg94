@@ -18,8 +18,32 @@ import {
 const autoTraderFeature = "auto-trader";
 const autoTrader2Feature = "auto-trader-2";
 const clockWorkFeature = "clock-work";
+const matchesAnalysisFeature = "matches-analysis";
 
 describe("Auto Trader access-key feature path", () => {
+  it("accepts Matches Analysis grants and limits its buy route to that feature", () => {
+    const create = CreateAccessKeyBody.parse({
+      label: "Matches Analysis user",
+      kind: "user",
+      max_devices: 1,
+      features: [matchesAnalysisFeature],
+    });
+    const update = UpdateAccessKeyBody.parse({ features: [matchesAnalysisFeature] });
+
+    assert.deepEqual(create.features, [matchesAnalysisFeature]);
+    assert.deepEqual(update.features, [matchesAnalysisFeature]);
+    assert.ok(ACCESS_FEATURES.includes(matchesAnalysisFeature));
+    assert.ok(TRADING_ACCESS_FEATURES.includes(matchesAnalysisFeature));
+    assert.equal(
+      runGuard(requireAccessFeature(matchesAnalysisFeature), [matchesAnalysisFeature]).nextCalled,
+      true,
+    );
+    assert.equal(
+      runGuard(requireAccessFeature(matchesAnalysisFeature), ["trade-x"]).statusCode,
+      403,
+    );
+  });
+
   it("accepts Clock Work grants and includes them on trading routes", () => {
     const create = CreateAccessKeyBody.parse({
       label: "Clock Work user",

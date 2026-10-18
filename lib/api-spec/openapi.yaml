@@ -813,6 +813,49 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /deriv/matches/buy:
+    post:
+      operationId: buyMatchesContracts
+      tags: [deriv]
+      summary: Buy one to three exact-digit Matches contracts
+      description: Requests a fresh proposal for every selected digit before buying. Partial acknowledgements are returned explicitly; do not replay an unconfirmed buy until Deriv history is checked.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MatchesBatchInput"
+      responses:
+        "202":
+          description: Matches buy requests sent; inspect completed and failed entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MatchesBatchBuyResponse"
+        "400":
+          description: Invalid Matches buy request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Matches access is unavailable or live trading is disabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Another Deriv contract is still open
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Deriv could not return fresh proposals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /deriv/sell:
     post:
       operationId: sellDerivContract
@@ -987,7 +1030,7 @@ components:
             $ref: "#/components/schemas/AccessFeature"
     AccessFeature:
       type: string
-      enum: [edge, digit-flip, trade-x, bulk-trader, clock-work, cash-grab, money-bank, jdy-ai-3, auto-trader, auto-trader-2, settings, history, admin]
+      enum: [edge, digit-flip, trade-x, bulk-trader, matches-analysis, clock-work, cash-grab, money-bank, jdy-ai-3, auto-trader, auto-trader-2, settings, history, admin]
     AccessSession:
       type: object
       required: [key_id, key_prefix, label, kind, is_admin, status, max_devices, features, online, last_seen_at]
@@ -1421,7 +1464,7 @@ components:
           minimum: 1
         duration:
           type: integer
-          enum: [3, 5]
+          enum: [5]
         duration_unit:
           type: string
           enum: [t]
@@ -1525,6 +1568,94 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ClockWorkFailedBuy"
+    MatchesContractOrder:
+      type: object
+      required: [key, amount, duration, duration_unit, contract_type, barrier, symbol]
+      properties:
+        key:
+          type: string
+          minLength: 1
+          maxLength: 32
+        amount:
+          type: number
+          minimum: 0.35
+        duration:
+          type: integer
+          enum: [1, 2, 3, 4, 5]
+        duration_unit:
+          type: string
+          enum: [t]
+        contract_type:
+          type: string
+          enum: [DIGITMATCH]
+        barrier:
+          type: integer
+          minimum: 0
+          maximum: 9
+        symbol:
+          type: string
+    MatchesBatchInput:
+      type: object
+      required: [contracts]
+      properties:
+        contracts:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items:
+            $ref: "#/components/schemas/MatchesContractOrder"
+    MatchesCompletedBuy:
+      type: object
+      required: [key, amount, contract_type, barrier, symbol, proposal, buy]
+      properties:
+        key:
+          type: string
+        amount:
+          type: number
+        contract_type:
+          type: string
+          enum: [DIGITMATCH]
+        barrier:
+          type: integer
+          minimum: 0
+          maximum: 9
+        symbol:
+          type: string
+        proposal:
+          $ref: "#/components/schemas/DerivProposal"
+        buy:
+          $ref: "#/components/schemas/DerivBuy"
+    MatchesFailedBuy:
+      type: object
+      required: [key, contract_type, error]
+      properties:
+        key:
+          type: string
+        contract_type:
+          type: string
+          enum: [DIGITMATCH]
+        error:
+          type: string
+    MatchesBatchBuyResponse:
+      type: object
+      required: [ok, message, requested_count, completed_count, contracts, failed]
+      properties:
+        ok:
+          type: boolean
+        message:
+          type: string
+        requested_count:
+          type: integer
+        completed_count:
+          type: integer
+        contracts:
+          type: array
+          items:
+            $ref: "#/components/schemas/MatchesCompletedBuy"
+        failed:
+          type: array
+          items:
+            $ref: "#/components/schemas/MatchesFailedBuy"
     DerivDualBuyInput:
       type: object
       required: [amount, duration, duration_unit, barrier]
