@@ -3635,13 +3635,20 @@ export default function XTraderPage() {
     void selectMarket(matchesSymbol);
   };
 
-  const toggleMatchesAi = (enabled: boolean) => {
+  const toggleMatchesAi = (
+    enabled: boolean,
+    stoppedMessage = "Automatic Matches entries are stopped. Open contracts can continue to settle.",
+  ) => {
+    if (enabled && (!matchesAnalysisEnabled || !canUseMatchesAnalysis || !isConnected || !currentAccount)) {
+      setMatchesStatusMessage("Enable Matches Analysis and connect a Deriv account before starting automatic entries.");
+      return;
+    }
     matchesAiRunningRef.current = enabled;
     setMatchesAiEnabled(enabled);
     matchesAutomationAttemptTickRef.current = enabled ? -1 : matchesTickCount;
     setMatchesStatusMessage(enabled
       ? "AI Matches is on. Waiting for fresh ticks, a ranked sample, and an available trade slot."
-      : "Automatic Matches entries are stopped. Open contracts can continue to settle.");
+      : stoppedMessage);
   };
 
   const changeMatchesSymbol = (nextSymbol: string) => {
@@ -3657,6 +3664,7 @@ export default function XTraderPage() {
 
   const executeMatchesOrders = async (digits: readonly number[], automated: boolean) => {
     if (matchesActionLockRef.current || matchesBuyMutation.isPending) return false;
+    if (automated && (!matchesAnalysisEnabled || !matchesAiEnabled || !matchesAiRunningRef.current)) return false;
     if (!matchesAnalysisEnabled || !canUseMatchesAnalysis || !isConnected || !currentAccount) {
       setMatchesStatusMessage("Enable Matches Analysis and connect a Deriv account before trading.");
       return false;
@@ -3697,14 +3705,21 @@ export default function XTraderPage() {
         matchesClaimedHistoryIdsRef.current,
         result.contracts.map((entry) => String(entry.buy.contract_id)),
       );
-      setMatchesStatusMessage(result.message);
       refreshTradeResults();
-      if (!result.ok) toggleMatchesAi(false);
+      if (!result.ok) {
+        toggleMatchesAi(false, `${result.message} Automatic entries are stopped. Open contracts can continue to settle.`);
+      } else {
+        setMatchesStatusMessage(automated && !matchesAiRunningRef.current
+          ? `${result.message} Automatic entries remain stopped. Open contracts can continue to settle.`
+          : result.message);
+      }
       return result.ok;
     } catch (error) {
       const message = errorMessage(error);
-      setMatchesStatusMessage(`${message} Check Deriv history before retrying an unconfirmed order.`);
-      toggleMatchesAi(false);
+      toggleMatchesAi(
+        false,
+        `${message} Check Deriv history before retrying an unconfirmed order. Automatic entries are stopped. Open contracts can continue to settle.`,
+      );
       return false;
     } finally {
       matchesActionLockRef.current = false;
@@ -3718,7 +3733,10 @@ export default function XTraderPage() {
       return;
     }
     if (!isConnected || !currentAccount) {
-      setMatchesStatusMessage("Waiting for a connected Deriv account.");
+      matchesAiRunningRef.current = false;
+      setMatchesAiEnabled(false);
+      matchesAutomationAttemptTickRef.current = matchesTickCount;
+      setMatchesStatusMessage("Deriv disconnected. Automatic Matches entries are stopped. Open contracts can continue to settle.");
       return;
     }
     if (isReal && !status.data?.live_trading_enabled) {
@@ -4565,13 +4583,8 @@ export default function XTraderPage() {
           stopLoss={digitFlipStopLoss}
           running={digitFlipRunning}
           currentStake={digitFlipCurrentStake}
-          recentTrades={digitFlipRows}
-          sessionRows={digitFlipVisibleSessionRows}
-          currency={currentAccount?.currency}
             assaultEnabled={digitFlipAssault}
            magicEnabled={digitFlipMagic}
-           clearTradesArmed={digitFlipClearArmed}
-           historyFading={historyFading}
           isPlacingTrade={digitFlipBuyMutation.isPending}
           disabled={!isConnected}
           entryBlocked={tradeSlotBlocked}
@@ -4598,11 +4611,26 @@ export default function XTraderPage() {
           onRunStop={toggleDigitFlipRun}
           onAiScan={runDigitFlipAiScanner}
           onReset={resetDigitFlip}
-          onClearTrades={clearDigitFlipHistory}
            onRefreshSample={refreshDigitFlipSample}
            onAssaultChange={toggleDigitFlipAssault}
            onMagicChange={toggleDigitFlipMagic}
         />
+      )}
+
+      {canUseDigitFlip && canViewHistory && (digitFlipEnabled || digitFlipClaimedHistoryIdsRef.current.size > 0) && (
+        <section className="xt-bottom-feature">
+          <DerivHistory
+            className="digit-flip-history"
+            title="DigitFlip History"
+            strategy="DigitFlip Strategy"
+            rows={digitFlipRows}
+            sessionRows={digitFlipVisibleSessionRows}
+            currency={currentAccount?.currency}
+            clearArmed={digitFlipClearArmed}
+            fading={historyFading}
+            onClear={clearDigitFlipHistory}
+          />
+        </section>
       )}
 
       {xTraderEnabled && (
@@ -4962,18 +4990,21 @@ export default function XTraderPage() {
               setGuideOpen(true);
             }}
           />
-          {canViewHistory && (
-            <DerivHistory
-              title="Matches Analysis History"
-              strategy="Matches Tool"
-              rows={matchesRows}
-              sessionRows={matchesVisibleSessionRows}
-              currency={currentAccount?.currency}
-              clearArmed={matchesHistoryClearArmed}
-              fading={historyFading}
-              onClear={clearMatchesHistory}
-            />
-          )}
+        </section>
+      )}
+
+      {canUseMatchesAnalysis && canViewHistory && (matchesAnalysisEnabled || matchesClaimedHistoryIdsRef.current.size > 0) && (
+        <section className="xt-bottom-feature">
+          <DerivHistory
+            title="Matches Analysis History"
+            strategy="Matches Tool"
+            rows={matchesRows}
+            sessionRows={matchesVisibleSessionRows}
+            currency={currentAccount?.currency}
+            clearArmed={matchesHistoryClearArmed}
+            fading={historyFading}
+            onClear={clearMatchesHistory}
+          />
         </section>
       )}
 

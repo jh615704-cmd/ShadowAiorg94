@@ -9,7 +9,6 @@ import {
 } from "lucide-react";
 import { formatDerivQuote } from "../lib/format-deriv-quote";
 import AiScannerAction from "./ai-scanner-action";
-import DerivHistory, { type DerivHistoryRow } from "./deriv-history";
 import "./digit-flip-panel.css";
 
 export type DigitFlipParity = "DIGITEVEN" | "DIGITODD";
@@ -23,8 +22,6 @@ export type DigitFlipMarketSignal = {
   oddPercentage: number;
   sampleCount: number;
 };
-
-export type DigitFlipTradeRow = DerivHistoryRow & { account_type: string };
 
 export type DigitFlipPanelProps = {
   enabled: boolean;
@@ -46,13 +43,8 @@ export type DigitFlipPanelProps = {
   stopLoss: number;
   running: boolean;
   currentStake: number;
-  recentTrades: readonly DigitFlipTradeRow[];
-  sessionRows: readonly DigitFlipTradeRow[];
-  currency?: string;
   assaultEnabled: boolean;
   magicEnabled: boolean;
-  clearTradesArmed: boolean;
-  historyFading: boolean;
   isPlacingTrade?: boolean;
   entryBlocked?: boolean;
   disabled?: boolean;
@@ -68,7 +60,6 @@ export type DigitFlipPanelProps = {
   onRunStop: () => void;
   onAiScan: () => Promise<string>;
   onReset: () => void;
-  onClearTrades: () => void;
   onRefreshSample: () => void;
   onAssaultChange: (value: boolean) => void;
   onMagicChange: (value: boolean) => void;
@@ -127,13 +118,8 @@ export default function DigitFlipPanel({
   stopLoss,
   running,
   currentStake,
-  recentTrades,
-  sessionRows,
-  currency,
   assaultEnabled,
   magicEnabled,
-  clearTradesArmed,
-  historyFading,
   isPlacingTrade = false,
   entryBlocked = false,
   disabled = false,
@@ -149,7 +135,6 @@ export default function DigitFlipPanel({
   onRunStop,
   onAiScan,
   onReset,
-  onClearTrades,
   onRefreshSample,
   onAssaultChange,
   onMagicChange,
@@ -374,7 +359,6 @@ export default function DigitFlipPanel({
         </div>
       </section>
 
-      <DerivHistory className="digit-flip-history" title="DigitFlip History" strategy="DigitFlip Strategy" rows={recentTrades} sessionRows={sessionRows} currency={currency} clearArmed={clearTradesArmed} fading={historyFading} onClear={onClearTrades} />
     </section>
   );
 }

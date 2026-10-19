@@ -103,7 +103,7 @@
 .df-best-copy > span,
 .df-section-label,
 .df-setup-grid label > span { color: #94a2b4; font-size: 8px; letter-spacing: .12em; text-transform: uppercase; }
-.df-best-copy p { margin: 5px 0 0; color: #edf3fb; font-size: 10px; white-space: nowrap; }
+.df-best-copy p { margin: 5px 0 0; color: #edf3fb; font-size: 10px; line-height: 1.45; white-space: normal; overflow-wrap: anywhere; }
 .df-best-copy strong { color: #46e1cf; }
 .df-best-copy em { margin: 0 3px; color: #687991; font-style: normal; }
 
@@ -278,7 +278,7 @@
 @media (max-width: 560px) {
   .df-panel { margin-top: 10px; gap: 13px; }
   .df-scanner { padding: 16px; }
-  .df-best-copy p { overflow: hidden; text-overflow: ellipsis; }
+  .df-best-copy p { overflow-wrap: anywhere; }
   .df-best-parity { min-width: 84px; }
   .df-card { border-radius: 15px; }
   .df-setup-grid { grid-template-columns: 1fr 1fr; }

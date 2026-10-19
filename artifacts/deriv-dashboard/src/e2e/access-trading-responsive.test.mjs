@@ -184,6 +184,74 @@ test("restricted homepage feature cards and switches glow red without enabling c
   }
 });
 
+test("DigitFlip history stays visible after switching the feature off", async () => {
+  const state = createState(userSession(["digit-flip"]));
+  state.hasToken = true;
+  state.statusVersion = 30;
+  state.allowFixtureTrades = true;
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/app`);
+    const digitFlipToggle = page.getByRole("checkbox", { name: "Toggle DigitFlip" });
+    const digitFlipSwitch = page.locator(".xt-feature-card-digit-flip .xt-switch");
+    await digitFlipToggle.waitFor();
+    await digitFlipSwitch.click();
+    await page.getByTestId("digit-flip-panel").waitFor();
+    await page.getByRole("button", { name: "AI Scanner" }).click();
+
+    const history = page.locator(".digit-flip-history");
+    await history.locator(".deriv-history-row").waitFor({ timeout: 10_000 });
+    assert.match(await history.innerText(), /US\$0\.50/);
+
+    await digitFlipSwitch.click();
+    await page.getByTestId("digit-flip-panel").waitFor({ state: "hidden" });
+    await history.locator(".deriv-history-row").waitFor();
+    await assertWithinViewport(page, ".digit-flip-history", viewports[0].width, "DigitFlip history");
+    assert.deepEqual(state.tradeRequests.map(({ path }) => path), ["/api/deriv/buy"]);
+    assert.deepEqual(state.unhandledApis, []);
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+});
+
+test("Matches stops after the current buy and keeps its history available while settling", async () => {
+  const state = createState(userSession(["matches-analysis"]));
+  state.hasToken = true;
+  state.allowFixtureTrades = true;
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/app`);
+    const matchesToggle = page.getByRole("checkbox", { name: "Toggle Matches Analysis" });
+    const matchesSwitch = page.locator(".xt-feature-card-matches .xt-switch");
+    await matchesToggle.waitFor();
+    await matchesSwitch.click();
+    await page.getByTestId("matches-analysis-panel").waitFor();
+    await page.waitForFunction(() => Number(document.querySelector('[data-testid="value-matches-sample-count"]')?.textContent ?? 0) >= 20, undefined, { timeout: 15_000 });
+
+    const firstBuy = page.waitForRequest((request) => request.url().includes("/api/deriv/matches/buy"), { timeout: 8_000 });
+    await page.getByTestId("button-matches-start").click();
+    await firstBuy;
+    await page.getByTestId("button-matches-stop").click();
+    await page.getByTestId("status-matches-message").getByText(/Automatic Matches entries are stopped/).waitFor();
+
+    const history = page.getByRole("region", { name: "Matches Analysis History Deriv history" });
+    await history.locator(".deriv-history-row").waitFor({ timeout: 10_000 });
+    await page.waitForTimeout(1_000);
+    assert.equal(state.tradeRequests.filter(({ path }) => path === "/api/deriv/matches/buy").length, 1, "Stopping must prevent another automatic Matches batch.");
+
+    await matchesSwitch.click();
+    await page.getByTestId("matches-analysis-panel").waitFor({ state: "hidden" });
+    await history.locator(".deriv-history-row").waitFor();
+    await assertWithinViewport(page, ".deriv-history", viewports[0].width, "Matches Analysis history");
+    assert.match(await history.innerText(), /US\$0\.35/);
+    assert.deepEqual(state.unhandledApis, []);
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+}, { timeout: 45_000 });
+
 test("clearing Auto Trader 2.0 resets run metrics and stake without deleting Deriv history", async () => {
   const state = createState(userSession(["auto-trader-2"]));
   state.hasToken = true;
@@ -654,6 +722,10 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await tradeXPanel.scrollIntoViewIfNeeded();
       await analysisSurface.scrollIntoViewIfNeeded();
+      await page.waitForFunction(() => {
+        const buttons = [...document.querySelectorAll(".tx-tap-trade")];
+        return buttons.length === 3 && buttons.every((button) => button.getBoundingClientRect().width > 0);
+      }, undefined, { timeout: 5_000 });
       await assertNoHorizontalOverflow(page, viewport, "Trade X");
       await assertWithinViewport(page, '[data-testid="trade-x-panel"]', viewport.width, "Trade X panel");
       for (const selector of [
@@ -937,6 +1009,8 @@ function createState(session) {
   return {
     session,
     hasToken: false,
+    allowFixtureTrades: false,
+    tradeSequence: 0,
     apiCalls: [],
     unhandledApis: [],
     tradeRequests: [],
@@ -1100,6 +1174,44 @@ async function mockApiRequest(route, state, pathname, method) {
     await fulfillJson(route, state.history ?? []);
     return;
   }
+  if (pathname === "/api/deriv/buy" && method === "POST" && state.allowFixtureTrades) {
+    state.tradeRequests.push({ path: pathname, method });
+    const order = request.postDataJSON();
+    const buy = fixtureBuy(state, order);
+    await fulfillJson(route, {
+      ok: true,
+      message: "Fixture buy confirmed.",
+      proposal: { id: "fixture-proposal", ask_price: order.amount, payout: order.amount * 2, spot: 100_000 },
+      buy: { contract_id: buy.contract_id, buy_price: order.amount, payout: order.amount * 2 },
+    });
+    return;
+  }
+  if (pathname === "/api/deriv/matches/buy" && method === "POST" && state.allowFixtureTrades) {
+    state.tradeRequests.push({ path: pathname, method });
+    const { contracts } = request.postDataJSON();
+    const completed = contracts.map((order) => {
+      const buy = fixtureBuy(state, order);
+      return {
+        key: order.key,
+        amount: order.amount,
+        contract_type: "DIGITMATCH",
+        barrier: order.barrier,
+        symbol: order.symbol,
+        proposal: { id: "fixture-proposal", ask_price: order.amount, payout: order.amount * 2, spot: 100_000 },
+        buy: { contract_id: buy.contract_id, buy_price: order.amount, payout: order.amount * 2 },
+      };
+    });
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    await fulfillJson(route, {
+      ok: true,
+      message: `${completed.length} Matches contract${completed.length === 1 ? "" : "s"} sent to Deriv.`,
+      requested_count: contracts.length,
+      completed_count: completed.length,
+      contracts: completed,
+      failed: [],
+    });
+    return;
+  }
   if (pathname === "/api/deriv/select-symbol" && method === "POST") {
     await fulfillJson(route, { symbol: request.postDataJSON().symbol });
     return;
@@ -1150,6 +1262,29 @@ function makeDerivStatus(version, activeContractCount = 0) {
     last_tick: { symbol: "R_75", quote: 100_000 + version, epoch: 1_700_000_000 + version },
     market_signals: signals,
   };
+}
+
+function fixtureBuy(state, order) {
+  const contractId = `fixture-contract-${++state.tradeSequence}`;
+  const row = {
+    account_id: account.id,
+    contract_id: contractId,
+    contract_type: order.contract_type,
+    symbol: order.symbol,
+    account_type: "demo",
+    currency: "USD",
+    barrier: order.barrier ?? null,
+    buy_price: order.amount,
+    current_value: order.amount,
+    payout: order.amount * 2,
+    profit: 0,
+    status: "open",
+    buy_time: 1_700_000_000 + state.tradeSequence,
+    sell_time: null,
+  };
+  state.history = [row, ...(state.history ?? [])];
+  state.activeContractCount = 1;
+  return row;
 }
 
 async function fulfillJson(route, body, status = 200) {

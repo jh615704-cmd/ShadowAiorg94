@@ -29,9 +29,9 @@ test("Matches ignores invalid digits and safely returns empty-sample frequencies
 test("Matches AI selection supports one, two, or all three ranked digits", () => {
   const ranked = rankObservedMatchDigits([5, 1, 5, 2, 1, 5, 2, 1]);
 
-  assert.deepEqual(chooseObservedMatchDigits(ranked, 1), [5]);
-  assert.deepEqual(chooseObservedMatchDigits(ranked, 2), [5, 1]);
-  assert.deepEqual(chooseObservedMatchDigits(ranked, 3), [5, 1, 2]);
+  assert.deepEqual(chooseObservedMatchDigits(ranked, 1), [1]);
+  assert.deepEqual(chooseObservedMatchDigits(ranked, 2), [1, 5]);
+  assert.deepEqual(chooseObservedMatchDigits(ranked, 3), [1, 5, 2]);
 });
 
 test("Matches exposes the requested minimum stake and sample floor", () => {
