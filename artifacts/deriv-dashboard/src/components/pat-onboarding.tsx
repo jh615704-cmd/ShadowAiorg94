@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useTestDerivToken, useTestDerivConnection, getGetDerivTokenStatusQueryKey, getGetDerivAccountsQueryKey, getGetDerivStatusQueryKey } from '@workspace/api-client-react';
+import { useTestDerivToken, useTestDerivConnection, getUserFacingErrorMessage, getGetDerivTokenStatusQueryKey, getGetDerivAccountsQueryKey, getGetDerivStatusQueryKey } from '@workspace/api-client-react';
 import { KeyRound, ShieldCheck, ArrowRight, RefreshCw, CircleAlert } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -43,7 +43,7 @@ export function PatOnboarding() {
       setExpiresAt('');
       setLocation('/app');
     } catch (error: any) {
-      const message = error?.data?.error || error?.message || "Failed to connect this Deriv PAT.";
+      const message = getUserFacingErrorMessage(error, "Failed to connect this Deriv PAT.");
       toast({
         variant: "destructive",
         title: "Connection failed",

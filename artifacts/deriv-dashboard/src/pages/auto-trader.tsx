@@ -128,6 +128,7 @@ function AutoTraderContent() {
   const [takeProfit, setTakeProfit] = useState("10");
   const [stopLoss, setStopLoss] = useState("10");
   const [message, setMessage] = useState<{ tone: "success" | "error" | "info"; text: string } | null>(null);
+  const [messageFading, setMessageFading] = useState(false);
   const [historyClearArmed, setHistoryClearArmed] = useState(false);
   const clearHistoryTimer = useRef<number | null>(null);
   const [frequencies, setFrequencies] = useState<Frequencies>({});
@@ -139,6 +140,23 @@ function AutoTraderContent() {
   const currentSignals = status.data?.market_signals ?? [];
 
   const [localContracts, setLocalContracts] = useState<LocalContract[]>([]);
+
+  useEffect(() => {
+    if (!message) {
+      setMessageFading(false);
+      return;
+    }
+    setMessageFading(false);
+    const fadeTimer = window.setTimeout(() => setMessageFading(true), 3_600);
+    const removeTimer = window.setTimeout(() => {
+      setMessage((current) => current === message ? null : current);
+    }, 4_000);
+    return () => {
+      window.clearTimeout(fadeTimer);
+      window.clearTimeout(removeTimer);
+    };
+  }, [message]);
+
   useEffect(() => {
     if (!accountId) {
       setLocalContracts([]);
@@ -518,7 +536,7 @@ function AutoTraderContent() {
                   <div className="at-deferred-note"><ShieldAlert size={14} /> Take-profit and stop-loss are reference targets only.</div>
                 </div>
               )}
-              {message && <div className={`at-action-message ${message.tone}`} role={message.tone === "error" ? "alert" : "status"} data-testid="status-trade-message">
+              {message && <div className={`at-action-message ${message.tone}${messageFading ? " fading" : ""}`} role={message.tone === "error" ? "alert" : "status"} data-testid="status-trade-message">
                 {message.tone === "error" ? <AlertCircle size={15} /> : <Check size={15} />}<span>{message.text}</span>
                 <button type="button" aria-label="Dismiss message" onClick={() => setMessage(null)} data-testid="button-dismiss-message"><X size={13} /></button>
               </div>}

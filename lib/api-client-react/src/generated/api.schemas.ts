@@ -184,6 +184,66 @@ export interface TradingProtectionSettingsUpdate {
   dual_weekends_weekdays_enabled: boolean;
 }
 
+export type FeatureControlFeature = typeof FeatureControlFeature[keyof typeof FeatureControlFeature];
+
+
+export const FeatureControlFeature = {
+  edge: 'edge',
+  'digit-flip': 'digit-flip',
+  'trade-x': 'trade-x',
+  'bulk-trader': 'bulk-trader',
+  'matches-analysis': 'matches-analysis',
+  'clock-work': 'clock-work',
+  'cash-grab': 'cash-grab',
+  'money-bank': 'money-bank',
+  'jdy-ai-3': 'jdy-ai-3',
+  'auto-trader': 'auto-trader',
+  'auto-trader-2': 'auto-trader-2',
+  settings: 'settings',
+  history: 'history',
+} as const;
+
+export type FeatureControlMode = typeof FeatureControlMode[keyof typeof FeatureControlMode];
+
+
+export const FeatureControlMode = {
+  available: 'available',
+  restricted: 'restricted',
+  coming_soon: 'coming_soon',
+  under_construction: 'under_construction',
+} as const;
+
+export interface FeatureControl {
+  feature: FeatureControlFeature;
+  mode: FeatureControlMode;
+  /** @nullable */
+  countdown_at: string | null;
+  /** @maxLength 500 */
+  notice: string;
+}
+
+export interface AdminFeatureSettings {
+  features: FeatureControl[];
+  global_announcement_enabled: boolean;
+  /** @maxLength 500 */
+  global_announcement: string;
+  auto_trader_2_paused: boolean;
+  /** @maxLength 300 */
+  auto_trader_2_pause_message: string;
+  /** @nullable */
+  updated_at: string | null;
+}
+
+export interface AdminFeatureSettingsUpdate {
+  features: FeatureControl[];
+  global_announcement_enabled: boolean;
+  /** @maxLength 500 */
+  global_announcement: string;
+  auto_trader_2_paused: boolean;
+  /** @maxLength 300 */
+  auto_trader_2_pause_message: string;
+}
+
 export interface SuccessResponse {
   success: boolean;
 }
@@ -506,6 +566,7 @@ export interface DerivBuyInput {
      */
   growth_rate?: number;
   symbol?: string;
+  automated?: boolean;
   /** When true for ACCU, the server checks recent ticks against Deriv's proposal-specific knockout barrier before sending a buy. */
   auto_knockout?: boolean;
 }
@@ -860,5 +921,6 @@ export interface DerivHistoryClearResponse {
 
 export interface ErrorResponse {
   error: string;
+  code?: string;
 }
 

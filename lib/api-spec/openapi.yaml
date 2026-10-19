@@ -240,6 +240,51 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /access/feature-settings:
+    get:
+      security:
+        - accessSession: []
+      operationId: getAdminFeatureSettings
+      tags: [access]
+      summary: Read feature availability and announcements
+      responses:
+        "200":
+          description: Public feature availability and bot controls
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminFeatureSettings"
+    patch:
+      security:
+        - accessSession: []
+      operationId: updateAdminFeatureSettings
+      tags: [access]
+      summary: Update feature availability and bot controls
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminFeatureSettingsUpdate"
+      responses:
+        "200":
+          description: Updated feature availability and bot controls
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminFeatureSettings"
+        "400":
+          description: Invalid feature settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Primary administrator access key required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /access/keys:
     get:
       security:
@@ -1081,6 +1126,41 @@ components:
         weekdays_enabled: { type: boolean }
         weekends_enabled: { type: boolean }
         dual_weekends_weekdays_enabled: { type: boolean }
+    FeatureControl:
+      type: object
+      required: [feature, mode, countdown_at, notice]
+      properties:
+        feature:
+          type: string
+          enum: [edge, digit-flip, trade-x, bulk-trader, matches-analysis, clock-work, cash-grab, money-bank, jdy-ai-3, auto-trader, auto-trader-2, settings, history]
+        mode:
+          type: string
+          enum: [available, restricted, coming_soon, under_construction]
+        countdown_at: { type: ["string", "null"], format: date-time }
+        notice: { type: string, maxLength: 500 }
+    AdminFeatureSettings:
+      type: object
+      required: [features, global_announcement_enabled, global_announcement, auto_trader_2_paused, auto_trader_2_pause_message, updated_at]
+      properties:
+        features:
+          type: array
+          items: { $ref: "#/components/schemas/FeatureControl" }
+        global_announcement_enabled: { type: boolean }
+        global_announcement: { type: string, maxLength: 500 }
+        auto_trader_2_paused: { type: boolean }
+        auto_trader_2_pause_message: { type: string, maxLength: 300 }
+        updated_at: { type: ["string", "null"], format: date-time }
+    AdminFeatureSettingsUpdate:
+      type: object
+      required: [features, global_announcement_enabled, global_announcement, auto_trader_2_paused, auto_trader_2_pause_message]
+      properties:
+        features:
+          type: array
+          items: { $ref: "#/components/schemas/FeatureControl" }
+        global_announcement_enabled: { type: boolean }
+        global_announcement: { type: string, maxLength: 500 }
+        auto_trader_2_paused: { type: boolean }
+        auto_trader_2_pause_message: { type: string, maxLength: 300 }
     SuccessResponse:
       type: object
       required: [success]
@@ -1416,6 +1496,8 @@ components:
           maximum: 0.05
         symbol:
           type: string
+        automated:
+          type: boolean
         auto_knockout:
           type: boolean
           description: When true for ACCU, the server checks recent ticks against Deriv's proposal-specific knockout barrier before sending a buy.
@@ -1816,5 +1898,7 @@ components:
       required: [error]
       properties:
         error:
+          type: string
+        code:
           type: string
 

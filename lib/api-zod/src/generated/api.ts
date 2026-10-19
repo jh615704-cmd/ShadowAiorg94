@@ -154,6 +154,79 @@ export const UpdateTradingProtectionResponse = zod.object({
 
 
 /**
+ * @summary Read feature availability and announcements
+ */
+export const getAdminFeatureSettingsResponseFeaturesItemNoticeMax = 500;
+
+export const getAdminFeatureSettingsResponseGlobalAnnouncementMax = 500;
+
+export const getAdminFeatureSettingsResponseAutoTrader2PauseMessageMax = 300;
+
+
+
+export const GetAdminFeatureSettingsResponse = zod.object({
+  "features": zod.array(zod.object({
+  "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history']),
+  "mode": zod.enum(['available', 'restricted', 'coming_soon', 'under_construction']),
+  "countdown_at": zod.coerce.date().nullable(),
+  "notice": zod.string().max(getAdminFeatureSettingsResponseFeaturesItemNoticeMax)
+})),
+  "global_announcement_enabled": zod.boolean(),
+  "global_announcement": zod.string().max(getAdminFeatureSettingsResponseGlobalAnnouncementMax),
+  "auto_trader_2_paused": zod.boolean(),
+  "auto_trader_2_pause_message": zod.string().max(getAdminFeatureSettingsResponseAutoTrader2PauseMessageMax),
+  "updated_at": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Update feature availability and bot controls
+ */
+export const updateAdminFeatureSettingsBodyFeaturesItemNoticeMax = 500;
+
+export const updateAdminFeatureSettingsBodyGlobalAnnouncementMax = 500;
+
+export const updateAdminFeatureSettingsBodyAutoTrader2PauseMessageMax = 300;
+
+
+
+export const UpdateAdminFeatureSettingsBody = zod.object({
+  "features": zod.array(zod.object({
+  "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history']),
+  "mode": zod.enum(['available', 'restricted', 'coming_soon', 'under_construction']),
+  "countdown_at": zod.coerce.date().nullable(),
+  "notice": zod.string().max(updateAdminFeatureSettingsBodyFeaturesItemNoticeMax)
+})),
+  "global_announcement_enabled": zod.boolean(),
+  "global_announcement": zod.string().max(updateAdminFeatureSettingsBodyGlobalAnnouncementMax),
+  "auto_trader_2_paused": zod.boolean(),
+  "auto_trader_2_pause_message": zod.string().max(updateAdminFeatureSettingsBodyAutoTrader2PauseMessageMax)
+})
+
+export const updateAdminFeatureSettingsResponseFeaturesItemNoticeMax = 500;
+
+export const updateAdminFeatureSettingsResponseGlobalAnnouncementMax = 500;
+
+export const updateAdminFeatureSettingsResponseAutoTrader2PauseMessageMax = 300;
+
+
+
+export const UpdateAdminFeatureSettingsResponse = zod.object({
+  "features": zod.array(zod.object({
+  "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history']),
+  "mode": zod.enum(['available', 'restricted', 'coming_soon', 'under_construction']),
+  "countdown_at": zod.coerce.date().nullable(),
+  "notice": zod.string().max(updateAdminFeatureSettingsResponseFeaturesItemNoticeMax)
+})),
+  "global_announcement_enabled": zod.boolean(),
+  "global_announcement": zod.string().max(updateAdminFeatureSettingsResponseGlobalAnnouncementMax),
+  "auto_trader_2_paused": zod.boolean(),
+  "auto_trader_2_pause_message": zod.string().max(updateAdminFeatureSettingsResponseAutoTrader2PauseMessageMax),
+  "updated_at": zod.coerce.date().nullable()
+})
+
+
+/**
  * @summary List access keys for administrators
  */
 export const ListAccessKeysResponseItem = zod.object({
@@ -1060,6 +1133,7 @@ export const BuyDerivContractBody = zod.object({
   "barrier": zod.number().int().min(buyDerivContractBodyBarrierMin).max(buyDerivContractBodyBarrierMax).optional(),
   "growth_rate": zod.number().min(buyDerivContractBodyGrowthRateMin).max(buyDerivContractBodyGrowthRateMax).optional(),
   "symbol": zod.string().optional(),
+  "automated": zod.boolean().optional(),
   "auto_knockout": zod.boolean().optional().describe('When true for ACCU, the server checks recent ticks against Deriv\'s proposal-specific knockout barrier before sending a buy.')
 })
 

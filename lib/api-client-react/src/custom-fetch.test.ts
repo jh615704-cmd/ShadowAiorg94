@@ -30,6 +30,44 @@ describe("customFetch transport recovery", () => {
     );
   });
 
+  it("hides upstream rate-limit and gateway wording from confirmed buy failures", async () => {
+    globalThis.fetch = (async () => new Response(
+      JSON.stringify({ error: "HTTP 502 Bad Gateway: You have reached the rate limit for buy" }),
+      { status: 502, statusText: "Bad Gateway", headers: { "content-type": "application/json" } },
+    )) as typeof fetch;
+
+    await assert.rejects(
+      customFetch("/api/deriv/bulk-buy", { method: "POST", body: JSON.stringify({ count: 2 }) }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /could not be confirmed/i);
+        assert.match(error.message, /check Deriv open contracts and account history/i);
+        assert.doesNotMatch(error.message, /HTTP 502|Bad Gateway|rate limit for buy/i);
+        return true;
+      },
+    );
+  });
+
+  it("shows safe copy for an explicit exhausted Deriv buy-rate-limit response", async () => {
+    globalThis.fetch = (async () => new Response(
+      JSON.stringify({
+        code: "DERIV_BUY_RATE_LIMITED",
+        error: "Deriv temporarily limited new buys. Some earlier batch contracts may already be open.",
+      }),
+      { status: 429, statusText: "Too Many Requests", headers: { "content-type": "application/json" } },
+    )) as typeof fetch;
+
+    await assert.rejects(
+      customFetch("/api/deriv/bulk-buy", { method: "POST", body: JSON.stringify({ count: 2 }) }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /temporarily limited new buys/i);
+        assert.doesNotMatch(error.message, /HTTP 429|Bad Gateway|rate limit for buy/i);
+        return true;
+      },
+    );
+  });
+
   it("retries a safe read once with the same request reference", async () => {
     let calls = 0;
     const requestIds: string[] = [];
@@ -98,6 +136,29 @@ describe("customFetch transport recovery", () => {
       },
     );
 
+    assert.equal(calls, 1);
+  });
+
+  it("treats an interrupted Clock Work batch as uncertain and never replays it", async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      throw new TypeError("Failed to fetch");
+    }) as typeof fetch;
+
+    await assert.rejects(
+      customFetch("/api/deriv/clock-work/buy", {
+        method: "POST",
+        body: JSON.stringify({ contracts: [] }),
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof ApiTransportError);
+        assert.equal(error.tradeOutcomeUncertain, true);
+        assert.match(error.message, /open/i);
+        assert.match(error.message, /history before sending it again/i);
+        return true;
+      },
+    );
     assert.equal(calls, 1);
   });
 

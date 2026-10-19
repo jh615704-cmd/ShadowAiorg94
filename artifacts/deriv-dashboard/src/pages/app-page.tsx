@@ -7,7 +7,8 @@ import {
 import {
   getGetDerivAccountsQueryKey, getGetDerivHistoryQueryKey, getGetDerivStatusQueryKey,
   useBuyDerivContract, useClearDerivHistory, useGetDerivAccounts, useGetDerivHistory,
-  useGetDerivStatus, useTestDerivConnection, useGetDerivTokenStatus
+  useGetDerivStatus, useTestDerivConnection, useGetDerivTokenStatus,
+  getUserFacingErrorMessage,
 } from '@workspace/api-client-react';
 import { AppShell } from '@/components/layout/app-shell';
 import { PatOnboarding } from '@/components/pat-onboarding';
@@ -45,8 +46,8 @@ export default function AppPage() {
   const statusQuery = useGetDerivStatus({ query: { queryKey: getGetDerivStatusQueryKey(), refetchInterval: 500, enabled: hasToken } });
    const historyQuery = useGetDerivHistory({ query: { queryKey: getGetDerivHistoryQueryKey(), refetchInterval: 5000, enabled: hasToken } });
   const loadErrorMessage = [accountsQuery.error, statusQuery.error]
-    .map((error) => (error as { data?: { error?: string } } | null)?.data?.error)
-    .find((message): message is string => typeof message === 'string');
+    .map((error) => error ? getUserFacingErrorMessage(error, "") : "")
+    .find((message) => Boolean(message));
   
   const testConnection = useTestDerivConnection();
   const buyContract = useBuyDerivContract();

@@ -1,7 +1,12 @@
 import { ReactNode } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useUser } from '@clerk/react';
-import { getGetAccessSessionQueryKey, useGetAccessSession } from '@workspace/api-client-react';
+import {
+  getGetAccessSessionQueryKey,
+  getGetAdminFeatureSettingsQueryKey,
+  useGetAccessSession,
+  useGetAdminFeatureSettings,
+} from '@workspace/api-client-react';
 import {
   Bot,
   Gauge,
@@ -16,6 +21,7 @@ import { useTheme } from '@/components/theme-provider';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { DerivAccountSwitcher } from '@/components/deriv-account-switcher';
 import { useAccessSessionLogout } from '@/hooks/use-access-session-logout';
+import { FeatureStatusText } from '@/components/feature-status';
 
 interface AppShellProps {
   children: ReactNode;
@@ -29,6 +35,9 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
   const { theme, setTheme } = useTheme();
   const { user } = useUser();
   const accessSession = useGetAccessSession({ query: { retry: false, queryKey: getGetAccessSessionQueryKey() } });
+  const featureSettings = useGetAdminFeatureSettings({
+    query: { retry: false, refetchInterval: 10_000, queryKey: getGetAdminFeatureSettingsQueryKey() },
+  });
   const { logout } = useAccessSessionLogout();
   const isAdmin = accessSession.data?.is_admin === true;
   const features = accessSession.data?.features ?? [];
@@ -43,6 +52,20 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
   const canUseAutoTrader2 = isAdmin || features.includes("auto-trader-2");
   const canUseTrading = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseClockWork || canUseCashGrab || canUseMoneyBank || canUseAutoTrader || canUseAutoTrader2;
   const canUseSettings = isAdmin || features.includes("settings");
+  const routeFeature = location === "/auto-trader"
+    ? "auto-trader"
+    : location === "/auto-trader-2"
+      ? "auto-trader-2"
+      : location === "/settings"
+        ? "settings"
+        : null;
+  const routeControl = routeFeature
+    ? featureSettings.data?.features.find((item) => item.feature === routeFeature)
+    : undefined;
+  const featureUnavailable = !isAdmin && routeFeature !== null && (
+    featureSettings.isError
+    || (routeControl !== undefined && routeControl.mode !== "available")
+  );
 
   return (
     <div className="app-frame">
@@ -162,7 +185,18 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
         </header>
 
         <div className="content-wrap">
-          {children}
+          {featureSettings.data?.global_announcement_enabled && featureSettings.data.global_announcement.trim() && (
+            <div className="global-feature-announcement" role="status">
+              {featureSettings.data.global_announcement}
+            </div>
+          )}
+          {featureUnavailable ? (
+            <section className="feature-availability-panel" role="status">
+              {featureSettings.isError
+                ? "Feature availability could not be loaded. Refresh the page before using this feature."
+                : <FeatureStatusText control={routeControl} isAdmin={isAdmin} fallback="This feature is temporarily unavailable." />}
+            </section>
+          ) : children}
         </div>
       </main>
     </div>

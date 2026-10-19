@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useLocation } from "wouter";
 import {
   getGetAccessSessionQueryKey,
+  getUserFacingErrorMessage,
   useGetAccessSession,
   useHeartbeatAccessSession,
   useLoginAccessKey,
@@ -29,8 +30,7 @@ function getDeviceId() {
 }
 
 function getErrorMessage(error: unknown) {
-  const candidate = error as { data?: { error?: string }; message?: string };
-  return candidate.data?.error ?? candidate.message ?? "That access key could not be accepted.";
+  return getUserFacingErrorMessage(error, "That access key could not be accepted.");
 }
 
 function getErrorStatus(error: unknown) {

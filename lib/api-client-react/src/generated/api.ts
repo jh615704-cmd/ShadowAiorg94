@@ -26,6 +26,8 @@ import type {
   AccessKeySummary,
   AccessKeyUpdateInput,
   AccessSession,
+  AdminFeatureSettings,
+  AdminFeatureSettingsUpdate,
   AdminUserInput,
   ApprovedUser,
   AuthAccess,
@@ -828,6 +830,154 @@ export const useUpdateTradingProtection = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getUpdateTradingProtectionMutationOptions(options));
+    }
+
+export const getGetAdminFeatureSettingsUrl = () => {
+
+
+
+
+  return `/api/access/feature-settings`
+}
+
+/**
+ * @summary Read feature availability and announcements
+ */
+export const getAdminFeatureSettings = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminFeatureSettings> => {
+
+  return customFetch<AdminFeatureSettings>(getGetAdminFeatureSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminFeatureSettingsQueryKey = () => {
+    return [
+    `/api/access/feature-settings`
+    ] as const;
+    }
+
+
+export const getGetAdminFeatureSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getAdminFeatureSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminFeatureSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminFeatureSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminFeatureSettings>>> = ({ signal }) => getAdminFeatureSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminFeatureSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminFeatureSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminFeatureSettings>>>
+export type GetAdminFeatureSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Read feature availability and announcements
+ */
+
+export function useGetAdminFeatureSettings<TData = Awaited<ReturnType<typeof getAdminFeatureSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminFeatureSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminFeatureSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateAdminFeatureSettingsUrl = () => {
+
+
+
+
+  return `/api/access/feature-settings`
+}
+
+/**
+ * @summary Update feature availability and bot controls
+ */
+export const updateAdminFeatureSettings = async (adminFeatureSettingsUpdate: AdminFeatureSettingsUpdate, options?: Parameters<typeof customFetch>[1]): Promise<AdminFeatureSettings> => {
+
+  return customFetch<AdminFeatureSettings>(getUpdateAdminFeatureSettingsUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminFeatureSettingsUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminFeatureSettingsMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminFeatureSettings>>, TError,{data: BodyType<AdminFeatureSettingsUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminFeatureSettings>>, TError,{data: BodyType<AdminFeatureSettingsUpdate>}, TContext> => {
+
+const mutationKey = ['updateAdminFeatureSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminFeatureSettings>>, {data: BodyType<AdminFeatureSettingsUpdate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateAdminFeatureSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminFeatureSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminFeatureSettings>>>
+    export type UpdateAdminFeatureSettingsMutationBody = BodyType<AdminFeatureSettingsUpdate>
+    export type UpdateAdminFeatureSettingsMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Update feature availability and bot controls
+ */
+export const useUpdateAdminFeatureSettings = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminFeatureSettings>>, TError,{data: BodyType<AdminFeatureSettingsUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminFeatureSettings>>,
+        TError,
+        {data: BodyType<AdminFeatureSettingsUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateAdminFeatureSettingsMutationOptions(options));
     }
 
 export const getListAccessKeysUrl = () => {

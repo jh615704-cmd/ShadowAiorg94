@@ -63,6 +63,7 @@
 .at2-account-strip > i.connected { color: #8ce4a4; }
 .at2-page-notice,
 .at2-page-message {
+  transition: opacity 400ms ease, transform 400ms ease;
   display: flex;
   align-items: flex-start;
   gap: 9px;
@@ -85,6 +86,7 @@
 .at2-page-message > button { flex: 0 0 auto; border: 0; background: transparent; color: inherit; font-size: 17px; cursor: pointer; }
 .at2-page-message.success { border-color: rgba(94, 179, 119, .5); background: rgba(23, 65, 46, .35); color: #a8e9b7; }
 .at2-page-message.info { color: #c5d7eb; }
+.at2-page-message.fading { opacity: 0; transform: translateY(-3px); pointer-events: none; }
 .at2-page-caution {
   display: flex;
   align-items: flex-start;

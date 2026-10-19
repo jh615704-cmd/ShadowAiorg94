@@ -148,8 +148,32 @@ function truncate(text: string, maxLength = 300): string {
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
 }
 
-function buildErrorMessage(response: Response, data: unknown): string {
-  const prefix = `HTTP ${response.status} ${response.statusText}`;
+function buildErrorMessage(
+  response: Response,
+  data: unknown,
+  requestInfo: { method: string; url: string },
+): string {
+  const code = getStringField(data, "code");
+  const message =
+    getStringField(data, "message") ??
+    getStringField(data, "error_description") ??
+    getStringField(data, "error");
+
+  if (code === "DERIV_BUY_RATE_LIMITED") {
+    return message
+      ?? "Deriv temporarily limited new buys. The app retried confirmed rejections safely; check account history before repeating a batch.";
+  }
+  if (code === "AUTO_TRADER_2_PAUSED") {
+    return message ?? "Auto Trader 2.0 is paused by an administrator. No new order was sent.";
+  }
+  if (response.status >= 500) {
+    return isTradeMutation(requestInfo.method, getPathname(requestInfo.url))
+      ? "The trade could not be confirmed. Check Deriv open contracts and account history before taking another action."
+      : "This service is temporarily unavailable. Please try again shortly.";
+  }
+  if (response.status === 429) {
+    return "This action is being sent too quickly. Wait a moment before trying again.";
+  }
 
   if (typeof data === "string") {
     const text = data.trim();
@@ -159,28 +183,24 @@ function buildErrorMessage(response: Response, data: unknown): string {
       && mediaType === "text/html"
       && /run this app to see the results here|replit diatype/i.test(text)
     ) {
-      return `${prefix}: The dashboard preview page was returned instead of the trading API. Check that the API service is running with the dashboard. No trade confirmation was received; check Deriv history before retrying.`;
+      return "The dashboard preview page was returned instead of the trading API. Check that the API service is running with the dashboard. No trade confirmation was received; check Deriv history before retrying.";
     }
-    return text ? `${prefix}: ${truncate(text)}` : prefix;
+    return text ? truncate(text) : "The request could not be completed.";
   }
 
   const title = getStringField(data, "title");
   const detail = getStringField(data, "detail");
-  const message =
-    getStringField(data, "message") ??
-    getStringField(data, "error_description") ??
-    getStringField(data, "error");
 
   if (response.status === 400 && message && /offers no return/i.test(message)) {
     return "Deriv did not offer a return for this setup, so no contract was placed. Auto trading stopped without retrying. Change the market or contract settings and check Deriv history before taking any manual action.";
   }
 
-  if (title && detail) return `${prefix}: ${title} — ${detail}`;
-  if (detail) return `${prefix}: ${detail}`;
-  if (message) return `${prefix}: ${message}`;
-  if (title) return `${prefix}: ${title}`;
+  if (title && detail) return `${title} — ${detail}`;
+  if (detail) return detail;
+  if (message) return message;
+  if (title) return title;
 
-  return prefix;
+  return "The request could not be completed.";
 }
 
 export class ApiError<T = unknown> extends Error {
@@ -198,7 +218,7 @@ export class ApiError<T = unknown> extends Error {
     data: T | null,
     requestInfo: { method: string; url: string },
   ) {
-    super(buildErrorMessage(response, data));
+    super(buildErrorMessage(response, data, requestInfo));
     Object.setPrototypeOf(this, new.target.prototype);
 
     this.status = response.status;
@@ -277,6 +297,41 @@ export class ApiTransportError extends Error {
   }
 }
 
+export function getUserFacingErrorMessage(
+  error: unknown,
+  fallback = "The request could not be completed.",
+): string {
+  if (error instanceof ApiError || error instanceof ApiTransportError) {
+    return error.message || fallback;
+  }
+  if (!error || typeof error !== "object") return fallback;
+  const candidate = error as {
+    status?: unknown;
+    message?: unknown;
+    data?: unknown;
+  };
+  const status = typeof candidate.status === "number" ? candidate.status : null;
+  const data = candidate.data && typeof candidate.data === "object"
+    ? candidate.data as Record<string, unknown>
+    : null;
+  const message = typeof candidate.message === "string" ? candidate.message : "";
+  if (status !== null && status >= 500) {
+    return "This service is temporarily unavailable. Please try again shortly.";
+  }
+  if (status === 429) {
+    return "This action is being sent too quickly. Wait a moment before trying again.";
+  }
+  const rawProviderError = /HTTP 5\d\d|Bad Gateway|rate limit for buy|Bulk buy was not completed/i;
+  if (rawProviderError.test(message)) {
+    return "The trade service could not confirm the request. Check Deriv open contracts and account history before taking another action.";
+  }
+  const dataMessage = typeof data?.error === "string" ? data.error : "";
+  if (rawProviderError.test(dataMessage)) {
+    return "The trade service could not confirm the request. Check Deriv open contracts and account history before taking another action.";
+  }
+  return message || dataMessage || fallback;
+}
+
 function getPathname(url: string): string {
   try {
     return new URL(url, "http://localhost").pathname;
@@ -286,7 +341,7 @@ function getPathname(url: string): string {
 }
 
 function isTradeMutation(method: string, pathname: string): boolean {
-  return method === "POST" && /^\/api\/deriv\/(?:buy|bulk-buy|dual-buy|sell|matches\/buy)$/.test(pathname);
+  return method === "POST" && /^\/api\/deriv\/(?:buy|bulk-buy|dual-buy|sell|clock-work\/buy|matches\/buy)$/.test(pathname);
 }
 
 function createRequestId(): string {

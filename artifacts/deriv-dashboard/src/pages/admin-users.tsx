@@ -4,6 +4,7 @@ import {
   AccessFeature,
   getListAccessKeysQueryKey,
   getGetTradingProtectionQueryKey,
+  getGetAdminFeatureSettingsQueryKey,
   useCreateAccessKey,
   useDeleteAccessKey,
   useListAccessKeys,
@@ -11,7 +12,12 @@ import {
   useUpdateAccessKey,
   useGetTradingProtection,
   useUpdateTradingProtection,
+  useGetAdminFeatureSettings,
+  useUpdateAdminFeatureSettings,
+  getUserFacingErrorMessage,
   type AccessFeature as AccessFeatureValue,
+  type AdminFeatureSettings,
+  type FeatureControl,
   type AccessKeySummary,
 } from "@workspace/api-client-react";
 import { AppShell } from "@/components/layout/app-shell";
@@ -78,8 +84,7 @@ const featureOptions = Object.values(AccessFeature)
   });
 
 function errorMessage(error: unknown) {
-  const candidate = error as { data?: { error?: string }; message?: string };
-  return candidate.data?.error ?? candidate.message ?? "The request could not be completed.";
+  return getUserFacingErrorMessage(error, "The request could not be completed.");
 }
 
 function formatOffline(seconds: number, online: boolean) {
@@ -88,6 +93,14 @@ function formatOffline(seconds: number, online: boolean) {
   if (seconds < 60) return `Offline ${seconds}s`;
   if (seconds < 3600) return `Offline ${Math.floor(seconds / 60)}m`;
   return `Offline ${Math.floor(seconds / 3600)}h`;
+}
+
+function toDateTimeLocal(value: Date | string | null): string {
+  if (!value) return "";
+  const date = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
 }
 
 function StatusBadge({ item }: { item: AccessKeySummary }) {
@@ -214,6 +227,10 @@ export default function AdminUsersPage() {
   const updateKey = useUpdateAccessKey();
   const protectionQuery = useGetTradingProtection({ query: { retry: false, queryKey: getGetTradingProtectionQueryKey() } });
   const updateProtection = useUpdateTradingProtection();
+  const featureSettingsQuery = useGetAdminFeatureSettings({
+    query: { retry: false, queryKey: getGetAdminFeatureSettingsQueryKey() },
+  });
+  const updateFeatureSettings = useUpdateAdminFeatureSettings();
   const [label, setLabel] = useState("");
   const [kind, setKind] = useState<"user" | "admin">("user");
   const [maxDevices, setMaxDevices] = useState(1);
@@ -227,6 +244,7 @@ export default function AdminUsersPage() {
     weekends_enabled: false,
     dual_weekends_weekdays_enabled: false,
   });
+  const [featureSettingsDraft, setFeatureSettingsDraft] = useState<AdminFeatureSettings | null>(null);
   const keys = keysQuery.data ?? [];
   const onlineCount = keys.filter((key) => key.online).length;
   const userCount = keys.filter((key) => key.kind === "user").length;
@@ -241,6 +259,10 @@ export default function AdminUsersPage() {
       dual_weekends_weekdays_enabled: protectionQuery.data.dual_weekends_weekdays_enabled,
     });
   }, [protectionQuery.data]);
+
+  useEffect(() => {
+    if (featureSettingsQuery.data) setFeatureSettingsDraft(featureSettingsQuery.data);
+  }, [featureSettingsQuery.data]);
 
   const refreshEverything = async () => {
     await queryClient.invalidateQueries();
@@ -372,6 +394,35 @@ export default function AdminUsersPage() {
     );
   };
 
+  const editFeatureControl = (feature: FeatureControl["feature"], patch: Partial<FeatureControl>) => {
+    setFeatureSettingsDraft((current) => current
+      ? { ...current, features: current.features.map((item) => item.feature === feature ? { ...item, ...patch } : item) }
+      : current);
+  };
+
+  const saveFeatureSettings = () => {
+    if (!featureSettingsDraft) return;
+    updateFeatureSettings.mutate(
+      {
+        data: {
+          features: featureSettingsDraft.features,
+          global_announcement_enabled: featureSettingsDraft.global_announcement_enabled,
+          global_announcement: featureSettingsDraft.global_announcement,
+          auto_trader_2_paused: featureSettingsDraft.auto_trader_2_paused,
+          auto_trader_2_pause_message: featureSettingsDraft.auto_trader_2_pause_message,
+        },
+      },
+      {
+        onSuccess: (saved) => {
+          setFeatureSettingsDraft(saved);
+          queryClient.setQueryData(getGetAdminFeatureSettingsQueryKey(), saved);
+          toast({ title: "Feature controls saved", description: "Availability and announcements are now visible to users." });
+        },
+        onError: (error) => toast({ variant: "destructive", title: "Feature controls could not be saved", description: errorMessage(error) }),
+      },
+    );
+  };
+
   const stats = useMemo(() => [
     { label: "TOTAL KEYS", value: keys.length, detail: `${userCount} user keys`, icon: KeyRound },
     { label: "ONLINE NOW", value: onlineCount, detail: "Presence within 90 seconds", icon: Activity },
@@ -388,6 +439,56 @@ export default function AdminUsersPage() {
             <p>Provision keys, set device limits, grant features, and control who can enter the trading workspace.</p>
           </div>
            <button type="button" className="refresh-control" onClick={() => void refreshEverything()} disabled={keysQuery.isFetching}><RefreshCw size={14} className={keysQuery.isFetching ? "spin" : ""} /> Refresh everything</button>
+        </section>
+
+        <section className="panel admin-feature-control-card">
+          <div className="panel-header">
+            <div><span className="panel-overline">USER-FACING FEATURE CONTROLS</span><h3>Feature availability and bot settings</h3></div>
+            <button type="button" className="secondary-button" onClick={saveFeatureSettings} disabled={!featureSettingsDraft || updateFeatureSettings.isPending}>
+              <Save size={15} />{updateFeatureSettings.isPending ? "Saving…" : "Save controls"}
+            </button>
+          </div>
+          <p className="admin-protection-intro">Feature status changes what non-admin users see. A countdown is shown live; it does not automatically publish a feature. Pausing Auto Trader 2.0 blocks new automated entries only and leaves open contracts to settle.</p>
+          {featureSettingsQuery.isError ? (
+            <div className="admin-form-error">Unable to load feature controls. Refresh the page and sign in again as the primary administrator.</div>
+          ) : featureSettingsQuery.isLoading || !featureSettingsDraft ? (
+            <div className="admin-empty"><RefreshCw className="spin" size={18} /> Loading feature controls…</div>
+          ) : (
+            <>
+              <div className="admin-feature-control-grid">
+                {featureSettingsDraft.features.map((control) => {
+                  const featureLabel = featureOptions.find((item) => item.value === control.feature)?.label ?? control.feature;
+                  return (
+                    <div className="admin-feature-control-row" key={control.feature}>
+                      <div className="admin-feature-control-title"><strong>{featureLabel}</strong><small>Controls the message shown to non-admin users.</small></div>
+                      <label className="admin-control-field"><span>Status</span><select value={control.mode} onChange={(event) => editFeatureControl(control.feature, { mode: event.target.value as FeatureControl["mode"] })}>
+                        <option value="available">Available</option>
+                        <option value="restricted">Restricted — admin access only</option>
+                        <option value="coming_soon">Coming soon</option>
+                        <option value="under_construction">Under construction</option>
+                      </select></label>
+                      <label className="admin-control-field"><span>Countdown (optional)</span><input type="datetime-local" value={toDateTimeLocal(control.countdown_at)} onChange={(event) => editFeatureControl(control.feature, { countdown_at: event.target.value ? new Date(event.target.value).toISOString() : null })} /></label>
+                      <label className="admin-control-field admin-feature-notice"><span>Feature notice</span><input type="text" maxLength={500} value={control.notice} placeholder="Optional message shown with the status" onChange={(event) => editFeatureControl(control.feature, { notice: event.target.value })} /></label>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="admin-bot-controls">
+                <label className={`admin-protection-toggle ${featureSettingsDraft.auto_trader_2_paused ? "selected" : ""}`}>
+                  <input type="checkbox" checked={featureSettingsDraft.auto_trader_2_paused} onChange={(event) => setFeatureSettingsDraft({ ...featureSettingsDraft, auto_trader_2_paused: event.target.checked })} />
+                  <span className="admin-protection-switch"><i /></span>
+                  <span><b>Pause Auto Trader 2.0</b><small>Blocks new bot entries; open contracts are not closed.</small></span>
+                </label>
+                <label className="admin-control-field"><span>Auto Trader 2.0 pause message</span><input type="text" maxLength={300} value={featureSettingsDraft.auto_trader_2_pause_message} onChange={(event) => setFeatureSettingsDraft({ ...featureSettingsDraft, auto_trader_2_pause_message: event.target.value })} /></label>
+                <label className="admin-protection-toggle admin-announcement-toggle">
+                  <input type="checkbox" checked={featureSettingsDraft.global_announcement_enabled} onChange={(event) => setFeatureSettingsDraft({ ...featureSettingsDraft, global_announcement_enabled: event.target.checked })} />
+                  <span className="admin-protection-switch"><i /></span>
+                  <span><b>Show a global announcement</b><small>Displayed across the workspace.</small></span>
+                </label>
+                <label className="admin-control-field admin-announcement-message"><span>Global announcement</span><textarea rows={2} maxLength={500} value={featureSettingsDraft.global_announcement} onChange={(event) => setFeatureSettingsDraft({ ...featureSettingsDraft, global_announcement: event.target.value })} placeholder="Enter the message users should see" /></label>
+              </div>
+            </>
+          )}
         </section>
 
         <section className="admin-stat-grid">

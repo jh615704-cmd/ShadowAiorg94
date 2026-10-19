@@ -1,12 +1,14 @@
 import { Router, type IRouter } from "express";
 import { and, asc, eq, isNull, ne } from "drizzle-orm";
-import { db, accessKeySessionsTable, accessKeysTable, tradingProtectionSettingsTable } from "@workspace/db";
+import { db, accessKeySessionsTable, accessKeysTable, adminFeatureSettingsTable, tradingProtectionSettingsTable } from "@workspace/db";
 import {
+  GetAdminFeatureSettingsResponse,
   CreateAccessKeyBody,
   CreateAccessKeyResponse,
   GetAccessSessionResponse,
   ListAccessKeysResponseItem,
   LoginAccessKeyBody,
+  UpdateAdminFeatureSettingsBody,
   UpdateAccessKeyBody,
   ListAccessKeysResponse,
 } from "@workspace/api-zod";
@@ -35,6 +37,47 @@ import { logger } from "../lib/logger";
 import { requireAccess, requireAccessAdmin } from "../middlewares/requireAccess";
 
 const router: IRouter = Router();
+const featureControlModes = new Set(["available", "restricted", "coming_soon", "under_construction"]);
+
+function defaultFeatureSettings() {
+  return {
+    features: ACCESS_FEATURES
+      .filter((feature) => feature !== "admin")
+      .map((feature) => ({ feature, mode: "available", countdown_at: null, notice: "" })),
+    global_announcement_enabled: false,
+    global_announcement: "",
+    auto_trader_2_paused: false,
+    auto_trader_2_pause_message: "Auto Trader 2.0 is temporarily paused by an administrator.",
+  };
+}
+
+function normalizeFeatureSettings(value: Record<string, unknown> | undefined, updatedAt: Date | null) {
+  const defaults = defaultFeatureSettings();
+  const storedFeatures = Array.isArray(value?.features) ? value.features : [];
+  const featureById = new Map(storedFeatures
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item))
+    .map((item) => [String(item.feature), item]));
+  const features = defaults.features.map((fallback) => {
+    const saved = featureById.get(fallback.feature);
+    if (!saved) return fallback;
+    return {
+      feature: fallback.feature,
+      mode: typeof saved.mode === "string" && featureControlModes.has(saved.mode) ? saved.mode : fallback.mode,
+      countdown_at: typeof saved.countdown_at === "string" ? saved.countdown_at : null,
+      notice: typeof saved.notice === "string" ? saved.notice.slice(0, 500) : "",
+    };
+  });
+  return GetAdminFeatureSettingsResponse.parse({
+    features,
+    global_announcement_enabled: value?.global_announcement_enabled === true,
+    global_announcement: typeof value?.global_announcement === "string" ? value.global_announcement.slice(0, 500) : "",
+    auto_trader_2_paused: value?.auto_trader_2_paused === true,
+    auto_trader_2_pause_message: typeof value?.auto_trader_2_pause_message === "string"
+      ? value.auto_trader_2_pause_message.slice(0, 300)
+      : defaults.auto_trader_2_pause_message,
+    updated_at: updatedAt,
+  });
+}
 
 function secureCookie(forwardedProto?: string) {
   return forwardedProto === "https";
@@ -255,6 +298,26 @@ router.patch("/access/trading-protection", requireAccess, requireAccessAdmin, as
     dual_weekends_weekdays_enabled: settings.dualWeekendsWeekdaysEnabled,
     updated_at: settings.updatedAt,
   });
+});
+
+router.get("/access/feature-settings", requireAccess, async (_req, res): Promise<void> => {
+  const [row] = await db.select().from(adminFeatureSettingsTable).limit(1);
+  res.json(normalizeFeatureSettings(row?.settings, row?.updatedAt ?? null));
+});
+
+router.patch("/access/feature-settings", requireAccess, requireAccessAdmin, async (req, res): Promise<void> => {
+  const parsed = UpdateAdminFeatureSettingsBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid feature settings" });
+    return;
+  }
+  const [existing] = await db.select().from(adminFeatureSettingsTable).limit(1);
+  const values = { settings: parsed.data, updatedAt: new Date() };
+  const [row] = existing
+    ? await db.update(adminFeatureSettingsTable).set(values)
+      .where(eq(adminFeatureSettingsTable.id, existing.id)).returning()
+    : await db.insert(adminFeatureSettingsTable).values({ id: 1, ...values }).returning();
+  res.json(normalizeFeatureSettings(row.settings, row.updatedAt));
 });
 
 router.use("/access/keys", requireAccess, requireAccessAdmin);

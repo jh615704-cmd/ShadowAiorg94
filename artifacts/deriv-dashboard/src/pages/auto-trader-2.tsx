@@ -5,6 +5,7 @@ import {
   getGetDerivHistoryQueryKey,
   getGetDerivStatusQueryKey,
   getGetDerivTokenStatusQueryKey,
+  ApiError,
   ApiTransportError,
   useBuyDerivContract,
   useGetAccessSession,
@@ -152,6 +153,7 @@ function AutoTrader2Content() {
   const [nextStake, setNextStake] = useState(1);
   const [decision, setDecision] = useState("Choose a contract family and start a session.");
   const [message, setMessage] = useState<{ tone: "error" | "success" | "info"; text: string } | null>(null);
+  const [messageFading, setMessageFading] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [guidePage, setGuidePage] = useState(0);
   const [localContracts, setLocalContracts] = useState<LocalContract[]>([]);
@@ -168,7 +170,6 @@ function AutoTrader2Content() {
   const [sessionLoadComplete, setSessionLoadComplete] = useState(false);
   const [sessionLoadedForAccount, setSessionLoadedForAccount] = useState<string | null>(null);
   const [verifyingSavedSession, setVerifyingSavedSession] = useState(false);
-  const [discardSessionArmed, setDiscardSessionArmed] = useState(false);
   const clearTimer = useRef<number | null>(null);
   const runRef = useRef<Runtime>({
     generation: 0,
@@ -293,11 +294,19 @@ function AutoTrader2Content() {
   }, [accountId, hasAccess, hasToken, history.isFetched, queryClient]);
 
   useEffect(() => {
-    if (!message || message.tone === "error") return;
-    const timer = window.setTimeout(() => {
+    if (!message) {
+      setMessageFading(false);
+      return;
+    }
+    setMessageFading(false);
+    const fadeTimer = window.setTimeout(() => setMessageFading(true), 3_600);
+    const removeTimer = window.setTimeout(() => {
       setMessage((current) => current === message ? null : current);
     }, 4_000);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(fadeTimer);
+      window.clearTimeout(removeTimer);
+    };
   }, [message]);
 
   useEffect(() => {
@@ -316,7 +325,6 @@ function AutoTrader2Content() {
     setSavedSessionNotice("");
     setSessionLoadComplete(false);
     setSessionLoadedForAccount(null);
-    setDiscardSessionArmed(false);
     if (clearTimer.current !== null) {
       window.clearTimeout(clearTimer.current);
       clearTimer.current = null;
@@ -477,24 +485,6 @@ function AutoTrader2Content() {
         text: "The verified Deriv result could not be saved to browser storage. Keep this session paused and check Deriv history before restarting.",
       });
       return false;
-    }
-  };
-
-  const discardSavedSession = () => {
-    if (!accountId) return;
-    if (!discardSessionArmed) {
-      setDiscardSessionArmed(true);
-      setSavedSessionNotice("Check the Deriv account history first. Click again to clear only this browser's saved AI 2 recovery state; this will not cancel or delete Deriv contracts.");
-      return;
-    }
-    try {
-      localStorage.removeItem(`${sessionStoragePrefix}${accountId}`);
-      setSavedSession(null);
-      setSavedSessionIssue("");
-      setSavedSessionNotice("Saved local recovery state cleared. Deriv contracts and account history were not changed.");
-      setDiscardSessionArmed(false);
-    } catch {
-      setSavedSessionNotice("Browser storage could not clear this recovery state. The session remains blocked.");
     }
   };
 
@@ -758,7 +748,7 @@ function AutoTrader2Content() {
       setIsPlacing(true);
       let contractId = "";
       try {
-        const result = await buyRef.current.mutateAsync({ data: order });
+        const result = await buyRef.current.mutateAsync({ data: { ...order, automated: true } });
         contractId = String(result.buy?.contract_id ?? "");
         if (!contractId) {
           if (config.aiEnabled) persistRunState("manual-review", config);
@@ -791,6 +781,30 @@ function AutoTrader2Content() {
           queryClient.invalidateQueries({ queryKey: getGetDerivAccountsQueryKey() }),
         ]).catch((error: unknown) => console.warn("Could not refresh Auto Trader 2.0 data after an accepted order.", error));
       } catch (error) {
+        const errorData = error instanceof ApiError && error.data && typeof error.data === "object"
+          ? error.data as Record<string, unknown>
+          : null;
+        const errorCode = typeof errorData?.code === "string" ? errorData.code : "";
+        if (errorCode === "AUTO_TRADER_2_PAUSED") {
+          runRef.current.pendingContractType = null;
+          runRef.current.pendingStake = null;
+          if (config.aiEnabled) persistRunState("ready", config);
+          finishLoop(generation, {
+            tone: "info",
+            text: error instanceof Error ? error.message : "Auto Trader 2.0 is paused by an administrator. No new order was sent.",
+          });
+          return;
+        }
+        if (errorCode === "DERIV_BUY_RATE_LIMITED") {
+          runRef.current.pendingContractType = null;
+          runRef.current.pendingStake = null;
+          if (config.aiEnabled) persistRunState("ready", config);
+          finishLoop(generation, {
+            tone: "error",
+            text: `${error instanceof Error ? error.message : "Deriv temporarily limited new buys."} The service safely retried confirmed rejections; this order was not accepted. Auto Trader 2.0 can be started again after checking the account.`,
+          });
+          return;
+        }
         const uncertain = error instanceof ApiTransportError && error.tradeOutcomeUncertain;
         if (config.aiEnabled) persistRunState("manual-review", config);
         finishLoop(generation, {
@@ -1031,7 +1045,6 @@ function AutoTrader2Content() {
       setSavedSession(null);
       setSavedSessionNotice("");
       setSavedSessionIssue("");
-      setDiscardSessionArmed(false);
       setRunning(true);
       setStopping(false);
       setMessage({ tone: "success", text: "Deriv history and open-contract status were verified. The saved session resumed without resending its last contract." });
@@ -1102,8 +1115,6 @@ function AutoTrader2Content() {
     if (
       sessionLoadingForAccount
       || sessionLoadedForAccount !== accountId
-      || savedSessionIssue
-      || requiresAutoTrader2SessionReview(savedSession)
       || (runRef.current.pendingContractId === null
         && (runRef.current.pendingContractType !== null || isPlacing))
     ) {
@@ -1131,18 +1142,29 @@ function AutoTrader2Content() {
         });
         return;
       }
-      if (
-        savedSession
-        && (savedSession.phase === "ready" || savedSession.phase === "awaiting-settlement")
-      ) {
-        const historyResult = await historyRef.current.refetch();
-        if (historyResult.isError || !Array.isArray(historyResult.data)) {
-          setMessage({
-            tone: "info",
-            text: "Deriv history could not verify the saved Auto Trader 2.0 contracts. The history and session were left unchanged.",
-          });
-          return;
-        }
+      const historyResult = await historyRef.current.refetch();
+      if (historyResult.isError || !Array.isArray(historyResult.data)) {
+        setMessage({
+          tone: "info",
+          text: "Deriv history could not be refreshed to verify the account. The local history and session were left unchanged.",
+        });
+        return;
+      }
+      const savedContractStillOpen = savedSession?.contractIds.some((contractId) =>
+        (historyResult.data as DerivHistoryItem[]).some((row) =>
+          row.account_id === accountId
+          && row.contract_id === contractId
+          && ["open", "pending", "active"].includes(row.status.toLowerCase()),
+        ),
+      );
+      if (savedContractStillOpen) {
+        setMessage({
+          tone: "info",
+          text: "Deriv history still reports a saved contract as open. The local history and session were left unchanged.",
+        });
+        return;
+      }
+      if (savedSession && (savedSession.phase === "ready" || savedSession.phase === "awaiting-settlement")) {
         const assessment = reconcileAutoTrader2SavedSession({
           session: savedSession,
           history: historyResult.data as DerivHistoryItem[],
@@ -1206,7 +1228,6 @@ function AutoTrader2Content() {
       setSavedSession(null);
       setSavedSessionIssue("");
       setSavedSessionNotice("");
-      setDiscardSessionArmed(false);
       setHistoryFading(true);
       window.setTimeout(() => setHistoryFading(false), 320);
       setDecision("");
@@ -1250,7 +1271,7 @@ function AutoTrader2Content() {
         {!hasToken && !token.isLoading && <div className="at2-page-notice" role="status"><AlertCircle size={16} />Select and connect a Deriv account in the existing connection settings before trading.</div>}
         {status.error && hasToken && <div className="at2-page-notice error" role="alert"><AlertCircle size={16} />Live Deriv status is unavailable. <button type="button" onClick={() => void status.refetch()}>Retry</button></div>}
         {accounts.error && hasToken && !status.error && <div className="at2-page-notice error" role="alert"><AlertCircle size={16} />The account list is unavailable. <button type="button" onClick={() => void accounts.refetch()}>Retry</button></div>}
-        {message && <div className={`at2-page-message ${message.tone}`} role={message.tone === "error" ? "alert" : "status"} data-testid="at2-message">
+        {message && <div className={`at2-page-message ${message.tone}${messageFading ? " fading" : ""}`} role={message.tone === "error" ? "alert" : "status"} data-testid="at2-message">
           {message.tone === "error" ? <AlertCircle size={15} /> : <Check size={15} />}
           <span>{message.text}</span>
           {message.tone === "error" && <button type="button" onClick={() => setMessage(null)} aria-label="Dismiss message">×</button>}
@@ -1281,11 +1302,7 @@ function AutoTrader2Content() {
               {savedSession.recoveryTargetPnl !== null ? ` · Differs recovery target ${amountLabel(savedSession.recoveryTargetPnl, currency)}` : ""}
             </small>}
           </div>
-          <div className="at2-session-recovery-actions">
-            {(savedSessionIssue || requiresAutoTrader2SessionReview(savedSession)) && <button type="button" className="secondary" onClick={discardSavedSession} disabled={verifyingSavedSession} data-testid="at2-discard-session">
-              {discardSessionArmed ? "CONFIRM CLEAR LOCAL STATE" : "I CHECKED HISTORY"}
-            </button>}
-          </div>
+          <div className="at2-session-recovery-actions" />
         </section>}
 
         <AutoTrader2Panel

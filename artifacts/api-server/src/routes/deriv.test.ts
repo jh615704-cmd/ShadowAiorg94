@@ -82,6 +82,7 @@ mock.module("@workspace/db", {
   namedExports: {
     db,
     derivCredentialsTable: { clerkUserId: "clerkUserId" },
+    adminFeatureSettingsTable: { id: "id", settings: "settings", updatedAt: "updatedAt" },
   },
 });
 
@@ -235,6 +236,7 @@ mock.module("../lib/deriv", {
     disposeUser: (userId: string) => {
       userPats.delete(userId);
     },
+    isDerivBuyRateLimitError: () => false,
   },
 });
 

@@ -2,12 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetAccessSessionQueryKey,
+  getGetAdminFeatureSettingsQueryKey,
   ApiTransportError,
   type ClockWorkContractOrder,
   useBuyMatchesContracts,
   useQuoteClockWorkContracts,
   useBuyClockWorkContracts,
   useGetAccessSession,
+  useGetAdminFeatureSettings,
   useDeleteDerivToken,
   useGetDerivAccounts,
   useGetDerivHistory,
@@ -26,9 +28,11 @@ import {
   getGetDerivAccountsQueryKey,
   getGetDerivStatusQueryKey,
   getGetDerivHistoryQueryKey,
+  type FeatureControl,
 } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { DerivAccountSwitcher } from "@/components/deriv-account-switcher";
+import { FeatureStatusText } from "@/components/feature-status";
 import { useAccessSessionLogout } from "@/hooks/use-access-session-logout";
 import {
   Activity, BookOpen, Bot, ChevronDown, ChevronLeft, ChevronRight, Gauge, Link2, Loader2,
@@ -372,8 +376,20 @@ const isTradingCalendarOpen = (date = new Date()) => (
 );
 const errorMessage = (error: unknown) => {
   if (!error || typeof error !== "object") return "Request failed";
-  const candidate = error as { data?: { error?: string }; message?: string };
-  return candidate.data?.error ?? candidate.message ?? "Request failed";
+  const candidate = error as { data?: unknown; message?: string; status?: number };
+  const data = candidate.data && typeof candidate.data === "object"
+    ? candidate.data as Record<string, unknown>
+    : null;
+  const message = typeof candidate.message === "string" ? candidate.message : "";
+  if (
+    (typeof candidate.status === "number" && (candidate.status >= 500 || candidate.status === 429))
+    || /HTTP 5\d\d|Bad Gateway|rate limit for buy|Bulk buy was not completed/i.test(message)
+  ) {
+    return message && !/HTTP 5\d\d|Bad Gateway|rate limit for buy|Bulk buy was not completed/i.test(message)
+      ? message
+      : "The trade service could not confirm the request. Check Deriv open contracts and account history before taking another action.";
+  }
+  return (typeof data?.error === "string" ? data.error : undefined) || message || "Request failed";
 };
 
 type MartingaleSettlementWatch = {
@@ -397,21 +413,31 @@ type CashGrabAutoSwitchRecommendation = {
 
 export default function XTraderPage() {
   const accessSession = useGetAccessSession({ query: { retry: false, queryKey: getGetAccessSessionQueryKey() } });
+  const adminFeatureSettings = useGetAdminFeatureSettings({
+    query: { retry: false, refetchInterval: 5_000, queryKey: getGetAdminFeatureSettingsQueryKey() },
+  });
   const queryClient = useQueryClient();
   const { logout: logoutAccessSession, isLoggingOut } = useAccessSessionLogout();
   const isAdmin = accessSession.data?.is_admin === true;
-  const canUseEdge = isAdmin || accessSession.data?.features.includes("edge") === true;
-  const canUseDigitFlip = isAdmin || accessSession.data?.features.includes("digit-flip") === true;
-  const canUseTradeX = isAdmin || accessSession.data?.features.includes("trade-x") === true;
-  const canUseBulkTrader = isAdmin || accessSession.data?.features.includes("bulk-trader") === true;
-  const canUseMatchesAnalysis = isAdmin || accessSession.data?.features.includes("matches-analysis") === true;
-  const canUseClockWork = isAdmin || accessSession.data?.features.includes("clock-work") === true;
-  const canUseCashGrab = isAdmin || accessSession.data?.features.includes("cash-grab") === true;
-  const canUseMoneyBank = isAdmin || accessSession.data?.features.includes("money-bank") === true;
-  const canUseAutoTrader = isAdmin || accessSession.data?.features.includes("auto-trader") === true;
-  const canUseAutoTrader2 = isAdmin || accessSession.data?.features.includes("auto-trader-2") === true;
+  const featureControl = (feature: FeatureControl["feature"]) =>
+    adminFeatureSettings.data?.features.find((item) => item.feature === feature);
+  const featureIsAvailable = (feature: FeatureControl["feature"]) =>
+    isAdmin || featureControl(feature)?.mode === "available";
+  const hasFeature = (feature: FeatureControl["feature"]) =>
+    isAdmin || accessSession.data?.features.includes(feature) === true;
+  const canUseEdge = hasFeature("edge") && featureIsAvailable("edge");
+  const canUseDigitFlip = hasFeature("digit-flip") && featureIsAvailable("digit-flip");
+  const canUseTradeX = hasFeature("trade-x") && featureIsAvailable("trade-x");
+  const canUseBulkTrader = hasFeature("bulk-trader") && featureIsAvailable("bulk-trader");
+  const canUseMatchesAnalysis = hasFeature("matches-analysis") && featureIsAvailable("matches-analysis");
+  const canUseClockWork = hasFeature("clock-work") && featureIsAvailable("clock-work");
+  const canUseCashGrab = hasFeature("cash-grab") && featureIsAvailable("cash-grab");
+  const canUseMoneyBank = hasFeature("money-bank") && featureIsAvailable("money-bank");
+  const canUseAutoTrader = hasFeature("auto-trader") && featureIsAvailable("auto-trader");
+  const canUseAutoTrader2 = hasFeature("auto-trader-2") && featureIsAvailable("auto-trader-2");
+  const canUseSettings = hasFeature("settings") && featureIsAvailable("settings");
   const canUseDeriv = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseMatchesAnalysis || canUseClockWork || canUseCashGrab || canUseMoneyBank || canUseAutoTrader || canUseAutoTrader2;
-  const canViewHistory = canUseDeriv || accessSession.data?.features.includes("history") === true;
+  const canViewHistory = canUseDeriv || (hasFeature("history") && featureIsAvailable("history"));
   const tokenStatus = useGetDerivTokenStatus({ query: { enabled: canUseDeriv, retry: false, queryKey: getGetDerivTokenStatusQueryKey() } });
   const connectedToken = Boolean(tokenStatus.data?.has_token);
   const accounts = useGetDerivAccounts({ query: { enabled: connectedToken && canUseDeriv, retry: false, refetchInterval: 10_000, queryKey: getGetDerivAccountsQueryKey() } });
@@ -4313,7 +4339,7 @@ export default function XTraderPage() {
                 {accessSession.data?.is_admin === true && (
                   <Link href="/admin/users" onClick={() => setNavigationOpen(false)}><ShieldCheck size={15} />Admin panel</Link>
                 )}
-                {accessSession.data?.features.includes("settings") && (
+                {canUseSettings && (
                   <Link href="/settings" onClick={() => setNavigationOpen(false)}><Settings size={15} />Settings</Link>
                 )}
                 <button
@@ -4329,11 +4355,11 @@ export default function XTraderPage() {
                 </button>
                 <Link href="/auto-trader" className={canUseAutoTrader ? "" : "xt-navigation-link-restricted"} onClick={() => setNavigationOpen(false)}>
                   <Bot size={15} />Auto Trader
-                  {!canUseAutoTrader && <span>Restricted — admin access only</span>}
+                  {!canUseAutoTrader && <span><FeatureStatusText control={featureControl("auto-trader")} isAdmin={isAdmin} fallback="Restricted — admin access only" /></span>}
                 </Link>
                 <Link href="/auto-trader-2" className={canUseAutoTrader2 ? "" : "xt-navigation-link-restricted"} onClick={() => setNavigationOpen(false)}>
                   <Bot size={15} />Auto Trader 2.0
-                  {!canUseAutoTrader2 && <span>Restricted — admin access only</span>}
+                  {!canUseAutoTrader2 && <span><FeatureStatusText control={featureControl("auto-trader-2")} isAdmin={isAdmin} fallback="Restricted — admin access only" /></span>}
                 </Link>
               </nav>
             )}
@@ -4396,7 +4422,7 @@ export default function XTraderPage() {
       <h2 className="xt-trading-strategies-heading">Trading Strategies</h2>
 
       <section className={`xt-feature-card xt-feature-card-matches ${!canUseMatchesAnalysis ? "xt-feature-card-restricted" : ""}`} id="matches-analysis-feature">
-        <div><Activity size={18} /><span><b>Matches Analysis</b><small>{canUseMatchesAnalysis ? "Matches Tool" : "Restricted — admin access only"}</small></span></div>
+        <div><Activity size={18} /><span><b>Matches Analysis</b><small><FeatureStatusText control={featureControl("matches-analysis")} isAdmin={isAdmin} fallback={canUseMatchesAnalysis ? "Matches Tool" : "Restricted — admin access only"} /></small></span></div>
         <div className="xt-feature-actions">
           {!canUseMatchesAnalysis && <span className="xt-feature-locked">RESTRICTED</span>}
           <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("matches-analysis"); setGuidePage(0); setGuideOpen(true); }}>
@@ -4410,7 +4436,7 @@ export default function XTraderPage() {
       </section>
 
       <section className={`xt-feature-card xt-feature-card-clock-work ${!canUseClockWork ? "xt-feature-card-restricted" : ""}`} id="clock-work-feature">
-        <div><Clock3 size={18} /><span><b>Clock Work</b><small>{canUseClockWork ? "Hybrid Analysis" : "Restricted — admin access only"}</small></span></div>
+        <div><Clock3 size={18} /><span><b>Clock Work</b><small><FeatureStatusText control={featureControl("clock-work")} isAdmin={isAdmin} fallback={canUseClockWork ? "Hybrid Analysis" : "Restricted — admin access only"} /></small></span></div>
         <div className="xt-feature-actions">
           {!canUseClockWork && <span className="xt-feature-locked">RESTRICTED</span>}
           <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("clock-work"); setGuidePage(0); setGuideOpen(true); }}>
@@ -4424,7 +4450,7 @@ export default function XTraderPage() {
       </section>
 
       <section className={`xt-feature-card xt-feature-card-cash-grab ${!canUseCashGrab ? "xt-feature-card-restricted" : ""}`} id="cash-grab-feature">
-        <div><Activity size={18} /><span><b>Cash Grab</b><small>{canUseCashGrab ? "Rise/Fall contracts · one at a time" : "Restricted — admin access only"}</small></span></div>
+        <div><Activity size={18} /><span><b>Cash Grab</b><small><FeatureStatusText control={featureControl("cash-grab")} isAdmin={isAdmin} fallback={canUseCashGrab ? "Rise/Fall contracts · one at a time" : "Restricted — admin access only"} /></small></span></div>
         <div className="xt-feature-actions">
           {!canUseCashGrab && <span className="xt-feature-locked">RESTRICTED</span>}
           <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("cash-grab"); setGuidePage(0); setGuideOpen(true); }}>
@@ -4438,7 +4464,7 @@ export default function XTraderPage() {
       </section>
 
       <section className={`xt-feature-card xt-feature-card-edge2 ${!canUseMoneyBank ? "xt-feature-card-restricted" : ""}`}>
-        <div><Bot size={18} /><span><b>Money Bank</b><small>{canUseMoneyBank ? "Accumulator" : "Restricted — admin access only"}</small></span></div>
+        <div><Bot size={18} /><span><b>Money Bank</b><small><FeatureStatusText control={featureControl("money-bank")} isAdmin={isAdmin} fallback={canUseMoneyBank ? "Accumulator" : "Restricted — admin access only"} /></small></span></div>
         <div className="xt-feature-actions">
           {!canUseMoneyBank && <span className="xt-feature-locked">RESTRICTED</span>}
           <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("money-bank"); setGuidePage(0); setGuideOpen(true); }}>
@@ -4458,7 +4484,7 @@ export default function XTraderPage() {
       </section>
 
       <section className={`xt-feature-card xt-feature-card-bulk ${!canUseBulkTrader ? "xt-feature-card-restricted" : ""}`}>
-        <div><Activity size={18} /><span><b>Bulk Trader</b><small>{canUseBulkTrader ? "Send 1–6 contracts instantly across four trade types" : "Restricted — admin access only"}</small></span></div>
+        <div><Activity size={18} /><span><b>Bulk Trader</b><small><FeatureStatusText control={featureControl("bulk-trader")} isAdmin={isAdmin} fallback={canUseBulkTrader ? "Send 1–6 contracts across four trade types" : "Restricted — admin access only"} /></small></span></div>
         <div className="xt-feature-actions">
           {!canUseBulkTrader && <span className="xt-feature-locked">RESTRICTED</span>}
           <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("bulk-trader"); setGuidePage(0); setGuideOpen(true); }}>
@@ -4472,7 +4498,7 @@ export default function XTraderPage() {
       </section>
 
       <section className={`xt-feature-card xt-feature-card-digit-flip ${!canUseDigitFlip ? "xt-feature-card-restricted" : ""}`}>
-        <div><Zap size={18} /><span><b>DigitFlip</b><small>{canUseDigitFlip ? "Even / Odd parity trading with live estimates" : "Restricted — admin access only"}</small></span></div>
+        <div><Zap size={18} /><span><b>DigitFlip</b><small><FeatureStatusText control={featureControl("digit-flip")} isAdmin={isAdmin} fallback={canUseDigitFlip ? "Even / Odd parity trading with live estimates" : "Restricted — admin access only"} /></small></span></div>
         <div className="xt-feature-actions">
           {!canUseDigitFlip && <span className="xt-feature-locked">RESTRICTED</span>}
           <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("digit-flip"); setGuidePage(0); setGuideOpen(true); }}><BookOpen size={14} />Guide</button>
@@ -4484,7 +4510,7 @@ export default function XTraderPage() {
       </section>
 
       <section className={`xt-feature-card xt-feature-card-trade-x ${!canUseTradeX ? "xt-feature-card-restricted" : ""}`}>
-        <div><Activity size={18} /><span><b>Trade X</b><small>{canUseTradeX ? "Digit Differs distribution and ranked-entry automation" : "Restricted — admin access only"}</small></span></div>
+        <div><Activity size={18} /><span><b>Trade X</b><small><FeatureStatusText control={featureControl("trade-x")} isAdmin={isAdmin} fallback={canUseTradeX ? "Digit Differs distribution and ranked-entry automation" : "Restricted — admin access only"} /></small></span></div>
         <div className="xt-feature-actions">
           {!canUseTradeX && <span className="xt-feature-locked">RESTRICTED</span>}
           <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("trade-x"); setGuidePage(0); setGuideOpen(true); }}>
@@ -4504,7 +4530,7 @@ export default function XTraderPage() {
       </section>
 
       <section className={`xt-feature-card xt-feature-card-edge ${!canUseEdge ? "xt-feature-card-restricted" : ""}`}>
-        <div><Bot size={18} /><span><b>EDGE 🏔️</b><small>{canUseEdge ? "Over / Under digit automation" : "Restricted — admin access only"}</small></span></div>
+        <div><Bot size={18} /><span><b>EDGE 🏔️</b><small><FeatureStatusText control={featureControl("edge")} isAdmin={isAdmin} fallback={canUseEdge ? "Over / Under digit automation" : "Restricted — admin access only"} /></small></span></div>
         <div className="xt-feature-actions">
           {!canUseEdge && <span className="xt-feature-locked">RESTRICTED</span>}
           <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("edge"); setGuidePage(0); setGuideOpen(true); }}>

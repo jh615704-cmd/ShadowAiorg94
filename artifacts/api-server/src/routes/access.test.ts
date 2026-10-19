@@ -37,6 +37,7 @@ const accessKeySessionsTable = columns([
 const tradingProtectionSettingsTable = columns([
   "id", "weekdaysEnabled", "weekendsEnabled", "dualWeekendsWeekdaysEnabled", "updatedAt",
 ]);
+const adminFeatureSettingsTable = columns(["id", "settings", "updatedAt"]);
 const storedKeys: StoredKey[] = [];
 const storedSessions: Record<string, unknown>[] = [];
 let nextKeyId = 0;
@@ -126,7 +127,7 @@ const db: any = {
 };
 
 mock.module("@workspace/db", {
-  namedExports: { db, accessKeysTable, accessKeySessionsTable, tradingProtectionSettingsTable },
+  namedExports: { db, accessKeysTable, accessKeySessionsTable, adminFeatureSettingsTable, tradingProtectionSettingsTable },
 });
 mock.module("drizzle-orm", {
   namedExports: {

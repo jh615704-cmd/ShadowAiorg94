@@ -50,10 +50,11 @@ import {
   disposeUser,
   DerivCredentialError,
   DerivCapacityError,
+  isDerivBuyRateLimitError,
 } from "../lib/deriv";
 import { withDistributedUserLock } from "../lib/distributed-user-lock";
 import { assertAccessSessionActive, AccessSessionRevokedError } from "../lib/access-keys";
-import { db, derivCredentialsTable } from "@workspace/db";
+import { adminFeatureSettingsTable, db, derivCredentialsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { decryptPat } from "../lib/pat-crypto";
 import { requireAccessFeature } from "../middlewares/requireAccess.ts";
@@ -410,6 +411,16 @@ router.post("/deriv/buy", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "Invalid trade request" });
 
   try {
+    if (parsed.data.automated === true) {
+      const [adminSettings] = await db.select().from(adminFeatureSettingsTable).limit(1);
+      const settings = adminSettings?.settings ?? {};
+      if (settings.auto_trader_2_paused === true) {
+        const message = typeof settings.auto_trader_2_pause_message === "string"
+          ? settings.auto_trader_2_pause_message.slice(0, 300)
+          : "Auto Trader 2.0 is temporarily paused by an administrator.";
+        return res.status(409).json({ error: message, code: "AUTO_TRADER_2_PAUSED" });
+      }
+    }
     const assertAuthorized = () => assertAccessSessionActive(res.locals.accessSessionId, res.locals.accessKeyId);
     const result = BuyDerivContractResponse.parse(await withCredential(
       res.locals.userId,
@@ -423,6 +434,12 @@ router.post("/deriv/buy", async (req, res) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Buy request failed";
     req.log.error({ err: error }, "Deriv live buy request failed");
+    if (isDerivBuyRateLimitError(error)) {
+      return res.status(429).json({
+        error: "Deriv temporarily limited new buys. The request was safely retried; check account history before repeating it.",
+        code: "DERIV_BUY_RATE_LIMITED",
+      });
+    }
      const status = isCapacityError(error)
        ? 503
        : isCredentialError(error)
@@ -483,6 +500,12 @@ router.post("/deriv/bulk-buy", async (req, res) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Bulk buy request failed";
     req.log?.error({ err: error }, "Deriv bulk buy request failed");
+    if (isDerivBuyRateLimitError(error)) {
+      return res.status(429).json({
+        error: "Deriv temporarily limited new buys. Some earlier batch contracts may already be open; check account history before sending another batch.",
+        code: "DERIV_BUY_RATE_LIMITED",
+      });
+    }
     const status = isCapacityError(error)
       ? 503
       : isCredentialError(error)
@@ -518,6 +541,12 @@ router.post("/deriv/dual-buy", async (req, res) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Dual buy request failed";
     req.log.error({ err: error }, "Deriv dual buy request failed");
+    if (isDerivBuyRateLimitError(error)) {
+      return res.status(429).json({
+        error: "Deriv temporarily limited new buys. One contract may already be open; check account history before repeating the pair.",
+        code: "DERIV_BUY_RATE_LIMITED",
+      });
+    }
     const status = isCapacityError(error)
       ? 503
       : isCredentialError(error)
@@ -574,6 +603,12 @@ router.post("/deriv/clock-work/buy", requireAccessFeature("clock-work"), async (
   } catch (error) {
     const message = error instanceof Error ? error.message : "Clock Work buy request failed";
     req.log.error({ err: error }, "Clock Work buy request failed");
+    if (isDerivBuyRateLimitError(error)) {
+      return res.status(429).json({
+        error: "Deriv temporarily limited new buys. Check account history before sending another Clock Work batch.",
+        code: "DERIV_BUY_RATE_LIMITED",
+      });
+    }
     const status = isCapacityError(error)
       ? 503
       : isCredentialError(error)
@@ -611,6 +646,12 @@ router.post("/deriv/matches/buy", requireAccessFeature("matches-analysis"), asyn
   } catch (error) {
     const message = error instanceof Error ? error.message : "Matches buy request failed";
     req.log.error({ err: error }, "Matches buy request failed");
+    if (isDerivBuyRateLimitError(error)) {
+      return res.status(429).json({
+        error: "Deriv temporarily limited new buys. Check account history before sending another Matches batch.",
+        code: "DERIV_BUY_RATE_LIMITED",
+      });
+    }
     const status = isCapacityError(error)
       ? 503
       : isCredentialError(error)

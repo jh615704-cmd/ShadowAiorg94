@@ -167,6 +167,12 @@ class DerivApiError extends Error {
   }
 }
 
+export function isDerivBuyRateLimitError(error: unknown): boolean {
+  if (error instanceof DerivApiError) return error.code === "RateLimit";
+  if (typeof error !== "object" || error === null || !("code" in error)) return false;
+  return (error as Record<string, unknown>).code === "DERIV_BUY_RATE_LIMITED";
+}
+
 export class DerivCredentialError extends Error {
   readonly status: number;
 
@@ -953,6 +959,58 @@ async function sendDirectBuy(proposal: DerivProposal, input: ProposalInput): Pro
       reject(new Error("Deriv WebSocket is not ready"));
     }
   });
+}
+
+async function sendDirectBuyWithRateLimitRetry(
+  initialProposal: DerivProposal,
+  input: ProposalInput,
+): Promise<DerivBuy> {
+  let proposal = initialProposal;
+  for (let retry = 0; ; retry += 1) {
+    try {
+      return await sendDirectBuy(proposal, input);
+    } catch (error) {
+      if (!isDerivBuyRateLimitError(error) || retry >= 2) throw error;
+      const waitMs = retry === 0 ? 1_250 : 2_500;
+      logger.warn({ retry: retry + 1, waitMs }, "Deriv rejected a buy for rate limiting; retrying the confirmed rejection safely");
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+      proposal = await requestFreshProposal(input);
+    }
+  }
+}
+
+async function sendBatchBuysSequentially<T>(
+  items: readonly T[],
+  buy: (item: T) => Promise<DerivBuy>,
+): Promise<PromiseSettledResult<DerivBuy>[]> {
+  const results: PromiseSettledResult<DerivBuy>[] = [];
+  for (let index = 0; index < items.length; index += 1) {
+    if (index > 0) await new Promise((resolve) => setTimeout(resolve, 1_050));
+    try {
+      results.push({ status: "fulfilled", value: await buy(items[index]) });
+    } catch (reason) {
+      results.push({ status: "rejected", reason });
+      // Once Deriv's response is ambiguous, do not create more positions from
+      // this batch until the account state is reconciled.
+      if (!(reason instanceof DerivApiError)) {
+        for (let remaining = index + 1; remaining < items.length; remaining += 1) {
+          results.push({ status: "rejected", reason: new Error("This order was not sent because an earlier order needs account-history verification.") });
+        }
+        break;
+      }
+    }
+  }
+  return results;
+}
+
+function safeBuyFailureMessage(error: unknown): string {
+  if (isDerivBuyRateLimitError(error)) {
+    return "Deriv temporarily limited new buys. The rejected order was safely retried; check account history before resubmitting.";
+  }
+  if (error instanceof DerivApiError) {
+    return "Deriv declined an order. Any confirmed contracts remain open; check account history before resubmitting.";
+  }
+  return "An order could not be confirmed. Check account history before resubmitting.";
 }
 
 async function sendSell(contractId: string): Promise<SellResult> {
@@ -1792,20 +1850,22 @@ export async function buyContract(input: BuyInput, assertAuthorized?: TradeAutho
   try {
     buy = await sendProposalBuy(proposal, normalizedInput);
   } catch (error) {
-    if (!(error instanceof DerivApiError) || error.code !== "InvalidContractProposal") {
+    if (
+      !(error instanceof DerivApiError)
+      || (error.code !== "InvalidContractProposal" && error.code !== "RateLimit")
+    ) {
       throw error;
     }
 
-    // An explicit InvalidContractProposal confirms Deriv rejected the ID and
-    // did not open a contract. Only this rejection is safe to recover from:
-    // get a new quote, then submit the same parameters as a direct buy.
+    // Deriv explicitly rejected the request, so no contract was opened.
+    // Refresh the quote and retry only this known-rejected order.
     logger.warn(
-      { contractType: normalizedInput.contract_type, symbol: proposalInput.symbol },
-      "Deriv rejected the single-trade proposal ID; requesting a fresh direct quote",
+      { code: error.code, contractType: normalizedInput.contract_type, symbol: proposalInput.symbol },
+      "Deriv explicitly rejected the single-trade request; requesting a fresh direct quote",
     );
     proposal = await requestFreshProposal(proposalInput);
     await assertAuthorized?.();
-    buy = await sendDirectBuy(proposal, normalizedInput);
+    buy = await sendDirectBuyWithRateLimitRetry(proposal, normalizedInput);
   }
   return {
     ok: true,
@@ -1902,16 +1962,15 @@ export async function bulkBuyContracts(input: {
   // Direct parameter buys use the fresh quote as the maximum price and avoid
   // holding temporary proposal IDs until the whole batch is ready. Deriv can
   // invalidate those IDs between the proposal response and a later buy.
-  const buyResults = await Promise.allSettled(
-    proposals.map((proposal) => sendDirectBuy(proposal, proposalInput)),
+  const buyResults = await sendBatchBuysSequentially(
+    proposals,
+    (proposal) => sendDirectBuyWithRateLimitRetry(proposal, proposalInput),
   );
   const failedBuy = buyResults.find((result): result is PromiseRejectedResult => result.status === "rejected");
   if (failedBuy) {
-    const successfulBuys = buyResults
-      .filter((result): result is PromiseFulfilledResult<DerivBuy> => result.status === "fulfilled")
-      .map((result) => result.value);
-    await Promise.allSettled(successfulBuys.map((buy) => sendSell(buy.contract_id)));
-    throw new Error(`Bulk buy was not completed: ${failedBuy.reason instanceof Error ? failedBuy.reason.message : "one or more contracts failed"}`);
+    const error = new Error(`Bulk buy could not be fully confirmed. ${safeBuyFailureMessage(failedBuy.reason)}`);
+    if (isDerivBuyRateLimitError(failedBuy.reason)) Object.assign(error, { code: "DERIV_BUY_RATE_LIMITED" });
+    throw error;
   }
 
   return {
@@ -2048,14 +2107,14 @@ export async function buyClockWorkContracts(
   // All prices are quoted before any buy. Do not retry or auto-close a partial
   // batch: a buy acknowledgement timeout can be ambiguous, so the account
   // history must be checked before a user resubmits.
-  const results = await Promise.allSettled(proposals.map(({ contract, proposal }) => sendDirectBuy(proposal, {
+  const results = await sendBatchBuysSequentially(proposals, ({ contract, proposal }) => sendDirectBuyWithRateLimitRetry(proposal, {
     amount: contract.amount,
     duration: contract.duration,
     duration_unit: contract.duration_unit,
     contract_type: contract.contract_type,
     barrier: contract.barrier,
     symbol: contract.symbol,
-  })));
+  }));
   const completed = results.flatMap((result, index) => result.status === "fulfilled"
     ? [{
         key: proposals[index].contract.key,
@@ -2071,7 +2130,7 @@ export async function buyClockWorkContracts(
     ? [{
         key: proposals[index].contract.key,
         contract_type: proposals[index].contract.contract_type,
-        error: result.reason instanceof Error ? result.reason.message : "Deriv did not confirm this buy.",
+        error: safeBuyFailureMessage(result.reason),
       }]
     : []);
   const ok = failed.length === 0;
@@ -2182,14 +2241,14 @@ export async function buyMatchesContracts(
 
   // Acknowledgement failures are returned for history verification. Never
   // retry or auto-sell an order whose acceptance is uncertain.
-  const results = await Promise.allSettled(proposals.map(({ contract, proposal }) => sendDirectBuy(proposal, {
+  const results = await sendBatchBuysSequentially(proposals, ({ contract, proposal }) => sendDirectBuyWithRateLimitRetry(proposal, {
     amount: contract.amount,
     duration: contract.duration,
     duration_unit: contract.duration_unit,
     contract_type: contract.contract_type,
     barrier: contract.barrier,
     symbol: contract.symbol,
-  })));
+  }));
   const completed = results.flatMap((result, index) => result.status === "fulfilled"
     ? [{
         key: proposals[index].contract.key,
@@ -2205,7 +2264,7 @@ export async function buyMatchesContracts(
     ? [{
         key: proposals[index].contract.key,
         contract_type: proposals[index].contract.contract_type,
-        error: result.reason instanceof Error ? result.reason.message : "Deriv did not confirm this buy.",
+        error: safeBuyFailureMessage(result.reason),
       }]
     : []);
   const ok = failed.length === 0;
@@ -2348,16 +2407,15 @@ export async function dualBuyContracts(input: {
   const connected = await connect();
   if (!connected) throw new Error("Deriv WebSocket is not ready");
   await assertAuthorized?.();
-  const buyResults = await Promise.allSettled(
-    proposals.map(({ proposal, input: buyInput }) => sendDirectBuy(proposal, buyInput)),
-  );
+   const buyResults = await sendBatchBuysSequentially(
+     proposals,
+     ({ proposal, input: buyInput }) => sendDirectBuyWithRateLimitRetry(proposal, buyInput),
+   );
   const failedBuy = buyResults.find((result): result is PromiseRejectedResult => result.status === "rejected");
   if (failedBuy) {
-    const successfulBuys = buyResults
-      .filter((result): result is PromiseFulfilledResult<DerivBuy> => result.status === "fulfilled")
-      .map((result) => result.value);
-    await Promise.allSettled(successfulBuys.map((buy) => sendSell(buy.contract_id)));
-    throw new Error(`Dual buy was not completed: ${failedBuy.reason instanceof Error ? failedBuy.reason.message : "one or more contracts failed"}`);
+     const error = new Error(`Dual buy could not be fully confirmed. ${safeBuyFailureMessage(failedBuy.reason)}`);
+     if (isDerivBuyRateLimitError(failedBuy.reason)) Object.assign(error, { code: "DERIV_BUY_RATE_LIMITED" });
+     throw error;
   }
 
   return {

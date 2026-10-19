@@ -12,6 +12,7 @@ type SocketMessage = Record<string, any>;
 type BuyBehavior = "ack" | "reject" | "disconnect" | "invalid-proposal-id";
 
 let buyBehavior: BuyBehavior = "ack";
+let rateLimitFailuresRemaining = 0;
 let proposalNumber = 0;
 let proposalPayoutOverride: number | null = null;
 let buyPayoutOverride: number | null = null;
@@ -161,6 +162,18 @@ function handleClientMessage(socket: FakeWebSocket, message: SocketMessage) {
     });
     return;
   }
+  if (rateLimitFailuresRemaining > 0) {
+    rateLimitFailuresRemaining -= 1;
+    emitMessage(socket, {
+      ...(message.req_id == null ? {} : { req_id: message.req_id }),
+      error: { code: "RateLimit", message: "You have reached the rate limit for buy." },
+      echo_req: {
+        buy: message.buy,
+        ...(message.req_id == null ? {} : { req_id: message.req_id }),
+      },
+    });
+    return;
+  }
   if (buyBehavior === "disconnect") {
     socket.close();
     return;
@@ -274,6 +287,7 @@ beforeEach(() => {
   for (const userId of testUserIds) deriv.disposeUser(userId);
   testUserIds.clear();
   buyBehavior = "ack";
+  rateLimitFailuresRemaining = 0;
   proposalNumber = 0;
   proposalPayoutOverride = null;
   buyPayoutOverride = null;
@@ -962,6 +976,48 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
     assert.equal(result.count, 1);
   });
 
+  test("retries a confirmed buy rate-limit rejection with a fresh proposal", async () => {
+    rateLimitFailuresRemaining = 1;
+    const result = await withSelectedAccount("rate-limited-buy-user", () => deriv.buyContract({
+      amount: 1,
+      duration: 1,
+      duration_unit: "t",
+      contract_type: "DIGITODD",
+      symbol: "R_75",
+    }));
+
+    assert.ok(result.buy.contract_id);
+    const socket = latestSocket();
+    assert.equal(socket.sent.filter((message) => message.buy).length, 2);
+    assert.equal(socket.sent.filter((message) => message.proposal).length, 2);
+    await inUser("rate-limited-buy-user", async () => {
+      assert.equal(deriv.getHistory().length, 1);
+      assert.equal(deriv.getStatus().active_contract_count, 1);
+    });
+  });
+
+  test("returns a definite rate-limit error after bounded safe retries", async () => {
+    rateLimitFailuresRemaining = 3;
+    await assert.rejects(
+      withSelectedAccount("exhausted-rate-limit-user", () => deriv.buyContract({
+        amount: 1,
+        duration: 1,
+        duration_unit: "t",
+        contract_type: "DIGITODD",
+        symbol: "R_75",
+      })),
+      (error: unknown) => {
+        assert.equal(deriv.isDerivBuyRateLimitError(error), true);
+        return true;
+      },
+    );
+    assert.equal(latestSocket().sent.filter((message) => message.buy).length, 3);
+    await inUser("exhausted-rate-limit-user", async () => {
+      assert.equal(deriv.getHistory().length, 0);
+      assert.equal(deriv.getStatus().active_contract_count, 0);
+    });
+  });
+
   test("bulk buys return after buy acknowledgements without waiting for settlement", async () => {
     const result = await withSelectedAccount("bulk-buy-user", () => deriv.bulkBuyContracts({
       amount: 1,
@@ -974,7 +1030,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
     }));
 
     assert.equal(result.count, 2);
-    assert.deepEqual(buySendCountsAtAck, [2, 2], "all batch buy requests must be sent before the first acknowledgement");
+    assert.deepEqual(buySendCountsAtAck, [1, 2], "batch buy requests are spaced and acknowledged one at a time");
     await inUser("bulk-buy-user", async () => {
       assert.equal(deriv.getHistory().length, 2);
       assert.ok(deriv.getHistory().every((trade: { status: string }) => trade.status === "open"));
