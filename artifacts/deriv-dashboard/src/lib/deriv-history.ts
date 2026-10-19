@@ -62,6 +62,7 @@ export type DerivHistoryFeature =
   | "bulk-trader"
   | "cash-grab"
   | "clock-work"
+  | "matches-analysis"
   | "money-bank";
 
 export function claimDerivHistoryFeatureContractIds(

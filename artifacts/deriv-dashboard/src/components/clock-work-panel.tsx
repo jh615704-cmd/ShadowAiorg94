@@ -28,8 +28,7 @@ export interface ClockWorkPanelProps {
   symbol: string;
   markets: { value: string; label: string }[];
   onSymbolChange: (value: string) => void;
-  duration: 3 | 5;
-  onDurationChange: (value: 3 | 5) => void;
+  duration: 5;
   quote: number | null;
   quoteHistory: number[];
   quoteUpdatedAt: string;
@@ -88,8 +87,6 @@ export interface ClockWorkPanelProps {
   aggressiveBalancePercent: number;
   onAggressiveBalancePercentChange: (value: number) => void;
   aggressiveMinWinRate: number;
-  aggressivePushTicks: number;
-  onAggressivePushTicksChange: (value: number) => void;
   aggressivePushProgress: number;
   aggressiveRounds: number;
   aggressiveStakeLabel: string;
@@ -127,7 +124,7 @@ function Toggle({ checked, onChange, disabled, label }: { checked: boolean; onCh
 export default function ClockWorkPanel(props: ClockWorkPanelProps) {
   const [chartFocusZone, setChartFocusZone] = useState<ClockWorkChartZone | null>(null);
   const {
-    enabled, symbol, markets, onSymbolChange, duration, onDurationChange, quote, quoteHistory,
+    enabled, symbol, markets, onSymbolChange, duration, quote, quoteHistory,
     quoteUpdatedAt, tradeSlotBlocked,
     barrierMode, onBarrierModeChange, halfBarrier, onHalfBarrierChange, higherBarrierLabel,
     lowerBarrierLabel, higherBarrierOffset, lowerBarrierOffset, barrierAnchor, onResetBarrierAnchor,
@@ -140,7 +137,7 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
     onPlaceLower, onPlacePair, onPlaceAllFour, autoMode, onAutoModeChange, minLean,
     onMinLeanChange, autoEnabled, onAutoEnabledChange, aggressiveEnabled,
     onAggressiveEnabledChange, aggressiveBalancePercent, onAggressiveBalancePercentChange,
-    aggressiveMinWinRate, aggressivePushTicks, onAggressivePushTicksChange,
+    aggressiveMinWinRate,
     aggressivePushProgress, aggressiveRounds,
     aggressiveStakeLabel, accountBalance, currency, aggressiveUsingBalance, aggressiveEachSide,
     autoStatus,
@@ -230,7 +227,7 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
         <div className="cw-setup-top">
           <label className="cw-control"><span>MARKET</span><select value={symbol} onChange={(event) => { setChartFocusZone(null); onSymbolChange(event.target.value); }} disabled={disabled} aria-label="Market" data-testid="select-clock-market">{markets.map((market) => <option key={market.value} value={market.value}>{market.label}</option>)}</select></label>
           <div className="cw-control"><span>DURATION</span><div className="cw-duration-choice" role="group" aria-label="Clock Work duration">
-            {([3, 5] as const).map((ticks) => <button key={ticks} type="button" aria-pressed={duration === ticks} className={duration === ticks ? "selected" : ""} onClick={() => onDurationChange(ticks)} disabled={disabled} data-testid={`button-clock-duration-${ticks}`}>{ticks} Ticks</button>)}
+            <button type="button" aria-pressed="true" className="selected" disabled data-testid="button-clock-duration-5">{duration} Ticks</button>
           </div></div>
         </div>
         <div className="cw-stakes">
@@ -326,18 +323,14 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
           <span className="cw-win-rate-threshold">Min win rate <b>{aggressiveMinWinRate}%</b></span>
           <span className="cw-inline-label">Balance %</span>
           <div className="cw-choice-row" role="group" aria-label="Aggressive balance percentage">{[5,10,25,50].map((value) => <button key={value} type="button" aria-pressed={aggressiveBalancePercent === value} className={aggressiveBalancePercent === value ? "selected" : ""} onClick={() => onAggressiveBalancePercentChange(value)} disabled={disabled}>{value}%</button>)}</div>
-          <div className="cw-aggressive-push" role="group" aria-label="Consecutive tick push">
-            <span className="cw-inline-label">Push</span>
-            {[3,4,5,6,7].map((value) => <button key={value} type="button" aria-pressed={aggressivePushTicks === value} className={aggressivePushTicks === value ? "selected" : ""} onClick={() => onAggressivePushTicksChange(value)} disabled={disabled}>{value}t</button>)}
-          </div>
         </div>
         <div className="cw-balance-strip"><span>Balance <b>{money(accountBalance, currency)}</b></span><span>Using <b>{money(aggressiveUsingBalance, currency)}</b></span><span>{aggressiveStakeLabel} <b>{money(aggressiveEachSide, currency)}</b></span></div>
         <div className="cw-aggressive-status">
-          <div className="cw-auto-status"><i className={aggressiveEnabled ? "status-on" : ""} /><span>{autoStatus || (aggressiveEnabled ? `Waiting for ${aggressivePushTicks}+ tick push.` : "Aggressive automation is off.")}</span></div>
+          <div className="cw-auto-status"><i className={aggressiveEnabled ? "status-on" : ""} /><span>{autoStatus || (aggressiveEnabled ? "Waiting for a 5-tick push." : "Aggressive automation is off.")}</span></div>
           <span className="cw-rounds">{aggressiveRounds} rounds</span>
         </div>
-        <div className="cw-push-progress" style={{ gridTemplateColumns: `repeat(${aggressivePushTicks}, minmax(0, 1fr))` }} role="progressbar" aria-label="Consecutive tick push progress" aria-valuemin={0} aria-valuemax={aggressivePushTicks} aria-valuenow={Math.min(aggressivePushTicks, aggressivePushProgress)}>
-          {Array.from({ length: aggressivePushTicks }, (_, index) => <i key={index} className={index < aggressivePushProgress ? "reached" : ""} />)}
+        <div className="cw-push-progress" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }} role="progressbar" aria-label="Consecutive tick push progress" aria-valuemin={0} aria-valuemax={5} aria-valuenow={Math.min(5, aggressivePushProgress)}>
+          {Array.from({ length: 5 }, (_, index) => <i key={index} className={index < aggressivePushProgress ? "reached" : ""} />)}
         </div>
         <p className="cw-auto-note">Aggressive entries require at least {aggressiveMinWinRate}% observed win rate for the push direction. This historical threshold does not guarantee future results.</p>
       </section>

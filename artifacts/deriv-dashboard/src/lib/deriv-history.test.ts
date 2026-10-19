@@ -60,6 +60,18 @@ test("history contract ownership stays exclusive per feature and Deriv account",
   assert.deepEqual([...otherAccountIds], ["contract-1"]);
 });
 
+test("DigitFlip history claims only its acknowledged parity contract for the selected account", () => {
+  const owners = new Map<string, DerivHistoryFeature>();
+  const digitFlipIds = new Set<string>();
+  const cashGrabIds = new Set<string>();
+
+  claimDerivHistoryFeatureContractIds(owners, "account-1", "digit-flip", digitFlipIds, ["even-contract"]);
+  claimDerivHistoryFeatureContractIds(owners, "account-1", "cash-grab", cashGrabIds, ["even-contract"]);
+
+  assert.deepEqual([...digitFlipIds], ["even-contract"]);
+  assert.deepEqual([...cashGrabIds], []);
+});
+
 test("session summary accepts the feature's live P/L and trade count", () => {
   assert.deepEqual(
     summarizeDerivHistorySession(

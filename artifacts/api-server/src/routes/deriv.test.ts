@@ -210,6 +210,10 @@ mock.module("../lib/deriv", {
       observePat();
       return { ok: true, message: "contracts bought", requested_count: 0, completed_count: 0, contracts: [], failed: [] };
     },
+    buyMatchesContracts: async () => {
+      observePat();
+      return { ok: true, message: "1 Matches contract sent to Deriv.", requested_count: 1, completed_count: 1, contracts: [], failed: [] };
+    },
     selectAccount: async () => {
       observePat();
       return status;

@@ -506,7 +506,6 @@ export default function XTraderPage() {
   const [matchesHiddenHistoryIds, setMatchesHiddenHistoryIds] = useState<Set<string>>(new Set());
   const [clockWorkEnabled, setClockWorkEnabled] = useState(false);
   const [clockWorkSymbol, setClockWorkSymbol] = useState("R_75");
-  const [clockWorkDuration, setClockWorkDuration] = useState<ClockWorkPanelProps["duration"]>(5);
   const [clockWorkBarrierMode, setClockWorkBarrierMode] = useState<"offset" | "absolute">("offset");
   const [clockWorkHalfBarrier, setClockWorkHalfBarrier] = useState(false);
   const [clockWorkHigherBarrier, setClockWorkHigherBarrier] = useState(.12);
@@ -535,7 +534,6 @@ export default function XTraderPage() {
   const [clockWorkAutoEnabled, setClockWorkAutoEnabled] = useState(false);
   const [clockWorkAggressiveEnabled, setClockWorkAggressiveEnabled] = useState(false);
   const [clockWorkAggressivePercent, setClockWorkAggressivePercent] = useState(5);
-  const [clockWorkAggressivePushTicks, setClockWorkAggressivePushTicks] = useState(4);
   const [clockWorkAggressiveRounds, setClockWorkAggressiveRounds] = useState(0);
   const [clockWorkAutoStatus, setClockWorkAutoStatus] = useState("Select an automatic mode to begin.");
   const [clockWorkHistoryClearArmed, setClockWorkHistoryClearArmed] = useState(false);
@@ -586,7 +584,7 @@ export default function XTraderPage() {
   const [guideOpen, setGuideOpen] = useState(false);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [guidePage, setGuidePage] = useState(0);
-  const [guideMode, setGuideMode] = useState<"edge" | "trade-x" | "digit-flip" | "bulk-trader" | "money-bank" | "cash-grab" | "clock-work">("edge");
+  const [guideMode, setGuideMode] = useState<"edge" | "trade-x" | "digit-flip" | "bulk-trader" | "money-bank" | "cash-grab" | "matches-analysis" | "clock-work">("edge");
   const [clearHistoryArmed, setClearHistoryArmed] = useState(false);
   const [historyFading, setHistoryFading] = useState(false);
   const [tradeXHistoryClearArmed, setTradeXHistoryClearArmed] = useState(false);
@@ -759,6 +757,7 @@ export default function XTraderPage() {
   const edgeAllRows = rows.filter((trade) => trade.contract_type === "DIGITOVER" || trade.contract_type === "DIGITUNDER");
   const tradeXAllRows = rows.filter((trade) => trade.contract_type === "DIGITDIFF");
   const digitFlipAllRows = rows.filter((trade) => trade.contract_type === "DIGITEVEN" || trade.contract_type === "DIGITODD");
+  const matchesAllRows = rows.filter((trade) => trade.contract_type === "DIGITMATCH");
   const bulkAllRows = rows.filter((trade) => (
     trade.contract_type === "DIGITOVER"
     || trade.contract_type === "DIGITUNDER"
@@ -782,7 +781,22 @@ export default function XTraderPage() {
   const tradeXRows = tradeXAllRows.filter((trade) => tradeXClaimedHistoryIdsRef.current.has(trade.contract_id) && !tradeXHiddenHistoryIds.has(trade.contract_id));
   const tradeXSessionRows = tradeXAllRows.filter((trade) => tradeXClaimedHistoryIdsRef.current.has(trade.contract_id));
   const tradeXVisibleSessionRows = tradeXSessionRows.filter((trade) => !tradeXHiddenHistoryIds.has(trade.contract_id));
-  const digitFlipRows = digitFlipAllRows.filter((trade) => digitFlipClaimedHistoryIdsRef.current.has(trade.contract_id) && !digitFlipHiddenHistoryIds.has(trade.contract_id));
+  const digitFlipRows = digitFlipAllRows.filter((trade) => digitFlipClaimedHistoryIdsRef.current.has(String(trade.contract_id)) && !digitFlipHiddenHistoryIds.has(String(trade.contract_id)));
+  const matchesSessionRows = matchesSessionKnownIdsRef.current
+    ? matchesAllRows.filter((trade) => (
+      matchesClaimedHistoryIdsRef.current.has(String(trade.contract_id))
+      && !matchesSessionKnownIdsRef.current?.has(String(trade.contract_id))
+    ))
+    : [];
+  const matchesVisibleSessionRows = matchesSessionRows.filter((trade) => !matchesHiddenHistoryIds.has(String(trade.contract_id)));
+  const matchesRows = matchesAllRows.filter((trade) => (
+    matchesClaimedHistoryIdsRef.current.has(String(trade.contract_id))
+    && !matchesHiddenHistoryIds.has(String(trade.contract_id))
+  ));
+  const matchesTopDigits = useMemo<ObservedMatchesDigitStat[]>(
+    () => matchesTickCount > 0 ? rankObservedMatchDigits(matchesObservedDigits).slice(0, 3) : [],
+    [matchesObservedDigits, matchesTickCount],
+  );
   const bulkRows = bulkAllRows.filter((trade) => bulkClaimedHistoryIdsRef.current.has(trade.contract_id) && !bulkTraderHiddenHistoryIds.has(trade.contract_id));
   const moneyBankRows = moneyBankAllRows
     .filter((trade) => moneyBankClaimedHistoryIdsRef.current.has(trade.contract_id)) as MoneyBankTrade[];
@@ -828,7 +842,7 @@ export default function XTraderPage() {
     higherOffset: clockWorkHigherBarrier,
     lowerOffset: clockWorkLowerBarrier,
     halfBarrier: clockWorkHalfBarrier,
-    duration: clockWorkDuration,
+    duration: 5,
   });
   const clockWorkObservedTicks = getClockWorkBarrierTickCounts(
     clockWorkQuoteHistory,
@@ -840,7 +854,7 @@ export default function XTraderPage() {
       : clockWorkBarrierReference + (clockWorkHalfBarrier ? clockWorkLowerBarrier / 2 : clockWorkLowerBarrier),
   );
   const clockWorkRecentMoves = getClockWorkRecentMoves(clockWorkQuoteHistory);
-  const clockWorkPushProgress = getClockWorkPushProgress(clockWorkQuoteHistory, clockWorkAggressivePushTicks);
+  const clockWorkPushProgress = getClockWorkPushProgress(clockWorkQuoteHistory, 5);
   const clockWorkPushDirection = clockWorkPushProgress.direction;
   const clockWorkTickEpoch = clockWorkTickIsFreshForMarket ? clockWorkLatestTick?.epoch ?? null : null;
   const clockWorkQuoteUpdatedAt = clockWorkTickEpoch == null ? "" : new Date(Number(clockWorkTickEpoch) * 1000).toISOString();
@@ -870,7 +884,7 @@ export default function XTraderPage() {
     return {
       key,
       amount: Number(Math.max(1, amount).toFixed(2)),
-      duration: clockWorkDuration,
+      duration: 5,
       duration_unit: "t",
       contract_type: contractType,
       barrier,
@@ -880,7 +894,7 @@ export default function XTraderPage() {
   const clockWorkPairOrders = useMemo(() => [
     makeClockWorkOrder("higher", "HIGHER", clockWorkHigherStake),
     makeClockWorkOrder("lower", "LOWER", clockWorkLowerStake),
-  ], [clockWorkDuration, clockWorkSymbol, clockWorkBarrierMode, clockWorkHigherBarrier, clockWorkLowerBarrier, clockWorkHalfBarrier, clockWorkCurrentQuote, clockWorkHigherStake, clockWorkLowerStake]);
+  ], [clockWorkSymbol, clockWorkBarrierMode, clockWorkHigherBarrier, clockWorkLowerBarrier, clockWorkHalfBarrier, clockWorkCurrentQuote, clockWorkHigherStake, clockWorkLowerStake]);
   const makeClockWorkFourOrders = (lead: "HIGHER" | "LOWER" | null) => {
     const sequence = getClockWorkFourSequence(lead);
     let higherIndex = 0;
@@ -896,7 +910,7 @@ export default function XTraderPage() {
   };
   const clockWorkFourOrders = useMemo(
     () => makeClockWorkFourOrders(clockWorkRates.prediction),
-    [clockWorkDuration, clockWorkSymbol, clockWorkBarrierMode, clockWorkHigherBarrier, clockWorkLowerBarrier, clockWorkHalfBarrier, clockWorkCurrentQuote, clockWorkH1Stake, clockWorkH2Stake, clockWorkL1Stake, clockWorkL2Stake, clockWorkRates.prediction],
+    [clockWorkSymbol, clockWorkBarrierMode, clockWorkHigherBarrier, clockWorkLowerBarrier, clockWorkHalfBarrier, clockWorkCurrentQuote, clockWorkH1Stake, clockWorkH2Stake, clockWorkL1Stake, clockWorkL2Stake, clockWorkRates.prediction],
   );
   clockWorkQuoteOrderBuilderRef.current = () => ({
     pair: [
@@ -955,7 +969,6 @@ export default function XTraderPage() {
     canUseClockWork,
     isConnected,
     clockWorkSymbol,
-    clockWorkDuration,
     clockWorkBarrierMode,
     clockWorkHigherBarrier,
     clockWorkLowerBarrier,
@@ -992,8 +1005,8 @@ export default function XTraderPage() {
     : [];
   const digitFlipSessionRows = digitFlipSessionKnownIdsRef.current
     ? digitFlipAllRows.filter((trade) => (
-      digitFlipClaimedHistoryIdsRef.current.has(trade.contract_id)
-      && !digitFlipSessionKnownIdsRef.current?.has(trade.contract_id)
+      digitFlipClaimedHistoryIdsRef.current.has(String(trade.contract_id))
+      && !digitFlipSessionKnownIdsRef.current?.has(String(trade.contract_id))
     ))
     : [];
   const digitFlipVisibleSessionRows = digitFlipSessionRows.filter((trade) => !digitFlipHiddenHistoryIds.has(trade.contract_id));
@@ -1141,6 +1154,7 @@ export default function XTraderPage() {
     bulkSessionKnownIdsRef.current = null;
     cashGrabSessionKnownIdsRef.current = null;
     moneyBankSessionKnownIdsRef.current = null;
+    matchesSessionKnownIdsRef.current = null;
     historyFeatureOwnersRef.current.clear();
     edgeClaimedHistoryIdsRef.current.clear();
     tradeXClaimedHistoryIdsRef.current.clear();
@@ -1148,6 +1162,7 @@ export default function XTraderPage() {
     bulkClaimedHistoryIdsRef.current.clear();
     cashGrabClaimedHistoryIdsRef.current.clear();
     clockWorkClaimedHistoryIdsRef.current.clear();
+    matchesClaimedHistoryIdsRef.current.clear();
     moneyBankClaimedHistoryIdsRef.current.clear();
     setEdgeHiddenHistoryIds(new Set());
     setTradeXHiddenHistoryIds(new Set());
@@ -1155,6 +1170,10 @@ export default function XTraderPage() {
     setBulkTraderHiddenHistoryIds(new Set());
     setCashGrabHiddenHistoryIds(new Set());
     setClockWorkHiddenHistoryIds(new Set());
+    setMatchesHiddenHistoryIds(new Set());
+    matchesAiRunningRef.current = false;
+    setMatchesAiEnabled(false);
+    setMatchesAnalysisEnabled(false);
     setEdgeAccountBalance(currentAccountBalance == null ? "" : currentAccountBalance.toFixed(2));
     setDigitFlipAccountBalance(currentAccountBalance == null ? "" : currentAccountBalance.toFixed(2));
   }, [currentAccount?.id]);
@@ -1400,6 +1419,32 @@ export default function XTraderPage() {
   }, [digitFlipEnabled, status.data?.last_tick?.epoch, status.data?.last_digit, status.data?.last_tick?.symbol, tradeXEnabled, tradeXSymbol]);
 
   useEffect(() => {
+    if (!matchesAnalysisEnabled) return;
+    const cursor = matchesSampleCursorRef.current;
+    if (symbol !== matchesSymbol) {
+      if (cursor.symbol !== matchesSymbol) {
+        matchesSampleCursorRef.current = { symbol: matchesSymbol, tickCount: analysisTickCount };
+        setMatchesObservedDigits([]);
+        setMatchesTickCount(0);
+      }
+      return;
+    }
+    if (cursor.symbol !== matchesSymbol || analysisTickCount < cursor.tickCount) {
+      matchesSampleCursorRef.current = { symbol: matchesSymbol, tickCount: analysisTickCount };
+      setMatchesObservedDigits([]);
+      setMatchesTickCount(0);
+      return;
+    }
+    const tickDelta = analysisTickCount - cursor.tickCount;
+    if (tickDelta <= 0) return;
+
+    matchesSampleCursorRef.current = { symbol: matchesSymbol, tickCount: analysisTickCount };
+    const freshDigits = analysisDigits.slice(-tickDelta).filter((digit) => Number.isInteger(digit) && digit >= 0 && digit <= 9);
+    setMatchesObservedDigits((current) => [...current, ...freshDigits].slice(-MATCHES_HISTORY_LIMIT));
+    setMatchesTickCount((current) => current + tickDelta);
+  }, [analysisDigits, analysisTickCount, matchesAnalysisEnabled, matchesSymbol, symbol]);
+
+  useEffect(() => {
     digitFlipAssaultRef.current = digitFlipAssault;
     digitFlipMagicRef.current = digitFlipMagic;
     digitFlipMarketSignalsRef.current = digitFlipMarketSignals;
@@ -1591,7 +1636,7 @@ export default function XTraderPage() {
       currentAccountRef.current?.id,
       feature,
       target,
-      confirmedContractIds,
+      confirmedContractIds.map((contractId) => String(contractId)),
     );
     // Contract IDs come from Deriv's buy acknowledgement. Claim them locally
     // now; the single background refresh/poll fills in the authoritative row.
@@ -2647,6 +2692,14 @@ export default function XTraderPage() {
     setBulkTraderEnabled(false);
     digitFlipRunningRef.current = false;
     setDigitFlipRunning(false);
+    setClockWorkEnabled(false);
+    setClockWorkAutoEnabled(false);
+    setClockWorkAggressiveEnabled(false);
+    matchesAiRunningRef.current = false;
+    setMatchesAiEnabled(false);
+    setMatchesAnalysisEnabled(false);
+    autoSwitchRef.current = false;
+    setAutoSwitch(false);
   };
 
   const clearCashGrabHistory = async () => {
@@ -2691,6 +2744,12 @@ export default function XTraderPage() {
     setDigitFlipRunning(false);
     setTradeXEnabled(false);
     setBulkTraderEnabled(false);
+    setClockWorkEnabled(false);
+    setClockWorkAutoEnabled(false);
+    setClockWorkAggressiveEnabled(false);
+    matchesAiRunningRef.current = false;
+    setMatchesAiEnabled(false);
+    setMatchesAnalysisEnabled(false);
     void selectMarket(symbol);
   };
 
@@ -2713,6 +2772,12 @@ export default function XTraderPage() {
     setDigitFlipRunning(false);
     setTradeXEnabled(false);
     setBulkTraderEnabled(false);
+    setClockWorkEnabled(false);
+    setClockWorkAutoEnabled(false);
+    setClockWorkAggressiveEnabled(false);
+    matchesAiRunningRef.current = false;
+    setMatchesAiEnabled(false);
+    setMatchesAnalysisEnabled(false);
   };
 
   const reset = () => {
@@ -3302,8 +3367,15 @@ export default function XTraderPage() {
     setXTraderEnabled(false);
     setTradeXEnabled(false);
     setBulkTraderEnabled(false);
+    setClockWorkEnabled(false);
+    setClockWorkAutoEnabled(false);
+    setClockWorkAggressiveEnabled(false);
+    matchesAiRunningRef.current = false;
+    setMatchesAiEnabled(false);
+    setMatchesAnalysisEnabled(false);
     runningRef.current = false;
     setRunning(false);
+    autoSwitchRef.current = false;
     setAutoSwitch(false);
     void chooseDigitFlipMarket();
   };
@@ -3401,7 +3473,24 @@ export default function XTraderPage() {
     await sleep(260);
     setDigitFlipHiddenHistoryIds((current) => {
       const next = new Set(current);
-      digitFlipRows.forEach((trade) => next.add(trade.contract_id));
+          digitFlipRows.forEach((trade) => next.add(String(trade.contract_id)));
+      return next;
+    });
+    setHistoryFading(false);
+  };
+
+  const clearMatchesHistory = async () => {
+    if (!matchesHistoryClearArmed) {
+      setMatchesHistoryClearArmed(true);
+      window.setTimeout(() => setMatchesHistoryClearArmed(false), 2_500);
+      return;
+    }
+    setMatchesHistoryClearArmed(false);
+    setHistoryFading(true);
+    await sleep(260);
+    setMatchesHiddenHistoryIds((current) => {
+      const next = new Set(current);
+      matchesRows.forEach((trade) => next.add(String(trade.contract_id)));
       return next;
     });
     setHistoryFading(false);
@@ -3419,6 +3508,12 @@ export default function XTraderPage() {
       setXTraderEnabled(false);
       setDigitFlipEnabled(false);
       setBulkTraderEnabled(false);
+      setClockWorkEnabled(false);
+      setClockWorkAutoEnabled(false);
+      setClockWorkAggressiveEnabled(false);
+      matchesAiRunningRef.current = false;
+      setMatchesAiEnabled(false);
+      setMatchesAnalysisEnabled(false);
       digitFlipRunningRef.current = false;
       setDigitFlipRunning(false);
       stop();
@@ -3449,6 +3544,9 @@ export default function XTraderPage() {
     setTradeXEnabled(false);
     setDigitFlipEnabled(false);
     setBulkTraderEnabled(false);
+    matchesAiRunningRef.current = false;
+    setMatchesAiEnabled(false);
+    setMatchesAnalysisEnabled(false);
     runningRef.current = false;
     digitFlipRunningRef.current = false;
     setRunning(false);
@@ -3474,12 +3572,191 @@ export default function XTraderPage() {
     setXTraderEnabled(false);
     setTradeXEnabled(false);
     setDigitFlipEnabled(false);
+    setClockWorkEnabled(false);
+    setClockWorkAutoEnabled(false);
+    setClockWorkAggressiveEnabled(false);
+    matchesAiRunningRef.current = false;
+    setMatchesAiEnabled(false);
+    setMatchesAnalysisEnabled(false);
     runningRef.current = false;
     digitFlipRunningRef.current = false;
     setRunning(false);
     setDigitFlipRunning(false);
+    autoSwitchRef.current = false;
+    setAutoSwitch(false);
     void selectMarket(bulkTraderSymbol);
   };
+
+  const resetMatchesSample = (symbol = matchesSymbol) => {
+    matchesSampleCursorRef.current = { symbol, tickCount: analysisTickCount };
+    setMatchesObservedDigits([]);
+    setMatchesTickCount(0);
+    matchesAutomationAttemptTickRef.current = -1;
+  };
+
+  const toggleMatchesAnalysis = (enabled: boolean) => {
+    if (enabled && !canUseMatchesAnalysis) return;
+    if (enabled && !isConnected) {
+      setConnectionMessage({ kind: "error", text: "Connect Deriv before enabling Matches Analysis." });
+      return;
+    }
+    setMatchesAnalysisEnabled(enabled);
+    if (!enabled) {
+      matchesAiRunningRef.current = false;
+      setMatchesAiEnabled(false);
+      setMatchesStatusMessage("Matches Analysis is off. Open contracts can continue to settle.");
+      return;
+    }
+
+    deactivateMoneyBank();
+    deactivateCashGrab();
+    stop();
+    setXTraderEnabled(false);
+    setTradeXEnabled(false);
+    setDigitFlipEnabled(false);
+    setBulkTraderEnabled(false);
+    setClockWorkEnabled(false);
+    setClockWorkAutoEnabled(false);
+    setClockWorkAggressiveEnabled(false);
+    runningRef.current = false;
+    digitFlipRunningRef.current = false;
+    setRunning(false);
+    setDigitFlipRunning(false);
+    autoSwitchRef.current = false;
+    setAutoSwitch(false);
+    matchesAiRunningRef.current = false;
+    setMatchesAiEnabled(false);
+    setClockWorkAutoStatus("Clock Work automation is stopped. Open contracts can continue to settle.");
+    matchesSessionKnownIdsRef.current = new Set(
+      rows.filter((trade) => trade.contract_type === "DIGITMATCH").map((trade) => String(trade.contract_id)),
+    );
+    resetMatchesSample();
+    setMatchesStatusMessage("Collecting fresh ticks for this market.");
+    void selectMarket(matchesSymbol);
+  };
+
+  const toggleMatchesAi = (enabled: boolean) => {
+    matchesAiRunningRef.current = enabled;
+    setMatchesAiEnabled(enabled);
+    matchesAutomationAttemptTickRef.current = enabled ? -1 : matchesTickCount;
+    setMatchesStatusMessage(enabled
+      ? "AI Matches is on. Waiting for fresh ticks, a ranked sample, and an available trade slot."
+      : "Automatic Matches entries are stopped. Open contracts can continue to settle.");
+  };
+
+  const changeMatchesSymbol = (nextSymbol: string) => {
+    const nextMarket = matchesMarkets.find((market) => market.value === nextSymbol);
+    setMatchesSymbol(nextSymbol);
+    if (nextMarket) setMatchesMarketType(nextMarket.marketType);
+    matchesAiRunningRef.current = false;
+    setMatchesAiEnabled(false);
+    resetMatchesSample(nextSymbol);
+    setMatchesStatusMessage("Market changed. Collecting a fresh sample.");
+    if (matchesAnalysisEnabled) void selectMarket(nextSymbol);
+  };
+
+  const executeMatchesOrders = async (digits: readonly number[], automated: boolean) => {
+    if (matchesActionLockRef.current || matchesBuyMutation.isPending) return false;
+    if (!matchesAnalysisEnabled || !canUseMatchesAnalysis || !isConnected || !currentAccount) {
+      setMatchesStatusMessage("Enable Matches Analysis and connect a Deriv account before trading.");
+      return false;
+    }
+    if (isReal && !status.data?.live_trading_enabled) {
+      setMatchesStatusMessage("Live-account trading is disabled for this workspace.");
+      if (automated) toggleMatchesAi(false);
+      return false;
+    }
+    if (tradeSlotBlocked) {
+      setMatchesStatusMessage(tradeSlotMessage ?? "Waiting for open contracts to settle.");
+      return false;
+    }
+    const selectedDigits = Array.from(new Set(digits))
+      .filter((digit) => Number.isInteger(digit) && digit >= 0 && digit <= 9)
+      .slice(0, 3);
+    if (!selectedDigits.length || (automated && matchesTickCount < MATCHES_MINIMUM_SAMPLE_SIZE)) {
+      setMatchesStatusMessage(`Collect at least ${MATCHES_MINIMUM_SAMPLE_SIZE} fresh ticks before AI Matches trades.`);
+      return false;
+    }
+
+    const contracts = selectedDigits.map((digit) => ({
+      key: crypto.randomUUID(),
+      amount: matchesStake,
+      duration: matchesDuration,
+      duration_unit: "t" as const,
+      contract_type: "DIGITMATCH" as const,
+      barrier: digit,
+      symbol: matchesSymbol,
+    }));
+    matchesActionLockRef.current = true;
+    if (automated) matchesAutomationAttemptTickRef.current = matchesTickCount;
+    setMatchesStatusMessage(automated ? "Sending fresh Matches proposals and buy requests." : "Sending the manual Matches trade.");
+    try {
+      const result = await matchesBuyMutation.mutateAsync({ data: { contracts } });
+      claimFeatureRows(
+        "matches-analysis",
+        matchesClaimedHistoryIdsRef.current,
+        result.contracts.map((entry) => String(entry.buy.contract_id)),
+      );
+      setMatchesStatusMessage(result.message);
+      refreshTradeResults();
+      if (!result.ok) toggleMatchesAi(false);
+      return result.ok;
+    } catch (error) {
+      const message = errorMessage(error);
+      setMatchesStatusMessage(`${message} Check Deriv history before retrying an unconfirmed order.`);
+      toggleMatchesAi(false);
+      return false;
+    } finally {
+      matchesActionLockRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    if (!matchesAnalysisEnabled || !matchesAiEnabled || !matchesAiRunningRef.current) return;
+    if (!canUseMatchesAnalysis) {
+      toggleMatchesAi(false);
+      return;
+    }
+    if (!isConnected || !currentAccount) {
+      setMatchesStatusMessage("Waiting for a connected Deriv account.");
+      return;
+    }
+    if (isReal && !status.data?.live_trading_enabled) {
+      setMatchesStatusMessage("Live-account trading is disabled for this workspace.");
+      toggleMatchesAi(false);
+      return;
+    }
+    if (matchesTickCount < MATCHES_MINIMUM_SAMPLE_SIZE) {
+      setMatchesStatusMessage(`Collecting fresh ticks (${matchesTickCount}/${MATCHES_MINIMUM_SAMPLE_SIZE}).`);
+      return;
+    }
+    if (tradeSlotBlocked) {
+      setMatchesStatusMessage(tradeSlotMessage ?? "Waiting for open contracts to settle.");
+      return;
+    }
+    if (matchesBuyMutation.isPending || matchesActionLockRef.current) return;
+    if (matchesAutomationAttemptTickRef.current >= matchesTickCount) return;
+    const digits = chooseObservedMatchDigits(matchesTopDigits, matchesAiDigits);
+    if (digits.length !== matchesAiDigits) return;
+
+    matchesAutomationAttemptTickRef.current = matchesTickCount;
+    void executeMatchesOrders(digits, true);
+  }, [
+    canUseMatchesAnalysis,
+    currentAccount,
+    executeMatchesOrders,
+    isConnected,
+    isReal,
+    matchesAiDigits,
+    matchesAiEnabled,
+    matchesAnalysisEnabled,
+    matchesBuyMutation.isPending,
+    matchesTickCount,
+    matchesTopDigits,
+    status.data?.live_trading_enabled,
+    tradeSlotBlocked,
+    tradeSlotMessage,
+  ]);
 
   const executeClockWorkBatch = async (
     contracts: ClockWorkContractOrder[],
@@ -3855,6 +4132,8 @@ export default function XTraderPage() {
           ? moneyBankGuidePages
           : guideMode === "cash-grab"
             ? cashGrabGuidePages
+            : guideMode === "matches-analysis"
+              ? matchesAnalysisGuidePages
             : guideMode === "clock-work"
               ? clockWorkGuidePages
         : guidePages;
@@ -3868,6 +4147,8 @@ export default function XTraderPage() {
           ? canUseMoneyBank
           : guideMode === "cash-grab"
             ? canUseCashGrab
+            : guideMode === "matches-analysis"
+              ? canUseMatchesAnalysis
             : guideMode === "clock-work"
               ? canUseClockWork
               : canUseEdge;
@@ -3923,7 +4204,7 @@ export default function XTraderPage() {
     }
     const lead = aggressive ? clockWorkPushDirection : clockWorkRates.prediction;
     if (aggressive && !lead) {
-      setClockWorkAutoStatus(`Waiting for ${clockWorkAggressivePushTicks} consecutive ticks in one direction (${clockWorkPushProgress.consecutiveTicks}/${clockWorkAggressivePushTicks}).`);
+      setClockWorkAutoStatus(`Waiting for 5 consecutive ticks in one direction (${clockWorkPushProgress.consecutiveTicks}/5).`);
       return;
     }
     if (clockWorkAutoMode === "auto" && !lead) {
@@ -4087,6 +4368,20 @@ export default function XTraderPage() {
       </section>
 
       <h2 className="xt-trading-strategies-heading">Trading Strategies</h2>
+
+      <section className={`xt-feature-card xt-feature-card-matches ${!canUseMatchesAnalysis ? "xt-feature-card-restricted" : ""}`} id="matches-analysis-feature">
+        <div><Activity size={18} /><span><b>Matches Analysis</b><small>{canUseMatchesAnalysis ? "Matches Tool" : "Restricted — admin access only"}</small></span></div>
+        <div className="xt-feature-actions">
+          {!canUseMatchesAnalysis && <span className="xt-feature-locked">RESTRICTED</span>}
+          <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("matches-analysis"); setGuidePage(0); setGuideOpen(true); }}>
+            <BookOpen size={14} />Guide
+          </button>
+          <label className="xt-switch">
+            <input type="checkbox" checked={matchesAnalysisEnabled} onChange={(event) => toggleMatchesAnalysis(event.target.checked)} aria-label="Toggle Matches Analysis" disabled={!canUseMatchesAnalysis || !isConnected} />
+            <span />
+          </label>
+        </div>
+      </section>
 
       <section className={`xt-feature-card xt-feature-card-clock-work ${!canUseClockWork ? "xt-feature-card-restricted" : ""}`} id="clock-work-feature">
         <div><Clock3 size={18} /><span><b>Clock Work</b><small>{canUseClockWork ? "Hybrid Analysis" : "Restricted — admin access only"}</small></span></div>
@@ -4272,6 +4567,7 @@ export default function XTraderPage() {
           currentStake={digitFlipCurrentStake}
           recentTrades={digitFlipRows}
           sessionRows={digitFlipVisibleSessionRows}
+          currency={currentAccount?.currency}
             assaultEnabled={digitFlipAssault}
            magicEnabled={digitFlipMagic}
            clearTradesArmed={digitFlipClearArmed}
@@ -4624,14 +4920,70 @@ export default function XTraderPage() {
         />
       )}
 
+      {matchesAnalysisEnabled && canUseMatchesAnalysis && (
+        <section className="xt-bottom-feature">
+          <MatchesAnalysisPanel
+            marketType={matchesMarketType}
+            markets={matchesMarkets}
+            symbol={matchesSymbol}
+            onMarketTypeChange={setMatchesMarketType}
+            onSymbolChange={changeMatchesSymbol}
+            digitHistory={matchesObservedDigits}
+            tickCount={matchesTickCount}
+            topDigits={matchesTopDigits}
+            selectedDigit={matchesSelectedDigit}
+            onSelectedDigitChange={setMatchesSelectedDigit}
+            duration={matchesDuration}
+            onDurationChange={setMatchesDuration}
+            stake={matchesStake}
+            onStakeChange={setMatchesStake}
+            aiEnabled={matchesAiEnabled}
+            onAiEnabledChange={toggleMatchesAi}
+            aiDigits={matchesAiDigits}
+            onAiDigitsChange={setMatchesAiDigits}
+            isRunning={matchesAiEnabled}
+            isPlacing={matchesBuyMutation.isPending}
+            disabled={!isConnected || !currentAccount || !canUseMatchesAnalysis}
+            tradeSlotBlocked={tradeSlotBlocked}
+            statusMessage={matchesStatusMessage}
+            onManualTrade={() => {
+              toggleMatchesAi(false);
+              void executeMatchesOrders([matchesSelectedDigit], false);
+            }}
+            onStartMatches={() => toggleMatchesAi(true)}
+            onStopMatches={() => toggleMatchesAi(false)}
+            onRescan={() => {
+              resetMatchesSample();
+              setMatchesStatusMessage("Rescan started. Waiting for fresh ticks.");
+            }}
+            onOpenGuide={() => {
+              setGuideMode("matches-analysis");
+              setGuidePage(0);
+              setGuideOpen(true);
+            }}
+          />
+          {canViewHistory && (
+            <DerivHistory
+              title="Matches Analysis History"
+              strategy="Matches Tool"
+              rows={matchesRows}
+              sessionRows={matchesVisibleSessionRows}
+              currency={currentAccount?.currency}
+              clearArmed={matchesHistoryClearArmed}
+              fading={historyFading}
+              onClear={clearMatchesHistory}
+            />
+          )}
+        </section>
+      )}
+
       {clockWorkEnabled && canUseClockWork && (
         <section className="xt-bottom-feature">
           <ClockWorkPanel
             enabled={clockWorkEnabled}
             symbol={clockWorkSymbol}
             markets={clockWorkSymbols}
-            duration={clockWorkDuration}
-            onDurationChange={setClockWorkDuration}
+            duration={5}
             onSymbolChange={(next) => {
               clockWorkMarketResetEpochRef.current = Math.floor(Date.now() / 1000);
               setClockWorkQuoteBuffer({ symbol: next, quotes: [], lastTickId: null });
@@ -4727,7 +5079,7 @@ export default function XTraderPage() {
               if (enabled) {
                 setClockWorkAggressiveRounds(0);
                 setClockWorkAutoEnabled(false);
-                setClockWorkAutoStatus(`Waiting for a ${clockWorkAggressivePushTicks}-tick directional push and at least ${CLOCK_WORK_AGGRESSIVE_MIN_WIN_RATE}% observed win rate.`);
+                setClockWorkAutoStatus(`Waiting for a 5-tick directional push and at least ${CLOCK_WORK_AGGRESSIVE_MIN_WIN_RATE}% observed win rate.`);
               } else {
                 setClockWorkAutoStatus("Aggressive Auto Trading is stopped. Open contracts can continue to settle.");
               }
@@ -4735,8 +5087,6 @@ export default function XTraderPage() {
             aggressiveBalancePercent={clockWorkAggressivePercent}
             aggressiveMinWinRate={CLOCK_WORK_AGGRESSIVE_MIN_WIN_RATE}
             onAggressiveBalancePercentChange={setClockWorkAggressivePercent}
-            aggressivePushTicks={clockWorkAggressivePushTicks}
-            onAggressivePushTicksChange={setClockWorkAggressivePushTicks}
             aggressivePushProgress={clockWorkPushProgress.consecutiveTicks}
             aggressiveRounds={clockWorkAggressiveRounds}
             aggressiveStakeLabel={clockWorkAggressiveStakeLabel}
@@ -4765,12 +5115,12 @@ export default function XTraderPage() {
         <div className="xt-guide-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setGuideOpen(false); }}>
           <section className="xt-guide" role="dialog" aria-modal="true" aria-labelledby="xt-guide-title">
             <header className="xt-guide-header">
-              <div><BookOpen size={18} /><span><b>{guideMode === "trade-x" ? "Trade X Guide" : guideMode === "digit-flip" ? "DigitFlip Guide" : guideMode === "bulk-trader" ? "Bulk Trader Guide" : guideMode === "money-bank" ? "Money Bank Guide" : guideMode === "cash-grab" ? "Cash Grab Guide" : guideMode === "clock-work" ? "Clock Work Guide" : "EDGE Guide"}</b><small>Page {guidePage + 1} of {activeGuidePages.length}</small></span></div>
+              <div><BookOpen size={18} /><span><b>{guideMode === "trade-x" ? "Trade X Guide" : guideMode === "digit-flip" ? "DigitFlip Guide" : guideMode === "bulk-trader" ? "Bulk Trader Guide" : guideMode === "money-bank" ? "Money Bank Guide" : guideMode === "cash-grab" ? "Cash Grab Guide" : guideMode === "matches-analysis" ? "Matches Analysis Guide" : guideMode === "clock-work" ? "Clock Work Guide" : "EDGE Guide"}</b><small>Page {guidePage + 1} of {activeGuidePages.length}</small></span></div>
               <button type="button" aria-label="Close guide" onClick={() => setGuideOpen(false)}><X size={17} /></button>
             </header>
             <div className="xt-guide-progress"><span style={{ width: `${((guidePage + 1) / activeGuidePages.length) * 100}%` }} /></div>
             <article className="xt-guide-page">
-               <small className="xt-guide-kicker">{guideMode === "trade-x" ? "TRADE X FIELD GUIDE" : guideMode === "digit-flip" ? "DIGITFLIP FIELD GUIDE" : guideMode === "bulk-trader" ? "BULK TRADER FIELD GUIDE" : guideMode === "money-bank" ? "MONEY BANK FIELD GUIDE" : guideMode === "cash-grab" ? "CASH GRAB FIELD GUIDE" : guideMode === "clock-work" ? "CLOCK WORK FIELD GUIDE" : "EDGE FIELD GUIDE"}</small>
+               <small className="xt-guide-kicker">{guideMode === "trade-x" ? "TRADE X FIELD GUIDE" : guideMode === "digit-flip" ? "DIGITFLIP FIELD GUIDE" : guideMode === "bulk-trader" ? "BULK TRADER FIELD GUIDE" : guideMode === "money-bank" ? "MONEY BANK FIELD GUIDE" : guideMode === "cash-grab" ? "CASH GRAB FIELD GUIDE" : guideMode === "matches-analysis" ? "MATCHES ANALYSIS FIELD GUIDE" : guideMode === "clock-work" ? "CLOCK WORK FIELD GUIDE" : "EDGE FIELD GUIDE"}</small>
               <h2 id="xt-guide-title">{activeGuidePages[guidePage].title}</h2>
               <p>{activeGuidePages[guidePage].body}</p>
               <ul>{activeGuidePages[guidePage].points.map((point) => <li key={point}>{point}</li>)}</ul>
@@ -4782,7 +5132,7 @@ export default function XTraderPage() {
                 <button type="button" className="xt-guide-start" onClick={() => {
                   setGuideOpen(false);
                   if (!canUseGuideFeature) return;
-                  guideMode === "trade-x" ? toggleTradeX(true) : guideMode === "digit-flip" ? toggleDigitFlip(true) : guideMode === "bulk-trader" ? toggleBulkTrader(true) : guideMode === "money-bank" ? toggleMoneyBank(true) : guideMode === "cash-grab" ? toggleCashGrab(true) : guideMode === "clock-work" ? toggleClockWork(true) : toggleXTrader(true);
+                  guideMode === "trade-x" ? toggleTradeX(true) : guideMode === "digit-flip" ? toggleDigitFlip(true) : guideMode === "bulk-trader" ? toggleBulkTrader(true) : guideMode === "money-bank" ? toggleMoneyBank(true) : guideMode === "cash-grab" ? toggleCashGrab(true) : guideMode === "matches-analysis" ? toggleMatchesAnalysis(true) : guideMode === "clock-work" ? toggleClockWork(true) : toggleXTrader(true);
                 }}>{canUseGuideFeature ? "Let's start trading" : "Close guide"}</button>
               ) : (
                 <button type="button" className="xt-guide-nav next" onClick={() => setGuidePage((page) => Math.min(activeGuidePages.length - 1, page + 1))}>Next<ChevronRight size={15} /></button>

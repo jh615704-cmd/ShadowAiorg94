@@ -491,7 +491,7 @@ router.post("/deriv/bulk-buy", async (req, res) => {
         ? 403
       : message.includes("disabled") || message.includes("real account")
       ? 403
-      : message.includes("still settling") || message.includes("checking open contracts") || message.includes("safety timeout")
+      : message.includes("still settling") || message.includes("checking open contracts") || message.includes("safety timeout") || message.toLowerCase().includes("global trading protection")
         ? 409
        : message.includes("not available") || message.includes("balance") || message.includes("confirmation") || message.includes("offers no return") || message.includes("duration")
         ? 400
