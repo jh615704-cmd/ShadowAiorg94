@@ -77,6 +77,30 @@ describe("customFetch transport recovery", () => {
     assert.equal(calls, 1);
   });
 
+  it("treats an interrupted Matches buy as an uncertain trade and never replays it", async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      throw new TypeError("Failed to fetch");
+    }) as typeof fetch;
+
+    await assert.rejects(
+      customFetch("/api/deriv/matches/buy", {
+        method: "POST",
+        body: JSON.stringify({ contracts: [] }),
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof ApiTransportError);
+        assert.equal(error.tradeOutcomeUncertain, true);
+        assert.match(error.message, /contract may already be open/i);
+        assert.match(error.message, /Refresh Deriv history before sending it again/i);
+        return true;
+      },
+    );
+
+    assert.equal(calls, 1);
+  });
+
   it("replaces Deriv's raw no-return response with a safe, non-retry message", async () => {
     globalThis.fetch = (async () => new Response(
       JSON.stringify({ message: "This contract offers no return." }),

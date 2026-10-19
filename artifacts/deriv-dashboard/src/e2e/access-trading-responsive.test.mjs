@@ -231,7 +231,10 @@ test("Matches stops after the current buy and keeps its history available while 
 
     const firstBuy = page.waitForRequest((request) => request.url().includes("/api/deriv/matches/buy"), { timeout: 8_000 });
     await page.getByTestId("button-matches-start").click();
-    await firstBuy;
+    const request = await firstBuy;
+    const { contracts } = request.postDataJSON();
+    assert.ok(contracts.length > 0);
+    assert.ok(contracts.every(({ key }) => /^[a-f0-9]{32}$/i.test(key)), "Matches order keys must fit the server's 32-character limit.");
     await page.getByTestId("button-matches-stop").click();
     await page.getByTestId("status-matches-message").getByText(/Automatic Matches entries are stopped/).waitFor();
 
@@ -1189,6 +1192,10 @@ async function mockApiRequest(route, state, pathname, method) {
   if (pathname === "/api/deriv/matches/buy" && method === "POST" && state.allowFixtureTrades) {
     state.tradeRequests.push({ path: pathname, method });
     const { contracts } = request.postDataJSON();
+    if (!contracts.every(({ key }) => typeof key === "string" && key.length <= 32)) {
+      await fulfillJson(route, { error: "Invalid Matches buy request" }, 400);
+      return;
+    }
     const completed = contracts.map((order) => {
       const buy = fixtureBuy(state, order);
       return {

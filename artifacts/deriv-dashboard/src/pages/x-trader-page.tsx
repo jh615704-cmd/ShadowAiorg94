@@ -3687,7 +3687,9 @@ export default function XTraderPage() {
     }
 
     const contracts = selectedDigits.map((digit) => ({
-      key: crypto.randomUUID(),
+      // The Matches API limits contract keys to 32 characters. A standard
+      // UUID contains 36 characters, so remove its four separators.
+      key: crypto.randomUUID().replace(/-/g, ""),
       amount: matchesStake,
       duration: matchesDuration,
       duration_unit: "t" as const,
@@ -3716,9 +3718,15 @@ export default function XTraderPage() {
       return result.ok;
     } catch (error) {
       const message = errorMessage(error);
+      const status = error && typeof error === "object" && "status" in error
+        ? Number((error as { status?: unknown }).status)
+        : NaN;
+      const stoppedMessage = status >= 400 && status < 500
+        ? `${message} No Matches order was submitted. Automatic entries are stopped. Open contracts can continue to settle.`
+        : `${message} Check Deriv history before retrying an unconfirmed order. Automatic entries are stopped. Open contracts can continue to settle.`;
       toggleMatchesAi(
         false,
-        `${message} Check Deriv history before retrying an unconfirmed order. Automatic entries are stopped. Open contracts can continue to settle.`,
+        stoppedMessage,
       );
       return false;
     } finally {

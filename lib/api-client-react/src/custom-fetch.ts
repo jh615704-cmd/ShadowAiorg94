@@ -286,7 +286,7 @@ function getPathname(url: string): string {
 }
 
 function isTradeMutation(method: string, pathname: string): boolean {
-  return method === "POST" && /^\/api\/deriv\/(?:buy|bulk-buy|dual-buy|sell)$/.test(pathname);
+  return method === "POST" && /^\/api\/deriv\/(?:buy|bulk-buy|dual-buy|sell|matches\/buy)$/.test(pathname);
 }
 
 function createRequestId(): string {
