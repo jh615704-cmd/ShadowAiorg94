@@ -255,6 +255,37 @@ test("Matches stops after the current buy and keeps its history available while 
   }
 }, { timeout: 45_000 });
 
+test("Clock Work hides the preceding Matches history while active without clearing it", async () => {
+  const state = createState(userSession(["matches-analysis", "clock-work"]));
+  state.hasToken = true;
+  state.allowFixtureTrades = true;
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/app`);
+    await page.locator(".xt-feature-card-matches .xt-switch").click();
+    await page.getByTestId("matches-analysis-panel").waitFor();
+    const matchesHistory = page.getByRole("region", { name: "Matches Analysis History Deriv history" });
+    const matchBuy = page.waitForRequest((request) => request.url().includes("/api/deriv/matches/buy"), { timeout: 8_000 });
+    await page.getByTestId("button-matches-manual-trade").click();
+    await matchBuy;
+    await matchesHistory.locator(".deriv-history-row").waitFor({ timeout: 10_000 });
+
+    await page.locator(".xt-feature-card-clock-work .xt-switch").click();
+    await page.getByTestId("clock-work-panel").waitFor();
+    assert.equal(await matchesHistory.isVisible(), false, "The history panel above Clock Work should be hidden while Clock Work is active.");
+    const clockWorkHistory = page.getByRole("region", { name: "Clock Work History Deriv history" });
+    await clockWorkHistory.waitFor();
+
+    await page.locator(".xt-feature-card-clock-work .xt-switch").click();
+    await page.getByTestId("clock-work-panel").waitFor({ state: "hidden" });
+    await matchesHistory.locator(".deriv-history-row").waitFor();
+    assert.deepEqual(state.unhandledApis, []);
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+}, { timeout: 45_000 });
+
 test("clearing Auto Trader 2.0 resets run metrics and stake without deleting Deriv history", async () => {
   const state = createState(userSession(["auto-trader-2"]));
   state.hasToken = true;
@@ -1175,6 +1206,19 @@ async function mockApiRequest(route, state, pathname, method) {
   }
   if (pathname === "/api/deriv/history" && method === "GET") {
     await fulfillJson(route, state.history ?? []);
+    return;
+  }
+  if (pathname === "/api/deriv/clock-work/quotes" && method === "POST") {
+    const { contracts } = request.postDataJSON();
+    await fulfillJson(route, {
+      quotes: contracts.map((contract) => ({
+        ...contract,
+        ask_price: contract.amount,
+        payout: contract.amount * 2,
+        spot: 100_000,
+        longcode: "Fixture quote",
+      })),
+    });
     return;
   }
   if (pathname === "/api/deriv/buy" && method === "POST" && state.allowFixtureTrades) {

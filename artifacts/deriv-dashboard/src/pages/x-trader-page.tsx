@@ -5001,7 +5001,7 @@ export default function XTraderPage() {
         </section>
       )}
 
-      {canUseMatchesAnalysis && canViewHistory && (matchesAnalysisEnabled || matchesClaimedHistoryIdsRef.current.size > 0) && (
+      {canUseMatchesAnalysis && canViewHistory && !clockWorkEnabled && (matchesAnalysisEnabled || matchesClaimedHistoryIdsRef.current.size > 0) && (
         <section className="xt-bottom-feature">
           <DerivHistory
             title="Matches Analysis History"
