@@ -14,8 +14,6 @@ export interface AutoTrader2PanelProps {
   nextStake: number;
   duration: number;
   onDurationChange: (duration: number) => void;
-  takeProfit: number;
-  onTakeProfitChange: (amount: number) => void;
   lossLimit: number;
   onLossLimitChange: (amount: number) => void;
   stakeMode: "flat" | "multiply";
@@ -76,8 +74,6 @@ export default function AutoTrader2Panel({
   nextStake,
   duration,
   onDurationChange,
-  takeProfit,
-  onTakeProfitChange,
   lossLimit,
   onLossLimitChange,
   stakeMode,
@@ -268,19 +264,6 @@ export default function AutoTrader2Panel({
             disabled={controlsLocked}
             aria-label="Contract duration in ticks"
             data-testid="at2-duration"
-          />
-        </label>
-        <label className="at2-field">
-          <span className="at2-label">TAKE PROFIT <i>· {currency}</i></span>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={takeProfit}
-            onChange={(event) => onTakeProfitChange(Math.max(0, Number(event.target.value) || 0))}
-            disabled={controlsLocked}
-            aria-label={`Session take-profit limit in ${currency}`}
-            data-testid="at2-take-profit"
           />
         </label>
         <label className="at2-field">

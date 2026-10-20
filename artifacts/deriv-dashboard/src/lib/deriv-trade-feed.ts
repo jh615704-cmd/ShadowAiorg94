@@ -33,7 +33,7 @@ export function waitForSettledDerivTrade<T extends DerivTradeFeedRow>({
   subscribe: (listener: () => void) => () => void;
   isSettled: (status: string) => boolean;
   signal?: AbortSignal;
-  timeoutMs?: number;
+  timeoutMs?: number | null;
 }): Promise<T | null> {
   const findSettled = () => getRows()?.find(
     (row) => row.account_id === accountId
@@ -47,10 +47,11 @@ export function waitForSettledDerivTrade<T extends DerivTradeFeedRow>({
   return new Promise((resolve) => {
     let settled = false;
     let unsubscribe: (() => void) | null = null;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
     const cleanup = () => {
       unsubscribe?.();
       unsubscribe = null;
-      clearTimeout(timeout);
+      if (timeout !== null) clearTimeout(timeout);
       signal?.removeEventListener("abort", abort);
     };
     const finish = (row: T | null) => {
@@ -64,7 +65,9 @@ export function waitForSettledDerivTrade<T extends DerivTradeFeedRow>({
       const row = findSettled();
       if (row) finish(row);
     };
-    const timeout = setTimeout(() => finish(null), Math.max(1, timeoutMs));
+    if (timeoutMs !== null) {
+      timeout = setTimeout(() => finish(null), Math.max(1, timeoutMs));
+    }
 
     unsubscribe = subscribe(check);
     signal?.addEventListener("abort", abort, { once: true });

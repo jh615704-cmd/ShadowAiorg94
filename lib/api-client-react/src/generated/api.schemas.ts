@@ -213,9 +213,19 @@ export const FeatureControlMode = {
   under_construction: 'under_construction',
 } as const;
 
+export type FeatureControlAudience = typeof FeatureControlAudience[keyof typeof FeatureControlAudience];
+
+
+export const FeatureControlAudience = {
+  all: 'all',
+  specific: 'specific',
+} as const;
+
 export interface FeatureControl {
   feature: FeatureControlFeature;
   mode: FeatureControlMode;
+  audience: FeatureControlAudience;
+  user_ids: string[];
   /** @nullable */
   countdown_at: string | null;
   /** @maxLength 500 */
@@ -524,6 +534,23 @@ export interface DerivSymbolSelection {
   symbol: string;
 }
 
+export type DerivBuyInputAccessFeature = typeof DerivBuyInputAccessFeature[keyof typeof DerivBuyInputAccessFeature];
+
+
+export const DerivBuyInputAccessFeature = {
+  edge: 'edge',
+  'digit-flip': 'digit-flip',
+  'trade-x': 'trade-x',
+  'bulk-trader': 'bulk-trader',
+  'matches-analysis': 'matches-analysis',
+  'clock-work': 'clock-work',
+  'cash-grab': 'cash-grab',
+  'money-bank': 'money-bank',
+  'jdy-ai-3': 'jdy-ai-3',
+  'auto-trader': 'auto-trader',
+  'auto-trader-2': 'auto-trader-2',
+} as const;
+
 export type DerivBuyInputDurationUnit = typeof DerivBuyInputDurationUnit[keyof typeof DerivBuyInputDurationUnit];
 
 
@@ -546,6 +573,7 @@ export const DerivBuyInputContractType = {
 } as const;
 
 export interface DerivBuyInput {
+  access_feature: DerivBuyInputAccessFeature;
   /** @exclusiveMinimum 0 */
   amount: number;
   /**
@@ -571,6 +599,23 @@ export interface DerivBuyInput {
   auto_knockout?: boolean;
 }
 
+export type DerivBulkBuyInputAccessFeature = typeof DerivBulkBuyInputAccessFeature[keyof typeof DerivBulkBuyInputAccessFeature];
+
+
+export const DerivBulkBuyInputAccessFeature = {
+  edge: 'edge',
+  'digit-flip': 'digit-flip',
+  'trade-x': 'trade-x',
+  'bulk-trader': 'bulk-trader',
+  'matches-analysis': 'matches-analysis',
+  'clock-work': 'clock-work',
+  'cash-grab': 'cash-grab',
+  'money-bank': 'money-bank',
+  'jdy-ai-3': 'jdy-ai-3',
+  'auto-trader': 'auto-trader',
+  'auto-trader-2': 'auto-trader-2',
+} as const;
+
 export type DerivBulkBuyInputDurationUnit = typeof DerivBulkBuyInputDurationUnit[keyof typeof DerivBulkBuyInputDurationUnit];
 
 
@@ -593,6 +638,7 @@ export const DerivBulkBuyInputContractType = {
 } as const;
 
 export interface DerivBulkBuyInput {
+  access_feature: DerivBulkBuyInputAccessFeature;
   /** @exclusiveMinimum 0 */
   amount: number;
   /**
@@ -831,6 +877,23 @@ export interface MatchesBatchBuyResponse {
   failed: MatchesFailedBuy[];
 }
 
+export type DerivDualBuyInputAccessFeature = typeof DerivDualBuyInputAccessFeature[keyof typeof DerivDualBuyInputAccessFeature];
+
+
+export const DerivDualBuyInputAccessFeature = {
+  edge: 'edge',
+  'digit-flip': 'digit-flip',
+  'trade-x': 'trade-x',
+  'bulk-trader': 'bulk-trader',
+  'matches-analysis': 'matches-analysis',
+  'clock-work': 'clock-work',
+  'cash-grab': 'cash-grab',
+  'money-bank': 'money-bank',
+  'jdy-ai-3': 'jdy-ai-3',
+  'auto-trader': 'auto-trader',
+  'auto-trader-2': 'auto-trader-2',
+} as const;
+
 export type DerivDualBuyInputDurationUnit = typeof DerivDualBuyInputDurationUnit[keyof typeof DerivDualBuyInputDurationUnit];
 
 
@@ -839,6 +902,7 @@ export const DerivDualBuyInputDurationUnit = {
 } as const;
 
 export interface DerivDualBuyInput {
+  access_feature: DerivDualBuyInputAccessFeature;
   /** @exclusiveMinimum 0 */
   amount: number;
   /** @minimum 1 */

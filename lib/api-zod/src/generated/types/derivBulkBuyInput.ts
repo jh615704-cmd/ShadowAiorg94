@@ -5,10 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { DerivBulkBuyInputAccessFeature } from './derivBulkBuyInputAccessFeature';
 import type { DerivBulkBuyInputContractType } from './derivBulkBuyInputContractType';
 import type { DerivBulkBuyInputDurationUnit } from './derivBulkBuyInputDurationUnit';
 
 export interface DerivBulkBuyInput {
+  access_feature: DerivBulkBuyInputAccessFeature;
   /** @exclusiveMinimum 0 */
   amount: number;
   /**

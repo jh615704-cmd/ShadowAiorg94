@@ -1128,7 +1128,7 @@ components:
         dual_weekends_weekdays_enabled: { type: boolean }
     FeatureControl:
       type: object
-      required: [feature, mode, countdown_at, notice]
+      required: [feature, mode, audience, user_ids, countdown_at, notice]
       properties:
         feature:
           type: string
@@ -1136,6 +1136,12 @@ components:
         mode:
           type: string
           enum: [available, restricted, coming_soon, under_construction]
+        audience:
+          type: string
+          enum: [all, specific]
+        user_ids:
+          type: array
+          items: { type: string, format: uuid }
         countdown_at: { type: ["string", "null"], format: date-time }
         notice: { type: string, maxLength: 500 }
     AdminFeatureSettings:
@@ -1471,8 +1477,11 @@ components:
           minLength: 1
     DerivBuyInput:
       type: object
-      required: [amount, duration, duration_unit, contract_type]
+      required: [amount, duration, duration_unit, contract_type, access_feature]
       properties:
+        access_feature:
+          type: string
+          enum: [edge, digit-flip, trade-x, bulk-trader, matches-analysis, clock-work, cash-grab, money-bank, jdy-ai-3, auto-trader, auto-trader-2]
         amount:
           type: number
           exclusiveMinimum: 0
@@ -1503,8 +1512,11 @@ components:
           description: When true for ACCU, the server checks recent ticks against Deriv's proposal-specific knockout barrier before sending a buy.
     DerivBulkBuyInput:
       type: object
-      required: [amount, duration, duration_unit, contract_type, count]
+      required: [amount, duration, duration_unit, contract_type, count, access_feature]
       properties:
+        access_feature:
+          type: string
+          enum: [edge, digit-flip, trade-x, bulk-trader, matches-analysis, clock-work, cash-grab, money-bank, jdy-ai-3, auto-trader, auto-trader-2]
         amount:
           type: number
           exclusiveMinimum: 0
@@ -1740,8 +1752,11 @@ components:
             $ref: "#/components/schemas/MatchesFailedBuy"
     DerivDualBuyInput:
       type: object
-      required: [amount, duration, duration_unit, barrier]
+      required: [amount, duration, duration_unit, barrier, access_feature]
       properties:
+        access_feature:
+          type: string
+          enum: [edge, digit-flip, trade-x, bulk-trader, matches-analysis, clock-work, cash-grab, money-bank, jdy-ai-3, auto-trader, auto-trader-2]
         amount:
           type: number
           exclusiveMinimum: 0

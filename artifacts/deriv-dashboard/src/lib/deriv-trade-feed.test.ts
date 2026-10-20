@@ -38,7 +38,7 @@ test("a settled contract wakes its waiter from the live update without a polling
       return () => { notify = null; };
     },
     isSettled: (status) => !["open", "pending", "active"].includes(status.toLowerCase()),
-    timeoutMs: 1_000,
+    timeoutMs: null,
   });
 
   rows = mergeDerivTradeUpdate(rows, { ...rows[0], status: "won", profit: 0.8 });

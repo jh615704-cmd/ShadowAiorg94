@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getGetAccessSessionQueryKey,
+  getGetAdminFeatureSettingsQueryKey,
   getGetDerivAccountsQueryKey,
   getGetDerivHistoryQueryKey,
   getGetDerivStatusQueryKey,
@@ -9,6 +10,7 @@ import {
   ApiTransportError,
   useBuyDerivContract,
   useGetAccessSession,
+  useGetAdminFeatureSettings,
   useGetDerivAccounts,
   useGetDerivHistory,
   useGetDerivStatus,
@@ -78,7 +80,7 @@ const guideCopy = [
   ["Even and Odd", "Even and Odd use the last digit at expiry. Choose the parity manually or let AI 2 compare the observed sample when it is enabled.", "A recent imbalance can change quickly and is not a promise of future parity."],
   ["Set your stake", "Stake is the amount requested for each individual contract. The account balance and the server's trading checks remain authoritative.", "The amount risked can be lost. Keep it within an amount you can afford to lose."],
   ["Set contract duration", "Duration is the number of ticks before contract expiry. Auto Trader 2.0 uses whole-tick durations from 1 through 5.", "A shorter contract resolves sooner but is not automatically safer or more profitable."],
-  ["Take-profit limit", "Take Profit stops the automated loop before another entry once the settled session profit reaches this value. Enter zero to turn this stop off.", "This is a session stop, not a guaranteed payout. An already-open contract may settle after the loop stops."],
+  ["Stop conditions", "Auto Trader 2.0 continues after wins and stops only when you press Stop or settled session losses reach the configured Loss Limit. Enter zero to disable the loss-limit stop.", "An already-open contract may settle after you stop. The loss limit does not cap the possible loss on an open contract."],
   ["Loss limit", "Loss Limit stops the loop before another entry once settled session losses reach the configured amount. Enter zero to turn this stop off.", "This does not cap the possible loss on an already-open contract or guarantee an exact maximum loss."],
   ["Flat stake mode", "Flat mode uses the configured stake for each entry. It makes the planned amount consistent from one contract to the next.", "Flat staking cannot prevent losses. Review the stake against the account balance before starting."],
   ["Multiply after loss", "Multiply after loss increases the next requested stake after a losing settlement by your configured multiplier. A win returns the next amount to the base stake.", "Multiplying can increase exposure quickly and does not guarantee recovery. The server still checks the selected account balance."],
@@ -131,7 +133,12 @@ function amountLabel(value: number, currency: string) {
 function AutoTrader2Content() {
   const queryClient = useQueryClient();
   const access = useGetAccessSession({ query: { queryKey: getGetAccessSessionQueryKey(), retry: false } });
-  const hasAccess = access.data?.is_admin === true || access.data?.features.includes("auto-trader-2") === true;
+  const featureSettings = useGetAdminFeatureSettings({
+    query: { queryKey: getGetAdminFeatureSettingsQueryKey(), retry: false, refetchInterval: 10_000 },
+  });
+  const isAdmin = access.data?.is_admin === true;
+  const featureAvailable = featureSettings.data?.features.find((item) => item.feature === "auto-trader-2")?.mode === "available";
+  const hasAccess = isAdmin || (access.data?.features.includes("auto-trader-2") === true && featureAvailable);
   const token = useGetDerivTokenStatus({ query: { queryKey: getGetDerivTokenStatusQueryKey(), retry: false, enabled: hasAccess } });
   const hasToken = token.data?.has_token === true;
   const [running, setRunning] = useState(false);
@@ -143,7 +150,6 @@ function AutoTrader2Content() {
   const [barrier, setBarrier] = useState(0);
   const [stake, setStake] = useState(1);
   const [duration, setDuration] = useState(1);
-  const [takeProfit, setTakeProfit] = useState(10);
   const [lossLimit, setLossLimit] = useState(10);
   const [stakeMode, setStakeMode] = useState<"flat" | "multiply">("flat");
   const [multiplier, setMultiplier] = useState(2);
@@ -356,7 +362,6 @@ function AutoTrader2Content() {
         setBarrier(restoredSession.config.barrier);
         setStake(restoredSession.config.stake);
         setDuration(restoredSession.config.duration);
-        setTakeProfit(restoredSession.config.takeProfit);
         setLossLimit(restoredSession.config.lossLimit);
         setStakeMode(restoredSession.config.stakeMode);
         setMultiplier(restoredSession.config.multiplier);
@@ -421,7 +426,6 @@ function AutoTrader2Content() {
     barrier,
     stake,
     duration,
-    takeProfit,
     lossLimit,
     stakeMode,
     multiplier,
@@ -665,11 +669,14 @@ function AutoTrader2Content() {
     while (runRef.current.active && runRef.current.generation === generation) {
       let slotReady = false;
       let latestSignals: readonly AutoTrader2Signal[] = signalsRef.current;
-      for (let attempt = 0; attempt < 10 && runRef.current.active && runRef.current.generation === generation; attempt += 1) {
+      let statusRetryDelay = 1_000;
+      while (!slotReady && runRef.current.active && runRef.current.generation === generation) {
         try {
           const refreshedStatus = await statusRef.current.refetch();
           const currentStatus = refreshedStatus.data;
           if (
+            !refreshedStatus.isError
+            &&
             currentStatus?.connected === true
             && currentStatus.authorized === true
             && currentStatus.account?.id === accountId
@@ -681,19 +688,15 @@ function AutoTrader2Content() {
             break;
           }
         } catch {
-          finishLoop(generation, {
-            tone: "error",
-            text: "Deriv could not confirm the open-contract check. Auto Trader 2.0 stopped without sending another order.",
-          });
-          return;
+          // Keep the session alive, but never send a new order without a fresh open-contract confirmation.
         }
-        setDecision("Waiting for Deriv to confirm there are no open contracts.");
-        await delay(1_000);
+        if (!slotReady && runRef.current.active && runRef.current.generation === generation) {
+          setDecision("Waiting for Deriv to confirm there are no open contracts. No new order will be sent until it does.");
+          await delay(statusRetryDelay);
+          statusRetryDelay = Math.min(statusRetryDelay * 2, 5_000);
+        }
       }
-      if (!slotReady) {
-        finishLoop(generation, { tone: "info", text: "Deriv has not confirmed the trade slot is clear. No new order was sent." });
-        return;
-      }
+      if (!slotReady) return;
 
       const inRecovery = runRef.current.recovery;
       if (continuous && (!first || !loopCandidate)) {
@@ -721,6 +724,7 @@ function AutoTrader2Content() {
       const selectedBarrier = selectedType === "DIGITDIFF" ? candidate?.barrier ?? config.barrier : undefined;
       const orderStake = Number(runRef.current.currentStake.toFixed(2));
       const order: DerivBuyInput = {
+        access_feature: "auto-trader-2",
         amount: orderStake,
         duration: config.duration,
         duration_unit: "t",
@@ -777,8 +781,9 @@ function AutoTrader2Content() {
           return;
         }
         void Promise.all([
-          queryClient.invalidateQueries({ queryKey: getGetDerivStatusQueryKey() }),
-          queryClient.invalidateQueries({ queryKey: getGetDerivAccountsQueryKey() }),
+          queryClient.refetchQueries({ queryKey: getGetDerivStatusQueryKey(), type: "active" }, { cancelRefetch: false }),
+          queryClient.refetchQueries({ queryKey: derivHistoryQueryKey, type: "active" }, { cancelRefetch: false }),
+          queryClient.refetchQueries({ queryKey: getGetDerivAccountsQueryKey(), type: "active" }, { cancelRefetch: false }),
         ]).catch((error: unknown) => console.warn("Could not refresh Auto Trader 2.0 data after an accepted order.", error));
       } catch (error) {
         const errorData = error instanceof ApiError && error.data && typeof error.data === "object"
@@ -843,7 +848,7 @@ function AutoTrader2Content() {
         }),
         isSettled,
         signal: settlementController.signal,
-        timeoutMs: 135_000,
+          timeoutMs: null,
       });
       if (runRef.current.settlementAbortController === settlementController) {
         runRef.current.settlementAbortController = null;
@@ -909,13 +914,11 @@ function AutoTrader2Content() {
       }
       setNextStake(runRef.current.currentStake);
 
-      const hitTakeProfit = config.takeProfit > 0 && runRef.current.sessionPnl >= config.takeProfit;
       const hitLossLimit = config.lossLimit > 0 && runRef.current.sessionPnl <= -config.lossLimit;
-      if (hitTakeProfit || hitLossLimit) {
+      if (hitLossLimit) {
         if (config.aiEnabled) persistRunState("completed", config);
-        const resultLabel = hitTakeProfit ? "Take-profit limit reached" : "Loss limit reached";
-        finishLoop(generation, { tone: "info", text: `${resultLabel}. No further entry was sent.` });
-        setDecision(`${resultLabel} · automation stopped.`);
+        finishLoop(generation, { tone: "info", text: "Loss limit reached. No further entry was sent." });
+        setDecision("Loss limit reached · automation stopped.");
         return;
       }
 
@@ -1035,7 +1038,6 @@ function AutoTrader2Content() {
       setBarrier(config.barrier);
       setStake(config.stake);
       setDuration(config.duration);
-      setTakeProfit(config.takeProfit);
       setLossLimit(config.lossLimit);
       setStakeMode(config.stakeMode);
       setMultiplier(config.multiplier);
@@ -1093,6 +1095,13 @@ function AutoTrader2Content() {
       );
     }
   };
+
+  useEffect(() => {
+    if (!hasAccess && runRef.current.active) {
+      stop();
+      setMessage({ tone: "error", text: "Auto Trader 2.0 access was removed. No further entries will be sent." });
+    }
+  }, [hasAccess, stop]);
 
   const clearHistory = async () => {
     if (!accountId || running || runRef.current.active || clearingHistory) return;
@@ -1317,8 +1326,6 @@ function AutoTrader2Content() {
           nextStake={nextStake}
           duration={duration}
           onDurationChange={setDuration}
-          takeProfit={takeProfit}
-          onTakeProfitChange={setTakeProfit}
           lossLimit={lossLimit}
           onLossLimitChange={setLossLimit}
           stakeMode={stakeMode}

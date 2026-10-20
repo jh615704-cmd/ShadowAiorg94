@@ -1,19 +1,45 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
-import type { Request, Response } from "express";
+import { describe, it, mock } from "node:test";
+import type { Request, RequestHandler, Response } from "express";
 import {
   CreateAccessKeyBody,
   UpdateAccessKeyBody,
 } from "@workspace/api-zod";
-import {
-  ACCESS_FEATURES,
-  featureList,
-  TRADING_ACCESS_FEATURES,
-} from "../lib/access-keys.ts";
-import {
-  requireAccessFeature,
-  requireAnyAccessFeature,
-} from "./requireAccess.ts";
+let savedFeatureSettings: { settings: unknown } | null = null;
+const adminFeatureSettingsTable = {};
+const fakeDb = {
+  select() {
+    return {
+      from(table: unknown) {
+        return {
+          async limit() {
+            return table === adminFeatureSettingsTable && savedFeatureSettings ? [savedFeatureSettings] : [];
+          },
+        };
+      },
+    };
+  },
+};
+
+mock.module("@workspace/db", {
+  namedExports: {
+    db: fakeDb,
+    accessKeysTable: {},
+    accessKeySessionsTable: {},
+    adminFeatureSettingsTable,
+  },
+});
+mock.module("drizzle-orm", {
+  namedExports: {
+    and: (...conditions: unknown[]) => conditions,
+    eq: (...conditions: unknown[]) => conditions,
+    gt: (...conditions: unknown[]) => conditions,
+    isNull: (...conditions: unknown[]) => conditions,
+  },
+});
+
+const { ACCESS_FEATURES, featureList, TRADING_ACCESS_FEATURES } = await import("../lib/access-keys.ts");
+const { requireAccessFeature, requireAnyAccessFeature, requireTradeAccessFeature } = await import("./requireAccess.ts");
 
 const autoTraderFeature = "auto-trader";
 const autoTrader2Feature = "auto-trader-2";
@@ -21,7 +47,7 @@ const clockWorkFeature = "clock-work";
 const matchesAnalysisFeature = "matches-analysis";
 
 describe("Auto Trader access-key feature path", () => {
-  it("accepts Matches Analysis grants and limits its buy route to that feature", () => {
+  it("accepts Matches Analysis grants and limits its buy route to that feature", async () => {
     const create = CreateAccessKeyBody.parse({
       label: "Matches Analysis user",
       kind: "user",
@@ -34,17 +60,14 @@ describe("Auto Trader access-key feature path", () => {
     assert.deepEqual(update.features, [matchesAnalysisFeature]);
     assert.ok(ACCESS_FEATURES.includes(matchesAnalysisFeature));
     assert.ok(TRADING_ACCESS_FEATURES.includes(matchesAnalysisFeature));
+    assert.equal((await runGuard(requireAccessFeature(matchesAnalysisFeature), [matchesAnalysisFeature])).nextCalled, true);
     assert.equal(
-      runGuard(requireAccessFeature(matchesAnalysisFeature), [matchesAnalysisFeature]).nextCalled,
-      true,
-    );
-    assert.equal(
-      runGuard(requireAccessFeature(matchesAnalysisFeature), ["trade-x"]).statusCode,
+      (await runGuard(requireAccessFeature(matchesAnalysisFeature), ["trade-x"])).statusCode,
       403,
     );
   });
 
-  it("accepts Clock Work grants and includes them on trading routes", () => {
+  it("accepts Clock Work grants and includes them on trading routes", async () => {
     const create = CreateAccessKeyBody.parse({
       label: "Clock Work user",
       kind: "user",
@@ -57,12 +80,9 @@ describe("Auto Trader access-key feature path", () => {
     assert.deepEqual(update.features, [clockWorkFeature]);
     assert.ok(ACCESS_FEATURES.includes(clockWorkFeature));
     assert.ok(TRADING_ACCESS_FEATURES.includes(clockWorkFeature));
+    assert.equal((await runGuard(requireAccessFeature(clockWorkFeature), [clockWorkFeature])).nextCalled, true);
     assert.equal(
-      runGuard(requireAccessFeature(clockWorkFeature), [clockWorkFeature]).nextCalled,
-      true,
-    );
-    assert.equal(
-      runGuard(requireAccessFeature(clockWorkFeature), ["trade-x"]).statusCode,
+      (await runGuard(requireAccessFeature(clockWorkFeature), ["trade-x"])).statusCode,
       403,
     );
   });
@@ -106,21 +126,76 @@ describe("Auto Trader access-key feature path", () => {
     assert.ok(TRADING_ACCESS_FEATURES.every((feature) => ACCESS_FEATURES.includes(feature)));
   });
 
-  it("allows the feature route only when the session has the matching grant", () => {
-    const authorized = runGuard(requireAccessFeature(autoTraderFeature), [autoTraderFeature]);
+  it("allows the feature route only when the session has the matching grant", async () => {
+    const authorized = await runGuard(requireAccessFeature(autoTraderFeature), [autoTraderFeature]);
     assert.equal(authorized.nextCalled, true);
     assert.equal(authorized.statusCode, undefined);
 
-    const denied = runGuard(requireAnyAccessFeature(autoTraderFeature), ["trade-x"]);
+    const denied = await runGuard(requireAnyAccessFeature(autoTraderFeature), ["trade-x"]);
     assert.equal(denied.nextCalled, false);
     assert.equal(denied.statusCode, 403);
     assert.match(String(denied.body?.error), /auto-trader/);
   });
+
+  it("blocks only the selected access keys when a feature is restricted", async () => {
+    savedFeatureSettings = {
+      settings: {
+        features: [{
+          feature: autoTraderFeature,
+          mode: "restricted",
+          audience: "specific",
+          user_ids: ["00000000-0000-4000-8000-000000000001"],
+          notice: "Please contact support.",
+        }],
+      },
+    };
+    const selected = await runGuard(
+      requireAccessFeature(autoTraderFeature),
+      [autoTraderFeature],
+      "00000000-0000-4000-8000-000000000001",
+    );
+    const unselected = await runGuard(
+      requireAccessFeature(autoTraderFeature),
+      [autoTraderFeature],
+      "00000000-0000-4000-8000-000000000002",
+    );
+    assert.equal(selected.statusCode, 403);
+    assert.match(String(selected.body?.error), /Restricted — admin access only/);
+    assert.equal(unselected.nextCalled, true);
+    savedFeatureSettings = null;
+  });
+
+  it("requires a feature context and enforces that feature before a generic buy", async () => {
+    savedFeatureSettings = {
+      settings: {
+        features: [{
+          feature: autoTraderFeature,
+          mode: "under_construction",
+          audience: "all",
+          user_ids: [],
+          notice: "",
+        }],
+      },
+    };
+    const missing = await runGuard(requireTradeAccessFeature, [autoTraderFeature]);
+    const blocked = await runGuard(
+      requireTradeAccessFeature,
+      [autoTraderFeature],
+      "00000000-0000-4000-8000-000000000099",
+      { access_feature: autoTraderFeature },
+    );
+    assert.equal(missing.statusCode, 400);
+    assert.equal(blocked.statusCode, 403);
+    assert.equal(blocked.body?.feature, autoTraderFeature);
+    savedFeatureSettings = null;
+  });
 });
 
-function runGuard(
-  guard: (request: Request, response: Response, next: () => void) => void,
+async function runGuard(
+  guard: RequestHandler,
   features: string[],
+  accessKeyId = "00000000-0000-4000-8000-000000000099",
+  body?: Record<string, unknown>,
 ) {
   const result: {
     nextCalled: boolean;
@@ -128,7 +203,7 @@ function runGuard(
     body?: Record<string, unknown>;
   } = { nextCalled: false };
   const response = {
-    locals: { accessKey: { features } },
+    locals: { accessKey: { features, keyHash: "test-key-hash" }, accessKeyId },
     status(code: number) {
       result.statusCode = code;
       return this;
@@ -139,7 +214,7 @@ function runGuard(
     },
   } as unknown as Response;
 
-  guard({} as Request, response, () => {
+  await guard({ body } as Request, response, () => {
     result.nextCalled = true;
   });
   return result;

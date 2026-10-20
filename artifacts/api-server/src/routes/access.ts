@@ -63,6 +63,10 @@ function normalizeFeatureSettings(value: Record<string, unknown> | undefined, up
     return {
       feature: fallback.feature,
       mode: typeof saved.mode === "string" && featureControlModes.has(saved.mode) ? saved.mode : fallback.mode,
+      audience: saved.audience === "specific" ? "specific" : "all",
+      user_ids: Array.isArray(saved.user_ids)
+        ? Array.from(new Set(saved.user_ids.filter((id): id is string => typeof id === "string")))
+        : [],
       countdown_at: typeof saved.countdown_at === "string" ? saved.countdown_at : null,
       notice: typeof saved.notice === "string" ? saved.notice.slice(0, 500) : "",
     };
@@ -77,6 +81,31 @@ function normalizeFeatureSettings(value: Record<string, unknown> | undefined, up
       : defaults.auto_trader_2_pause_message,
     updated_at: updatedAt,
   });
+}
+
+function sessionFeatureSettings(
+  settings: ReturnType<typeof normalizeFeatureSettings>,
+  accessKeyId: string,
+  isAdmin: boolean,
+) {
+  if (isAdmin) return settings;
+  return {
+    ...settings,
+    features: settings.features.map((control) => {
+      const targeted = control.audience === "all" || control.user_ids.includes(accessKeyId);
+      if (targeted) {
+        return { ...control, audience: "all" as const, user_ids: [] };
+      }
+      return {
+        ...control,
+        mode: "available" as const,
+        audience: "all" as const,
+        user_ids: [],
+        countdown_at: null,
+        notice: "",
+      };
+    }),
+  };
 }
 
 function secureCookie(forwardedProto?: string) {
@@ -302,7 +331,9 @@ router.patch("/access/trading-protection", requireAccess, requireAccessAdmin, as
 
 router.get("/access/feature-settings", requireAccess, async (_req, res): Promise<void> => {
   const [row] = await db.select().from(adminFeatureSettingsTable).limit(1);
-  res.json(normalizeFeatureSettings(row?.settings, row?.updatedAt ?? null));
+  const settings = normalizeFeatureSettings(row?.settings, row?.updatedAt ?? null);
+  const isAdmin = isPrimaryAdminKeyHash(res.locals.accessKey.keyHash);
+  res.json(sessionFeatureSettings(settings, res.locals.accessKeyId, isAdmin));
 });
 
 router.patch("/access/feature-settings", requireAccess, requireAccessAdmin, async (req, res): Promise<void> => {

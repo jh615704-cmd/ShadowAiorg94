@@ -245,7 +245,9 @@ export default function AdminUsersPage() {
     dual_weekends_weekdays_enabled: false,
   });
   const [featureSettingsDraft, setFeatureSettingsDraft] = useState<AdminFeatureSettings | null>(null);
+  const [featureUserSearch, setFeatureUserSearch] = useState<Record<string, string>>({});
   const keys = keysQuery.data ?? [];
+  const userKeys = keys.filter((key) => key.kind === "user");
   const onlineCount = keys.filter((key) => key.online).length;
   const userCount = keys.filter((key) => key.kind === "user").length;
   const activeCount = keys.filter((key) => key.status === "active").length;
@@ -261,8 +263,10 @@ export default function AdminUsersPage() {
   }, [protectionQuery.data]);
 
   useEffect(() => {
-    if (featureSettingsQuery.data) setFeatureSettingsDraft(featureSettingsQuery.data);
-  }, [featureSettingsQuery.data]);
+    if (featureSettingsQuery.data && !featureSettingsDraft) {
+      setFeatureSettingsDraft(featureSettingsQuery.data);
+    }
+  }, [featureSettingsDraft, featureSettingsQuery.data]);
 
   const refreshEverything = async () => {
     await queryClient.invalidateQueries();
@@ -400,27 +404,107 @@ export default function AdminUsersPage() {
       : current);
   };
 
-  const saveFeatureSettings = () => {
-    if (!featureSettingsDraft) return;
+  const featureSettingsPayload = (
+    base: AdminFeatureSettings,
+    featureOverrides: FeatureControl[] = base.features,
+    extra?: Partial<AdminFeatureSettings>,
+  ) => ({
+    features: featureOverrides,
+    global_announcement_enabled: extra?.global_announcement_enabled ?? base.global_announcement_enabled,
+    global_announcement: extra?.global_announcement ?? base.global_announcement,
+    auto_trader_2_paused: extra?.auto_trader_2_paused ?? base.auto_trader_2_paused,
+    auto_trader_2_pause_message: extra?.auto_trader_2_pause_message ?? base.auto_trader_2_pause_message,
+  });
+
+  const saveFeatureControl = (feature: FeatureControl["feature"]) => {
+    const savedSettings = featureSettingsQuery.data;
+    const draftControl = featureSettingsDraft?.features.find((item) => item.feature === feature);
+    if (!savedSettings || !draftControl) return;
+    const features = savedSettings.features.map((item) => item.feature === feature ? draftControl : item);
+    updateFeatureSettings.mutate(
+      { data: featureSettingsPayload(savedSettings, features) },
+      {
+        onSuccess: (saved) => {
+          queryClient.setQueryData(getGetAdminFeatureSettingsQueryKey(), saved);
+          setFeatureSettingsDraft((current) => current
+            ? { ...current, features: current.features.map((item) => item.feature === feature
+              ? saved.features.find((savedItem) => savedItem.feature === feature) ?? item
+              : item) }
+            : saved);
+          toast({ title: "Feature notice saved", description: "The selected users are updated immediately." });
+        },
+        onError: (error) => toast({ variant: "destructive", title: "Feature notice could not be saved", description: errorMessage(error) }),
+      },
+    );
+  };
+
+  const cancelFeatureControl = (feature: FeatureControl["feature"]) => {
+    const savedControl = featureSettingsQuery.data?.features.find((item) => item.feature === feature);
+    if (savedControl) editFeatureControl(feature, savedControl);
+  };
+
+  const saveAnnouncement = () => {
+    const base = featureSettingsQuery.data;
+    const draft = featureSettingsDraft;
+    if (!base || !draft) return;
     updateFeatureSettings.mutate(
       {
-        data: {
-          features: featureSettingsDraft.features,
-          global_announcement_enabled: featureSettingsDraft.global_announcement_enabled,
-          global_announcement: featureSettingsDraft.global_announcement,
-          auto_trader_2_paused: featureSettingsDraft.auto_trader_2_paused,
-          auto_trader_2_pause_message: featureSettingsDraft.auto_trader_2_pause_message,
-        },
+        data: featureSettingsPayload(base, base.features, {
+          global_announcement_enabled: draft.global_announcement_enabled,
+          global_announcement: draft.global_announcement,
+        }),
       },
       {
         onSuccess: (saved) => {
-          setFeatureSettingsDraft(saved);
           queryClient.setQueryData(getGetAdminFeatureSettingsQueryKey(), saved);
-          toast({ title: "Feature controls saved", description: "Availability and announcements are now visible to users." });
+          setFeatureSettingsDraft((current) => current
+            ? { ...current, global_announcement_enabled: saved.global_announcement_enabled, global_announcement: saved.global_announcement }
+            : saved);
+          toast({ title: "Global announcement saved", description: "The announcement is now visible to users." });
         },
-        onError: (error) => toast({ variant: "destructive", title: "Feature controls could not be saved", description: errorMessage(error) }),
+        onError: (error) => toast({ variant: "destructive", title: "Announcement could not be saved", description: errorMessage(error) }),
       },
     );
+  };
+
+  const cancelAnnouncement = () => {
+    const saved = featureSettingsQuery.data;
+    if (!saved) return;
+    setFeatureSettingsDraft((current) => current
+      ? { ...current, global_announcement_enabled: saved.global_announcement_enabled, global_announcement: saved.global_announcement }
+      : saved);
+  };
+
+  const saveAutoTrader2Controls = () => {
+    const base = featureSettingsQuery.data;
+    const draft = featureSettingsDraft;
+    if (!base || !draft) return;
+    updateFeatureSettings.mutate(
+      {
+        data: featureSettingsPayload(base, base.features, {
+          auto_trader_2_paused: draft.auto_trader_2_paused,
+          auto_trader_2_pause_message: draft.auto_trader_2_pause_message,
+        }),
+      },
+      {
+        onSuccess: (saved) => {
+          queryClient.setQueryData(getGetAdminFeatureSettingsQueryKey(), saved);
+          setFeatureSettingsDraft((current) => current
+            ? { ...current, auto_trader_2_paused: saved.auto_trader_2_paused, auto_trader_2_pause_message: saved.auto_trader_2_pause_message }
+            : saved);
+          toast({ title: "Auto Trader 2.0 controls saved" });
+        },
+        onError: (error) => toast({ variant: "destructive", title: "Auto Trader 2.0 controls could not be saved", description: errorMessage(error) }),
+      },
+    );
+  };
+
+  const cancelAutoTrader2Controls = () => {
+    const saved = featureSettingsQuery.data;
+    if (!saved) return;
+    setFeatureSettingsDraft((current) => current
+      ? { ...current, auto_trader_2_paused: saved.auto_trader_2_paused, auto_trader_2_pause_message: saved.auto_trader_2_pause_message }
+      : saved);
   };
 
   const stats = useMemo(() => [
@@ -444,11 +528,8 @@ export default function AdminUsersPage() {
         <section className="panel admin-feature-control-card">
           <div className="panel-header">
             <div><span className="panel-overline">USER-FACING FEATURE CONTROLS</span><h3>Feature availability and bot settings</h3></div>
-            <button type="button" className="secondary-button" onClick={saveFeatureSettings} disabled={!featureSettingsDraft || updateFeatureSettings.isPending}>
-              <Save size={15} />{updateFeatureSettings.isPending ? "Saving…" : "Save controls"}
-            </button>
           </div>
-          <p className="admin-protection-intro">Feature status changes what non-admin users see. A countdown is shown live; it does not automatically publish a feature. Pausing Auto Trader 2.0 blocks new automated entries only and leaves open contracts to settle.</p>
+          <p className="admin-protection-intro">Restricted, Coming soon, and Under construction block the selected users from opening that feature or its guide. Choose All users to include current and future user keys, or Specific users to target a saved list. Open contracts are not cancelled.</p>
           {featureSettingsQuery.isError ? (
             <div className="admin-form-error">Unable to load feature controls. Refresh the page and sign in again as the primary administrator.</div>
           ) : featureSettingsQuery.isLoading || !featureSettingsDraft ? (
@@ -458,17 +539,72 @@ export default function AdminUsersPage() {
               <div className="admin-feature-control-grid">
                 {featureSettingsDraft.features.map((control) => {
                   const featureLabel = featureOptions.find((item) => item.value === control.feature)?.label ?? control.feature;
+                  const savedControl = featureSettingsQuery.data?.features.find((item) => item.feature === control.feature);
+                  const comparable = (item: FeatureControl | undefined) => item
+                    ? JSON.stringify({ ...item, user_ids: [...item.user_ids].sort() })
+                    : "";
+                  const changed = comparable(control) !== comparable(savedControl);
+                  const search = (featureUserSearch[control.feature] ?? "").trim().toLowerCase();
+                  const matchingUsers = userKeys.filter((key) =>
+                    !search || `${key.label} ${key.key_prefix}`.toLowerCase().includes(search),
+                  );
+                  const visibleUsers = matchingUsers.slice(0, search ? 200 : 100);
                   return (
                     <div className="admin-feature-control-row" key={control.feature}>
-                      <div className="admin-feature-control-title"><strong>{featureLabel}</strong><small>Controls the message shown to non-admin users.</small></div>
-                      <label className="admin-control-field"><span>Status</span><select value={control.mode} onChange={(event) => editFeatureControl(control.feature, { mode: event.target.value as FeatureControl["mode"] })}>
-                        <option value="available">Available</option>
-                        <option value="restricted">Restricted — admin access only</option>
-                        <option value="coming_soon">Coming soon</option>
-                        <option value="under_construction">Under construction</option>
-                      </select></label>
-                      <label className="admin-control-field"><span>Countdown (optional)</span><input type="datetime-local" value={toDateTimeLocal(control.countdown_at)} onChange={(event) => editFeatureControl(control.feature, { countdown_at: event.target.value ? new Date(event.target.value).toISOString() : null })} /></label>
+                      <div className="admin-feature-control-fields">
+                        <div className="admin-feature-control-title"><strong>{featureLabel}</strong><small>Save applies the status and notice to the audience you choose.</small></div>
+                        <label className="admin-control-field"><span>Status</span><select value={control.mode} onChange={(event) => editFeatureControl(control.feature, { mode: event.target.value as FeatureControl["mode"] })}>
+                          <option value="available">Available</option>
+                          <option value="restricted">Restricted — admin access only</option>
+                          <option value="coming_soon">Coming soon</option>
+                          <option value="under_construction">Under construction</option>
+                        </select></label>
+                        <label className="admin-control-field"><span>Users</span><select value={control.audience} onChange={(event) => editFeatureControl(control.feature, { audience: event.target.value as FeatureControl["audience"] })}>
+                          <option value="all">All users</option>
+                          <option value="specific">Specific users</option>
+                        </select></label>
+                        <label className="admin-control-field"><span>Countdown (optional)</span><input type="datetime-local" value={toDateTimeLocal(control.countdown_at)} onChange={(event) => editFeatureControl(control.feature, { countdown_at: event.target.value ? new Date(event.target.value).toISOString() : null })} /></label>
+                      </div>
                       <label className="admin-control-field admin-feature-notice"><span>Feature notice</span><input type="text" maxLength={500} value={control.notice} placeholder="Optional message shown with the status" onChange={(event) => editFeatureControl(control.feature, { notice: event.target.value })} /></label>
+                      {control.audience === "specific" && (
+                        <div className="admin-feature-user-picker">
+                          <div className="admin-feature-user-picker-heading">
+                            <div><strong>Select users</strong><small>{control.user_ids.length} selected · {userKeys.length} user keys</small></div>
+                            <label className="admin-control-field"><span>Find a user</span><input type="search" value={featureUserSearch[control.feature] ?? ""} onChange={(event) => setFeatureUserSearch((current) => ({ ...current, [control.feature]: event.target.value }))} placeholder="Search by name or key prefix" /></label>
+                          </div>
+                          <div className="admin-feature-user-list" role="group" aria-label={`Users affected by ${featureLabel} status`}>
+                            {visibleUsers.length ? visibleUsers.map((userKey) => {
+                              const selected = control.user_ids.includes(userKey.key_id);
+                              return (
+                                <label className={`admin-feature-user-option${selected ? " selected" : ""}`} key={userKey.key_id}>
+                                  <input
+                                    type="checkbox"
+                                    checked={selected}
+                                    onChange={() => editFeatureControl(control.feature, {
+                                      user_ids: selected
+                                        ? control.user_ids.filter((id) => id !== userKey.key_id)
+                                        : [...control.user_ids, userKey.key_id],
+                                    })}
+                                  />
+                                  <span className={`admin-feature-user-presence${userKey.online ? " online" : ""}`} />
+                                  <span className="admin-feature-user-name">{userKey.label}<small>{userKey.key_prefix} · {userKey.status}</small></span>
+                                  <span className="admin-feature-user-online">{userKey.online ? "Online" : "Offline"}</span>
+                                </label>
+                              );
+                            }) : <div className="admin-feature-user-empty">No users match this search.</div>}
+                          </div>
+                          {matchingUsers.length > visibleUsers.length && <small className="admin-feature-user-limit">Showing {visibleUsers.length} of {matchingUsers.length} matches. Search to narrow the list.</small>}
+                          {!userKeys.length && <small className="admin-feature-user-limit">No user keys have been created yet. New users are included automatically when All users is selected.</small>}
+                        </div>
+                      )}
+                      <div className="admin-feature-control-actions">
+                        <button type="button" className="secondary-button" onClick={() => saveFeatureControl(control.feature)} disabled={!changed || !savedControl || updateFeatureSettings.isPending}>
+                          <Save size={14} />{updateFeatureSettings.isPending ? "Saving…" : "Save"}
+                        </button>
+                        <button type="button" className="key-action" onClick={() => cancelFeatureControl(control.feature)} disabled={!changed || updateFeatureSettings.isPending}>
+                          <X size={14} />Cancel
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -480,12 +616,28 @@ export default function AdminUsersPage() {
                   <span><b>Pause Auto Trader 2.0</b><small>Blocks new bot entries; open contracts are not closed.</small></span>
                 </label>
                 <label className="admin-control-field"><span>Auto Trader 2.0 pause message</span><input type="text" maxLength={300} value={featureSettingsDraft.auto_trader_2_pause_message} onChange={(event) => setFeatureSettingsDraft({ ...featureSettingsDraft, auto_trader_2_pause_message: event.target.value })} /></label>
+                <div className="admin-feature-control-actions admin-settings-actions">
+                  <button type="button" className="secondary-button" onClick={saveAutoTrader2Controls} disabled={!featureSettingsQuery.data || updateFeatureSettings.isPending || (featureSettingsDraft.auto_trader_2_paused === featureSettingsQuery.data.auto_trader_2_paused && featureSettingsDraft.auto_trader_2_pause_message === featureSettingsQuery.data.auto_trader_2_pause_message)}>
+                    <Save size={14} />{updateFeatureSettings.isPending ? "Saving…" : "Save"}
+                  </button>
+                  <button type="button" className="key-action" onClick={cancelAutoTrader2Controls} disabled={!featureSettingsQuery.data || updateFeatureSettings.isPending || (featureSettingsDraft.auto_trader_2_paused === featureSettingsQuery.data.auto_trader_2_paused && featureSettingsDraft.auto_trader_2_pause_message === featureSettingsQuery.data.auto_trader_2_pause_message)}>
+                    <X size={14} />Cancel
+                  </button>
+                </div>
                 <label className="admin-protection-toggle admin-announcement-toggle">
                   <input type="checkbox" checked={featureSettingsDraft.global_announcement_enabled} onChange={(event) => setFeatureSettingsDraft({ ...featureSettingsDraft, global_announcement_enabled: event.target.checked })} />
                   <span className="admin-protection-switch"><i /></span>
                   <span><b>Show a global announcement</b><small>Displayed across the workspace.</small></span>
                 </label>
                 <label className="admin-control-field admin-announcement-message"><span>Global announcement</span><textarea rows={2} maxLength={500} value={featureSettingsDraft.global_announcement} onChange={(event) => setFeatureSettingsDraft({ ...featureSettingsDraft, global_announcement: event.target.value })} placeholder="Enter the message users should see" /></label>
+                <div className="admin-feature-control-actions admin-announcement-actions">
+                  <button type="button" className="secondary-button" onClick={saveAnnouncement} disabled={!featureSettingsQuery.data || updateFeatureSettings.isPending || (featureSettingsDraft.global_announcement_enabled === featureSettingsQuery.data.global_announcement_enabled && featureSettingsDraft.global_announcement === featureSettingsQuery.data.global_announcement)}>
+                    <Save size={14} />{updateFeatureSettings.isPending ? "Saving…" : "Save"}
+                  </button>
+                  <button type="button" className="key-action" onClick={cancelAnnouncement} disabled={!featureSettingsQuery.data || updateFeatureSettings.isPending || (featureSettingsDraft.global_announcement_enabled === featureSettingsQuery.data.global_announcement_enabled && featureSettingsDraft.global_announcement === featureSettingsQuery.data.global_announcement)}>
+                    <X size={14} />Cancel
+                  </button>
+                </div>
               </div>
             </>
           )}

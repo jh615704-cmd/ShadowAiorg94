@@ -5,9 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { DerivDualBuyInputAccessFeature } from './derivDualBuyInputAccessFeature';
 import type { DerivDualBuyInputDurationUnit } from './derivDualBuyInputDurationUnit';
 
 export interface DerivDualBuyInput {
+  access_feature: DerivDualBuyInputAccessFeature;
   /** @exclusiveMinimum 0 */
   amount: number;
   /** @minimum 1 */

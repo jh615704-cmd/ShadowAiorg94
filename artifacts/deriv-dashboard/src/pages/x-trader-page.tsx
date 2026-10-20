@@ -1780,6 +1780,7 @@ export default function XTraderPage() {
     armMartingaleWatch(latestRows, amount, 1);
     const result = await bulkBuyMutation.mutateAsync({
       data: {
+        access_feature: "edge",
         amount,
         duration: config.duration,
         duration_unit: "t",
@@ -1847,6 +1848,7 @@ export default function XTraderPage() {
     armMartingaleWatch(latestRows, amount, 2);
     const result = await dualBuyMutation.mutateAsync({
       data: {
+        access_feature: "edge",
         amount,
         duration: config.duration,
         duration_unit: "t",
@@ -2087,6 +2089,7 @@ export default function XTraderPage() {
 
       const result = await moneyBankBuyMutation.mutateAsync({
         data: {
+          access_feature: "money-bank",
           amount: Number(level.stake.toFixed(2)),
           duration: currentConfig.takeProfitTicks,
           duration_unit: "t",
@@ -2466,13 +2469,16 @@ export default function XTraderPage() {
     cashGrabActionLockRef.current = true;
     try {
       const result = await bulkBuyMutation.mutateAsync({
-        data: buildCashGrabBulkBuyPayload({
-          amount,
-          duration: config.duration,
-          direction: config.direction,
-          symbol: config.symbol,
-          count: 1,
-        }),
+        data: {
+          ...buildCashGrabBulkBuyPayload({
+            amount,
+            duration: config.duration,
+            direction: config.direction,
+            symbol: config.symbol,
+            count: 1,
+          }),
+          access_feature: "cash-grab",
+        },
       });
       contractConfirmed = true;
       setConnectionMessage(null);
@@ -2933,6 +2939,7 @@ export default function XTraderPage() {
     try {
       const result = await bulkBuyMutation.mutateAsync({
         data: {
+          access_feature: "trade-x",
           amount: config.stake,
           duration: durationOverride,
           duration_unit: "t",
@@ -3021,6 +3028,7 @@ export default function XTraderPage() {
       armMartingaleWatch(historySnapshot.rows, stake, 1);
       const result = await bulkBuyMutation.mutateAsync({
         data: {
+          access_feature: "edge",
           amount: stake,
           duration,
           duration_unit: "t",
@@ -3083,13 +3091,16 @@ export default function XTraderPage() {
     cashGrabActionLockRef.current = true;
     try {
       const result = await bulkBuyMutation.mutateAsync({
-        data: buildCashGrabBulkBuyPayload({
-          amount,
-          duration: cashGrabDuration,
-          direction: candidate.contractType,
-          symbol: candidate.symbol,
-          count: 1,
-        }),
+        data: {
+          ...buildCashGrabBulkBuyPayload({
+            amount,
+            duration: cashGrabDuration,
+            direction: candidate.contractType,
+            symbol: candidate.symbol,
+            count: 1,
+          }),
+          access_feature: "cash-grab",
+        },
       });
       if (!result.buys.length) throw new Error("Deriv did not return a confirmed Cash Grab contract.");
       setConnectionMessage(null);
@@ -3263,6 +3274,7 @@ export default function XTraderPage() {
     try {
       const result = await digitFlipBuyMutation.mutateAsync({
         data: {
+          access_feature: "digit-flip",
           amount,
           duration: config.duration,
           duration_unit: "t",
@@ -3894,6 +3906,7 @@ export default function XTraderPage() {
     }
     const send = (type: BulkTraderContractType) => bulkBuyMutation.mutateAsync({
       data: {
+        access_feature: "bulk-trader",
         amount: bulkTraderStake,
         duration: bulkTraderDuration,
         duration_unit: "t",
@@ -3992,6 +4005,7 @@ export default function XTraderPage() {
       armMartingaleWatch(latestRows, amount, 1);
       const result = await bulkBuyMutation.mutateAsync({
         data: {
+          access_feature: "edge",
           amount,
           duration,
           duration_unit: "t",
@@ -4056,6 +4070,7 @@ export default function XTraderPage() {
       armMartingaleWatch(latestRows, amount, 2);
       const result = await dualBuyMutation.mutateAsync({
         data: {
+          access_feature: "edge",
           amount,
           duration,
           duration_unit: "t",

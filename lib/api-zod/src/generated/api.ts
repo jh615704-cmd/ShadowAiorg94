@@ -168,6 +168,8 @@ export const GetAdminFeatureSettingsResponse = zod.object({
   "features": zod.array(zod.object({
   "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history']),
   "mode": zod.enum(['available', 'restricted', 'coming_soon', 'under_construction']),
+  "audience": zod.enum(['all', 'specific']),
+  "user_ids": zod.array(zod.string().uuid()),
   "countdown_at": zod.coerce.date().nullable(),
   "notice": zod.string().max(getAdminFeatureSettingsResponseFeaturesItemNoticeMax)
 })),
@@ -194,6 +196,8 @@ export const UpdateAdminFeatureSettingsBody = zod.object({
   "features": zod.array(zod.object({
   "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history']),
   "mode": zod.enum(['available', 'restricted', 'coming_soon', 'under_construction']),
+  "audience": zod.enum(['all', 'specific']),
+  "user_ids": zod.array(zod.string().uuid()),
   "countdown_at": zod.coerce.date().nullable(),
   "notice": zod.string().max(updateAdminFeatureSettingsBodyFeaturesItemNoticeMax)
 })),
@@ -215,6 +219,8 @@ export const UpdateAdminFeatureSettingsResponse = zod.object({
   "features": zod.array(zod.object({
   "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history']),
   "mode": zod.enum(['available', 'restricted', 'coming_soon', 'under_construction']),
+  "audience": zod.enum(['all', 'specific']),
+  "user_ids": zod.array(zod.string().uuid()),
   "countdown_at": zod.coerce.date().nullable(),
   "notice": zod.string().max(updateAdminFeatureSettingsResponseFeaturesItemNoticeMax)
 })),
@@ -1126,6 +1132,7 @@ export const buyDerivContractBodyGrowthRateMax = 0.05;
 
 
 export const BuyDerivContractBody = zod.object({
+  "access_feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2']),
   "amount": zod.number().gt(buyDerivContractBodyAmountExclusiveMin),
   "duration": zod.number().int().min(1).max(buyDerivContractBodyDurationMax),
   "duration_unit": zod.enum(['t']),
@@ -1175,6 +1182,7 @@ export const bulkBuyDerivContractsBodyCountMax = 6;
 
 
 export const BulkBuyDerivContractsBody = zod.object({
+  "access_feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2']),
   "amount": zod.number().gt(bulkBuyDerivContractsBodyAmountExclusiveMin),
   "duration": zod.number().int().min(1).max(bulkBuyDerivContractsBodyDurationMax).describe('Tick duration; CALL and PUT allow 1–10, other contract types are limited to 1–5.'),
   "duration_unit": zod.enum(['t']),
@@ -1395,6 +1403,7 @@ export const dualBuyDerivContractsBodyBarrierMax = 9;
 
 
 export const DualBuyDerivContractsBody = zod.object({
+  "access_feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2']),
   "amount": zod.number().gt(dualBuyDerivContractsBodyAmountExclusiveMin),
   "duration": zod.number().int().min(1),
   "duration_unit": zod.enum(['t']),

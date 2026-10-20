@@ -13,7 +13,6 @@ export type AutoTrader2RunConfig = {
   barrier: number;
   stake: number;
   duration: number;
-  takeProfit: number;
   lossLimit: number;
   stakeMode: "flat" | "multiply";
   multiplier: number;
@@ -85,7 +84,6 @@ function isRunConfig(value: unknown): value is AutoTrader2RunConfig {
     && isFiniteNumber(config.barrier)
     && isFiniteNumber(config.stake)
     && isFiniteNumber(config.duration)
-    && isFiniteNumber(config.takeProfit)
     && isFiniteNumber(config.lossLimit)
     && (config.stakeMode === "flat" || config.stakeMode === "multiply")
     && isFiniteNumber(config.multiplier)
@@ -273,10 +271,7 @@ export function reconcileAutoTrader2SavedSession(input: {
       pendingStake: null,
     };
 
-    if (
-      (updatedSession.config.takeProfit > 0 && sessionPnl >= updatedSession.config.takeProfit)
-      || (updatedSession.config.lossLimit > 0 && sessionPnl <= -updatedSession.config.lossLimit)
-    ) {
+    if (updatedSession.config.lossLimit > 0 && sessionPnl <= -updatedSession.config.lossLimit) {
       return { kind: "completed", session: { ...updatedSession, phase: "completed" } };
     }
     return { kind: "ready", session: updatedSession };

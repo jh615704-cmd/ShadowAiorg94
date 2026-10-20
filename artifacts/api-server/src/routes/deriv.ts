@@ -57,7 +57,7 @@ import { assertAccessSessionActive, AccessSessionRevokedError } from "../lib/acc
 import { adminFeatureSettingsTable, db, derivCredentialsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { decryptPat } from "../lib/pat-crypto";
-import { requireAccessFeature } from "../middlewares/requireAccess.ts";
+import { requireAccessFeature, requireTradeAccessFeature } from "../middlewares/requireAccess.ts";
 
 const router: IRouter = Router();
 class MissingDerivCredentialError extends Error {}
@@ -406,7 +406,7 @@ router.post("/deriv/select-symbol", async (req, res) => {
   }
 });
 
-router.post("/deriv/buy", async (req, res) => {
+router.post("/deriv/buy", requireTradeAccessFeature, async (req, res) => {
   const parsed = BuyDerivContractBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid trade request" });
 
@@ -484,7 +484,7 @@ router.post("/deriv/sell", async (req, res) => {
   }
 });
 
-router.post("/deriv/bulk-buy", async (req, res) => {
+router.post("/deriv/bulk-buy", requireTradeAccessFeature, async (req, res) => {
   const parsed = BulkBuyDerivContractsBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid bulk buy request" });
 
@@ -525,7 +525,7 @@ router.post("/deriv/bulk-buy", async (req, res) => {
   }
 });
 
-router.post("/deriv/dual-buy", async (req, res) => {
+router.post("/deriv/dual-buy", requireTradeAccessFeature, async (req, res) => {
   const parsed = DualBuyDerivContractsBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid dual buy request" });
 

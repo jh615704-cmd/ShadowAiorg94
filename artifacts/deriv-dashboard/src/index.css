@@ -2765,14 +2765,15 @@ body { overflow-x: hidden; }
 .admin-feature-control-grid { display: grid; gap: 10px; }
 .admin-feature-control-row {
   display: grid;
-  grid-template-columns: minmax(150px, .8fr) minmax(170px, 1fr) minmax(210px, 1fr) minmax(220px, 1.3fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
-  align-items: end;
+  align-items: start;
   padding: 12px;
   border: 1px solid var(--line, rgba(132, 170, 204, .2));
   border-radius: 10px;
   background: rgba(13, 35, 57, .45);
 }
+.admin-feature-control-fields { display: grid; grid-template-columns: minmax(150px, .9fr) repeat(3, minmax(160px, 1fr)); gap: 10px; align-items: end; }
 .admin-feature-control-title { display: grid; gap: 5px; align-self: center; }
 .admin-feature-control-title strong { color: #e8f2ff; font-size: 13px; }
 .admin-feature-control-title small { color: #8da3bd; font-size: 11px; line-height: 1.4; }
@@ -2795,19 +2796,49 @@ body { overflow-x: hidden; }
 }
 .admin-control-field textarea { resize: vertical; line-height: 1.45; }
 .admin-feature-notice { grid-column: span 1; }
+.admin-feature-user-picker { display: grid; gap: 8px; padding: 10px; border: 1px solid rgba(120, 157, 190, .22); border-radius: 8px; background: rgba(4, 18, 33, .54); }
+.admin-feature-user-picker-heading { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(220px, .8fr); align-items: end; gap: 10px; }
+.admin-feature-user-picker-heading > div { display: grid; gap: 4px; }
+.admin-feature-user-picker-heading strong { color: #dbeaff; font-size: 12px; }
+.admin-feature-user-picker-heading small,
+.admin-feature-user-limit { color: #91a7c0; font-size: 10px; }
+.admin-feature-user-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 5px; max-height: 230px; overflow: auto; padding: 2px; }
+.admin-feature-user-option { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 7px 8px; border: 1px solid rgba(120, 157, 190, .18); border-radius: 7px; background: rgba(8, 26, 45, .7); cursor: pointer; }
+.admin-feature-user-option.selected { border-color: rgba(69, 207, 155, .48); background: rgba(11, 66, 54, .38); }
+.admin-feature-user-option input { accent-color: #26c68a; }
+.admin-feature-user-presence { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #657a91; }
+.admin-feature-user-presence.online { background: #3ad99b; box-shadow: 0 0 8px rgba(58, 217, 155, .48); }
+.admin-feature-user-name { display: grid; min-width: 0; flex: 1; gap: 3px; overflow: hidden; color: #e1edfb; font-size: 11px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+.admin-feature-user-name small { overflow: hidden; color: #91a7c0; font-size: 9px; font-weight: 600; text-overflow: ellipsis; text-transform: none; white-space: nowrap; }
+.admin-feature-user-online { color: #8fa6be; font-size: 9px; }
+.admin-feature-user-empty { grid-column: 1 / -1; padding: 12px; color: #91a7c0; font-size: 11px; text-align: center; }
+.admin-feature-control-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.admin-settings-actions { grid-column: 1; }
+.admin-announcement-actions { grid-column: 2; grid-row: 3; }
 .admin-bot-controls { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(260px, 1fr); gap: 12px; margin-top: 16px; }
 .admin-announcement-toggle { grid-column: 1; }
 .admin-announcement-message { grid-column: 2; grid-row: 1 / span 2; }
-.admin-feature-control-card .panel-header > button { display: inline-flex; align-items: center; gap: 7px; }
+.admin-feature-control-actions .secondary-button,
+.admin-feature-control-actions .key-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 35px; }
+.admin-feature-control-actions .key-action:disabled { cursor: not-allowed; opacity: .45; }
+.at-history-row { transition: transform .26s ease, opacity .26s ease; }
+.at-history-row.fading { opacity: 0; transform: translateX(10px); pointer-events: none; }
 
 @media (max-width: 1050px) {
-  .admin-feature-control-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-feature-control-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-feature-control-title { grid-column: span 2; }
 }
 @media (max-width: 650px) {
-  .admin-feature-control-row,
+  .admin-feature-control-fields,
+  .admin-feature-user-picker-heading,
   .admin-bot-controls { grid-template-columns: minmax(0, 1fr); }
   .admin-feature-control-title,
   .admin-announcement-toggle,
-  .admin-announcement-message { grid-column: 1; grid-row: auto; }
+  .admin-announcement-message,
+  .admin-announcement-actions,
+  .admin-settings-actions { grid-column: 1; grid-row: auto; }
+  .admin-feature-control-title { grid-column: 1; }
+  .admin-feature-control-actions { justify-content: stretch; }
+  .admin-feature-control-actions > button { flex: 1; }
+  .admin-feature-user-list { grid-template-columns: minmax(0, 1fr); }
 }

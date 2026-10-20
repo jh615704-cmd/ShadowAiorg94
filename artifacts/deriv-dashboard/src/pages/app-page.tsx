@@ -145,6 +145,7 @@ export default function AppPage() {
     buyContract.mutate(
       {
         data: {
+          access_feature: "digit-flip",
           amount: Number(amount),
           duration: Number(duration),
           duration_unit: 't',

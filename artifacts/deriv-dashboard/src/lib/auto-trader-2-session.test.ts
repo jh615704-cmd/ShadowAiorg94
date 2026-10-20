@@ -17,7 +17,6 @@ const session = (overrides: Partial<AutoTrader2SavedSession> = {}): AutoTrader2S
     barrier: 2,
     stake: 1,
     duration: 1,
-    takeProfit: 10,
     lossLimit: 10,
     stakeMode: "flat",
     multiplier: 2,
@@ -157,6 +156,42 @@ test("a settled Rise loss persists Fall as the required next side", () => {
   assert.equal(assessment.kind, "ready");
   if (assessment.kind !== "ready") return;
   assert.equal(assessment.session.forcedNextType, "PUT");
+});
+
+test("profitable sessions remain ready instead of stopping automatically", () => {
+  const saved = session({
+    phase: "awaiting-settlement",
+    contractIds: ["profit"],
+    sessionPnl: 0,
+    pendingContractId: "profit",
+    pendingContractType: "CALL",
+    pendingStake: 1,
+  });
+  const assessment = reconcileAutoTrader2SavedSession({
+    session: saved,
+    history: [{ account_id: "VRTC123", contract_id: "profit", profit: 2, status: "won" }],
+    openContracts: clearOpenContracts,
+  });
+  assert.equal(assessment.kind, "ready");
+  if (assessment.kind === "ready") assert.equal(assessment.session.phase, "ready");
+});
+
+test("reaching the configured loss limit completes a saved session", () => {
+  const saved = session({
+    phase: "awaiting-settlement",
+    contractIds: ["loss"],
+    sessionPnl: 0,
+    config: { ...session().config, lossLimit: 1 },
+    pendingContractId: "loss",
+    pendingContractType: "CALL",
+    pendingStake: 1,
+  });
+  const assessment = reconcileAutoTrader2SavedSession({
+    session: saved,
+    history: [{ account_id: "VRTC123", contract_id: "loss", profit: -1, status: "lost" }],
+    openContracts: clearOpenContracts,
+  });
+  assert.equal(assessment.kind, "completed");
 });
 
 test("a third settled loss pauses that contract type before a saved session resumes", () => {

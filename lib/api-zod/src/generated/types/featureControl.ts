@@ -5,12 +5,15 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { FeatureControlAudience } from './featureControlAudience';
 import type { FeatureControlFeature } from './featureControlFeature';
 import type { FeatureControlMode } from './featureControlMode';
 
 export interface FeatureControl {
   feature: FeatureControlFeature;
   mode: FeatureControlMode;
+  audience: FeatureControlAudience;
+  user_ids: string[];
   /** @nullable */
   countdown_at: Date | null;
   /** @maxLength 500 */

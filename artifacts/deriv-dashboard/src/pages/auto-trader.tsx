@@ -7,12 +7,14 @@ import {
 } from "lucide-react";
 import {
   getGetAccessSessionQueryKey,
+  getGetAdminFeatureSettingsQueryKey,
   getGetDerivAccountsQueryKey,
   getGetDerivHistoryQueryKey,
   getGetDerivStatusQueryKey,
   getGetDerivTokenStatusQueryKey,
   useBulkBuyDerivContracts,
   useGetAccessSession,
+  useGetAdminFeatureSettings,
   useGetDerivAccounts,
   useGetDerivHistory,
   useGetDerivStatus,
@@ -97,7 +99,12 @@ function todayStart() {
 function AutoTraderContent() {
   const queryClient = useQueryClient();
   const access = useGetAccessSession({ query: { queryKey: getGetAccessSessionQueryKey(), retry: false } });
-  const hasAutoTraderAccess = access.data?.is_admin === true || access.data?.features.includes("auto-trader") === true;
+  const featureSettings = useGetAdminFeatureSettings({
+    query: { queryKey: getGetAdminFeatureSettingsQueryKey(), retry: false, refetchInterval: 10_000 },
+  });
+  const isAdmin = access.data?.is_admin === true;
+  const featureAvailable = featureSettings.data?.features.find((item) => item.feature === "auto-trader")?.mode === "available";
+  const hasAutoTraderAccess = isAdmin || (access.data?.features.includes("auto-trader") === true && featureAvailable);
   const token = useGetDerivTokenStatus({ query: { queryKey: getGetDerivTokenStatusQueryKey(), retry: false, enabled: hasAutoTraderAccess } });
   const hasToken = token.data?.has_token === true;
   const [scanning, setScanning] = useState(false);
@@ -130,6 +137,7 @@ function AutoTraderContent() {
   const [message, setMessage] = useState<{ tone: "success" | "error" | "info"; text: string } | null>(null);
   const [messageFading, setMessageFading] = useState(false);
   const [historyClearArmed, setHistoryClearArmed] = useState(false);
+  const [historyFading, setHistoryFading] = useState(false);
   const clearHistoryTimer = useRef<number | null>(null);
   const [frequencies, setFrequencies] = useState<Frequencies>({});
   const [marketTicks, setMarketTicks] = useState<TickMap>({});
@@ -140,6 +148,10 @@ function AutoTraderContent() {
   const currentSignals = status.data?.market_signals ?? [];
 
   const [localContracts, setLocalContracts] = useState<LocalContract[]>([]);
+
+  useEffect(() => {
+    if (!hasAutoTraderAccess) setScanning(false);
+  }, [hasAutoTraderAccess]);
 
   useEffect(() => {
     if (!message) {
@@ -235,6 +247,7 @@ function AutoTraderContent() {
   }, [scanning, currentSignals]);
 
   const startScan = async () => {
+    if (!hasAutoTraderAccess) return;
     if (!connected) {
       setMessage({ tone: "error", text: "Connect and select an authorized Deriv account before starting the scanner." });
       return;
@@ -272,7 +285,7 @@ function AutoTraderContent() {
     }
   };
 
-  const clearTodayTrades = () => {
+  const clearTodayTrades = async () => {
     if (!accountId) return;
     if (!historyClearArmed) {
       setHistoryClearArmed(true);
@@ -290,7 +303,10 @@ function AutoTraderContent() {
       window.clearTimeout(clearHistoryTimer.current);
       clearHistoryTimer.current = null;
     }
+    setHistoryFading(true);
+    await new Promise((resolve) => window.setTimeout(resolve, 260));
     setLocalContracts([]);
+    setHistoryFading(false);
     try {
       localStorage.removeItem(`${storagePrefix}${accountId}`);
       setMessage({ tone: "success", text: "Auto Trader trades were cleared from this account-scoped view. Deriv's account history is unchanged." });
@@ -335,6 +351,10 @@ function AutoTraderContent() {
   const connected = Boolean(status.data?.connected && status.data?.authorized && hasToken);
 
   const placeTrade = async (market: Market, digit: number, count: 1 | 3 | 6) => {
+    if (!hasAutoTraderAccess) {
+      setMessage({ tone: "error", text: "Auto Trader access is restricted. No order was sent." });
+      return;
+    }
     const amount = Number(stake);
     const duration = Number(durationTicks);
     if (!accountId || !connected) {
@@ -367,6 +387,7 @@ function AutoTraderContent() {
     try {
       result = await bulkBuy.mutateAsync({
         data: {
+          access_feature: "auto-trader",
           amount,
           duration,
           duration_unit: "t",
@@ -585,7 +606,7 @@ function AutoTraderContent() {
                     .replace("Volatility ", "V")
                     .replace(" · 1s", " 1s");
                   return (
-                    <div className="at-history-row" key={trade.contract_id} data-testid={`row-trade-${trade.contract_id}`}>
+                    <div className={`at-history-row${historyFading ? " fading" : ""}`} key={trade.contract_id} data-testid={`row-trade-${trade.contract_id}`}>
                       <span className={`at-result-pill ${open ? "open" : trade.profit > 0 ? "won" : trade.profit < 0 ? "lost" : ""}`}>{resultLabel}</span>
                       <span className="at-history-market">
                         <span className="at-history-meta">

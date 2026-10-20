@@ -45,6 +45,9 @@ const db = {
     return {
       from() {
         return {
+          async limit() {
+            return [];
+          },
           where(condition: QueryCondition) {
             return {
               async limit() {
@@ -95,8 +98,9 @@ mock.module("drizzle-orm", {
 mock.module("../lib/access-keys", {
   namedExports: {
     AccessSessionRevokedError: MockAccessSessionRevokedError,
+    TRADING_ACCESS_FEATURES: ["edge", "digit-flip", "trade-x", "bulk-trader", "matches-analysis", "clock-work", "cash-grab", "money-bank", "jdy-ai-3", "auto-trader", "auto-trader-2"],
     findSessionByToken: async () => null,
-    featureList: (features: string[] | null | undefined) => features ?? [],
+    featureList: (features: string[] | null | undefined) => features ?? ["edge"],
     hashSecret: (value: string) => value,
     isPrimaryAdminKeyHash: () => false,
     parseAccessCookie: () => null,
@@ -249,7 +253,7 @@ app.use(express.json());
 app.use((req, res, next) => {
   Object.assign(req, { log: { error() {}, warn() {} } });
   res.locals.userId = sessionId;
-  res.locals.accessKey = { features: ["clock-work"] };
+  res.locals.accessKey = { features: ["clock-work", "edge"] };
   next();
 });
 app.use(derivRouter);
@@ -301,6 +305,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        access_feature: "edge",
         amount: 1,
         duration: 1,
         duration_unit: "t",
@@ -315,6 +320,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        access_feature: "edge",
         amount: 1,
         duration: 5,
         duration_unit: "t",
@@ -330,6 +336,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        access_feature: "edge",
         amount: 1,
         duration: 1,
         duration_unit: "t",
@@ -344,6 +351,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        access_feature: "edge",
         amount: 1,
         duration: 10,
         duration_unit: "t",
@@ -358,6 +366,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        access_feature: "edge",
         amount: 1,
         duration: 10,
         duration_unit: "t",
@@ -379,6 +388,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        access_feature: "edge",
         amount: 1,
         duration: 1,
         duration_unit: "t",
@@ -410,6 +420,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        access_feature: "edge",
         amount: 1,
         duration: 1,
         duration_unit: "t",
