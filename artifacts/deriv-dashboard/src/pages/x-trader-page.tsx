@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetAccessSessionQueryKey,
   getGetAdminFeatureSettingsQueryKey,
+  getUserFacingErrorMessage,
   ApiTransportError,
   type ClockWorkContractOrder,
   useBuyMatchesContracts,
@@ -375,21 +376,7 @@ const isTradingCalendarOpen = (date = new Date()) => (
   || (TRADING_CALENDAR_MODE === "weekends" && (date.getDay() === 0 || date.getDay() === 6))
 );
 const errorMessage = (error: unknown) => {
-  if (!error || typeof error !== "object") return "Request failed";
-  const candidate = error as { data?: unknown; message?: string; status?: number };
-  const data = candidate.data && typeof candidate.data === "object"
-    ? candidate.data as Record<string, unknown>
-    : null;
-  const message = typeof candidate.message === "string" ? candidate.message : "";
-  if (
-    (typeof candidate.status === "number" && (candidate.status >= 500 || candidate.status === 429))
-    || /HTTP 5\d\d|Bad Gateway|rate limit for buy|Bulk buy was not completed/i.test(message)
-  ) {
-    return message && !/HTTP 5\d\d|Bad Gateway|rate limit for buy|Bulk buy was not completed/i.test(message)
-      ? message
-      : "The trade service could not confirm the request. Check Deriv open contracts and account history before taking another action.";
-  }
-  return (typeof data?.error === "string" ? data.error : undefined) || message || "Request failed";
+  return getUserFacingErrorMessage(error, "Request failed");
 };
 
 type MartingaleSettlementWatch = {

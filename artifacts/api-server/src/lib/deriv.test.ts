@@ -997,7 +997,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
   });
 
   test("returns a definite rate-limit error after bounded safe retries", async () => {
-    rateLimitFailuresRemaining = 3;
+    rateLimitFailuresRemaining = 4;
     await assert.rejects(
       withSelectedAccount("exhausted-rate-limit-user", () => deriv.buyContract({
         amount: 1,
@@ -1011,7 +1011,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
         return true;
       },
     );
-    assert.equal(latestSocket().sent.filter((message) => message.buy).length, 3);
+    assert.equal(latestSocket().sent.filter((message) => message.buy).length, 4);
     await inUser("exhausted-rate-limit-user", async () => {
       assert.equal(deriv.getHistory().length, 0);
       assert.equal(deriv.getStatus().active_contract_count, 0);
