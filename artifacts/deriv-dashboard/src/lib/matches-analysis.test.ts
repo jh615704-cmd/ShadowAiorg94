@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  MATCHES_AUTO_MINIMUM_OBSERVED_RATE,
   chooseObservedMatchDigits,
   MATCHES_MINIMUM_SAMPLE_SIZE,
   MATCHES_MINIMUM_STAKE,
@@ -34,7 +35,18 @@ test("Matches AI selection supports one, two, or all three ranked digits", () =>
   assert.deepEqual(chooseObservedMatchDigits(ranked, 3), [1, 5, 2]);
 });
 
-test("Matches exposes the requested minimum stake and sample floor", () => {
+test("Matches AI only selects digits above the 10% observed-frequency baseline", () => {
+  const ranked = [
+    { digit: 4, count: 10, rate: 10 },
+    { digit: 7, count: 13, rate: 13 },
+    { digit: 2, count: 11, rate: 11 },
+  ];
+
+  assert.deepEqual(chooseObservedMatchDigits(ranked, 3), [7, 2]);
+  assert.equal(MATCHES_AUTO_MINIMUM_OBSERVED_RATE, 10);
+});
+
+test("Matches exposes the requested minimum stake and stronger automatic sample floor", () => {
   assert.equal(MATCHES_MINIMUM_STAKE, 0.35);
-  assert.equal(MATCHES_MINIMUM_SAMPLE_SIZE, 20);
+  assert.equal(MATCHES_MINIMUM_SAMPLE_SIZE, 100);
 });

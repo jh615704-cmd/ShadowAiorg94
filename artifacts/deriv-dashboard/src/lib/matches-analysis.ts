@@ -1,6 +1,7 @@
 export const MATCHES_MINIMUM_STAKE = 0.35;
-export const MATCHES_MINIMUM_SAMPLE_SIZE = 20;
+export const MATCHES_MINIMUM_SAMPLE_SIZE = 100;
 export const MATCHES_HISTORY_LIMIT = 120;
+export const MATCHES_AUTO_MINIMUM_OBSERVED_RATE = 10;
 
 export type MatchesDigitStat = {
   digit: number;
@@ -35,6 +36,7 @@ export function chooseObservedMatchDigits(
 ): number[] {
   return ranked
     .filter((item) => Number.isInteger(item.digit) && item.digit >= 0 && item.digit <= 9)
+    .filter((item) => Number.isFinite(item.rate) && item.rate > MATCHES_AUTO_MINIMUM_OBSERVED_RATE)
     .slice(0, count)
     .map((item) => item.digit);
 }

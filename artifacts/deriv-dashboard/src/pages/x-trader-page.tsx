@@ -2899,6 +2899,10 @@ export default function XTraderPage() {
       setTradeXMessage("Trade X is already sending. Wait for the current request to finish.");
       return false;
     }
+    if (bulkBuyMutation.isPending) {
+      setTradeXMessage("Another trade request is still being sent. Wait for its confirmation before placing a Trade X contract.");
+      return false;
+    }
     if (tradeSlotBlocked) {
       setTradeXMessage(tradeSlotMessage ?? "Deriv has not confirmed that the previous contract settled. No new trade was sent.");
       return false;
@@ -2965,7 +2969,7 @@ export default function XTraderPage() {
       refreshTradeResults();
       return true;
     } catch (error) {
-      setTradeXMessage(errorMessage(error));
+      setTradeXMessage(`${errorMessage(error)} Check Deriv account history before retrying in case the contract was accepted.`);
       return false;
     } finally {
       tradeXActionLockRef.current = false;
@@ -3798,7 +3802,11 @@ export default function XTraderPage() {
     if (matchesBuyMutation.isPending || matchesActionLockRef.current) return;
     if (matchesAutomationAttemptTickRef.current >= matchesTickCount) return;
     const digits = chooseObservedMatchDigits(matchesTopDigits, matchesAiDigits);
-    if (digits.length !== matchesAiDigits) return;
+    if (digits.length !== matchesAiDigits) {
+      matchesAutomationAttemptTickRef.current = matchesTickCount;
+      setMatchesStatusMessage("Waiting for enough top-ranked digits to exceed the 10% observed-frequency baseline.");
+      return;
+    }
 
     matchesAutomationAttemptTickRef.current = matchesTickCount;
     void executeMatchesOrders(digits, true);

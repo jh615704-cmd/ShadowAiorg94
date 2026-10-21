@@ -1,4 +1,4 @@
-import { Activity, BookOpen, Play, Radar, RefreshCw, Square, Zap } from "lucide-react";
+import { Activity, BookOpen, Medal, Play, Radar, RefreshCw, Square, Zap } from "lucide-react";
 import type { KeyboardEvent } from "react";
 import "./matches-analysis-panel.css";
 
@@ -231,26 +231,30 @@ export default function MatchesAnalysisPanel({
             <p className="ma-radar-note">Historical frequency is descriptive only; it does not predict the next tick.</p>
           </section>
 
-          <section className="ma-observed-card ma-surface" aria-labelledby="ma-observed-title">
+           <section className="ma-observed-card ma-surface" aria-labelledby="ma-observed-title">
             <div className="ma-section-heading">
-              <div><span className="ma-index">03</span><div><h3 id="ma-observed-title">Top observed frequencies</h3><p>Ranked from the supplied sample</p></div></div>
+               <div><span className="ma-index">03</span><div><h3 id="ma-observed-title">Top 3 observed digits</h3><p>Ranked from the current sample</p></div></div>
               <span className="ma-observed-tag">OBSERVED</span>
             </div>
              <div className="ma-ranking-list">
                {rankedDigits.length ? rankedDigits.map((item, index) => (
-                 <div className="ma-ranked-item" key={item.digit} data-testid={`button-matches-top-digit-${item.digit}`}>
-                   <button type="button"
-                     className={`ma-rank-row ${selectedDigit === item.digit ? "is-selected" : ""}`}
+                  <div className="ma-ranked-item" key={item.digit} data-testid={`matches-top-digit-${item.digit}`}>
+                    <div className={`ma-rank-card ${selectedDigit === item.digit ? "is-selected" : ""}`}>
+                      <button type="button"
+                      className="ma-rank-select"
                      onClick={() => onSelectedDigitChange(item.digit)} disabled={disabled}
                      aria-pressed={selectedDigit === item.digit}
                      aria-label={`Select observed digit ${item.digit}`}>
-                     <span className={`ma-rank-order rank-${index + 1}`}>0{index + 1}</span>
-                     <b className="ma-rank-digit">{item.digit}</b>
-                     <span className="ma-rank-meter" aria-hidden="true"><i style={{ width: `${Math.max(0, Math.min(100, item.rate))}%` }} /></span>
-                     <span className="ma-rank-stats"><b data-testid={`value-matches-frequency-${item.digit}`}>{item.rate.toFixed(1)}%</b><small>{item.count} observed</small></span>
-                   </button>
-                   <button type="button" className="ma-tap-trade" onClick={() => onTradeDigit(item.digit)}
-                     disabled={actionDisabled} data-testid={`button-matches-tap-${item.digit}`}>TAP TO TRADE</button>
+                        <span className={`ma-rank-medal medal-${index + 1}`} aria-hidden="true"><Medal size={17} /></span>
+                        <span className="ma-rank-digit">{item.digit}</span>
+                      </button>
+                      <span className="ma-rank-stats">
+                        <b data-testid={`value-matches-frequency-${item.digit}`}>{item.rate.toFixed(1)}%</b>
+                        <small>{item.count} observed</small>
+                      </span>
+                      <button type="button" className="ma-tap-trade" onClick={() => onTradeDigit(item.digit)}
+                        disabled={actionDisabled} data-testid={`button-matches-tap-${item.digit}`}>TAP TO TRADE</button>
+                    </div>
                  </div>
                )) : <div className="ma-ranking-empty" data-testid="empty-matches-top-digits">No observed frequency ranking yet.</div>}
             </div>
@@ -281,17 +285,22 @@ export default function MatchesAnalysisPanel({
             <div className={`ma-ai-controls ${aiEnabled ? "is-enabled" : ""}`}>
               <div className="ma-ai-head">
                 <div><span className="ma-ai-mark"><Zap size={13} /></span><span><b>AI Matches</b><small>Automated digit batches</small></span></div>
-                <button type="button" className={`ma-ai-toggle ${aiEnabled ? "is-on" : ""}`}
-                  role="switch" aria-checked={aiEnabled} aria-label="AI Matches"
-                  onClick={() => onAiEnabledChange(!aiEnabled)} disabled={disabled}
-                  data-testid="button-matches-ai-toggle"><i />{aiEnabled ? "ON" : "OFF"}</button>
+                <label className="ma-switch-control" aria-label="Flip Switch">
+                  <span className="ma-switch-state">{aiEnabled ? "ON" : "OFF"}</span>
+                  <span className="ma-switch">
+                    <input type="checkbox" role="switch" checked={aiEnabled}
+                      onChange={(event) => onAiEnabledChange(event.target.checked)}
+                      disabled={disabled} aria-label="Flip Switch" data-testid="button-matches-ai-toggle" />
+                    <i />
+                  </span>
+                </label>
               </div>
               <div className="ma-batch-row">
-                <span className="ma-field-label">DIGITS / BATCH</span>
+                <span className="ma-field-label">TOP DIGITS / TRADE</span>
                 <div className="ma-batch-options" role="group" aria-label="AI Matches batch size">
                   {aiBatchSizes.map((value) => <button key={value} type="button"
                     className={aiDigits === value ? "selected" : ""} aria-pressed={aiDigits === value}
-                    onClick={() => onAiDigitsChange(value)} disabled={disabled || !aiEnabled}
+                    onClick={() => onAiDigitsChange(value)} disabled={disabled || isRunning}
                     data-testid={`button-matches-ai-digits-${value}`}>{value}</button>)}
                 </div>
               </div>

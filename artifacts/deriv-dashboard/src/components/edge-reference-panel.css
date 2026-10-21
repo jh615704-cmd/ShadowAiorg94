@@ -323,7 +323,7 @@
   background: linear-gradient(130deg, #182238, #1c2a39);
 }
 .edge-ref-duration-field > span { color: #ddc55b; font-size: 10px; }
-.edge-ref-duration-options { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.edge-ref-duration-options { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; }
 .edge-ref-duration-note { color: #9aa9bb; font-size: 9px; line-height: 1.4; }
 .edge-ref-duration-options button {
   min-height: 38px;
@@ -438,7 +438,7 @@
   .edge-ref-run-row { grid-template-columns: minmax(0, 1fr) 52px; gap: 8px; }
   .edge-ref-run,
   .edge-ref-session-reset { min-height: 52px; }
-  .edge-ref-duration-options { gap: 4px; }
+  .edge-ref-duration-options { gap: 0; }
   .edge-ref-duration-options button { min-height: 44px; }
 }
 
