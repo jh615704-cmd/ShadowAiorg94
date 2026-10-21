@@ -48,7 +48,9 @@ test("Trade X requires one valid Digit Differs entry and rejects unsupported dur
     digit: 4,
     count: 1,
   };
-  assert.equal(validateTradeXEntry({ ...base, duration: 5 }), null);
+  for (const duration of [1, 2, 3, 4, 5]) {
+    assert.equal(validateTradeXEntry({ ...base, duration }), null);
+  }
   assert.match(String(validateTradeXEntry({ ...base, duration: 6 })), /1 to 5/);
   assert.match(String(validateTradeXEntry({ ...base, duration: 1, count: 2 })), /one Digit Differs/);
   assert.match(String(validateTradeXEntry({ ...base, stake: 0.355, balance: 0.35, duration: 1 })), /total stake exceeds/);
@@ -82,6 +84,9 @@ test("EDGE validates its selected side, dual barriers, duration, and full exposu
     count: 2,
   };
   assert.equal(validateEdgeEntry({ ...base, contractType: "DUAL" }), null);
+  for (const duration of [1, 2, 3, 4, 5]) {
+    assert.equal(validateEdgeEntry({ ...base, duration, count: 1, contractType: "DIGITOVER" }), null);
+  }
   assert.match(String(validateEdgeEntry({ ...base, barrier: 9, contractType: "DUAL" })), /no possible winning digit/);
   assert.match(String(validateEdgeEntry({ ...base, duration: 6, count: 1, contractType: "DIGITOVER" })), /1 to 5/);
   assert.match(String(validateEdgeEntry({ ...base, balance: 1.99, contractType: "DUAL" })), /total stake exceeds/);

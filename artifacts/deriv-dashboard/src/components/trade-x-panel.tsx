@@ -362,7 +362,7 @@ export default function TradeXPanel({
               <span className="tx-index">04</span>
               <div>
                 <h3>Execution rail</h3>
-                <p>Deriv settles this contract on the next selected number of live market ticks.</p>
+                <p>Tick 0 is entry. One tick settles on the next price update; 2–5 ticks settle on their matching numbered update.</p>
               </div>
             </div>
             <TimerReset size={18} />

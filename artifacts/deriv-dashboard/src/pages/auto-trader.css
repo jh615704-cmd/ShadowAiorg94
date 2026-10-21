@@ -402,6 +402,7 @@
 .at-settings-toggle.open > svg:last-child { transform: rotate(90deg); }
 .at-settings-fields { display: grid; gap: 10px; padding-top: 13px; }
 .at-settings-fields label { display: grid; gap: 6px; color: #9fb4cb; font-size: 9px; font-weight: 700; }
+.at-duration-note { color: #849bb6; font-size: 8px; font-weight: 500; line-height: 1.4; }
 .at-inline-input { display: flex; justify-content: space-between; align-items: center; height: 32px; padding: 0 8px; border: 1px solid #2a4968; border-radius: 5px; background: #091d32; }
 .at-inline-input input { width: 75%; border: 0; outline: 0; background: transparent; color: #e3eefb; font: 10px "DM Mono", monospace; }
 .at-inline-input span { color: #8097b3; font: 8px "DM Mono", monospace; }

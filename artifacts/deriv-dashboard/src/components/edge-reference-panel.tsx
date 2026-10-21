@@ -265,6 +265,7 @@ export default function EdgeReferencePanel({
             </button>
           ))}
         </div>
+        <small className="edge-ref-duration-note">Tick 0 is entry; settlement is evaluated on the selected numbered update.</small>
       </div>
       <label className="edge-ref-input-card"><span>Initial stake</span><div><input type="number" min=".35" step=".01" value={stake} onChange={(event) => onStakeChange(Math.max(.35, Number(event.target.value) || .35))} disabled={running} /><b>{currency}</b></div></label>
       <section className="edge-ref-ai-scanner">

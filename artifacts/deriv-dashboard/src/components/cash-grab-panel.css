@@ -247,6 +247,8 @@
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 5px;
 }
+.cash-grab-df-panel .cash-grab-duration-field { grid-column: 1 / -1; }
+.cash-grab-df-panel .df-setup-grid { grid-template-columns: minmax(0, 1fr); }
 .cash-grab-tick-options button {
   min-height: 35px;
   border: 1px solid rgba(99, 157, 212, .3);
@@ -264,6 +266,7 @@
   background: linear-gradient(135deg, #1277b9, #14497d);
   box-shadow: 0 0 0 1px rgba(89, 188, 255, .2);
 }
+.cash-grab-duration-note { color: #92a9c3; font-size: 8px; line-height: 1.4; }
 .cash-grab-ai-scanner {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -355,3 +358,6 @@
   .cash-grab-df-panel .df-toggle-card { padding: 9px 11px; }
   .cash-grab-df-panel .df-toggle-copy > p { line-height: 1.35; }
 }
+
+.cash-grab-df-panel .df-setup-grid { grid-template-columns: minmax(0, 1fr); }
+.cash-grab-df-panel .df-setup-grid > label { grid-column: 1 / -1; }

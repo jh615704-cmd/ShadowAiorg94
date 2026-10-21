@@ -69,7 +69,7 @@ const guideCopy = [
   ["Find a market", "Filter the 15 instruments by Volatility, Jump, or Volatility 1s. Each market has its own tick counter.", "Counts begin with new live ticks; the scanner does not fill in sample data."],
   ["Read digit counts", "The number under each digit is how many times that final digit appeared during this scan.", "Zero means it has not appeared in the observed scan. It does not predict the next digit or guarantee a win."],
   ["Place a Digit Differs order", "Choose a digit and press 3× or 6× to send that many separate contracts using the stake and duration in Settings.", "Buttons are available after the first live tick for that market; no larger sample threshold is required. Each contract can settle differently."],
-  ["Set stake and duration", "Stake is per contract. Duration is 1–5 ticks; a 2-tick duration is valid. A 6× order requests six times the per-contract stake.", "Take-profit and stop-loss fields are reference targets only; they do not automatically close trades."],
+  ["Set stake and duration", "Stake is per contract. Tick 0 is the entry spot; a 1-tick contract settles on the next price update, and 2–5 tick contracts settle on their matching numbered update.", "A 6× order requests six times the per-contract stake. Take-profit and stop-loss fields are reference targets only; they do not automatically close trades."],
   ["Review and clear history", "Today's trades and daily totals include only contracts placed from this page on the selected account.", "Clear removes them from this page's account-scoped view. Deriv's account history is not deleted."],
   ["Check the outcome", "A Digit Differs contract is settled by Deriv at expiry; it wins only if the final digit differs from its barrier.", "A zero count, a short sample, or waiting for another tick cannot guarantee the result. If an order response is uncertain, check Deriv history before retrying."],
 ] as const;
@@ -125,6 +125,7 @@ function AutoTraderContent() {
     query: { queryKey: getGetDerivHistoryQueryKey(), enabled: hasAutoTraderAccess && hasToken, retry: false, refetchInterval: hasAutoTraderAccess && hasToken ? 5_000 : false },
   });
   const bulkBuy = useBulkBuyDerivContracts();
+  const batchSubmitLockRef = useRef(false);
 
   const [filter, setFilter] = useState<FilterKey>("all");
   const [stake, setStake] = useState("1.00");
@@ -351,6 +352,10 @@ function AutoTraderContent() {
   const connected = Boolean(status.data?.connected && status.data?.authorized && hasToken);
 
   const placeTrade = async (market: Market, digit: number, count: 1 | 3 | 6) => {
+    if (batchSubmitLockRef.current || bulkBuy.isPending) {
+      setMessage({ tone: "info", text: "Auto Trader is already sending a batch. Wait for its result before sending another." });
+      return;
+    }
     if (!hasAutoTraderAccess) {
       setMessage({ tone: "error", text: "Auto Trader access is restricted. No order was sent." });
       return;
@@ -383,6 +388,7 @@ function AutoTraderContent() {
       return;
     }
     setMessage(null);
+    batchSubmitLockRef.current = true;
     let result: Awaited<ReturnType<typeof bulkBuy.mutateAsync>>;
     try {
       result = await bulkBuy.mutateAsync({
@@ -398,10 +404,20 @@ function AutoTraderContent() {
         },
       });
     } catch (error) {
-      setMessage({ tone: "error", text: error instanceof Error ? error.message : "The order could not be placed." });
+      const errorMessage = error instanceof Error ? error.message : "The order could not be placed.";
+      setMessage({
+        tone: "error",
+        text: `${errorMessage} If Deriv's response was uncertain, check account history before resubmitting.`,
+      });
       return;
+    } finally {
+      batchSubmitLockRef.current = false;
     }
 
+    if (!result.buys.length) {
+      setMessage({ tone: result.ok ? "success" : "info", text: result.message });
+      return;
+    }
     const placedAt = Date.now();
     const batchId = result.buys.length > 1 ? `auto-trader-${placedAt}-${result.buys[0]?.contract_id ?? "batch"}` : undefined;
     const fresh = result.buys.map((buy, index) => ({
@@ -418,8 +434,10 @@ function AutoTraderContent() {
       trackingNote = " The order was accepted, but this browser could not save its local daily-stat tracking; check Deriv history.";
     }
     setMessage({
-      tone: "success",
-      text: `${result.buys.length} contract${result.buys.length === 1 ? "" : "s"} accepted for ${market.name}, digit ${digit}, ${duration} tick${duration === 1 ? "" : "s"}. Separate contracts can settle differently.${trackingNote}`,
+      tone: result.ok ? "success" : "info",
+      text: `${result.ok
+        ? `${result.buys.length} contract${result.buys.length === 1 ? "" : "s"} accepted for ${market.name}, digit ${digit}, ${duration} tick${duration === 1 ? "" : "s"}. Separate contracts can settle differently.`
+        : result.message}${trackingNote}`,
     });
     const refetchOptions = { cancelRefetch: false };
     void Promise.all([
@@ -551,7 +569,7 @@ function AutoTraderContent() {
               {settingsOpen && (
                 <div className="at-settings-fields" data-testid="panel-settings">
                   <label htmlFor="at-stake">Stake per contract<div className="at-stake-input"><span>{currency}</span><input id="at-stake" type="number" min="0.01" step="0.01" value={stake} onChange={(event) => setStake(event.target.value)} aria-label="Stake per contract" data-testid="input-stake" /></div></label>
-                  <label htmlFor="at-duration-ticks">Duration (ticks)<div className="at-inline-input"><input id="at-duration-ticks" type="number" min="1" max="5" step="1" value={durationTicks} onChange={(event) => setDurationTicks(event.target.value)} aria-label="Duration in ticks" data-testid="input-duration-ticks" /><span>1–5</span></div></label>
+                  <label htmlFor="at-duration-ticks">Duration (ticks)<div className="at-inline-input"><input id="at-duration-ticks" type="number" min="1" max="5" step="1" value={durationTicks} onChange={(event) => setDurationTicks(event.target.value)} aria-label="Duration in ticks" data-testid="input-duration-ticks" /><span>1–5</span></div><small className="at-duration-note">Tick 0 is entry; settlement is evaluated on the selected numbered tick.</small></label>
                   <label>Take profit target<div className="at-inline-input"><input type="number" min="0" step="0.01" value={takeProfit} onChange={(event) => setTakeProfit(event.target.value)} data-testid="input-take-profit" /><span>{currency}</span></div></label>
                   <label>Stop loss limit<div className="at-inline-input"><input type="number" min="0" step="0.01" value={stopLoss} onChange={(event) => setStopLoss(event.target.value)} data-testid="input-stop-loss" /><span>{currency}</span></div></label>
                   <div className="at-deferred-note"><ShieldAlert size={14} /> Take-profit and stop-loss are reference targets only.</div>

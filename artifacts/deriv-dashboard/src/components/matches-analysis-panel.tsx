@@ -33,6 +33,7 @@ export interface MatchesAnalysisPanelProps {
   tradeSlotBlocked: boolean;
   statusMessage: string;
   onManualTrade: () => void;
+  onTradeDigit: (digit: number) => void;
   onStartMatches: () => void;
   onStopMatches: () => void;
   onRescan: () => void;
@@ -67,6 +68,7 @@ export default function MatchesAnalysisPanel({
   tradeSlotBlocked,
   statusMessage,
   onManualTrade,
+  onTradeDigit,
   onStartMatches,
   onStopMatches,
   onRescan,
@@ -234,19 +236,23 @@ export default function MatchesAnalysisPanel({
               <div><span className="ma-index">03</span><div><h3 id="ma-observed-title">Top observed frequencies</h3><p>Ranked from the supplied sample</p></div></div>
               <span className="ma-observed-tag">OBSERVED</span>
             </div>
-            <div className="ma-ranking-list">
-              {rankedDigits.length ? rankedDigits.map((item, index) => (
-                <button type="button" key={item.digit}
-                  className={`ma-rank-row ${selectedDigit === item.digit ? "is-selected" : ""}`}
-                  onClick={() => onSelectedDigitChange(item.digit)} disabled={disabled}
-                  aria-pressed={selectedDigit === item.digit}
-                  data-testid={`button-matches-top-digit-${item.digit}`}>
-                  <span className={`ma-rank-order rank-${index + 1}`}>0{index + 1}</span>
-                  <b className="ma-rank-digit">{item.digit}</b>
-                  <span className="ma-rank-meter" aria-hidden="true"><i style={{ width: `${Math.max(0, Math.min(100, item.rate))}%` }} /></span>
-                  <span className="ma-rank-stats"><b data-testid={`value-matches-frequency-${item.digit}`}>{item.rate.toFixed(1)}%</b><small>{item.count} observed</small></span>
-                </button>
-              )) : <div className="ma-ranking-empty" data-testid="empty-matches-top-digits">No observed frequency ranking yet.</div>}
+             <div className="ma-ranking-list">
+               {rankedDigits.length ? rankedDigits.map((item, index) => (
+                 <div className="ma-ranked-item" key={item.digit} data-testid={`button-matches-top-digit-${item.digit}`}>
+                   <button type="button"
+                     className={`ma-rank-row ${selectedDigit === item.digit ? "is-selected" : ""}`}
+                     onClick={() => onSelectedDigitChange(item.digit)} disabled={disabled}
+                     aria-pressed={selectedDigit === item.digit}
+                     aria-label={`Select observed digit ${item.digit}`}>
+                     <span className={`ma-rank-order rank-${index + 1}`}>0{index + 1}</span>
+                     <b className="ma-rank-digit">{item.digit}</b>
+                     <span className="ma-rank-meter" aria-hidden="true"><i style={{ width: `${Math.max(0, Math.min(100, item.rate))}%` }} /></span>
+                     <span className="ma-rank-stats"><b data-testid={`value-matches-frequency-${item.digit}`}>{item.rate.toFixed(1)}%</b><small>{item.count} observed</small></span>
+                   </button>
+                   <button type="button" className="ma-tap-trade" onClick={() => onTradeDigit(item.digit)}
+                     disabled={actionDisabled} data-testid={`button-matches-tap-${item.digit}`}>TAP TO TRADE</button>
+                 </div>
+               )) : <div className="ma-ranking-empty" data-testid="empty-matches-top-digits">No observed frequency ranking yet.</div>}
             </div>
             <div className="ma-frequency-disclaimer" data-testid="text-matches-frequency-disclaimer">
               Top three are observed frequencies, not forecasts or guaranteed outcomes.
@@ -270,6 +276,7 @@ export default function MatchesAnalysisPanel({
                   <b>{value}</b><span>{value === 1 ? "tick" : "ticks"}</span>
                 </button>)}
               </div>
+              <small className="ma-duration-note">Entry is Tick 0; settlement is evaluated on the selected numbered tick.</small>
             </div>
             <div className={`ma-ai-controls ${aiEnabled ? "is-enabled" : ""}`}>
               <div className="ma-ai-head">

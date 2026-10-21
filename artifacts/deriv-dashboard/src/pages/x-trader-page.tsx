@@ -185,7 +185,7 @@ const guidePages = [
   { title: "What Over means", body: "An Over contract wins when the last digit at expiry is above the selected barrier. For example, Over 1 wins on digits 2 through 9.", points: ["Choose a barrier from the digit row.", "The button label always shows the current barrier.", "The result is decided by the contract expiry, not by the entry quote."] },
   { title: "What Under means", body: "An Under contract wins when the last digit at expiry is below the selected barrier. For example, Under 1 wins only on digit 0.", points: ["Over and Under have different winning ranges.", "Changing the barrier changes the winning range.", "Do not treat a visible streak as a promise about the next result."] },
   { title: "Choosing a digit barrier", body: "The digit row shows recent Over and Under streak lengths for each barrier. Selecting a digit changes both the contract label and the configuration summary.", points: ["A larger barrier gives Over more possible winning digits.", "A smaller barrier gives Under more possible winning digits.", "Compare the streaks with the payout and your risk limit."] },
-  { title: "Duration in ticks", body: "Duration controls how many ticks the contract observes before settlement. Short durations resolve quickly and can also change rapidly.", points: ["Use 1 tick for fast experiments.", "Use longer durations only when your strategy is designed for them.", "Duration does not improve the probability by itself."] },
+  { title: "Duration in ticks", body: "Tick 0 is the entry spot. One tick settles on the next price update; 2–5 ticks settle on the matching numbered update.", points: ["Use only 1 through 5 ticks.", "Short durations resolve quickly and can also change rapidly.", "Duration does not improve the probability by itself."] },
   { title: "Stake and balance", body: "Stake is the amount risked on each contract. The selected stake is used for the next Over or Under trade unless Martingale after loss is enabled.", points: ["Keep a reserve instead of risking the full balance.", "Martingale increases the next stake after a loss and resets after a win.", "A valid balance check cannot prevent market losses."] },
   { title: "Flat stake strategy", body: "Flat staking uses the same stake on every trade. It is the simplest baseline and makes session results easier to compare.", points: ["Use it to measure a signal without changing risk size.", "Set Take Profit and Stop Loss before starting.", "A losing trade does not automatically justify a larger next stake."] },
   { title: "Martingale after loss", body: "Martingale increases the next stake after a loss by the configured multiplier. It can grow exposure quickly and may exhaust a balance after a short losing run.", points: ["Set a low multiplier and a hard stop if you test it.", "The strategy is not a recovery guarantee.", "Demo testing is strongly recommended before any live use."] },
@@ -205,7 +205,7 @@ const tradeXGuidePages = [
   { title: "Welcome to Trade X", body: "Trade X is the Digit Differs workspace. It watches the live digit distribution, ranks the least frequent digits, and lets you decide whether to send one trade or use controlled automation.", points: ["Use a demo account while learning the signal.", "The signal describes observed ticks; it cannot guarantee the next digit.", "The switch pauses every Trade X action without changing EDGE."] },
   { title: "Read the distribution", body: "Each digit shows its observed percentage and current absence streak. The differs candidate list ranks digits with the lowest observed frequency first, because a Differs contract wins when the expiry digit is not the selected barrier.", points: ["Tap any oval digit to make it the active selection.", "The top three list follows the same live ranking.", "Refresh restarts the local sample window from the next market tick."] },
   { title: "Ranked candidates", body: "Trade X can rank observed digits so you can compare the active Digit Differs barrier before sending a contract.", points: ["Ranked mode follows the live candidate order.", "Tap a digit or turn Manual Select on when you want an exact barrier.", "The active entry is shown before every action."] },
-  { title: "Manual actions", body: "Place Trade X Trade sends one Digit Differs contract using the active digit.", points: ["Check market, stake, duration, and digit before sending.", "Manual digit taps switch to exact-digit selection so the request matches the screen.", "The expiry result is decided by Deriv."] },
+  { title: "Manual actions", body: "Place Trade X Trade sends one Digit Differs contract using the active digit. Tick 0 is entry; one tick settles on the next price update, and 2–5 settle on their matching numbered update.", points: ["Check market, stake, duration, and digit before sending.", "Manual digit taps switch to exact-digit selection so the request matches the screen.", "The expiry result is decided by Deriv."] },
   { title: "A careful workflow", body: "Start with a small demo stake, wait for a meaningful sample, and treat every signal as descriptive market context rather than certainty.", points: ["Confirm the selected account is the one you intend to use.", "Use the lowest practical stake while evaluating a market.", "Stop automation before changing markets or strategy assumptions."] },
   { title: "Set the stake", body: "Stake controls the amount requested for each Digit Differs contract. Start low while learning how the distribution reacts.", points: ["Keep a reserve in the account.", "The server and account balance remain final guards.", "A higher stake does not make a signal stronger."] },
   { title: "Manual selection", body: "Manual selection lets you choose the exact digit barrier rather than accepting the current ranked candidate.", points: ["Tap a digit to make it active.", "Confirm the selected digit before placing a trade.", "The barrier is sent with the contract request."] },
@@ -269,7 +269,7 @@ const matchesAnalysisGuidePages = [
 const digitFlipGuidePages = [
   { title: "Welcome to DigitFlip", body: "DigitFlip trades Even or Odd contracts using a live parity sample. Estimates describe recent ticks and never guarantee the next contract result.", points: ["Start with a demo account.", "Only one of DigitFlip, Trade X, and EDGE can run at once.", "Auto Candidates reviews the strongest market every 10 seconds after settlement."] },
   { title: "Choose a market and parity", body: "DigitFlip starts with an automatically selected market, then lets you choose Volatility or Jump markets manually. Even and Odd have distinct selected states.", points: ["The quote and last digit are live telemetry.", "Recent percentages come from the selected market sample.", "The market selector does not predict the next digit."] },
-  { title: "Stake and duration", body: "Choose 1 to 6 ticks and begin with a flat stake of 0.50 or more. Martingale after loss is optional and can grow exposure quickly.", points: ["Decimals are supported for the multiplier.", "Use a small stake while evaluating a signal.", "There is no max-stake control in this workspace."] },
+  { title: "Stake and duration", body: "Choose 1 to 5 ticks and begin with a flat stake of 0.50 or more. Tick 0 is entry; settlement is evaluated on the selected numbered tick. Martingale after loss is optional and can grow exposure quickly.", points: ["Decimals are supported for the multiplier.", "Use a small stake while evaluating a signal.", "There is no max-stake control in this workspace."] },
   { title: "Run, stop, and reset", body: "Run starts the guarded loop. Stop prevents another entry after the active request. Reset clears only session P/L and current stake; it does not delete Deriv history.", points: ["Take Profit and Stop Loss stop the loop.", "Recent trades can be hidden from this dashboard.", "Hidden rows remain in Deriv."] },
   { title: "Reading the live parity", body: "DigitFlip uses the live Even and Odd percentages as market context. The percentages describe recent ticks and never guarantee the next contract result.", points: ["Wait for a meaningful live sample before trading.", "Use a small stake while evaluating a market.", "No condition is presented as a guaranteed win."] },
   { title: "Live account protection", body: "Selecting a real account routes DigitFlip orders to real funds. The server's live-trading setting and balance checks still apply.", points: ["Use demo funds while learning.", "Check the selected account before every session.", "Deriv confirms each contract and its settlement."] },
@@ -346,7 +346,7 @@ const cashGrabGuidePages = [
   { title: "Read Rise and Fall samples", body: "The direction bar summarizes observed Rise and Fall movement in the available market sample.", points: ["Small samples can change quickly.", "A larger percentage is still not a promise.", "A safety gate can hold an entry when evidence is too limited."] },
   { title: "Select a direction", body: "Choose Rise or Fall explicitly. Cash Grab keeps that direction for the next entry and does not silently flip it.", points: ["Confirm the selected direction.", "Changing direction while stopped does not send a trade.", "The trade request matches the visible selection."] },
   { title: "Set the stake", body: "Stake is the base amount used for each contract. Cash Grab enforces a minimum of 0.35 and checks the connected account balance before every entry.", points: ["Use a small demo stake while learning.", "Multiply mode can increase the next stake after a loss.", "Leave a reserve instead of using the full balance."] },
-  { title: "Set duration and stake mode", body: "Rise/Fall duration can be set from one to ten ticks. Choose Flat for the same stake each time, or Multiply to apply your entered multiplier after a loss.", points: ["Cash Grab waits for each contract to settle before the next entry.", "A win restores the base stake.", "A larger multiplier can increase exposure quickly."] },
+  { title: "Set duration and stake mode", body: "Rise/Fall duration can be set from one to five ticks. Tick 0 is entry; settlement is evaluated on the selected numbered tick. Choose Flat for the same stake each time, or Multiply to apply your entered multiplier after a loss.", points: ["Cash Grab waits for each contract to settle before the next entry.", "A win restores the base stake.", "A larger multiplier can increase exposure quickly."] },
   { title: "Custom multiplier", body: "In Multiply mode, enter any positive multiplier for the next contract after a settled loss. A win returns the stake to the configured base amount.", points: ["The multiplier has no app-imposed maximum.", "The available account balance is checked before every entry.", "Multiplying does not guarantee recovery."] },
   { title: "Auto-switch safety", body: "Auto-switch reviews fresh market samples on its scan schedule and changes markets only when the observed direction rate, sample, and balance checks pass.", points: ["It can change markets between entries.", "It does not alter your selected stake mode or multiplier.", "It may wait rather than send when no setup qualifies."] },
   { title: "Run Cash Grab", body: "Start checks the connection, selected account, and available balance, then sends one Rise/Fall contract at a time until you stop it.", points: ["Review market, direction, stake, mode, and duration.", "Each request waits for the current contract to settle before the next.", "If a check or request fails, Cash Grab stops and reports the reason."] },
@@ -592,6 +592,7 @@ export default function XTraderPage() {
   const [digitFlipHiddenHistoryIds, setDigitFlipHiddenHistoryIds] = useState<Set<string>>(new Set());
   const [edgeMinWinRate, setEdgeMinWinRate] = useState(90);
   const [tradeXTradesSent, setTradeXTradesSent] = useState(0);
+  const [tradeXSubmitting, setTradeXSubmitting] = useState(false);
   const [tradeXMessage, setTradeXMessage] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
@@ -2936,6 +2937,7 @@ export default function XTraderPage() {
     }
     const latestRows = queryClient.getQueryData<typeof rows>(getGetDerivHistoryQueryKey()) ?? [];
     tradeXActionLockRef.current = true;
+    setTradeXSubmitting(true);
     try {
       const result = await bulkBuyMutation.mutateAsync({
         data: {
@@ -2949,9 +2951,16 @@ export default function XTraderPage() {
           count,
         },
       });
-      claimFeatureRows("trade-x", tradeXClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
-      setTradeXTradesSent((value) => value + count);
-      setTradeXMessage(null);
+      if (result.buys.length) {
+        claimFeatureRows("trade-x", tradeXClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
+      }
+      if (!result.ok || result.buys.length !== count) {
+        setTradeXMessage(result.message || `Deriv confirmed ${result.buys.length} of ${count} Trade X contracts. Check account history before resubmitting.`);
+        refreshTradeResults();
+        return false;
+      }
+      setTradeXTradesSent((value) => value + result.buys.length);
+      setTradeXMessage(`Deriv confirmed ${result.buys.length} Trade X contract${result.buys.length === 1 ? "" : "s"}. Waiting for settlement.`);
       setConnectionMessage(null);
       refreshTradeResults();
       return true;
@@ -2960,6 +2969,7 @@ export default function XTraderPage() {
       return false;
     } finally {
       tradeXActionLockRef.current = false;
+      setTradeXSubmitting(false);
     }
   };
 
@@ -3056,8 +3066,8 @@ export default function XTraderPage() {
     if (cashGrabRunningRef.current || cashGrabActionLockRef.current || bulkBuyMutation.isPending) {
       throw new Error("Cash Grab is already running or sending a contract.");
     }
-    if (!Number.isInteger(cashGrabDuration) || cashGrabDuration < 1 || cashGrabDuration > 10) {
-      throw new Error("Choose a Cash Grab duration from 1 to 10 ticks first.");
+    if (!Number.isInteger(cashGrabDuration) || cashGrabDuration < 1 || cashGrabDuration > 5) {
+      throw new Error("Choose a Cash Grab duration from 1 to 5 ticks first.");
     }
     const amount = Number(cashGrabStake.toFixed(2));
     if (!Number.isFinite(amount) || amount < 0.35) throw new Error("Set a Cash Grab stake of at least 0.35 first.");
@@ -3919,11 +3929,12 @@ export default function XTraderPage() {
     bulkActionLockRef.current = true;
     try {
       const result = await send(contractType);
-      if (!result.buys.length) throw new Error("Deriv did not acknowledge any contracts for this setup.");
-      claimFeatureRows("bulk-trader", bulkClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
-      setConnectionMessage(null);
+      if (result.buys.length) {
+        claimFeatureRows("bulk-trader", bulkClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
+      }
+      setConnectionMessage(result.ok ? null : { kind: "info", text: result.message });
       refreshTradeResults();
-      return true;
+      return result.ok;
     } catch (error) {
       setConnectionMessage({ kind: "error", text: errorMessage(error) });
       return false;
@@ -3967,6 +3978,7 @@ export default function XTraderPage() {
   });
 
   const selectDuration = (next: number) => {
+    if (!Number.isInteger(next) || next < 1 || next > 5) return;
     setDuration(next);
   };
 
@@ -4763,7 +4775,7 @@ export default function XTraderPage() {
             </div>
 
             <div className="xt-form-grid">
-               <label><small>DURATION</small><div className="xt-ticks">{[1,2,3,4,5,6].map((tick) => <button key={tick} className={duration === tick ? "active" : ""} onClick={() => selectDuration(tick)} disabled={running}>{tick}</button>)}</div></label>
+               <label><small>DURATION</small><div className="xt-ticks">{[1,2,3,4,5].map((tick) => <button key={tick} className={duration === tick ? "active" : ""} onClick={() => selectDuration(tick)} disabled={running}>{tick}</button>)}</div></label>
                <label><small>STAKE · MIN 0.35</small><div className="xt-money"><span>{currentAccount?.currency ?? "USD"}</span><input type="number" min=".35" step=".01" value={stake} onChange={(event) => setStake(Math.max(.35, Number(event.target.value) || .35))} disabled={running} /></div></label>
               <label><small>STRATEGY</small><select value={strategy} onChange={(event) => setStrategy(event.target.value as "flat" | "martingale")} disabled={running}><option value="flat">Flat stake</option><option value="martingale">Martingale after loss</option></select></label>
               <label><small>MARTINGALE MULTIPLIER</small><input type="number" min="1" max="10" step=".1" value={martingale} onChange={(event) => setMartingale(Number(event.target.value))} disabled={running || strategy === "flat"} /></label>
@@ -4826,7 +4838,7 @@ export default function XTraderPage() {
             analysisTickCount={analysisTickCount}
             analysisUpdatedAt={lastDigit == null ? "waiting for live ticks" : `last digit ${lastDigit}`}
             lastDigit={lastDigit}
-            isPlacingTrade={bulkBuyMutation.isPending}
+            isPlacingTrade={tradeXSubmitting || bulkBuyMutation.isPending}
             isRefreshingAnalysis={analysisTickCount === 0 && !isConnected}
             disabled={running || !isConnected || tradeSlotBlocked}
             onMarketTypeChange={setTradeXMarketType}
@@ -5013,6 +5025,10 @@ export default function XTraderPage() {
             onManualTrade={() => {
               toggleMatchesAi(false);
               void executeMatchesOrders([matchesSelectedDigit], false);
+            }}
+            onTradeDigit={(digit) => {
+              toggleMatchesAi(false);
+              void executeMatchesOrders([digit], false);
             }}
             onStartMatches={() => toggleMatchesAi(true)}
             onStopMatches={() => toggleMatchesAi(false)}

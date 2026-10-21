@@ -497,7 +497,7 @@
   gap: 18px;
   padding: 16px 18px 18px;
 }
-.tx-duration-list { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
+.tx-duration-list { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
 .tx-duration-button {
   min-height: 42px;
   display: grid;

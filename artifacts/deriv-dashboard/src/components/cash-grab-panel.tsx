@@ -15,7 +15,7 @@ import "./cash-grab-panel.css";
 
 export type CashGrabContractFamily = "rise-fall";
 export type CashGrabDirection = "CALL" | "PUT";
-export type CashGrabDuration = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+export type CashGrabDuration = 1 | 2 | 3 | 4 | 5;
 export type CashGrabAiStatus = "off" | "ready" | "watching" | "quiet" | "blocked";
 export type CashGrabStakeMode = "flat" | "multiply";
 
@@ -99,7 +99,7 @@ export interface CashGrabPanelProps {
 }
 
 const minimumStake = 0.35;
-const durations: readonly CashGrabDuration[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const durations: readonly CashGrabDuration[] = [1, 2, 3, 4, 5];
 
 const statusLabel = (status: CashGrabAiStatus = "off") => ({
   off: "OFF",
@@ -379,7 +379,7 @@ export default function CashGrabPanel({
               data-testid="input-cash-grab-stake"
             />
           </label>
-          <label>
+          <label className="cash-grab-duration-field">
             <span>DURATION · TICKS</span>
             <div className="cash-grab-tick-options" role="group" aria-label="Cash Grab duration in ticks">
               {durations.map((ticks) => (
@@ -396,6 +396,7 @@ export default function CashGrabPanel({
                 </button>
               ))}
             </div>
+            <small className="cash-grab-duration-note">Entry is Tick 0; this contract settles on its selected numbered tick.</small>
           </label>
           <label>
             <span>STAKE MODE</span>

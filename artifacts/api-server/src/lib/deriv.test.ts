@@ -13,6 +13,7 @@ type BuyBehavior = "ack" | "reject" | "disconnect" | "invalid-proposal-id";
 
 let buyBehavior: BuyBehavior = "ack";
 let rateLimitFailuresRemaining = 0;
+let rejectBuyResponsesRemaining = 0;
 let proposalNumber = 0;
 let proposalPayoutOverride: number | null = null;
 let buyPayoutOverride: number | null = null;
@@ -162,6 +163,15 @@ function handleClientMessage(socket: FakeWebSocket, message: SocketMessage) {
     });
     return;
   }
+  if (rejectBuyResponsesRemaining > 0) {
+    rejectBuyResponsesRemaining -= 1;
+    emitMessage(socket, {
+      ...(message.req_id == null ? {} : { req_id: message.req_id }),
+      error: { code: "ContractBuyFailure", message: "buy rejected by Deriv" },
+      echo_req: { buy: message.buy, ...(message.req_id == null ? {} : { req_id: message.req_id }) },
+    });
+    return;
+  }
   if (rateLimitFailuresRemaining > 0) {
     rateLimitFailuresRemaining -= 1;
     emitMessage(socket, {
@@ -288,6 +298,7 @@ beforeEach(() => {
   testUserIds.clear();
   buyBehavior = "ack";
   rateLimitFailuresRemaining = 0;
+  rejectBuyResponsesRemaining = 0;
   proposalNumber = 0;
   proposalPayoutOverride = null;
   buyPayoutOverride = null;
@@ -1018,7 +1029,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
     });
   });
 
-  test("bulk buys return after buy acknowledgements without waiting for settlement", async () => {
+  test("bulk buys dispatch together and return after acknowledgements without waiting for settlement", async () => {
     const result = await withSelectedAccount("bulk-buy-user", () => deriv.bulkBuyContracts({
       amount: 1,
       duration: 1,
@@ -1027,10 +1038,10 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       barrier: 3,
       symbol: "R_75",
       count: 2,
-    }));
+    }, undefined, true));
 
     assert.equal(result.count, 2);
-    assert.deepEqual(buySendCountsAtAck, [1, 2], "batch buy requests are spaced and acknowledged one at a time");
+    assert.deepEqual(buySendCountsAtAck, [2, 2], "all batch buy requests are dispatched before their acknowledgements arrive");
     await inUser("bulk-buy-user", async () => {
       assert.equal(deriv.getHistory().length, 2);
       assert.ok(deriv.getHistory().every((trade: { status: string }) => trade.status === "open"));
@@ -1051,6 +1062,43 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
         /still reports an open contract|previous contract is still settling/,
       );
     });
+  });
+
+  test("three- and six-contract synchronized batches dispatch every buy before acknowledgement", async () => {
+    for (const count of [3, 6]) {
+      const result = await withSelectedAccount(`synchronized-bulk-${count}`, () => deriv.bulkBuyContracts({
+        amount: 1,
+        duration: 2,
+        duration_unit: "t",
+        contract_type: "DIGITDIFF",
+        barrier: 4,
+        symbol: "R_75",
+        count,
+      }, undefined, true));
+      assert.equal(result.count, count);
+      assert.equal(result.buys.length, count);
+      assert.deepEqual(buySendCountsAtAck.slice(-count), Array(count).fill(count));
+      mockPortfolioContracts = [];
+    }
+  });
+
+  test("synchronized batches return confirmed contracts when one explicit buy rejection occurs", async () => {
+    rejectBuyResponsesRemaining = 1;
+    const result = await withSelectedAccount("partial-synchronized-bulk", () => deriv.bulkBuyContracts({
+      amount: 1,
+      duration: 3,
+      duration_unit: "t",
+      contract_type: "DIGITDIFF",
+      barrier: 7,
+      symbol: "R_75",
+      count: 3,
+    }, undefined, true));
+
+    assert.equal(result.ok, false);
+    assert.equal(result.count, 2);
+    assert.equal(result.buys.length, 2);
+    assert.match(result.message, /2 of 3 contracts were confirmed/);
+    assert.match(result.message, /check Deriv history before resubmitting/);
   });
 
   test("Deriv sale flags release a stale open status without treating zero as sold", async () => {

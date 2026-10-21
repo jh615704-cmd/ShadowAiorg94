@@ -409,6 +409,12 @@ router.post("/deriv/select-symbol", async (req, res) => {
 router.post("/deriv/buy", requireTradeAccessFeature, async (req, res) => {
   const parsed = BuyDerivContractBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid trade request" });
+  if (
+    parsed.data.access_feature === "cash-grab"
+    && (!Number.isInteger(parsed.data.duration) || parsed.data.duration < 1 || parsed.data.duration > 5)
+  ) {
+    return res.status(400).json({ error: "Cash Grab supports whole-number durations from 1 to 5 ticks." });
+  }
 
   try {
     if (parsed.data.automated === true) {
@@ -487,13 +493,23 @@ router.post("/deriv/sell", async (req, res) => {
 router.post("/deriv/bulk-buy", requireTradeAccessFeature, async (req, res) => {
   const parsed = BulkBuyDerivContractsBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid bulk buy request" });
+  if (
+    parsed.data.access_feature === "cash-grab"
+    && (!Number.isInteger(parsed.data.duration) || parsed.data.duration < 1 || parsed.data.duration > 5)
+  ) {
+    return res.status(400).json({ error: "Cash Grab supports whole-number durations from 1 to 5 ticks." });
+  }
 
   try {
     const result = BulkBuyDerivContractsResponse.parse(
       await withCredential(res.locals.userId, async () => {
         const assertAuthorized = () => assertAccessSessionActive(res.locals.accessSessionId, res.locals.accessKeyId);
         await assertAuthorized();
-        return bulkBuyContracts(parsed.data, assertAuthorized);
+        return bulkBuyContracts(
+          parsed.data,
+          assertAuthorized,
+          parsed.data.access_feature === "auto-trader" || parsed.data.access_feature === "bulk-trader",
+        );
       }, true),
     );
     return res.status(202).json(result);

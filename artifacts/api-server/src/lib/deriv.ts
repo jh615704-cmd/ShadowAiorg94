@@ -1003,6 +1003,15 @@ async function sendBatchBuysSequentially<T>(
   return results;
 }
 
+async function sendBatchBuysTogether<T>(
+  items: readonly T[],
+  buy: (item: T) => Promise<DerivBuy>,
+): Promise<PromiseSettledResult<DerivBuy>[]> {
+  // Dispatch each already-quoted order in the same event-loop turn. Deriv
+  // still acknowledges and settles each contract independently.
+  return Promise.allSettled(items.map((item) => buy(item)));
+}
+
 function safeBuyFailureMessage(error: unknown): string {
   if (isDerivBuyRateLimitError(error)) {
     return "Deriv temporarily limited new buys. The rejected order was safely retried; check account history before resubmitting.";
@@ -1917,7 +1926,7 @@ export async function bulkBuyContracts(input: {
   symbol?: string;
   growth_rate?: number;
   count: number;
-}, assertAuthorized?: TradeAuthorizationCheck) {
+}, assertAuthorized?: TradeAuthorizationCheck, sendTogether = false) {
   await assertAuthorized?.();
   const amount = roundCents(input.amount);
   if (!Number.isInteger(input.count) || input.count < 1 || input.count > maxBulkCount) {
@@ -1962,25 +1971,33 @@ export async function bulkBuyContracts(input: {
   // Direct parameter buys use the fresh quote as the maximum price and avoid
   // holding temporary proposal IDs until the whole batch is ready. Deriv can
   // invalidate those IDs between the proposal response and a later buy.
-  const buyResults = await sendBatchBuysSequentially(
-    proposals,
-    (proposal) => sendDirectBuyWithRateLimitRetry(proposal, proposalInput),
-  );
-  const failedBuy = buyResults.find((result): result is PromiseRejectedResult => result.status === "rejected");
-  if (failedBuy) {
+  const buyResults = sendTogether && input.count > 1
+    ? await sendBatchBuysTogether(
+      proposals,
+      (proposal) => sendDirectBuyWithRateLimitRetry(proposal, proposalInput),
+    )
+    : await sendBatchBuysSequentially(
+      proposals,
+      (proposal) => sendDirectBuyWithRateLimitRetry(proposal, proposalInput),
+    );
+  const buys = buyResults.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+  const failures = buyResults.filter((result): result is PromiseRejectedResult => result.status === "rejected");
+  const ok = failures.length === 0;
+  if (failures.length > 0 && !(sendTogether && input.count > 1)) {
+    const failedBuy = failures[0];
     const error = new Error(`Bulk buy could not be fully confirmed. ${safeBuyFailureMessage(failedBuy.reason)}`);
     if (isDerivBuyRateLimitError(failedBuy.reason)) Object.assign(error, { code: "DERIV_BUY_RATE_LIMITED" });
     throw error;
   }
 
   return {
-    ok: true,
-    count: proposals.length,
-    message: getState().account.type === "real"
-      ? `${proposals.length} live buy requests sent together.`
-      : `${proposals.length} demo buy requests sent together.`,
+    ok,
+    count: buys.length,
+    message: ok
+      ? `${buys.length} ${getState().account.type} buy requests sent together. Each contract settles independently.`
+      : `${buys.length} of ${proposals.length} contracts were confirmed. The remaining order status is uncertain or rejected; check Deriv history before resubmitting.`,
     proposals,
-    buys: buyResults.map((result) => (result as PromiseFulfilledResult<DerivBuy>).value),
+    buys,
   };
 }
 

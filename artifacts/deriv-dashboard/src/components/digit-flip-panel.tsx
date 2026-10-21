@@ -13,7 +13,7 @@ import "./digit-flip-panel.css";
 
 export type DigitFlipParity = "DIGITEVEN" | "DIGITODD";
 export type DigitFlipMarketType = "auto" | "volatility" | "jumps";
-export type DigitFlipDuration = 1 | 2 | 3 | 4 | 5 | 6;
+export type DigitFlipDuration = 1 | 2 | 3 | 4 | 5;
 export type DigitFlipStakeMode = "flat" | "martingale";
 
 export type DigitFlipMarketSignal = {
@@ -332,7 +332,7 @@ export default function DigitFlipPanel({
           <label className="df-duration-field">
             <span>DURATION / TICKS</span>
             <div className="df-duration-options" role="group" aria-label="DigitFlip duration">
-              {[1, 2, 3, 4, 5, 6].map((tick) => (
+              {[1, 2, 3, 4, 5].map((tick) => (
                 <button
                   type="button"
                   key={tick}
@@ -346,6 +346,7 @@ export default function DigitFlipPanel({
                 </button>
               ))}
             </div>
+            <small className="df-duration-note">Entry is Tick 0; the contract settles on the selected numbered tick.</small>
           </label>
           <label><span>STAKE MODE</span><select value={stakeMode} onChange={(event) => onStakeModeChange(event.target.value as DigitFlipStakeMode)} disabled={disabled || running}><option value="flat">Flat stake</option><option value="martingale">Martingale</option></select></label>
           <label><span>MULTIPLIER</span><input type="number" min="1" step=".1" value={multiplier} onChange={(event) => onMultiplierChange(Math.max(1, Number(event.target.value) || 1))} disabled={disabled || running || stakeMode === "flat"} /></label>
