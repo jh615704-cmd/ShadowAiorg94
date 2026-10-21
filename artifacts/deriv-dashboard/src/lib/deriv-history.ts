@@ -6,6 +6,8 @@ export type DerivHistoryRow = {
   account_type: string;
   currency?: string;
   barrier: number | null;
+  duration: number | null;
+  duration_unit: string | null;
   buy_price: number;
   current_value: number;
   payout: number;

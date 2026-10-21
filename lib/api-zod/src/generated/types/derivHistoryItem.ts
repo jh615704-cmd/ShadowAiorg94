@@ -16,6 +16,10 @@ export interface DerivHistoryItem {
   /** @nullable */
   barrier: number | null;
   symbol: string;
+  /** @nullable */
+  duration: number | null;
+  /** @nullable */
+  duration_unit: string | null;
   buy_price: number;
   /** Current contract value from Deriv, or buy price plus floating profit when no live bid is available. */
   current_value: number;

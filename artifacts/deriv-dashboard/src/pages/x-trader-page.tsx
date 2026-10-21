@@ -128,12 +128,16 @@ import {
   type DerivHistoryFeature,
 } from "../lib/deriv-history";
 import {
-  chooseObservedMatchDigits,
+  chooseQualifiedMatchesDigits,
   MATCHES_HISTORY_LIMIT,
-  MATCHES_MINIMUM_SAMPLE_SIZE,
-  rankObservedMatchDigits,
+  rankSettledMatchOutcomes,
   type MatchesDigitStat as ObservedMatchesDigitStat,
 } from "../lib/matches-analysis";
+import {
+  acquireTradeXActionLock,
+  buildTradeXOrderData,
+  releaseTradeXActionLock,
+} from "../lib/trade-x-execution";
 import {
   validateBulkTraderEntry,
   validateEdgeEntry,
@@ -808,8 +812,13 @@ export default function XTraderPage() {
     && !matchesHiddenHistoryIds.has(String(trade.contract_id))
   ));
   const matchesTopDigits = useMemo<ObservedMatchesDigitStat[]>(
-    () => matchesTickCount > 0 ? rankObservedMatchDigits(matchesObservedDigits).slice(0, 3) : [],
-    [matchesObservedDigits, matchesTickCount],
+    () => rankSettledMatchOutcomes(
+      matchesAllRows,
+      currentAccount?.id,
+      matchesSymbol,
+      matchesDuration,
+    ).slice(0, 3),
+    [currentAccount?.id, matchesAllRows, matchesDuration, matchesSymbol],
   );
   const bulkRows = bulkAllRows.filter((trade) => bulkClaimedHistoryIdsRef.current.has(trade.contract_id) && !bulkTraderHiddenHistoryIds.has(trade.contract_id));
   const moneyBankRows = moneyBankAllRows
@@ -2939,21 +2948,23 @@ export default function XTraderPage() {
       setTradeXMessage(orderError);
       return false;
     }
+    const lockResult = acquireTradeXActionLock(tradeXActionLockRef, bulkBuyMutation.isPending);
+    if (lockResult !== "acquired") {
+      setTradeXMessage(lockResult === "already-sending"
+        ? "Trade X is already sending. Wait for the current request to finish."
+        : "Another trade request is still being sent. Wait for its confirmation before placing a Trade X contract.");
+      return false;
+    }
     const latestRows = queryClient.getQueryData<typeof rows>(getGetDerivHistoryQueryKey()) ?? [];
-    tradeXActionLockRef.current = true;
     setTradeXSubmitting(true);
     try {
       const result = await bulkBuyMutation.mutateAsync({
-        data: {
-          access_feature: "trade-x",
-          amount: config.stake,
+        data: buildTradeXOrderData({
+          stake: config.stake,
           duration: durationOverride,
-          duration_unit: "t",
-          contract_type: "DIGITDIFF",
-          barrier: entryDigit,
+          digit: entryDigit,
           symbol,
-          count,
-        },
+        }),
       });
       if (result.buys.length) {
         claimFeatureRows("trade-x", tradeXClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
@@ -2972,7 +2983,7 @@ export default function XTraderPage() {
       setTradeXMessage(`${errorMessage(error)} Check Deriv account history before retrying in case the contract was accepted.`);
       return false;
     } finally {
-      tradeXActionLockRef.current = false;
+      releaseTradeXActionLock(tradeXActionLockRef);
       setTradeXSubmitting(false);
     }
   };
@@ -3686,7 +3697,7 @@ export default function XTraderPage() {
     setMatchesAiEnabled(enabled);
     matchesAutomationAttemptTickRef.current = enabled ? -1 : matchesTickCount;
     setMatchesStatusMessage(enabled
-      ? "AI Matches is on. Waiting for fresh ticks, a ranked sample, and an available trade slot."
+      ? "AI Matches is on. Waiting for settled results at the selected duration and an available trade slot."
       : stoppedMessage);
   };
 
@@ -3720,8 +3731,8 @@ export default function XTraderPage() {
     const selectedDigits = Array.from(new Set(digits))
       .filter((digit) => Number.isInteger(digit) && digit >= 0 && digit <= 9)
       .slice(0, 3);
-    if (!selectedDigits.length || (automated && matchesTickCount < MATCHES_MINIMUM_SAMPLE_SIZE)) {
-      setMatchesStatusMessage(`Collect at least ${MATCHES_MINIMUM_SAMPLE_SIZE} fresh ticks before AI Matches trades.`);
+    if (!selectedDigits.length || (automated && selectedDigits.length !== matchesAiDigits)) {
+      setMatchesStatusMessage("Waiting for enough settled Digit Match outcomes to qualify the selected top-digit count.");
       return false;
     }
 
@@ -3791,20 +3802,15 @@ export default function XTraderPage() {
       toggleMatchesAi(false);
       return;
     }
-    if (matchesTickCount < MATCHES_MINIMUM_SAMPLE_SIZE) {
-      setMatchesStatusMessage(`Collecting fresh ticks (${matchesTickCount}/${MATCHES_MINIMUM_SAMPLE_SIZE}).`);
-      return;
-    }
     if (tradeSlotBlocked) {
       setMatchesStatusMessage(tradeSlotMessage ?? "Waiting for open contracts to settle.");
       return;
     }
     if (matchesBuyMutation.isPending || matchesActionLockRef.current) return;
     if (matchesAutomationAttemptTickRef.current >= matchesTickCount) return;
-    const digits = chooseObservedMatchDigits(matchesTopDigits, matchesAiDigits);
+    const digits = chooseQualifiedMatchesDigits(matchesTopDigits, matchesAiDigits);
     if (digits.length !== matchesAiDigits) {
-      matchesAutomationAttemptTickRef.current = matchesTickCount;
-      setMatchesStatusMessage("Waiting for enough top-ranked digits to exceed the 10% observed-frequency baseline.");
+      setMatchesStatusMessage("Waiting for enough settled Digit Match outcomes at this market and duration.");
       return;
     }
 

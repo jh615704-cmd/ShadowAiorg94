@@ -77,6 +77,8 @@ export type DerivHistoryItem = {
   contract_type: string;
   barrier: number | null;
   symbol: string;
+  duration: number | null;
+  duration_unit: string | null;
   buy_price: number;
   current_value: number;
   payout: number;
@@ -740,6 +742,14 @@ function normalizeHistory(raw: unknown, fallbackStatus = "closed"): DerivHistory
     : settled && returnedValue != null && Number.isFinite(returnedValue) && Number.isFinite(buyPrice)
       ? Number((returnedValue - buyPrice).toFixed(2))
       : 0;
+  const contractInput = getState().contractInputs.get(contractId);
+  const rawDuration = record.duration ?? contractInput?.duration;
+  const parsedDuration = Number(rawDuration);
+  const duration = Number.isSafeInteger(parsedDuration) && parsedDuration > 0 ? parsedDuration : null;
+  const rawDurationUnit = record.duration_unit ?? contractInput?.duration_unit;
+  const duration_unit = typeof rawDurationUnit === "string" && rawDurationUnit.trim()
+    ? rawDurationUnit.trim()
+    : null;
   const reportedCurrentValue = record.bid_price
     ?? record.current_value
     ?? (settled ? returnedValue ?? undefined : undefined);
@@ -754,9 +764,11 @@ function normalizeHistory(raw: unknown, fallbackStatus = "closed"): DerivHistory
     currency: getState().account.currency,
     contract_type: String((record.contract_type ?? getState().lastProposalContractType) || "unknown"),
     barrier: record.barrier == null
-      ? (getState().contractInputs.get(contractId)?.barrier ?? null)
+      ? (contractInput?.barrier ?? null)
       : Number(record.barrier),
     symbol: String(record.underlying_symbol ?? record.symbol ?? getState().lastProposalSymbol),
+    duration,
+    duration_unit,
     buy_price: buyPrice,
     current_value: Number.isFinite(currentValue) ? currentValue : buyPrice + profit,
     payout: Number(record.payout ?? 0),

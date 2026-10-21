@@ -1861,7 +1861,7 @@ components:
           type: [integer, "null"]
     DerivHistoryItem:
       type: object
-      required: [contract_id, account_id, account_type, currency, contract_type, barrier, symbol, buy_price, current_value, payout, profit, status]
+      required: [contract_id, account_id, account_type, currency, contract_type, barrier, symbol, duration, duration_unit, buy_price, current_value, payout, profit, status]
       properties:
         contract_id:
           type: string
@@ -1878,6 +1878,10 @@ components:
           type: [number, "null"]
         symbol:
           type: string
+        duration:
+          type: [integer, "null"]
+        duration_unit:
+          type: [string, "null"]
         buy_price:
           type: number
         current_value:

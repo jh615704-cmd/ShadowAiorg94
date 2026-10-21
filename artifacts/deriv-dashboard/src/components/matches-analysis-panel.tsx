@@ -233,8 +233,8 @@ export default function MatchesAnalysisPanel({
 
            <section className="ma-observed-card ma-surface" aria-labelledby="ma-observed-title">
             <div className="ma-section-heading">
-               <div><span className="ma-index">03</span><div><h3 id="ma-observed-title">Top 3 observed digits</h3><p>Ranked from the current sample</p></div></div>
-              <span className="ma-observed-tag">OBSERVED</span>
+               <div><span className="ma-index">03</span><div><h3 id="ma-observed-title">Top 3 settled win rates</h3><p>Same market and selected duration</p></div></div>
+               <span className="ma-observed-tag">SETTLED</span>
             </div>
              <div className="ma-ranking-list">
                {rankedDigits.length ? rankedDigits.map((item, index) => (
@@ -249,17 +249,17 @@ export default function MatchesAnalysisPanel({
                         <span className="ma-rank-digit">{item.digit}</span>
                       </button>
                       <span className="ma-rank-stats">
-                        <b data-testid={`value-matches-frequency-${item.digit}`}>{item.rate.toFixed(1)}%</b>
-                        <small>{item.count} observed</small>
+                        <b data-testid={`value-matches-settled-win-rate-${item.digit}`}>{item.rate.toFixed(1)}%</b>
+                        <small>{item.count} settled</small>
                       </span>
                       <button type="button" className="ma-tap-trade" onClick={() => onTradeDigit(item.digit)}
                         disabled={actionDisabled} data-testid={`button-matches-tap-${item.digit}`}>TAP TO TRADE</button>
                     </div>
                  </div>
-               )) : <div className="ma-ranking-empty" data-testid="empty-matches-top-digits">No observed frequency ranking yet.</div>}
+               )) : <div className="ma-ranking-empty" data-testid="empty-matches-top-digits">No duration-matched settled outcomes yet.</div>}
             </div>
             <div className="ma-frequency-disclaimer" data-testid="text-matches-frequency-disclaimer">
-              Top three are observed frequencies, not forecasts or guaranteed outcomes.
+               Only settled Digit Match outcomes for this market and duration are ranked. Past results do not predict future trades.
             </div>
           </section>
         </div>
@@ -304,7 +304,7 @@ export default function MatchesAnalysisPanel({
                     data-testid={`button-matches-ai-digits-${value}`}>{value}</button>)}
                 </div>
               </div>
-              <p className="ma-ai-note">Automation submits trades using the current market and risk settings. Stop is available at any time.</p>
+              <p className="ma-ai-note">Automation waits for settled results at the selected duration. Stop is available at any time.</p>
             </div>
           </div>
           <div className="ma-action-row">

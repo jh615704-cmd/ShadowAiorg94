@@ -1442,6 +1442,8 @@ export const GetDerivHistoryResponseItem = zod.object({
   "contract_type": zod.string(),
   "barrier": zod.number().nullable(),
   "symbol": zod.string(),
+  "duration": zod.number().int().nullable(),
+  "duration_unit": zod.string().nullable(),
   "buy_price": zod.number(),
   "current_value": zod.number().describe('Current contract value from Deriv, or buy price plus floating profit when no live bid is available.'),
   "payout": zod.number(),

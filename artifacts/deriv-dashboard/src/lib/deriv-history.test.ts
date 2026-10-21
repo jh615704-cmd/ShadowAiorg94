@@ -19,6 +19,8 @@ const row = (overrides: Partial<DerivHistoryRow>): DerivHistoryRow => ({
   account_type: "demo",
   currency: "USD",
   barrier: 5,
+  duration: 1,
+  duration_unit: "t",
   buy_price: 1,
   current_value: 0,
   payout: 0,

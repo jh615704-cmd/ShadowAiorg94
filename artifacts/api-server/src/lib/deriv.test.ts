@@ -718,6 +718,8 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
         contract_type: "DIGITDIFF",
         barrier: 5,
         symbol: "R_75",
+         duration: 1,
+         duration_unit: "t",
         buy_price: 2.25,
          current_value: 2.25,
         payout: 4.5,
