@@ -404,6 +404,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        access_feature: "edge",
         amount: 1,
         duration: 1,
         duration_unit: "t",

@@ -14,3 +14,9 @@ History polling should be enabled for users with any trading feature, even when 
 **Why:** The API grants trading-feature users access to their own trade history; a narrower UI gate leaves those users without a cached history feed.
 
 **How to apply:** Keep the frontend history-query gate aligned with the API route guard and the trading-feature registry.
+
+An administrator's feature restriction applies to all users, including users added later, or only the explicitly selected users; a restricted feature must also block its guide.
+
+**Why:** The administrator needs feature availability to be enforceable consistently for both existing and future users, not just displayed as a notice.
+
+**How to apply:** Enforce audience targeting on the server for feature pages and all trade routes, and keep guide visibility behind the same effective feature access check.

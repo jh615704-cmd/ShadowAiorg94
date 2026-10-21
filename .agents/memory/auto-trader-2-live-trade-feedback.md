@@ -8,3 +8,9 @@ Auto Trader 2 trade history feedback is push-driven from Deriv contract updates.
 **Why:** the user requested instant trade updates without constant polling and asked to catch delayed-feedback regressions before release.
 
 **How to apply:** Changes to trade display or Auto Trader 2 settlement should consume pushed events, preserve known feature rows when snapshots are incomplete, and keep service/client regression tests that cover open, live-update, and final-settlement states.
+
+Auto Trader 2 has no fixed trade-count or take-profit stop; it continues until the user stops it or the configured loss limit is reached, while unresolved order submissions remain in manual-review safety state.
+
+**Why:** The user wants sessions to continue past seven trades without mistaking an empty pending state for a real open contract, but duplicate buys must still be prevented.
+
+**How to apply:** Keep settlement waiting abortable and event-driven, remove arbitrary run caps, and never resend an order whose Deriv outcome is uncertain.
