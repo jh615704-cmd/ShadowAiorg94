@@ -20,3 +20,9 @@ An administrator's feature restriction applies to all users, including users add
 **Why:** The administrator needs feature availability to be enforceable consistently for both existing and future users, not just displayed as a notice.
 
 **How to apply:** Enforce audience targeting on the server for feature pages and all trade routes, and keep guide visibility behind the same effective feature access check.
+
+Feature-settings normalization must supply every required targeting field on defaults as well as saved rows, because older persisted settings may contain only a subset of features.
+
+**Why:** A default feature omitted `audience` and `user_ids`, causing the response schema to reject the full settings payload and the primary administrator panel to fail loading.
+
+**How to apply:** Normalize persisted feature settings into the complete current response shape before schema parsing, including when the database has no matching saved row.

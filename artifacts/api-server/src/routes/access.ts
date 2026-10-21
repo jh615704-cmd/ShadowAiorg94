@@ -43,7 +43,14 @@ function defaultFeatureSettings() {
   return {
     features: ACCESS_FEATURES
       .filter((feature) => feature !== "admin")
-      .map((feature) => ({ feature, mode: "available", countdown_at: null, notice: "" })),
+      .map((feature) => ({
+        feature,
+        mode: "available",
+        audience: "all",
+        user_ids: [],
+        countdown_at: null,
+        notice: "",
+      })),
     global_announcement_enabled: false,
     global_announcement: "",
     auto_trader_2_paused: false,

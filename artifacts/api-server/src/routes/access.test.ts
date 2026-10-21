@@ -40,12 +40,14 @@ const tradingProtectionSettingsTable = columns([
 const adminFeatureSettingsTable = columns(["id", "settings", "updatedAt"]);
 const storedKeys: StoredKey[] = [];
 const storedSessions: Record<string, unknown>[] = [];
+const storedAdminSettings: Record<string, unknown>[] = [];
 let nextKeyId = 0;
 let nextRawKey = 0;
 
 function recordsFor(table: unknown): Array<Record<string, unknown>> {
   if (table === accessKeysTable) return storedKeys as unknown as Array<Record<string, unknown>>;
   if (table === accessKeySessionsTable) return storedSessions;
+  if (table === adminFeatureSettingsTable) return storedAdminSettings;
   return [];
 }
 
@@ -227,6 +229,37 @@ test("deleted access-key names can be reused while deleted keys stay unable to s
     });
     assert.equal(oldKeyLogin.status, 403, "The deleted access key must remain unusable.");
     assert.match(String((await oldKeyLogin.json() as { error: string }).error), /deleted/i);
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve());
+    });
+  }
+});
+
+test("feature settings supply targeting defaults when no settings have been saved", async () => {
+  const app = express();
+  app.use((_req, res, next) => {
+    res.locals.accessKey = { keyHash: "not-primary-admin" };
+    res.locals.accessKeyId = "test-user-id";
+    next();
+  });
+  app.use(accessRouter);
+  const server = createServer(app);
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/access/feature-settings`);
+    assert.equal(response.status, 200);
+    const settings = await response.json() as {
+      features: Array<{ audience: string; user_ids: string[] }>;
+    };
+    assert.ok(settings.features.length > 0);
+    assert.ok(settings.features.every((feature) => feature.audience === "all" && Array.isArray(feature.user_ids)));
   } finally {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => error ? reject(error) : resolve());
