@@ -14,9 +14,11 @@ export type AutoTrader2RunConfig = {
   stake: number;
   duration: number;
   lossLimit: number;
+  profitLimit: number;
   stakeMode: "flat" | "multiply";
   multiplier: number;
   aiEnabled: boolean;
+  autoContractType: boolean;
   autoSelect: boolean;
   selectedMarket: string;
 };
@@ -29,7 +31,7 @@ export type AutoTrader2SavedPhase =
   | "completed";
 
 export type AutoTrader2SavedSession = {
-  version: 3;
+  version: 4;
   accountId: string;
   phase: AutoTrader2SavedPhase;
   config: AutoTrader2RunConfig;
@@ -76,6 +78,16 @@ const isFiniteNumber = (value: unknown): value is number => typeof value === "nu
 const isSettled = (status: string) => !["open", "pending", "active"].includes(status.toLowerCase());
 const cents = (value: number) => Number(value.toFixed(2));
 
+export function getAutoTrader2StopReason(input: {
+  sessionPnl: number;
+  lossLimit: number;
+  profitLimit: number;
+}): "loss" | "profit" | null {
+  if (input.lossLimit > 0 && input.sessionPnl <= -input.lossLimit) return "loss";
+  if (input.profitLimit > 0 && input.sessionPnl >= input.profitLimit) return "profit";
+  return null;
+}
+
 function isRunConfig(value: unknown): value is AutoTrader2RunConfig {
   if (typeof value !== "object" || value === null) return false;
   const config = value as Record<string, unknown>;
@@ -85,9 +97,12 @@ function isRunConfig(value: unknown): value is AutoTrader2RunConfig {
     && isFiniteNumber(config.stake)
     && isFiniteNumber(config.duration)
     && isFiniteNumber(config.lossLimit)
+    && config.lossLimit >= 0
+    && (config.profitLimit === undefined || (isFiniteNumber(config.profitLimit) && config.profitLimit >= 0))
     && (config.stakeMode === "flat" || config.stakeMode === "multiply")
     && isFiniteNumber(config.multiplier)
     && typeof config.aiEnabled === "boolean"
+    && (config.autoContractType === undefined || typeof config.autoContractType === "boolean")
     && typeof config.autoSelect === "boolean"
     && typeof config.selectedMarket === "string";
 }
@@ -100,7 +115,7 @@ export function parseAutoTrader2SavedSession(
   try {
     const value = JSON.parse(serialized) as Record<string, unknown>;
     if (
-      (value.version !== 1 && value.version !== 2 && value.version !== 3)
+      (value.version !== 1 && value.version !== 2 && value.version !== 3 && value.version !== 4)
       || value.accountId !== expectedAccountId
       || !phases.includes(value.phase as AutoTrader2SavedPhase)
       || !isRunConfig(value.config)
@@ -119,7 +134,7 @@ export function parseAutoTrader2SavedSession(
     }
     const lossStreaks = value.version === 1 ? {} : value.lossStreaks;
     const pausedContractTypes = value.version === 1 ? [] : value.pausedContractTypes;
-    const forcedNextType = value.version === 3 ? value.forcedNextType : null;
+    const forcedNextType = value.version === 3 || value.version === 4 ? value.forcedNextType : null;
     if (
       typeof lossStreaks !== "object"
       || lossStreaks === null
@@ -138,11 +153,18 @@ export function parseAutoTrader2SavedSession(
     }
     return {
       ...value,
-      version: 3,
+      version: 4,
+      config: {
+        ...(value.config as AutoTrader2RunConfig),
+        profitLimit: isFiniteNumber((value.config as Record<string, unknown>).profitLimit)
+          ? Number((value.config as Record<string, unknown>).profitLimit)
+          : 0,
+        autoContractType: (value.config as Record<string, unknown>).autoContractType === true,
+      },
       lossStreaks: lossStreaks as AutoTrader2LossState["lossStreaks"],
       pausedContractTypes: pausedContractTypes as AutoTrader2ContractType[],
       forcedNextType: forcedNextType as AutoTrader2ContractType | null,
-    } as AutoTrader2SavedSession;
+    } as unknown as AutoTrader2SavedSession;
   } catch {
     return null;
   }
@@ -271,7 +293,11 @@ export function reconcileAutoTrader2SavedSession(input: {
       pendingStake: null,
     };
 
-    if (updatedSession.config.lossLimit > 0 && sessionPnl <= -updatedSession.config.lossLimit) {
+    if (getAutoTrader2StopReason({
+      sessionPnl,
+      lossLimit: updatedSession.config.lossLimit,
+      profitLimit: updatedSession.config.profitLimit,
+    })) {
       return { kind: "completed", session: { ...updatedSession, phase: "completed" } };
     }
     return { kind: "ready", session: updatedSession };
@@ -296,8 +322,13 @@ export function reconcileAutoTrader2SavedSession(input: {
       reason: "The saved session total does not match Deriv history. Review the account history before resuming.",
     };
   }
+  const reachedStopLimit = getAutoTrader2StopReason({
+    sessionPnl: historyPnl,
+    lossLimit: session.config.lossLimit,
+    profitLimit: session.config.profitLimit,
+  }) !== null;
   return {
-    kind: "ready",
-    session: { ...session, sessionPnl: historyPnl },
+    kind: reachedStopLimit ? "completed" : "ready",
+    session: reachedStopLimit ? { ...session, phase: "completed", sessionPnl: historyPnl } : { ...session, sessionPnl: historyPnl },
   };
 }

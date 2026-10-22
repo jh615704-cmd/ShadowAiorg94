@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   chooseAutoTrader2Candidate,
+  chooseAutoTrader2ManualCandidate,
   getAutoTrader2OppositeType,
   updateAutoTrader2LossState,
   updateAutoTrader2Recovery,
@@ -216,6 +217,68 @@ test("Rise/Fall scoring uses the selected multi-tick expiry outcome", () => {
   assert.equal(candidate?.contractType, "PUT");
   assert.equal(candidate?.observedRate, 100);
   assert.equal(candidate?.sampleCount, 50);
+});
+
+test("manual Auto selection chooses the higher observed Rise/Fall expiry rate", () => {
+  const candidate = chooseAutoTrader2ManualCandidate({
+    signals: [signal("R_10", Array(41).fill(2), {
+      recent_quotes: quotesFromSteps(40, [1, 1, 1, -1]),
+    })],
+    family: "rise-fall",
+    preferredType: "PUT",
+    barrier: 0,
+    autoContractType: true,
+    selectedMarket: "R_10",
+    autoSelect: false,
+    duration: 1,
+  });
+  assert.equal(candidate?.contractType, "CALL");
+  assert.equal(candidate?.observedRate, 75);
+  assert.equal(candidate?.sampleCount, 40);
+});
+
+test("manual Auto selection chooses the higher observed Even/Odd expiry rate", () => {
+  const candidate = chooseAutoTrader2ManualCandidate({
+    signals: [signal("R_10", [1, ...Array(30).fill(2), ...Array(10).fill(1)])],
+    family: "even-odd",
+    preferredType: "DIGITODD",
+    barrier: 0,
+    autoContractType: true,
+    selectedMarket: "R_10",
+    autoSelect: false,
+    duration: 1,
+  });
+  assert.equal(candidate?.contractType, "DIGITEVEN");
+  assert.equal(candidate?.observedRate, 75);
+});
+
+test("manual Auto selection chooses the least frequent recent Differs digit", () => {
+  const candidate = chooseAutoTrader2ManualCandidate({
+    signals: [signal("R_10", [...Array(5).fill(0), ...Array(10).fill(1), ...Array(10).fill(2)])],
+    family: "differs",
+    preferredType: "DIGITDIFF",
+    barrier: 1,
+    autoContractType: true,
+    selectedMarket: "R_10",
+    autoSelect: false,
+    duration: 1,
+  });
+  assert.equal(candidate?.barrier, 3);
+  assert.equal(candidate?.observedRate, 100);
+});
+
+test("manual Auto selection waits for a sufficient sample instead of guessing", () => {
+  const candidate = chooseAutoTrader2ManualCandidate({
+    signals: [signal("R_10", [1, 2, 3])],
+    family: "even-odd",
+    preferredType: "DIGITEVEN",
+    barrier: 0,
+    autoContractType: true,
+    selectedMarket: "R_10",
+    autoSelect: false,
+    duration: 1,
+  });
+  assert.equal(candidate, null);
 });
 
 test("a forced opposite direction takes priority over the preferred direction", () => {

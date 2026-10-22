@@ -212,7 +212,7 @@
 .at2-family-option.selected strong { color: #a3edb4; }
 .at2-family-option small { color: #8098b3; font-size: 8px; line-height: 1.3; }
 .at2-contract-detail { margin-top: 8px; }
-.at2-direction-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.at2-direction-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .at2-direction-options button {
   min-height: 34px;
   border: 1px solid #294968;
@@ -228,7 +228,22 @@
   background: rgba(36, 105, 67, .35);
   color: #a5eab5;
 }
+.at2-direction-options button.selected.auto { border-color: #62c887; color: #a5eab5; }
+.at2-differs-selection { display: grid; gap: 5px; max-width: 280px; }
 .at2-barrier-field { max-width: 180px; }
+.at2-barrier-field select {
+  width: 100%;
+  height: 36px;
+  padding: 0 9px;
+  border: 1px solid #294968;
+  border-radius: 5px;
+  background: #081c32;
+  color: #e8f2ff;
+  font: 11px "DM Mono", monospace;
+}
+.at2-barrier-field select:disabled { opacity: .62; cursor: not-allowed; }
+.at2-auto-digit-note,
+.at2-limit-note { color: #8098b3; font-size: 8px; line-height: 1.35; }
 
 .at2-controls-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
 .at2-field { display: grid; gap: 6px; min-width: 0; }

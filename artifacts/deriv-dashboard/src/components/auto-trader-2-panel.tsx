@@ -16,12 +16,16 @@ export interface AutoTrader2PanelProps {
   onDurationChange: (duration: number) => void;
   lossLimit: number;
   onLossLimitChange: (amount: number) => void;
+  profitLimit: number;
+  onProfitLimitChange: (amount: number) => void;
   stakeMode: "flat" | "multiply";
   onStakeModeChange: (mode: "flat" | "multiply") => void;
   multiplier: number;
   onMultiplierChange: (multiplier: number) => void;
   aiEnabled: boolean;
   onAiEnabledChange: (enabled: boolean) => void;
+  autoContractType: boolean;
+  onAutoContractTypeChange: (enabled: boolean) => void;
   aiStatus: "off" | "working" | "waiting" | "paused";
   running: boolean;
   stopping: boolean;
@@ -76,12 +80,16 @@ export default function AutoTrader2Panel({
   onDurationChange,
   lossLimit,
   onLossLimitChange,
+  profitLimit,
+  onProfitLimitChange,
   stakeMode,
   onStakeModeChange,
   multiplier,
   onMultiplierChange,
   aiEnabled,
   onAiEnabledChange,
+  autoContractType,
+  onAutoContractTypeChange,
   aiStatus,
   running,
   stopping,
@@ -202,6 +210,14 @@ export default function AutoTrader2Panel({
                   data-testid={`at2-contract-type-${type.toLowerCase()}`}
                 >{type === "CALL" ? "Rise" : "Fall"}</button>
               ))}
+              <button
+                type="button"
+                className={autoContractType ? "selected auto" : ""}
+                aria-pressed={autoContractType}
+                onClick={() => onAutoContractTypeChange(!autoContractType)}
+                disabled={controlsLocked}
+                data-testid="at2-contract-type-auto"
+              >A · Auto</button>
             </div>
           )}
           {contractFamily === "even-odd" && (
@@ -217,23 +233,41 @@ export default function AutoTrader2Panel({
                   data-testid={`at2-contract-type-${type.toLowerCase()}`}
                 >{type === "DIGITEVEN" ? "Even" : "Odd"}</button>
               ))}
+              <button
+                type="button"
+                className={autoContractType ? "selected auto" : ""}
+                aria-pressed={autoContractType}
+                onClick={() => onAutoContractTypeChange(!autoContractType)}
+                disabled={controlsLocked}
+                data-testid="at2-contract-type-auto"
+              >A · Auto</button>
             </div>
           )}
           {contractFamily === "differs" && (
-            <label className="at2-field at2-barrier-field">
-              <span className="at2-label">DIFFERS DIGIT <i>· 0–9</i></span>
-              <input
-                type="number"
-                min="0"
-                max="9"
-                step="1"
-                value={barrier}
-                onChange={(event) => onBarrierChange(Math.min(9, Math.max(0, Math.floor(Number(event.target.value) || 0))))}
-                disabled={controlsLocked}
-                aria-label="Differs barrier digit from zero to nine"
-                data-testid="at2-barrier"
-              />
-            </label>
+            <div className="at2-differs-selection">
+              <label className="at2-field at2-barrier-field">
+                <span className="at2-label">DIFFERS DIGIT <i>· 0–9</i></span>
+                <select
+                  value={autoContractType ? "auto" : String(barrier)}
+                  onChange={(event) => {
+                    if (event.target.value === "auto") onAutoContractTypeChange(true);
+                    else {
+                      onAutoContractTypeChange(false);
+                      onBarrierChange(Number(event.target.value));
+                    }
+                  }}
+                  disabled={controlsLocked}
+                  aria-label="Differs barrier digit or automatic coldest digit"
+                  data-testid="at2-barrier"
+                >
+                  {Array.from({ length: 10 }, (_, digit) => <option value={digit} key={digit}>{digit}</option>)}
+                  <option value="auto">A · Auto (coldest digit)</option>
+                </select>
+              </label>
+              <small className="at2-auto-digit-note">
+                {autoContractType ? "Auto chooses the least frequent recent digit." : "Choose a digit, or select A to use the coldest recent digit."}
+              </small>
+            </div>
           )}
         </div>
       </div>
@@ -279,6 +313,20 @@ export default function AutoTrader2Panel({
             data-testid="at2-loss-limit"
           />
         </label>
+        <label className="at2-field">
+          <span className="at2-label">PROFIT TARGET <i>· {currency}</i></span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={profitLimit}
+            onChange={(event) => onProfitLimitChange(Math.max(0, Number(event.target.value) || 0))}
+            disabled={controlsLocked}
+            aria-label={`Session profit target in ${currency}`}
+            data-testid="at2-profit-limit"
+          />
+          <small className="at2-limit-note">0 disables this stop.</small>
+        </label>
       </div>
 
       <section className="at2-stake-plan" aria-label="Stake progression">
@@ -320,7 +368,7 @@ export default function AutoTrader2Panel({
             data-testid="at2-auto-select"
           />
           <span className="at2-checkmark" aria-hidden="true" />
-          <span className="at2-check-copy"><strong>Auto-select market</strong><small>With AI 2, picks the strongest eligible market for your selected family.</small></span>
+          <span className="at2-check-copy"><strong>Auto-select market</strong><small>Picks the strongest observed market for your selected contract or Auto choice.</small></span>
           <b className="at2-status-tag">{autoSelect ? "ON" : "OFF"}</b>
         </label>
         <label className={`at2-check-row at2-ai-row ${aiEnabled ? "checked" : ""}`}>

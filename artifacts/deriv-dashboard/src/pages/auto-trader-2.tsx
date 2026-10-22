@@ -32,6 +32,7 @@ import type { DerivHistoryRow } from "@/components/deriv-history";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getAccountBalance } from "@/lib/account-balance";
 import {
+  getAutoTrader2StopReason,
   parseAutoTrader2SavedSession,
   reconcileAutoTrader2SavedSession,
   requiresAutoTrader2SessionReview,
@@ -41,6 +42,7 @@ import {
 } from "@/lib/auto-trader-2-session";
 import {
   chooseAutoTrader2Candidate,
+  chooseAutoTrader2ManualCandidate,
   getAutoTrader2OppositeType,
   updateAutoTrader2LossState,
   updateAutoTrader2Recovery,
@@ -74,24 +76,25 @@ const markets: Market[] = [
 const guideCopy = [
   ["Welcome to Auto Trader 2.0", "This is a separate automated-trading mode under Auto Trader. It lets you set trade size, session boundaries, contract family, market selection, and how the next stake changes after a loss.", "All contracts are settled by Deriv. Historical signals and automation do not guarantee a winning result."],
   ["Select the Deriv account", "The account selector in the page header shows which Deriv account the feature will use. Confirm the account type, ID, and balance before every session.", "Demo trading is recommended while you learn. Real-account orders use real funds and remain subject to server permissions."],
-  ["Choose a contract family", "Choose Differs, Rise/Fall, or Even/Odd. With AI 2 on, it ranks the eligible direction or parity and market inside that family; with AI 2 off, your selected contract type is used.", "The contract result is decided at expiry. A recent pattern does not determine the next result."],
+  ["Choose a contract family", "Choose Differs, Rise/Fall, or Even/Odd. Select A · Auto to use the least frequent recent digit for Differs, or the higher observed expiry win rate for Rise/Fall and Even/Odd. AI 2 remains an optional stricter filter.", "The contract result is decided at expiry. A recent pattern does not determine the next result."],
   ["Digit Differs", "Differs wins when the last digit at contract expiry is not the selected barrier digit. Choose a digit from 0 through 9 when using manual settings.", "A digit that appeared less often in a sample is not guaranteed to stay uncommon."],
   ["Rise and Fall", "Rise uses a CALL contract and Fall uses a PUT contract. The selected market movement at expiry determines which contract wins.", "Recent up/down movements are descriptive history only; they do not predict the next movement."],
   ["Even and Odd", "Even and Odd use the last digit at expiry. Choose the parity manually or let AI 2 compare the observed sample when it is enabled.", "A recent imbalance can change quickly and is not a promise of future parity."],
   ["Set your stake", "Stake is the amount requested for each individual contract. The account balance and the server's trading checks remain authoritative.", "The amount risked can be lost. Keep it within an amount you can afford to lose."],
   ["Set contract duration", "Duration is the number of ticks before contract expiry. Auto Trader 2.0 uses whole-tick durations from 1 through 5.", "A shorter contract resolves sooner but is not automatically safer or more profitable."],
-  ["Stop conditions", "Auto Trader 2.0 continues after wins and stops only when you press Stop or settled session losses reach the configured Loss Limit. Enter zero to disable the loss-limit stop.", "An already-open contract may settle after you stop. The loss limit does not cap the possible loss on an open contract."],
+  ["Stop conditions", "Auto Trader 2.0 continues after wins and stops when you press Stop, settled losses reach Loss Limit, or settled session profit reaches Profit Target. Enter zero to disable either limit.", "An already-open contract may settle after you stop. Neither limit caps the possible result of an open contract."],
   ["Loss limit", "Loss Limit stops the loop before another entry once settled session losses reach the configured amount. Enter zero to turn this stop off.", "This does not cap the possible loss on an already-open contract or guarantee an exact maximum loss."],
+  ["Profit target", "Profit Target stops the loop before another entry once settled session profit reaches your configured amount. Enter zero to turn this stop off.", "An already-open contract may settle after a target is reached; the bot will not open another entry after settlement."],
   ["Flat stake mode", "Flat mode uses the configured stake for each entry. It makes the planned amount consistent from one contract to the next.", "Flat staking cannot prevent losses. Review the stake against the account balance before starting."],
   ["Multiply after loss", "Multiply after loss increases the next requested stake after a losing settlement by your configured multiplier. A win returns the next amount to the base stake.", "Multiplying can increase exposure quickly and does not guarantee recovery. The server still checks the selected account balance."],
-  ["Auto-select market", "When enabled with AI 2, the feature compares qualifying live samples across supported markets and selects the strongest eligible market. Turn it off to keep the manually selected market.", "Auto-selection ranks observed data; it is not a forecast of future results."],
+  ["Auto-select market", "When enabled, Auto Trader 2.0 compares recent expiry results across supported markets and uses the strongest observed sample for your selected contract or Auto choice. Turn it off to stay on the manually selected market.", "Auto-selection ranks observed data; it is not a forecast of future results."],
   ["AI 2 checkbox", "AI 2 uses a stricter evidence filter, chooses the strongest qualifying direction or parity, and switches to the paired opposite side after a loss. It analyzes fresh market data before the next entry; if the opposite side does not qualify, it waits. After three losses on one type, it pauses that type for the rest of the session.", "AI 2 is a rule-based filter of observed market data, not a source of guaranteed outcomes."],
   ["AI 2 sample threshold", "AI 2 requires a larger recent expiry sample and statistical support above the contract baseline. When the evidence is weak or inconsistent, it waits instead of placing a trade.", "Observed rates are historical context, not a promise of future contract results."],
   ["Differs loss response", "After any AI 2 Differs loss settles, recovery selection switches to qualifying Rise/Fall or Even/Odd candidates and can auto-select the strongest market. It remains in recovery until settled session P/L rises above the P/L level from just before that loss.", "Recovery does not guarantee a profit. If no qualifying setup is available, AI 2 waits without placing an order."],
   ["One open contract at a time", "The loop waits for Deriv history to show the active contract as settled before considering another entry. Other open contracts also block new entries.", "If settlement cannot be verified, the loop pauses instead of guessing or sending another order."],
   ["Reading Auto Trader 2.0 History", "History uses the same session summary and trade-row design as Cash Grab. It only includes contracts this feature recorded for the currently selected account.", "The history list is a dashboard view. Deriv remains the authoritative account record."],
   ["Clear this feature's history", "The two-step clear removes this browser's Auto Trader 2.0 rows and verified local run state. It resets this run's totals and next stake to the configured stake; Deriv account history is unchanged.", "If a stopped contract is settling, Deriv must first confirm it is closed. An uncertain order still requires review; clearing never closes or cancels a contract."],
-  ["Declines, uncertain orders & reloads", "Deriv may decline unavailable contracts; Auto Trader 2.0 stops after a rejection and never retries an uncertain order. AI 2 saves account-scoped recovery state in this browser. After reload, verify Deriv history and open contracts before resuming; an order that may have been submitted is never resent.", "A saved checkpoint is not proof of settlement. If history, account identity, or open-contract status cannot be confirmed, keep the session paused and review Deriv directly."],
+  ["Declines, uncertain orders & reloads", "A confirmed rejection is retried after a short wait. If the order outcome is uncertain, Auto Trader 2.0 stays paused for review and will never resend it. Session state is saved for this account in this browser; after reload, Deriv history and open contracts are checked before continuing.", "A saved checkpoint is not proof of settlement. If history, account identity, or open-contract status cannot be confirmed, keep the session paused and review Deriv directly."],
 ] as const;
 
 type LocalContract = { id: string; placedAt: number };
@@ -151,9 +154,11 @@ function AutoTrader2Content() {
   const [stake, setStake] = useState(1);
   const [duration, setDuration] = useState(1);
   const [lossLimit, setLossLimit] = useState(10);
+  const [profitLimit, setProfitLimit] = useState(0);
   const [stakeMode, setStakeMode] = useState<"flat" | "multiply">("flat");
   const [multiplier, setMultiplier] = useState(2);
   const [aiEnabled, setAiEnabled] = useState(false);
+  const [autoContractType, setAutoContractType] = useState(false);
   const [autoSelect, setAutoSelect] = useState(false);
   const [selectedMarket, setSelectedMarket] = useState("R_10");
   const [nextStake, setNextStake] = useState(1);
@@ -363,9 +368,11 @@ function AutoTrader2Content() {
         setStake(restoredSession.config.stake);
         setDuration(restoredSession.config.duration);
         setLossLimit(restoredSession.config.lossLimit);
+        setProfitLimit(restoredSession.config.profitLimit);
         setStakeMode(restoredSession.config.stakeMode);
         setMultiplier(restoredSession.config.multiplier);
         setAiEnabled(restoredSession.config.aiEnabled);
+        setAutoContractType(restoredSession.config.autoContractType);
         setAutoSelect(restoredSession.config.autoSelect);
         setSelectedMarket(restoredSession.config.selectedMarket);
         setSavedSessionNotice(
@@ -374,8 +381,8 @@ function AutoTrader2Content() {
             : restoredSession.phase === "awaiting-settlement"
               ? "Auto Trader 2.0 is stopped. The accepted contract remains with Deriv; Start will check its settlement before continuing."
               : restoredSession.phase === "completed"
-                ? "This AI 2 session is stopped. Starting again begins a new run; Deriv history remains unchanged."
-                : "A saved AI 2 session was found. Press Start to check Deriv history and continue safely.",
+                ? "This session is stopped. Starting again begins a new run; Deriv history remains unchanged."
+                : "A saved Auto Trader 2.0 session was found. Press Start to check Deriv history and continue safely.",
         );
       }
     } catch {
@@ -427,19 +434,21 @@ function AutoTrader2Content() {
     stake,
     duration,
     lossLimit,
+    profitLimit,
     stakeMode,
     multiplier,
     aiEnabled,
+    autoContractType,
     autoSelect,
     selectedMarket,
   });
 
   const persistRunState = (phase: AutoTrader2SavedPhase, config = runRef.current.config) => {
-    if (!config?.aiEnabled) return true;
+    if (!config) return true;
     if (!accountId) return false;
     const isTerminalOrReady = phase === "ready" || phase === "completed";
     const snapshot: AutoTrader2SavedSession = {
-      version: 3,
+      version: 4,
       accountId,
       phase,
       config,
@@ -496,16 +505,37 @@ function AutoTrader2Content() {
     config: RunConfig,
     recovery: boolean,
     currentSignals: readonly AutoTrader2Signal[] = signalsRef.current,
-  ) => chooseAutoTrader2Candidate({
+  ) => {
+    const autoDiffers = !recovery && config.family === "differs" && config.autoContractType
+      ? chooseManualCandidate(config, currentSignals)
+      : null;
+    if (!recovery && config.family === "differs" && config.autoContractType && !autoDiffers) return null;
+    return chooseAutoTrader2Candidate({
+      signals: currentSignals,
+      family: recovery ? "recovery" : config.family,
+      preferredType: config.contractType,
+      barrier: config.barrier,
+      selectedMarket: autoDiffers?.symbol ?? config.selectedMarket,
+      autoSelect: autoDiffers ? false : config.autoSelect,
+      duration: config.duration,
+      excludedContractTypes: runRef.current.pausedContractTypes,
+      requiredContractType: runRef.current.forcedNextType,
+      requiredBarrier: autoDiffers?.barrier,
+    });
+  };
+
+  const chooseManualCandidate = (
+    config: RunConfig,
+    currentSignals: readonly AutoTrader2Signal[],
+  ) => chooseAutoTrader2ManualCandidate({
     signals: currentSignals,
-    family: recovery ? "recovery" : config.family,
+    family: config.family,
     preferredType: config.contractType,
     barrier: config.barrier,
+    autoContractType: config.autoContractType,
     selectedMarket: config.selectedMarket,
     autoSelect: config.autoSelect,
     duration: config.duration,
-    excludedContractTypes: runRef.current.pausedContractTypes,
-    requiredContractType: runRef.current.forcedNextType,
   });
 
   const finishLoop = (generation: number, finalMessage?: { tone: "error" | "success" | "info"; text: string }) => {
@@ -517,20 +547,18 @@ function AutoTrader2Content() {
     setStopping(false);
     setIsPlacing(false);
     if (finalMessage) setMessage(finalMessage);
-    if (runRef.current.config?.aiEnabled) {
-      const saved = readStoredSession();
-      if (saved) {
-        setSavedSession(saved);
-        setSavedSessionNotice(
-          saved.phase === "placing" || saved.phase === "manual-review"
-            ? "The last order may have been submitted. Check Deriv history and open contracts before deciding what to do; Auto Trader 2.0 will not resend it."
-            : saved.phase === "awaiting-settlement"
-              ? "The accepted contract is still settling. Press Start after it settles; Auto Trader 2.0 will check Deriv before continuing."
-              : saved.phase === "completed"
-                ? "This AI 2 session is stopped. Starting again begins a new run; Deriv history remains unchanged."
-                : "The saved AI 2 session is paused. Verify its Deriv history and open-contract status before resuming.",
-        );
-      }
+    const saved = readStoredSession();
+    if (saved) {
+      setSavedSession(saved);
+      setSavedSessionNotice(
+        saved.phase === "placing" || saved.phase === "manual-review"
+          ? "The last order may have been submitted. Check Deriv history and open contracts before deciding what to do; Auto Trader 2.0 will not resend it."
+          : saved.phase === "awaiting-settlement"
+            ? "The accepted contract is still settling. Press Start after it settles; Auto Trader 2.0 will check Deriv before continuing."
+            : saved.phase === "completed"
+              ? `${finalMessage?.text ?? "Auto Trader 2.0 is stopped."} Starting again begins a new run; Deriv history remains unchanged.`
+              : "The saved session is paused. Verify its Deriv history and open-contract status before resuming.",
+      );
     }
   };
 
@@ -565,6 +593,10 @@ function AutoTrader2Content() {
     }
     if (!Number.isFinite(stake) || stake < minimumStake) {
       setMessage({ tone: "error", text: `Enter a stake of at least ${minimumStake.toFixed(2)} ${currency}.` });
+      return;
+    }
+    if (!Number.isFinite(lossLimit) || lossLimit < 0 || !Number.isFinite(profitLimit) || profitLimit < 0) {
+      setMessage({ tone: "error", text: "Loss Limit and Profit Target must be zero or greater." });
       return;
     }
     if (!Number.isInteger(duration) || duration < 1 || duration > 5) {
@@ -604,68 +636,31 @@ function AutoTrader2Content() {
     setRunning(true);
     setStopping(false);
     setMessage(null);
-    setDecision(config.aiEnabled ? "AI 2 is working. Waiting for an eligible live sample." : "Manual setup ready. One contract will be sent.");
+    setDecision(config.aiEnabled
+      ? "AI 2 is working. Waiting for an eligible live sample."
+      : config.autoContractType || config.autoSelect
+        ? "Auto selection is active. Waiting for enough recent samples."
+        : "Manual setup ready. The selected contract will repeat until a stop limit is reached or you stop it.");
 
     if (!persistRunState("ready", config)) {
       finishLoop(generation, {
         tone: "error",
-        text: "Auto Trader 2.0 could not save a recovery checkpoint, so it stopped before sending an order.",
+        text: "Auto Trader 2.0 could not save a session checkpoint, so it stopped before sending an order.",
       });
       return;
     }
 
-    if (!config.aiEnabled) {
-      let candidate: AutoTrader2Candidate | null = null;
-      if (config.autoSelect) {
-        const matchingSignals = signalsRef.current
-          .filter((signal) => signal.sample_count >= 20 && signal.recent_digits.length >= 20)
-          .map((signal): AutoTrader2Candidate => {
-            const digits = signal.recent_digits;
-            const sampleCount = Math.min(signal.sample_count, digits.length);
-            let observedRate = 0;
-            if (config.contractType === "DIGITDIFF") {
-              observedRate = ((sampleCount - digits.filter((digit) => digit === config.barrier).length) / sampleCount) * 100;
-            } else if (config.contractType === "CALL") {
-              observedRate = Number(signal.rise_percentage ?? 0);
-            } else if (config.contractType === "PUT") {
-              observedRate = Number(signal.fall_percentage ?? 0);
-            } else {
-              const evenRate = digits.filter((digit) => digit % 2 === 0).length / sampleCount * 100;
-              observedRate = config.contractType === "DIGITEVEN" ? evenRate : 100 - evenRate;
-            }
-            return {
-              symbol: signal.symbol,
-              contractType: config.contractType,
-              ...(config.contractType === "DIGITDIFF" ? { barrier: config.barrier } : {}),
-              observedRate,
-              sampleCount,
-              edgeOverBaseline: observedRate - (config.contractType === "DIGITDIFF" ? 90 : 50),
-            };
-          })
-          .filter((candidate) => Number.isFinite(candidate.observedRate));
-        candidate = matchingSignals
-          .filter((option) => config.autoSelect || option.symbol === config.selectedMarket)
-          .sort((left, right) => right.observedRate - left.observedRate || right.sampleCount - left.sampleCount)[0] ?? null;
-        if (!candidate) {
-          finishLoop(generation, { tone: "info", text: "No eligible live sample is available for auto-select yet. Start again after more market data arrives." });
-          setDecision("Waiting for an eligible live sample.");
-          return;
-        }
-      }
-      await runTrades(generation, config, candidate, false);
-      return;
-    }
-    await runTrades(generation, config, null, true);
+    await runTrades(generation, config, null);
   };
 
   const runTrades = async (
     generation: number,
     config: RunConfig,
     firstCandidate: AutoTrader2Candidate | null,
-    continuous: boolean,
   ) => {
     let first = true;
     let loopCandidate = firstCandidate;
+    let confirmedRejectionDelay = 1_000;
     while (runRef.current.active && runRef.current.generation === generation) {
       let slotReady = false;
       let latestSignals: readonly AutoTrader2Signal[] = signalsRef.current;
@@ -699,9 +694,13 @@ function AutoTrader2Content() {
       if (!slotReady) return;
 
       const inRecovery = runRef.current.recovery;
-      if (continuous && (!first || !loopCandidate)) {
-        loopCandidate = chooseCandidate(config, inRecovery, latestSignals);
-        if (!loopCandidate) {
+      if (!first || !loopCandidate) {
+        loopCandidate = config.aiEnabled
+          ? chooseCandidate(config, inRecovery, latestSignals)
+          : config.autoContractType || config.autoSelect
+            ? chooseManualCandidate(config, latestSignals)
+            : null;
+        if (!loopCandidate && (config.aiEnabled || config.autoContractType || config.autoSelect)) {
           const pausedTypes = runRef.current.pausedContractTypes
             .map((type) => type.replace("DIGIT", ""))
             .join(", ");
@@ -709,7 +708,9 @@ function AutoTrader2Content() {
             ? `Waiting for a qualifying alternate sample · AI 2 paused ${pausedTypes} after three losses; no new order sent.`
             : inRecovery
               ? "Waiting for a qualifying Rise/Fall or Even/Odd recovery sample; no new order sent."
-              : "Waiting for a fresh sample that meets the entry filter.");
+              : config.aiEnabled
+                ? "Waiting for a fresh sample that meets the AI 2 entry filter."
+                : "Waiting for enough recent samples to choose the requested automatic contract or market.");
           await delay(1_000);
           continue;
         }
@@ -734,15 +735,17 @@ function AutoTrader2Content() {
       };
 
       runRef.current.lastCandidate = candidate;
-      setDecision(continuous
-        ? inRecovery
+      setDecision(config.aiEnabled && inRecovery
           ? `Recovery selection · ${selectedType.replace("DIGIT", "")} · ${symbol} · ${candidate?.observedRate.toFixed(1) ?? "—"}% observed`
-          : `AI 2 selected ${selectedType.replace("DIGIT", "")}${selectedBarrier == null ? "" : ` ${selectedBarrier}`} · ${symbol} · ${candidate?.observedRate.toFixed(1) ?? "—"}% observed`
-        : `Sending ${selectedType.replace("DIGIT", "")} on ${symbol}.`);
+          : config.aiEnabled
+            ? `AI 2 selected ${selectedType.replace("DIGIT", "")}${selectedBarrier == null ? "" : ` ${selectedBarrier}`} · ${symbol} · ${candidate?.observedRate.toFixed(1) ?? "—"}% observed`
+            : candidate
+              ? `Auto selected ${selectedType.replace("DIGIT", "")}${selectedBarrier == null ? "" : ` ${selectedBarrier}`} · ${symbol} · ${candidate.observedRate.toFixed(1)}% observed`
+              : `Repeating selected ${selectedType.replace("DIGIT", "")}${selectedBarrier == null ? "" : ` ${selectedBarrier}`} on ${symbol}.`);
       runRef.current.pendingContractId = null;
       runRef.current.pendingContractType = selectedType;
       runRef.current.pendingStake = orderStake;
-      if (config.aiEnabled && !persistRunState("placing", config)) {
+      if (!persistRunState("placing", config)) {
         finishLoop(generation, {
           tone: "error",
           text: "Auto Trader 2.0 could not save the pre-order checkpoint. It stopped before sending this order.",
@@ -755,7 +758,7 @@ function AutoTrader2Content() {
         const result = await buyRef.current.mutateAsync({ data: { ...order, automated: true } });
         contractId = String(result.buy?.contract_id ?? "");
         if (!contractId) {
-          if (config.aiEnabled) persistRunState("manual-review", config);
+          persistRunState("manual-review", config);
           finishLoop(generation, {
             tone: "error",
             text: "Deriv returned an order response without a contract ID. New entries are paused; verify Deriv history before taking any further action.",
@@ -766,7 +769,7 @@ function AutoTrader2Content() {
         runRef.current.pendingContractId = contractId;
         setRunContractIds([...runRef.current.contractIds]);
         const historySaved = persistContract(contractId);
-        if (config.aiEnabled && !persistRunState("awaiting-settlement", config)) {
+        if (!persistRunState("awaiting-settlement", config)) {
           finishLoop(generation, {
             tone: "error",
             text: "Deriv accepted the contract, but its recovery checkpoint could not be saved. Auto Trader 2.0 stopped; check Deriv history and do not resubmit.",
@@ -790,28 +793,31 @@ function AutoTrader2Content() {
           ? error.data as Record<string, unknown>
           : null;
         const errorCode = typeof errorData?.code === "string" ? errorData.code : "";
-        if (errorCode === "AUTO_TRADER_2_PAUSED") {
+        const confirmedRejection = error instanceof ApiError
+          && error.status < 500
+          && error.status !== 403;
+        if (errorCode === "AUTO_TRADER_2_PAUSED" || errorCode === "DERIV_BUY_RATE_LIMITED" || confirmedRejection) {
           runRef.current.pendingContractType = null;
           runRef.current.pendingStake = null;
-          if (config.aiEnabled) persistRunState("ready", config);
-          finishLoop(generation, {
-            tone: "info",
-            text: error instanceof Error ? error.message : "Auto Trader 2.0 is paused by an administrator. No new order was sent.",
-          });
-          return;
-        }
-        if (errorCode === "DERIV_BUY_RATE_LIMITED") {
-          runRef.current.pendingContractType = null;
-          runRef.current.pendingStake = null;
-          if (config.aiEnabled) persistRunState("ready", config);
-          finishLoop(generation, {
-            tone: "error",
-            text: `${error instanceof Error ? error.message : "Deriv temporarily limited new buys."} The service safely retried confirmed rejections; this order was not accepted. Auto Trader 2.0 can be started again after checking the account.`,
-          });
-          return;
+          if (!persistRunState("ready", config)) {
+            finishLoop(generation, {
+              tone: "error",
+              text: "The order was rejected, but Auto Trader 2.0 could not save its session state. It stopped before another order.",
+            });
+            return;
+          }
+          const retryText = error instanceof Error
+            ? `${error.message} No contract was accepted. Auto Trader 2.0 remains active and will check again.`
+            : "Deriv rejected the order. Auto Trader 2.0 remains active and will check again.";
+          setMessage({ tone: "info", text: retryText });
+          setDecision("Waiting briefly after a confirmed rejection. Auto Trader 2.0 remains active.");
+          setIsPlacing(false);
+          await delay(confirmedRejectionDelay);
+          confirmedRejectionDelay = Math.min(confirmedRejectionDelay * 2, 30_000);
+          continue;
         }
         const uncertain = error instanceof ApiTransportError && error.tradeOutcomeUncertain;
-        if (config.aiEnabled) persistRunState("manual-review", config);
+        persistRunState("manual-review", config);
         finishLoop(generation, {
           tone: "error",
           text: uncertain
@@ -914,30 +920,32 @@ function AutoTrader2Content() {
       }
       setNextStake(runRef.current.currentStake);
 
-      const hitLossLimit = config.lossLimit > 0 && runRef.current.sessionPnl <= -config.lossLimit;
-      if (hitLossLimit) {
-        if (config.aiEnabled) persistRunState("completed", config);
+      const stopReason = getAutoTrader2StopReason({
+        sessionPnl: runRef.current.sessionPnl,
+        lossLimit: config.lossLimit,
+        profitLimit: config.profitLimit,
+      });
+      if (stopReason === "loss") {
+        persistRunState("completed", config);
         finishLoop(generation, { tone: "info", text: "Loss limit reached. No further entry was sent." });
         setDecision("Loss limit reached · automation stopped.");
         return;
       }
+      if (stopReason === "profit") {
+        persistRunState("completed", config);
+        finishLoop(generation, { tone: "success", text: "Profit target reached. No further entry was sent." });
+        setDecision("Profit target reached · automation stopped.");
+        return;
+      }
 
-      if (config.aiEnabled && !persistRunState("ready", config)) {
+      if (!persistRunState("ready", config)) {
         finishLoop(generation, {
           tone: "error",
-          text: "The settled result was verified, but the recovery checkpoint could not be saved. Auto Trader 2.0 stopped before another order.",
+          text: "The settled result was verified, but the session checkpoint could not be saved. Auto Trader 2.0 stopped before another order.",
         });
         return;
       }
 
-      if (!continuous) {
-        finishLoop(generation, {
-          tone: "success",
-          text: `${selectedType.replace("DIGIT", "")} contract settled. Auto Trader 2.0 sent one manual order and stopped.`,
-        });
-        setDecision("Manual order settled. Start again when ready.");
-        return;
-      }
       first = false;
       loopCandidate = null;
       if (config.aiEnabled && settledProfit < 0) {
@@ -987,7 +995,7 @@ function AutoTrader2Content() {
       if (assessment.kind === "completed") {
         if (!persistReconciledSession(assessment.session)) return;
         setSavedSession(assessment.session);
-        setSavedSessionNotice("The saved session reached its configured stop limit. Dismiss its local checkpoint before starting a new run.");
+          setSavedSessionNotice("The saved session reached its configured stop limit. Start again to begin a new run.");
         setMessage({ tone: "info", text: "Deriv history confirmed the saved stop condition. No new order was sent." });
         return;
       }
@@ -1039,9 +1047,11 @@ function AutoTrader2Content() {
       setStake(config.stake);
       setDuration(config.duration);
       setLossLimit(config.lossLimit);
+      setProfitLimit(config.profitLimit);
       setStakeMode(config.stakeMode);
       setMultiplier(config.multiplier);
       setAiEnabled(config.aiEnabled);
+      setAutoContractType(config.autoContractType);
       setAutoSelect(config.autoSelect);
       setSelectedMarket(config.selectedMarket);
       setSavedSession(null);
@@ -1051,7 +1061,7 @@ function AutoTrader2Content() {
       setStopping(false);
       setMessage({ tone: "success", text: "Deriv history and open-contract status were verified. The saved session resumed without resending its last contract." });
       setDecision("AI 2 resumed from the verified checkpoint.");
-      void runTrades(generation, config, null, true);
+      void runTrades(generation, config, null);
     } catch (error) {
       const text = error instanceof Error ? error.message : "Deriv could not verify the saved session.";
       setSavedSessionNotice(`${text} No order was sent.`);
@@ -1078,7 +1088,7 @@ function AutoTrader2Content() {
     setDecision("Stopped · any open contract remains with Deriv and may still settle.");
     setMessage({ tone: "info", text: "Auto Trader 2.0 stopped. Any accepted contract remains with Deriv and will settle; new entries are paused." });
     let saved = readStoredSession();
-    if (!orderPending && runRef.current.config?.aiEnabled) {
+    if (!orderPending && runRef.current.config) {
       persistRunState("completed");
       saved = readStoredSession();
     }
@@ -1318,7 +1328,7 @@ function AutoTrader2Content() {
           contractFamily={family}
           onContractFamilyChange={chooseFamily}
           contractType={contractType}
-          onContractTypeChange={setContractType}
+          onContractTypeChange={(type) => { setContractType(type); setAutoContractType(false); }}
           barrier={barrier}
           onBarrierChange={setBarrier}
           stake={stake}
@@ -1328,12 +1338,16 @@ function AutoTrader2Content() {
           onDurationChange={setDuration}
           lossLimit={lossLimit}
           onLossLimitChange={setLossLimit}
+          profitLimit={profitLimit}
+          onProfitLimitChange={setProfitLimit}
           stakeMode={stakeMode}
           onStakeModeChange={setStakeMode}
           multiplier={multiplier}
           onMultiplierChange={setMultiplier}
           aiEnabled={aiEnabled}
           onAiEnabledChange={setAiEnabled}
+          autoContractType={autoContractType}
+          onAutoContractTypeChange={setAutoContractType}
           aiStatus={aiStatus}
           running={running}
           stopping={stopping}
@@ -1368,19 +1382,19 @@ function AutoTrader2Content() {
           onOpenGuide={() => { setGuidePage(0); setGuideOpen(true); }}
         />
 
-        <div className="at2-page-caution"><ShieldAlert size={15} /><span>Live account selection routes orders to real funds when server-side live trading is enabled. AI 2 only filters historical observations and cannot guarantee profit or loss recovery.</span></div>
+        <div className="at2-page-caution"><ShieldAlert size={15} /><span>Live account selection routes orders to real funds when server-side live trading is enabled. Auto selection and AI 2 use historical observations and cannot guarantee future results.</span></div>
         <Dialog open={guideOpen} onOpenChange={setGuideOpen}>
           <DialogContent className="at2-guide-dialog" data-testid="at2-guide-dialog">
             <DialogHeader>
-              <div className="at2-guide-overline"><BookOpen size={14} /> AUTO TRADER 2.0 GUIDE <span>{String(guidePage + 1).padStart(2, "0")} / 20</span></div>
+              <div className="at2-guide-overline"><BookOpen size={14} /> AUTO TRADER 2.0 GUIDE <span>{String(guidePage + 1).padStart(2, "0")} / {guideCopy.length}</span></div>
               <DialogTitle>{guideCopy[guidePage][0]}</DialogTitle>
               <DialogDescription>{guideCopy[guidePage][1]}</DialogDescription>
             </DialogHeader>
             <div className="at2-guide-caution"><ShieldAlert size={15} /><span>{guideCopy[guidePage][2]}</span></div>
-            <div className="at2-guide-progress"><span style={{ transform: `scaleX(${(guidePage + 1) / 20})` }} /></div>
+            <div className="at2-guide-progress"><span style={{ transform: `scaleX(${(guidePage + 1) / guideCopy.length})` }} /></div>
             <div className="at2-guide-controls">
               <button type="button" onClick={() => setGuidePage((page) => Math.max(0, page - 1))} disabled={guidePage === 0} data-testid="at2-guide-previous"><ChevronLeft size={15} /> Previous</button>
-              <button type="button" onClick={() => guidePage === 19 ? setGuideOpen(false) : setGuidePage((page) => Math.min(19, page + 1))} data-testid="at2-guide-next">{guidePage === 19 ? "Finish" : "Next"} <ChevronRight size={15} /></button>
+              <button type="button" onClick={() => guidePage === guideCopy.length - 1 ? setGuideOpen(false) : setGuidePage((page) => Math.min(guideCopy.length - 1, page + 1))} data-testid="at2-guide-next">{guidePage === guideCopy.length - 1 ? "Finish" : "Next"} <ChevronRight size={15} /></button>
             </div>
           </DialogContent>
         </Dialog>

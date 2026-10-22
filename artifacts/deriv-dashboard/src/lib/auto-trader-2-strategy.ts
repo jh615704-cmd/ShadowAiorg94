@@ -218,6 +218,7 @@ export function chooseAutoTrader2Candidate(input: {
   duration?: number;
   excludedContractTypes?: readonly AutoTrader2ContractType[];
   requiredContractType?: AutoTrader2ContractType | null;
+  requiredBarrier?: number | null;
   minimumSample?: number;
   minimumEdge?: number;
   minimumConfidenceEdge?: number;
@@ -241,6 +242,7 @@ export function chooseAutoTrader2Candidate(input: {
   )).filter((candidate) =>
     !excludedContractTypes.has(candidate.contractType)
     && (!input.requiredContractType || candidate.contractType === input.requiredContractType)
+    && (input.requiredBarrier == null || candidate.barrier === input.requiredBarrier)
   );
 
   candidates.sort((left, right) =>
@@ -251,6 +253,104 @@ export function chooseAutoTrader2Candidate(input: {
     || left.symbol.localeCompare(right.symbol)
     || (left.barrier ?? -1) - (right.barrier ?? -1)
     || left.contractType.localeCompare(right.contractType),
+  );
+  return candidates[0] ?? null;
+}
+
+/**
+ * The user-selected Auto option compares observed expiry outcomes directly.
+ * Unlike AI 2, this selector intentionally has no edge/confidence threshold;
+ * it still requires a reasonable sample and never treats missing data as a
+ * reason to place an order.
+ */
+export function chooseAutoTrader2ManualCandidate(input: {
+  signals: readonly AutoTrader2Signal[];
+  family: AutoTrader2Family;
+  preferredType: AutoTrader2ContractType;
+  barrier: number;
+  autoContractType: boolean;
+  selectedMarket: string;
+  autoSelect: boolean;
+  duration: number;
+  minimumSample?: number;
+}): AutoTrader2Candidate | null {
+  const minimumSample = input.minimumSample ?? 20;
+  const duration = Number.isInteger(input.duration) && input.duration > 0 ? input.duration : 1;
+  const types: AutoTrader2ContractType[] = input.family === "differs"
+    ? ["DIGITDIFF"]
+    : input.family === "rise-fall"
+      ? input.autoContractType ? ["CALL", "PUT"] : [input.preferredType]
+      : input.autoContractType ? ["DIGITEVEN", "DIGITODD"] : [input.preferredType];
+  const eligibleSignals = input.signals.filter((signal) =>
+    input.autoSelect || signal.symbol === input.selectedMarket
+  );
+  const candidates: AutoTrader2Candidate[] = [];
+
+  for (const signal of eligibleSignals) {
+    const digits = signal.recent_digits.filter((digit) => Number.isInteger(digit) && digit >= 0 && digit <= 9);
+    const digitSampleCount = Math.min(signal.sample_count, digits.length);
+    const expiryDigits = digits.slice(duration);
+    const expirySampleCount = Math.min(Math.max(0, digitSampleCount - duration), expiryDigits.length);
+
+    if (input.family === "differs") {
+      const sampleCount = input.autoContractType ? digitSampleCount : expirySampleCount;
+      if (sampleCount < minimumSample) continue;
+      const sampledDigits = input.autoContractType
+        ? digits.slice(0, sampleCount)
+        : expiryDigits.slice(0, sampleCount);
+      const barriers = input.autoContractType ? Array.from({ length: 10 }, (_, digit) => digit) : [input.barrier];
+      for (const barrier of barriers) {
+        const frequency = sampledDigits.filter((digit) => digit === barrier).length;
+        const observedRate = ((sampleCount - frequency) / sampleCount) * 100;
+        candidates.push({
+          symbol: signal.symbol,
+          contractType: "DIGITDIFF",
+          barrier,
+          observedRate: Number(observedRate.toFixed(1)),
+          sampleCount,
+          edgeOverBaseline: observedRate - 90,
+        });
+      }
+      continue;
+    }
+
+    for (const contractType of types) {
+      let wins = 0;
+      let sampleCount = 0;
+      if (contractType === "CALL" || contractType === "PUT") {
+        const quotes = signal.recent_quotes?.every(Number.isFinite) ? signal.recent_quotes : [];
+        sampleCount = Math.min(Math.max(0, signal.sample_count - duration), Math.max(0, quotes.length - duration));
+        if (sampleCount < minimumSample) continue;
+        wins = Array.from({ length: sampleCount }, (_, index) =>
+          contractType === "CALL"
+            ? quotes[index + duration]! > quotes[index]!
+            : quotes[index + duration]! < quotes[index]!,
+        ).filter(Boolean).length;
+      } else {
+        sampleCount = expirySampleCount;
+        if (sampleCount < minimumSample) continue;
+        const sampledDigits = expiryDigits.slice(0, sampleCount);
+        const evenCount = sampledDigits.filter((digit) => digit % 2 === 0).length;
+        wins = contractType === "DIGITEVEN" ? evenCount : sampleCount - evenCount;
+      }
+
+      const observedRate = (wins / sampleCount) * 100;
+      candidates.push({
+        symbol: signal.symbol,
+        contractType,
+        observedRate: Number(observedRate.toFixed(1)),
+        sampleCount,
+        edgeOverBaseline: observedRate - 50,
+      });
+    }
+  }
+
+  candidates.sort((left, right) =>
+    right.observedRate - left.observedRate
+    || right.sampleCount - left.sampleCount
+    || Number(right.contractType === input.preferredType) - Number(left.contractType === input.preferredType)
+    || left.symbol.localeCompare(right.symbol)
+    || (left.barrier ?? -1) - (right.barrier ?? -1),
   );
   return candidates[0] ?? null;
 }
