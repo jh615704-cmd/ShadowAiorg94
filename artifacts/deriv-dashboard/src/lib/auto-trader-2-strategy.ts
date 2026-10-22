@@ -189,7 +189,6 @@ function candidatesForSignal(
       wins,
       contractType === "CALL" || contractType === "PUT" ? quoteSampleCount : expiryDigitSampleCount,
     );
-    observedRate = Number(observedRate.toFixed(1));
     const edgeOverBaseline = observedRate - baseline;
     const confidenceEdgeOverBaseline = confidenceLowerRate - baseline;
     if (edgeOverBaseline >= minimumEdge && confidenceEdgeOverBaseline >= minimumConfidenceEdge) {
@@ -219,6 +218,7 @@ export function chooseAutoTrader2Candidate(input: {
   excludedContractTypes?: readonly AutoTrader2ContractType[];
   requiredContractType?: AutoTrader2ContractType | null;
   requiredBarrier?: number | null;
+  prioritizeObservedRate?: boolean;
   minimumSample?: number;
   minimumEdge?: number;
   minimumConfidenceEdge?: number;
@@ -246,7 +246,8 @@ export function chooseAutoTrader2Candidate(input: {
   );
 
   candidates.sort((left, right) =>
-    (right.confidenceEdgeOverBaseline ?? 0) - (left.confidenceEdgeOverBaseline ?? 0)
+    (input.prioritizeObservedRate ? right.observedRate - left.observedRate : 0)
+    || (right.confidenceEdgeOverBaseline ?? 0) - (left.confidenceEdgeOverBaseline ?? 0)
     || right.edgeOverBaseline - left.edgeOverBaseline
     || right.sampleCount - left.sampleCount
     || Number(right.contractType === input.preferredType) - Number(left.contractType === input.preferredType)
@@ -338,7 +339,7 @@ export function chooseAutoTrader2ManualCandidate(input: {
       candidates.push({
         symbol: signal.symbol,
         contractType,
-        observedRate: Number(observedRate.toFixed(1)),
+        observedRate,
         sampleCount,
         edgeOverBaseline: observedRate - 50,
       });

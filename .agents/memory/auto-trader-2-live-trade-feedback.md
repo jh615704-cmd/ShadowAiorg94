@@ -14,3 +14,9 @@ Auto Trader 2 continues after each settled contract until the user presses Stop,
 **Why:** On October 22, 2026, the user clarified that Auto Trader 2.0 must not end after a single manual-mode contract and must stop at either the selected loss or profit boundary, as well as the Stop button.
 
 **How to apply:** Keep settlement waiting abortable and event-driven, remove arbitrary run caps, evaluate realized P/L before each next entry, and do not mark confirmed rejections as completed sessions. Never resend an order whose Deriv outcome is uncertain; keep necessary account, connection, and order-review safety holds.
+
+For Rise/Fall and Even/Odd, manual A · Auto is exclusive of the manual-side buttons and selects the eligible side with the highest full-precision observed expiry win rate. Display rounding must not affect selection. If AI 2 is enabled, apply its evidence filter first, then rank qualifying Auto candidates by observed win rate; preserve the required opposite-side rule after an AI 2 loss.
+
+**Why:** The user clarified that Auto must not appear selected alongside a manual side and must choose the best observed win-rate side for either contract family.
+
+**How to apply:** Keep the Auto and manual choices mutually exclusive in both appearance and accessibility state. Compare only eligible samples for the selected duration and market scope, wait when sample requirements are unmet, and use unrounded rates for ranking while rounding only displayed values.

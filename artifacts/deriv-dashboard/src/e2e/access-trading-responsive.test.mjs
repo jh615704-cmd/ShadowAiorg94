@@ -487,6 +487,34 @@ test("clearing Auto Trader 2.0 resets run metrics and stake without deleting Der
   }
 });
 
+test("Auto Trader 2.0 Auto is exclusive of the manual Rise/Fall and Even/Odd sides", async () => {
+  const state = createState(userSession(["auto-trader-2"]));
+  state.hasToken = true;
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/auto-trader-2`);
+    await page.getByTestId("auto-trader-2-panel").waitFor();
+
+    await page.getByTestId("at2-contract-rise-fall").click();
+    await page.getByTestId("at2-contract-type-auto").click();
+    assert.equal(await page.getByTestId("at2-contract-type-auto").getAttribute("aria-pressed"), "true");
+    assert.equal(await page.getByTestId("at2-contract-type-call").getAttribute("aria-pressed"), "false");
+    assert.equal(await page.getByTestId("at2-contract-type-put").getAttribute("aria-pressed"), "false");
+
+    await page.getByTestId("at2-contract-even-odd").click();
+    assert.equal(await page.getByTestId("at2-contract-type-auto").getAttribute("aria-pressed"), "true");
+    assert.equal(await page.getByTestId("at2-contract-type-digiteven").getAttribute("aria-pressed"), "false");
+    assert.equal(await page.getByTestId("at2-contract-type-digitodd").getAttribute("aria-pressed"), "false");
+    await page.getByText("Auto chooses the side with the higher observed win rate for this duration.").waitFor();
+
+    assert.deepEqual(state.tradeRequests, [], "Changing selection must not place a trade.");
+    assert.deepEqual(state.unhandledApis, []);
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+});
+
 test("Auto Trader Stop returns to Start when no order is pending", async () => {
   const state = createState(userSession(["auto-trader-2"]));
   state.hasToken = true;

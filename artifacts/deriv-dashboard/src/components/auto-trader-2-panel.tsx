@@ -178,7 +178,7 @@ export default function AutoTrader2Panel({
       <div className="at2-strategy-block">
         <div className="at2-field-heading">
           <label className="at2-label" id="at2-contract-label">CONTRACT FAMILY</label>
-          <span className="at2-field-note">Choose the contract to configure</span>
+          <span className="at2-field-note">Choose a side or let Auto compare both outcomes</span>
         </div>
         <div className="at2-family-options" role="group" aria-labelledby="at2-contract-label">
           {familyOptions.map((option) => (
@@ -198,13 +198,14 @@ export default function AutoTrader2Panel({
         </div>
         <div className="at2-contract-detail">
           {contractFamily === "rise-fall" && (
+            <>
             <div className="at2-direction-options" role="group" aria-label="Choose Rise or Fall">
               {(["CALL", "PUT"] as const).map((type) => (
                 <button
                   type="button"
                   key={type}
-                  className={contractType === type ? "selected" : ""}
-                  aria-pressed={contractType === type}
+                  className={!autoContractType && contractType === type ? "selected" : ""}
+                  aria-pressed={!autoContractType && contractType === type}
                   onClick={() => onContractTypeChange(type)}
                   disabled={controlsLocked}
                   data-testid={`at2-contract-type-${type.toLowerCase()}`}
@@ -219,15 +220,22 @@ export default function AutoTrader2Panel({
                 data-testid="at2-contract-type-auto"
               >A · Auto</button>
             </div>
+            <small className="at2-auto-direction-note">
+              {autoContractType
+                ? "Auto chooses the side with the higher observed win rate for this duration."
+                : "Auto compares both sides; select Rise or Fall to choose one manually."}
+            </small>
+            </>
           )}
           {contractFamily === "even-odd" && (
+            <>
             <div className="at2-direction-options" role="group" aria-label="Choose Even or Odd">
               {(["DIGITEVEN", "DIGITODD"] as const).map((type) => (
                 <button
                   type="button"
                   key={type}
-                  className={contractType === type ? "selected" : ""}
-                  aria-pressed={contractType === type}
+                  className={!autoContractType && contractType === type ? "selected" : ""}
+                  aria-pressed={!autoContractType && contractType === type}
                   onClick={() => onContractTypeChange(type)}
                   disabled={controlsLocked}
                   data-testid={`at2-contract-type-${type.toLowerCase()}`}
@@ -242,6 +250,12 @@ export default function AutoTrader2Panel({
                 data-testid="at2-contract-type-auto"
               >A · Auto</button>
             </div>
+            <small className="at2-auto-direction-note">
+              {autoContractType
+                ? "Auto chooses the side with the higher observed win rate for this duration."
+                : "Auto compares both sides; select Even or Odd to choose one manually."}
+            </small>
+            </>
           )}
           {contractFamily === "differs" && (
             <div className="at2-differs-selection">

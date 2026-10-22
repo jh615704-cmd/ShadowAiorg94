@@ -237,6 +237,31 @@ test("manual Auto selection chooses the higher observed Rise/Fall expiry rate", 
   assert.equal(candidate?.sampleCount, 40);
 });
 
+test("manual Auto chooses the exact higher win rate when rounded rates tie", () => {
+  const candidate = chooseAutoTrader2ManualCandidate({
+    signals: [
+      signal("R_10", Array(8).fill(2), {
+        recent_quotes: quotesFromSteps(7, [1, 1, 1, 1, 1, -1, -1]),
+      }),
+      signal("R_25", Array(200).fill(2), {
+        recent_quotes: quotesFromSteps(199, [...Array(142).fill(1), ...Array(57).fill(-1)]),
+      }),
+    ],
+    family: "rise-fall",
+    preferredType: "PUT",
+    barrier: 0,
+    autoContractType: true,
+    selectedMarket: "R_10",
+    autoSelect: true,
+    duration: 1,
+    minimumSample: 5,
+  });
+  assert.equal(candidate?.symbol, "R_10");
+  assert.equal(candidate?.contractType, "CALL");
+  assert.equal(candidate?.sampleCount, 7);
+  assert.ok(candidate.observedRate > 71.4);
+});
+
 test("manual Auto selection chooses the higher observed Even/Odd expiry rate", () => {
   const candidate = chooseAutoTrader2ManualCandidate({
     signals: [signal("R_10", [1, ...Array(30).fill(2), ...Array(10).fill(1)])],
@@ -250,6 +275,80 @@ test("manual Auto selection chooses the higher observed Even/Odd expiry rate", (
   });
   assert.equal(candidate?.contractType, "DIGITEVEN");
   assert.equal(candidate?.observedRate, 75);
+});
+
+test("AI 2 Auto prioritizes the highest observed rate among qualifying Rise/Fall candidates", () => {
+  const candidate = chooseAutoTrader2Candidate({
+    signals: [
+      signal("R_10", Array(201).fill(2), {
+        recent_quotes: quotesFromSteps(200, [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1]),
+      }),
+      signal("R_25", Array(41).fill(2), {
+        recent_quotes: quotesFromSteps(40, [1, 1, 1, 1, 1, 1, 1, -1, -1, -1]),
+      }),
+    ],
+    family: "rise-fall",
+    preferredType: "PUT",
+    barrier: 0,
+    selectedMarket: "R_10",
+    autoSelect: true,
+    duration: 1,
+    prioritizeObservedRate: true,
+    minimumSample: 20,
+    minimumEdge: 0,
+    minimumConfidenceEdge: 0,
+  });
+  assert.equal(candidate?.symbol, "R_25");
+  assert.equal(candidate?.contractType, "CALL");
+  assert.equal(candidate?.observedRate, 70);
+});
+
+test("AI 2 Auto prioritizes the highest observed rate among qualifying Even/Odd candidates", () => {
+  const candidate = chooseAutoTrader2Candidate({
+    signals: [
+      signal("R_10", [1, ...Array(130).fill(2), ...Array(70).fill(1)]),
+      signal("R_25", [1, ...Array(28).fill(2), ...Array(12).fill(1)]),
+    ],
+    family: "even-odd",
+    preferredType: "DIGITODD",
+    barrier: 0,
+    selectedMarket: "R_10",
+    autoSelect: true,
+    duration: 1,
+    prioritizeObservedRate: true,
+    minimumSample: 20,
+    minimumEdge: 0,
+    minimumConfidenceEdge: 0,
+  });
+  assert.equal(candidate?.symbol, "R_25");
+  assert.equal(candidate?.contractType, "DIGITEVEN");
+  assert.equal(candidate?.observedRate, 70);
+});
+
+test("AI 2 Auto uses exact observed rates when candidates display the same rounded rate", () => {
+  const candidate = chooseAutoTrader2Candidate({
+    signals: [
+      signal("R_10", Array(8).fill(2), {
+        recent_quotes: quotesFromSteps(7, [1, 1, 1, 1, 1, -1, -1]),
+      }),
+      signal("R_25", Array(200).fill(2), {
+        recent_quotes: quotesFromSteps(199, [...Array(142).fill(1), ...Array(57).fill(-1)]),
+      }),
+    ],
+    family: "rise-fall",
+    preferredType: "PUT",
+    barrier: 0,
+    selectedMarket: "R_10",
+    autoSelect: true,
+    duration: 1,
+    prioritizeObservedRate: true,
+    minimumSample: 5,
+    minimumEdge: -50,
+    minimumConfidenceEdge: -100,
+  });
+  assert.equal(candidate?.symbol, "R_10");
+  assert.equal(candidate?.contractType, "CALL");
+  assert.ok(candidate.observedRate > 71.4);
 });
 
 test("manual Auto selection chooses the least frequent recent Differs digit", () => {
