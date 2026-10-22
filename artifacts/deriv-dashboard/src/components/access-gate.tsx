@@ -14,6 +14,7 @@ import {
   ACCESS_ACTIVE_MARKER,
   ACCESS_IDLE_LOCK_MS,
   ACCESS_LAST_ACTIVITY,
+  ACCESS_REVOCATION_EXIT_DELAY_MS,
   clearAccessActivity,
   isAccessAwayLockDue,
   markAccessActivity,
@@ -84,7 +85,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
     accessRejectedRef.current = true;
     sessionWasActiveRef.current = false;
     setAccessRejected(true);
-    setLockReason("Workspace locked after 10 seconds away. Enter your access key again.");
+    setLockReason("Workspace locked after 2 hours away. Enter your access key again.");
     setExitDeadline(null);
     setLogoutPending(true);
     // Keep a stale marker until the server confirms logout, so a reload during
@@ -113,7 +114,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
     setAccessRejected(true);
     setLockReason(`No more trades — ${reason}.`);
     setExitCountdown(10);
-    setExitDeadline(Date.now() + ACCESS_IDLE_LOCK_MS);
+    setExitDeadline(Date.now() + ACCESS_REVOCATION_EXIT_DELAY_MS);
     clearAccessActivity();
     void queryClient.removeQueries();
   }, [queryClient]);
