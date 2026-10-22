@@ -1028,7 +1028,8 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
       await page.screenshot({ path: path.join(screenshotsDir, `trade-x-${viewport.name}.png`), fullPage: true });
     }
 
-    await page.goto(`${baseUrl}/auto-trader`);
+    await page.getByRole("button", { name: "Open navigation menu" }).click();
+    await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Auto Trader", exact: true }).click();
     await page.getByTestId("button-go-live").waitFor();
     await page.getByTestId("button-go-live").click();
     await page.locator(".at-market-list").waitFor();
@@ -1083,7 +1084,7 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
     await page.getByTestId("button-stop-scan").click();
     assert.equal(await page.getByTestId("button-go-live").isVisible(), true);
 
-    await page.goto(`${baseUrl}/app`);
+    await page.getByTestId("link-nav-dashboard").click();
     const moneyBankToggle = page.getByRole("checkbox", { name: "Toggle Money Bank", exact: true });
     await moneyBankToggle.waitFor();
     await page.locator(".xt-feature-card-edge2 .xt-switch").click();
