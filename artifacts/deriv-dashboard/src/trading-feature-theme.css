@@ -529,3 +529,246 @@
 .xt-app .bulk-trader-panel .bulk-digit em {
   z-index: 2;
 }
+
+/* Fast, consistent feedback for switches across every trading feature. */
+:root {
+  --trading-switch-duration: 140ms;
+  --trading-switch-easing: cubic-bezier(.2, .8, .2, 1);
+}
+
+.xt-app .xt-switch,
+.xt-app .cw-toggle,
+.xt-app .ma-switch-control,
+.xt-app .df-toggle-control,
+.xt-app .edge-toggle-control,
+.xt-app .edge-sniper-toggle,
+.xt-app .edge-ref-auto-market,
+.xt-app .money-bank-toggle-list label {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.xt-app button[role="switch"],
+.auto-trader-2-page button[role="switch"],
+.admin-protection-toggle {
+  position: relative;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.xt-app .xt-switch input {
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+
+.xt-app .xt-switch > span,
+.xt-app .xt-switch > span::after,
+.xt-app .cw-toggle-track,
+.xt-app .cw-toggle-track i,
+.xt-app .ma-switch > i,
+.xt-app .ma-switch > i::after,
+.xt-app .df-toggle > i,
+.xt-app .df-toggle > i::after,
+.xt-app .edge-toggle > i,
+.xt-app .edge-toggle > i::after,
+.xt-app .money-bank-toggle-list label > i,
+.xt-app .money-bank-toggle-list label > i::after,
+.xt-app .tx-switch,
+.xt-app .tx-switch span,
+.xt-app button[role="switch"],
+.xt-app button[role="switch"] > span,
+.xt-app .at2-check-row .at2-checkmark,
+.xt-app .at2-check-row .at2-checkmark::after,
+.auto-trader-2-page button[role="switch"],
+.auto-trader-2-page button[role="switch"] > span,
+.auto-trader-2-page .at2-check-row .at2-checkmark,
+.auto-trader-2-page .at2-check-row .at2-checkmark::after,
+.xt-app .money-bank-panel label:has(> input[type="checkbox"]) > i,
+.xt-app .money-bank-panel label:has(> input[type="checkbox"]) > i::after,
+.admin-protection-switch,
+.admin-protection-switch i {
+  transition-duration: var(--trading-switch-duration) !important;
+  transition-timing-function: var(--trading-switch-easing) !important;
+}
+
+.xt-app .xt-switch > span::after,
+.xt-app .cw-toggle-track i,
+.xt-app .ma-switch > i::after,
+.xt-app .df-toggle > i::after,
+.xt-app .edge-toggle > i::after,
+.xt-app .money-bank-toggle-list label > i::after,
+.xt-app .tx-switch span,
+.xt-app button[role="switch"] > span,
+.auto-trader-2-page button[role="switch"] > span,
+.xt-app .at2-check-row .at2-checkmark::after,
+.auto-trader-2-page .at2-check-row .at2-checkmark::after,
+.xt-app .money-bank-panel label:has(> input[type="checkbox"]) > i::after,
+.admin-protection-switch i {
+  will-change: transform;
+}
+
+.xt-app button[role="switch"],
+.auto-trader-2-page button[role="switch"],
+.admin-protection-switch {
+  transition-property: background-color, border-color, box-shadow !important;
+}
+
+.xt-app .ma-switch-control,
+.xt-app .df-toggle-control,
+.xt-app .edge-toggle-control,
+.xt-app .money-bank-toggle-list label,
+.xt-app .edge-sniper-toggle,
+.xt-app .edge-ref-auto-market {
+  transition:
+    color var(--trading-switch-duration) var(--trading-switch-easing),
+    border-color var(--trading-switch-duration) var(--trading-switch-easing),
+    background-color var(--trading-switch-duration) var(--trading-switch-easing);
+}
+
+.xt-app .money-bank-toggle-list input:focus-visible + i,
+.xt-app .edge-toggle input:focus-visible + i {
+  outline: 2px solid #65d8c7;
+  outline-offset: 3px;
+}
+
+.xt-app button[role="switch"]:focus-visible {
+  outline: 2px solid #65d8c7;
+  outline-offset: 3px;
+}
+
+.auto-trader-2-page button[role="switch"]:focus-visible {
+  outline: 2px solid #65d8c7;
+  outline-offset: 3px;
+}
+
+/* Give touch users a reliable hit area without enlarging the visible track. */
+@media (pointer: coarse) {
+  .xt-app .xt-switch,
+  .xt-app .cw-toggle,
+  .xt-app .ma-switch-control,
+  .xt-app .df-toggle-control,
+  .xt-app .edge-toggle-control,
+  .xt-app .edge-sniper-toggle,
+  .xt-app .edge-ref-auto-market,
+  .xt-app .money-bank-toggle-list label {
+    min-height: 44px;
+  }
+
+  .xt-app .at2-check-row {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  .auto-trader-2-page .at2-check-row {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  .xt-app .xt-switch {
+    width: 48px;
+    height: 44px;
+  }
+
+  .xt-app .xt-switch > span {
+    inset: auto;
+    top: 50%;
+    left: 50%;
+    width: 42px;
+    height: 23px;
+    transform: translate(-50%, -50%);
+  }
+
+  .xt-app .xt-auto-row .xt-switch {
+    transform: none;
+  }
+
+  :is(.xt-app, .auto-trader-2-page) button[role="switch"]::before {
+    position: absolute;
+    inset: -10px -8px;
+    content: "";
+  }
+}
+
+/* Preserve native wheel/touch momentum; never force animated programmatic scrolling. */
+:is(
+  .deriv-history-list,
+  .history-table-wrap,
+  .bulk-trader-market-list,
+  .xt-history,
+  .xt-guide,
+  .xt-guide-backdrop,
+  .deriv-account-menu,
+  .at-market-list,
+  .at-history-list,
+  .edge-ref-history,
+  .money-bank-history-rows,
+  .df-recent,
+  .admin-feature-user-list
+) {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+}
+
+:is(
+  .deriv-history-list,
+  .bulk-trader-market-list,
+  .xt-history,
+  .xt-guide,
+  .deriv-account-menu,
+  .at-market-list,
+  .at-history-list,
+  .edge-ref-history,
+  .money-bank-history-rows,
+  .df-recent,
+  .admin-feature-user-list
+) {
+  touch-action: pan-y;
+  overscroll-behavior-y: auto;
+}
+
+/* The account-wide history table must remain swipeable in both directions on phones. */
+.history-table-wrap {
+  touch-action: pan-x pan-y;
+}
+
+@media (min-width: 768px) {
+  html {
+    scrollbar-gutter: stable;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xt-app .xt-switch > span,
+  .xt-app .xt-switch > span::after,
+  .xt-app .cw-toggle-track,
+  .xt-app .cw-toggle-track i,
+  .xt-app .ma-switch > i,
+  .xt-app .ma-switch > i::after,
+  .xt-app .df-toggle > i,
+  .xt-app .df-toggle > i::after,
+  .xt-app .edge-toggle > i,
+  .xt-app .edge-toggle > i::after,
+  .xt-app .money-bank-toggle-list label > i,
+  .xt-app .money-bank-toggle-list label > i::after,
+  .xt-app .tx-switch,
+  .xt-app .tx-switch span,
+  .xt-app button[role="switch"],
+  .xt-app button[role="switch"] > span,
+  .auto-trader-2-page button[role="switch"],
+  .auto-trader-2-page button[role="switch"] > span,
+  .xt-app .at2-check-row .at2-checkmark,
+  .xt-app .at2-check-row .at2-checkmark::after,
+  .auto-trader-2-page .at2-check-row .at2-checkmark,
+  .auto-trader-2-page .at2-check-row .at2-checkmark::after,
+  .xt-app .money-bank-panel label:has(> input[type="checkbox"]) > i,
+  .xt-app .money-bank-panel label:has(> input[type="checkbox"]) > i::after,
+  .admin-protection-switch,
+  .admin-protection-switch i {
+    transition-duration: .01ms !important;
+    will-change: auto;
+  }
+}
