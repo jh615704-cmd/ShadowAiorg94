@@ -2827,3 +2827,14 @@
     font-size: 9px !important;
   }
 }
+
+.tx-panel .tx-rank-row-selected {
+  border-color: rgba(255, 105, 115, .9);
+  background: linear-gradient(145deg, rgba(93, 38, 53, .96), rgba(52, 31, 50, .98));
+  box-shadow: 0 0 0 1px rgba(255, 91, 104, .24), 0 0 15px rgba(255, 63, 81, .2);
+}
+
+.tx-panel .tx-rank-row-selected .tx-rank-digit {
+  color: #fff6f6;
+  text-shadow: 0 0 8px rgba(255, 127, 139, .28);
+}

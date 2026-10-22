@@ -5,6 +5,7 @@ import {
   MATCHES_AUTO_MINIMUM_SETTLED_WIN_RATE,
   MATCHES_MINIMUM_SETTLED_TRADES_PER_DIGIT,
   MATCHES_MINIMUM_STAKE,
+  rankObservedMatchDigits,
   rankSettledMatchOutcomes,
   type MatchesSettlementRow,
 } from "./matches-analysis.ts";
@@ -30,6 +31,36 @@ function contractsForDigit(digit: number, wins: number, total: number): MatchesS
     status: index < wins ? "won" : "lost",
   }));
 }
+
+test("Matches observed digit cards always have three visible ranks, with current sample frequency", () => {
+  const ranked = rankObservedMatchDigits([7, 2, 7, 9, 2, 7, 4, 9]);
+
+  assert.deepEqual(ranked.slice(0, 3), [
+    { digit: 7, count: 3, rate: 37.5 },
+    { digit: 9, count: 2, rate: 25 },
+    { digit: 2, count: 2, rate: 25 },
+  ]);
+  assert.equal(ranked.length, 10);
+  assert.deepEqual(rankObservedMatchDigits([]).slice(0, 3), [
+    { digit: 0, count: 0, rate: 0 },
+    { digit: 1, count: 0, rate: 0 },
+    { digit: 2, count: 0, rate: 0 },
+  ]);
+});
+
+test("Matches observed ranking ignores invalid digits and uses the most recent sample window", () => {
+  const ranked = rankObservedMatchDigits([
+    ...Array.from({ length: 120 }, () => 1),
+    ...Array.from({ length: 118 }, () => 8),
+    14,
+    -1,
+  ]);
+
+  assert.deepEqual(ranked.slice(0, 2), [
+    { digit: 8, count: 118, rate: 100 },
+    { digit: 0, count: 0, rate: 0 },
+  ]);
+});
 
 test("Matches ranks settled Digit Match outcomes for the selected account, market, and tick duration", () => {
   const rows = [

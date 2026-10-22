@@ -25,7 +25,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { DerivAccountSwitcher } from "@/components/deriv-account-switcher";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getAccountBalance } from "@/lib/account-balance";
-import { formatSignedDerivProfit, isDerivHistoryOpen } from "@/lib/deriv-history";
+import { formatSignedDerivProfit, isDerivHistoryOpen, uniqueDerivHistoryRows } from "@/lib/deriv-history";
 import { validateAutoTraderBatch } from "@/lib/trade-entry-guards";
 import "./auto-trader.css";
 
@@ -329,11 +329,11 @@ function AutoTraderContent() {
   ), [localContracts]);
   const todaysHistory = useMemo(() => {
     if (!accountId || !history.data) return [];
-    return (history.data as DerivHistoryItem[]).filter((item) =>
+    return uniqueDerivHistoryRows((history.data as DerivHistoryItem[]).filter((item) =>
       item.account_id === accountId
       && todayIds.has(item.contract_id)
       && (item.buy_time == null || item.buy_time * 1000 >= todayStart()),
-    );
+    ));
   }, [accountId, history.data, todayIds]);
   const settled = todaysHistory.filter((item) => !isDerivHistoryOpen(item.status));
   const wins = settled.filter((item) => item.profit > 0).length;

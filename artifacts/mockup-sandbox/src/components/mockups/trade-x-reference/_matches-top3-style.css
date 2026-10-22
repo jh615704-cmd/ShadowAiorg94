@@ -1,0 +1,33 @@
+.matches-top3-preview .tx-section-heading > div {
+  align-items: center;
+}
+
+.matches-top3-preview .tx-section-heading h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.matches-top3-preview .tx-section-heading h3 svg {
+  color: #6ed7ee;
+}
+
+.matches-top3-preview .tx-section-heading p {
+  margin-top: 3px;
+}
+
+.matches-observed-tag {
+  padding: 4px 7px;
+  border: 1px solid rgba(82, 194, 221, .26);
+  border-radius: 4px;
+  color: #93d8e7;
+  background: rgba(15, 62, 87, .4);
+  font: 700 8px var(--app-font-mono, monospace);
+  letter-spacing: .08em;
+}
+
+.matches-top3-preview .tx-rank-row-selected {
+  border-color: rgba(255, 105, 115, .9) !important;
+  background: linear-gradient(145deg, rgba(93, 38, 53, .96), rgba(52, 31, 50, .98)) !important;
+  box-shadow: 0 0 0 1px rgba(255, 91, 104, .24), 0 0 15px rgba(255, 63, 81, .2);
+}

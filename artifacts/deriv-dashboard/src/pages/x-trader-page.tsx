@@ -130,6 +130,7 @@ import {
 import {
   chooseQualifiedMatchesDigits,
   MATCHES_HISTORY_LIMIT,
+  rankObservedMatchDigits,
   rankSettledMatchOutcomes,
   type MatchesDigitStat as ObservedMatchesDigitStat,
 } from "../lib/matches-analysis";
@@ -516,6 +517,7 @@ export default function XTraderPage() {
   const [matchesSelectedDigit, setMatchesSelectedDigit] = useState(5);
   const [matchesAiEnabled, setMatchesAiEnabled] = useState(false);
   const [matchesAiDigits, setMatchesAiDigits] = useState<MatchesAiDigits>(1);
+  const [matchesAiDigitsConfirmed, setMatchesAiDigitsConfirmed] = useState(false);
   const [matchesObservedDigits, setMatchesObservedDigits] = useState<number[]>([]);
   const [matchesTickCount, setMatchesTickCount] = useState(0);
   const [matchesStatusMessage, setMatchesStatusMessage] = useState("Rescan to start a fresh digit sample.");
@@ -812,12 +814,16 @@ export default function XTraderPage() {
     && !matchesHiddenHistoryIds.has(String(trade.contract_id))
   ));
   const matchesTopDigits = useMemo<ObservedMatchesDigitStat[]>(
+    () => rankObservedMatchDigits(matchesObservedDigits).slice(0, 3),
+    [matchesObservedDigits],
+  );
+  const matchesSettledOutcomeDigits = useMemo<ObservedMatchesDigitStat[]>(
     () => rankSettledMatchOutcomes(
       matchesAllRows,
       currentAccount?.id,
       matchesSymbol,
       matchesDuration,
-    ).slice(0, 3),
+    ),
     [currentAccount?.id, matchesAllRows, matchesDuration, matchesSymbol],
   );
   const bulkRows = bulkAllRows.filter((trade) => bulkClaimedHistoryIdsRef.current.has(trade.contract_id) && !bulkTraderHiddenHistoryIds.has(trade.contract_id));
@@ -3689,6 +3695,10 @@ export default function XTraderPage() {
     enabled: boolean,
     stoppedMessage = "Automatic Matches entries are stopped. Open contracts can continue to settle.",
   ) => {
+    if (enabled && !matchesAiDigitsConfirmed) {
+      setMatchesStatusMessage("Choose 1, 2, or 3 top digits before enabling automatic Matches entries.");
+      return;
+    }
     if (enabled && (!matchesAnalysisEnabled || !canUseMatchesAnalysis || !isConnected || !currentAccount)) {
       setMatchesStatusMessage("Enable Matches Analysis and connect a Deriv account before starting automatic entries.");
       return;
@@ -3699,6 +3709,11 @@ export default function XTraderPage() {
     setMatchesStatusMessage(enabled
       ? "AI Matches is on. Waiting for settled results at the selected duration and an available trade slot."
       : stoppedMessage);
+  };
+
+  const selectMatchesAiDigits = (value: MatchesAiDigits) => {
+    setMatchesAiDigits(value);
+    setMatchesAiDigitsConfirmed(true);
   };
 
   const changeMatchesSymbol = (nextSymbol: string) => {
@@ -3808,7 +3823,7 @@ export default function XTraderPage() {
     }
     if (matchesBuyMutation.isPending || matchesActionLockRef.current) return;
     if (matchesAutomationAttemptTickRef.current >= matchesTickCount) return;
-    const digits = chooseQualifiedMatchesDigits(matchesTopDigits, matchesAiDigits);
+    const digits = chooseQualifiedMatchesDigits(matchesSettledOutcomeDigits, matchesAiDigits);
     if (digits.length !== matchesAiDigits) {
       setMatchesStatusMessage("Waiting for enough settled Digit Match outcomes at this market and duration.");
       return;
@@ -3827,7 +3842,7 @@ export default function XTraderPage() {
     matchesAnalysisEnabled,
     matchesBuyMutation.isPending,
     matchesTickCount,
-    matchesTopDigits,
+    matchesSettledOutcomeDigits,
     status.data?.live_trading_enabled,
     tradeSlotBlocked,
     tradeSlotMessage,
@@ -5030,7 +5045,8 @@ export default function XTraderPage() {
             aiEnabled={matchesAiEnabled}
             onAiEnabledChange={toggleMatchesAi}
             aiDigits={matchesAiDigits}
-            onAiDigitsChange={setMatchesAiDigits}
+            aiDigitsConfirmed={matchesAiDigitsConfirmed}
+            onAiDigitsChange={selectMatchesAiDigits}
             isRunning={matchesAiEnabled}
             isPlacing={matchesBuyMutation.isPending}
             disabled={!isConnected || !currentAccount || !canUseMatchesAnalysis}

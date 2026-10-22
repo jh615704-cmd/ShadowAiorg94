@@ -2740,14 +2740,83 @@ body { overflow-x: hidden; }
 }
 
 .global-feature-announcement {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) 30px;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
   margin: 0 0 14px;
-  padding: 12px 15px;
-  border: 1px solid rgba(91, 176, 240, .36);
-  border-radius: 10px;
-  background: rgba(18, 48, 78, .78);
-  color: #d8eaff;
+  padding: 8px 13px;
+  border: 1px solid rgba(90, 205, 173, .22);
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(4, 19, 18, .98), rgba(9, 34, 32, .98) 50%, rgba(4, 19, 18, .98));
+  color: #edf7f4;
   font-size: 13px;
   line-height: 1.5;
+  box-shadow: inset 0 -1px 0 rgba(89, 207, 174, .12), 0 8px 22px rgba(0, 0, 0, .14);
+  transition: opacity 340ms ease, transform 340ms ease;
+}
+.global-announcement-indicator {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #60ddb8;
+  box-shadow: 0 0 12px rgba(96, 221, 184, .68);
+}
+.global-announcement-copy {
+  min-width: 0;
+  margin: 0;
+  color: #edf7f4;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.global-announcement-copy strong {
+  color: #fff;
+  font-weight: 800;
+}
+.global-announcement-dismiss {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: #e6f1ed;
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+.global-announcement-dismiss:hover {
+  border-color: rgba(126, 221, 194, .28);
+  color: #fff;
+  background: rgba(126, 221, 194, .1);
+}
+.global-announcement-dismiss:focus-visible {
+  outline: 2px solid #70dfbd;
+  outline-offset: 2px;
+}
+.global-feature-announcement.is-fading {
+  opacity: 0;
+  transform: translateY(-5px);
+  pointer-events: none;
+}
+@media (max-width: 620px) {
+  .global-feature-announcement {
+    grid-template-columns: 8px minmax(0, 1fr) 28px;
+    gap: 8px;
+    min-height: 50px;
+    padding: 7px 9px;
+    font-size: 12px;
+  }
+  .global-announcement-copy { text-align: left; }
+  .global-announcement-dismiss { width: 28px; height: 28px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .global-feature-announcement,
+  .global-announcement-dismiss {
+    transition-duration: .01ms;
+  }
 }
 .at-action-message { transition: opacity 400ms ease, transform 400ms ease; }
 .at-action-message.fading { opacity: 0; transform: translateY(-3px); pointer-events: none; }
@@ -2842,4 +2911,23 @@ body { overflow-x: hidden; }
   .admin-feature-control-actions { justify-content: stretch; }
   .admin-feature-control-actions > button { flex: 1; }
   .admin-feature-user-list { grid-template-columns: minmax(0, 1fr); }
+}
+
+.xt-app .xt-digit-picker button.active {
+  border-color: #ff737f !important;
+  background: linear-gradient(180deg, #9c4053, #702d43) !important;
+  color: #fff !important;
+  box-shadow: 0 0 0 2px rgba(255, 104, 118, .24), 0 0 13px rgba(255, 70, 91, .3) !important;
+}
+
+.bulk-trader-panel .bulk-digit.selected {
+  border-color: #ff737f !important;
+  background: linear-gradient(180deg, #9c4053, #702d43) !important;
+  box-shadow: 0 0 0 2px rgba(255, 104, 118, .24), 0 0 14px rgba(255, 70, 91, .3) !important;
+  color: #fff !important;
+}
+
+.bulk-trader-panel .bulk-digit.selected .bulk-digit-marker,
+.bulk-trader-panel .bulk-digit.selected small {
+  color: #fff !important;
 }

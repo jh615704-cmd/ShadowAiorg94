@@ -261,12 +261,12 @@
   box-shadow: none !important;
 }
 
-/* Keep the user's selected barrier blue, while marking the live market digit with
-   a green edge instead of a bright green fill that obscures its number. */
+/* Keep selected digits readable while giving them a clear red edge and glow. */
 .xt-app .tx-panel .tx-digit-selected {
-  border-color: #42d7ff !important;
-  background: linear-gradient(180deg, #168fc8, #116b98) !important;
-  box-shadow: 0 0 0 2px rgba(66, 215, 255, .2), 0 0 14px rgba(0, 180, 230, .22) !important;
+  border-color: #ff737f !important;
+  background: linear-gradient(180deg, #9c4053, #702d43) !important;
+  color: #fff !important;
+  box-shadow: 0 0 0 2px rgba(255, 104, 118, .24), 0 0 14px rgba(255, 70, 91, .3) !important;
 }
 
 .xt-app .tx-panel .tx-digit-market:not(.tx-digit-selected) {
@@ -279,11 +279,11 @@
 }
 
 .xt-app .tx-panel .tx-digit-market.tx-digit-selected {
-  border: 2px solid #52e6a9 !important;
-  background: linear-gradient(180deg, #168fc8, #116b98) !important;
+  border: 2px solid #ff737f !important;
+  background: linear-gradient(180deg, #9c4053, #702d43) !important;
   box-shadow:
-    0 0 0 2px rgba(82, 230, 169, .25),
-    0 0 13px rgba(82, 230, 169, .25) !important;
+    0 0 0 2px rgba(255, 104, 118, .25),
+    0 0 13px rgba(255, 70, 91, .3) !important;
 }
 
 /* Use the same crisp, high-contrast type treatment on every viewport. */

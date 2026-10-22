@@ -95,12 +95,40 @@ export type DerivHistorySessionSummary = {
   staked: number;
 };
 
+export function uniqueDerivHistoryRows<T extends Pick<DerivHistoryRow, "account_id" | "contract_id" | "status" | "buy_time" | "sell_time">>(
+  rows: readonly T[],
+): T[] {
+  const uniqueRows = new Map<string, T>();
+
+  for (const row of rows) {
+    const key = JSON.stringify([row.account_id, row.contract_id]);
+    const previous = uniqueRows.get(key);
+    if (!previous) {
+      uniqueRows.set(key, row);
+      continue;
+    }
+
+    const previousIsOpen = isDerivHistoryOpen(previous.status);
+    const nextIsOpen = isDerivHistoryOpen(row.status);
+    const previousUpdatedAt = Math.max(previous.buy_time ?? 0, previous.sell_time ?? 0);
+    const nextUpdatedAt = Math.max(row.buy_time ?? 0, row.sell_time ?? 0);
+    if (
+      (previousIsOpen && !nextIsOpen)
+      || (previousIsOpen === nextIsOpen && nextUpdatedAt >= previousUpdatedAt)
+    ) {
+      uniqueRows.set(key, row);
+    }
+  }
+
+  return Array.from(uniqueRows.values());
+}
+
 export function summarizeDerivHistorySession(
   rows: readonly DerivHistoryRow[],
   sessionPnl?: number,
   sessionTradeCount?: number,
 ): DerivHistorySessionSummary {
-  const uniqueRows = [...new Map(rows.map((row) => [`${row.account_id}:${row.contract_id}`, row])).values()];
+  const uniqueRows = uniqueDerivHistoryRows(rows);
   const settled = uniqueRows.filter((row) => !isDerivHistoryOpen(row.status));
   const wins = settled.filter((row) => row.profit > 0).length;
   const losses = settled.filter((row) => row.profit < 0).length;

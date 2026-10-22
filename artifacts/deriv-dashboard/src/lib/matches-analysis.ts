@@ -20,6 +20,36 @@ export type MatchesSettlementRow = {
   status: string;
 };
 
+export function rankObservedMatchDigits(digits: readonly number[]): MatchesDigitStat[] {
+  const sample = digits
+    .slice(-MATCHES_HISTORY_LIMIT)
+    .filter((digit) => Number.isInteger(digit) && digit >= 0 && digit <= 9);
+  const counts = Array.from({ length: 10 }, (_, digit) => ({
+    digit,
+    count: 0,
+    lastSeen: -1,
+  }));
+
+  sample.forEach((digit, index) => {
+    counts[digit].count += 1;
+    counts[digit].lastSeen = index;
+  });
+
+  return counts
+    .map(({ digit, count }) => ({
+      digit,
+      count,
+      rate: sample.length ? (count / sample.length) * 100 : 0,
+    }))
+    .sort((left, right) => {
+      const countDifference = right.count - left.count;
+      if (countDifference) return countDifference;
+      const leftLastSeen = counts[left.digit].lastSeen;
+      const rightLastSeen = counts[right.digit].lastSeen;
+      return rightLastSeen - leftLastSeen || left.digit - right.digit;
+    });
+}
+
 export function rankSettledMatchOutcomes(
   rows: readonly MatchesSettlementRow[],
   accountId: string | null | undefined,

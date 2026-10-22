@@ -1,4 +1,4 @@
-import { Activity, BookOpen, Medal, Play, Radar, RefreshCw, Square, Zap } from "lucide-react";
+import { Activity, BookOpen, Medal, Play, Radar, RefreshCw, Square, Target, Zap } from "lucide-react";
 import type { KeyboardEvent } from "react";
 import "./matches-analysis-panel.css";
 
@@ -26,6 +26,7 @@ export interface MatchesAnalysisPanelProps {
   aiEnabled: boolean;
   onAiEnabledChange: (value: boolean) => void;
   aiDigits: MatchesAiDigits;
+  aiDigitsConfirmed: boolean;
   onAiDigitsChange: (value: MatchesAiDigits) => void;
   isRunning: boolean;
   isPlacing: boolean;
@@ -61,6 +62,7 @@ export default function MatchesAnalysisPanel({
   aiEnabled,
   onAiEnabledChange,
   aiDigits,
+  aiDigitsConfirmed,
   onAiDigitsChange,
   isRunning,
   isPlacing,
@@ -83,6 +85,11 @@ export default function MatchesAnalysisPanel({
     .filter((item) => item.digit >= 0 && item.digit <= 9)
     .sort((a, b) => b.rate - a.rate || b.count - a.count)
     .slice(0, 3);
+  const visibleRankedDigits = rankedDigits.length
+    ? rankedDigits
+    : [0, 1, 2].map((digit) => ({ digit, count: 0, rate: 0 }));
+  const observedSampleSize = counts.reduce((total, count) => total + count, 0);
+  const hasObservedSample = observedSampleSize > 0;
   const actionDisabled = disabled || isPlacing || tradeSlotBlocked;
   const setMarketFamily = (next: MatchesMarketType) => {
     onMarketTypeChange(next);
@@ -231,37 +238,60 @@ export default function MatchesAnalysisPanel({
             <p className="ma-radar-note">Historical frequency is descriptive only; it does not predict the next tick.</p>
           </section>
 
-           <section className="ma-observed-card ma-surface" aria-labelledby="ma-observed-title">
-            <div className="ma-section-heading">
-               <div><span className="ma-index">03</span><div><h3 id="ma-observed-title">Top 3 settled win rates</h3><p>Same market and selected duration</p></div></div>
-               <span className="ma-observed-tag">SETTLED</span>
-            </div>
-             <div className="ma-ranking-list">
-               {rankedDigits.length ? rankedDigits.map((item, index) => (
-                  <div className="ma-ranked-item" key={item.digit} data-testid={`matches-top-digit-${item.digit}`}>
-                    <div className={`ma-rank-card ${selectedDigit === item.digit ? "is-selected" : ""}`}>
-                      <button type="button"
-                      className="ma-rank-select"
-                     onClick={() => onSelectedDigitChange(item.digit)} disabled={disabled}
-                     aria-pressed={selectedDigit === item.digit}
-                     aria-label={`Select observed digit ${item.digit}`}>
-                        <span className={`ma-rank-medal medal-${index + 1}`} aria-hidden="true"><Medal size={17} /></span>
-                        <span className="ma-rank-digit">{item.digit}</span>
-                      </button>
-                      <span className="ma-rank-stats">
-                        <b data-testid={`value-matches-settled-win-rate-${item.digit}`}>{item.rate.toFixed(1)}%</b>
-                        <small>{item.count} settled</small>
-                      </span>
-                      <button type="button" className="ma-tap-trade" onClick={() => onTradeDigit(item.digit)}
-                        disabled={actionDisabled} data-testid={`button-matches-tap-${item.digit}`}>TAP TO TRADE</button>
-                    </div>
-                 </div>
-               )) : <div className="ma-ranking-empty" data-testid="empty-matches-top-digits">No duration-matched settled outcomes yet.</div>}
-            </div>
-            <div className="ma-frequency-disclaimer" data-testid="text-matches-frequency-disclaimer">
-               Only settled Digit Match outcomes for this market and duration are ranked. Past results do not predict future trades.
-            </div>
-          </section>
+          <div className="matches-ranking-scope tx-panel">
+            <section className="ma-observed-card ma-surface tx-safe-panel tx-section" aria-labelledby="ma-observed-title">
+              <div className="tx-section-heading tx-safe-heading">
+                <div>
+                  <span className="tx-index">03</span>
+                  <div>
+                    <h3 id="ma-observed-title"><Target size={16} aria-hidden="true" />Top 3 observed digits</h3>
+                    <p>Ranked by recent tick frequency</p>
+                  </div>
+                </div>
+              </div>
+              <div className="tx-ranking-list">
+                {visibleRankedDigits.map((item, index) => (
+                  <div
+                    className={`tx-rank-row ${selectedDigit === item.digit ? "tx-rank-row-selected" : ""}`}
+                    key={item.digit}
+                    data-testid={`matches-top-digit-${item.digit}`}
+                  >
+                    <button
+                      type="button"
+                      className="tx-rank-select"
+                      onClick={() => onSelectedDigitChange(item.digit)}
+                      disabled={disabled}
+                      aria-pressed={selectedDigit === item.digit}
+                      aria-label={`Select observed digit ${item.digit}`}
+                    >
+                      <span className={`tx-rank-medal medal-${index + 1}`} aria-hidden="true"><Medal size={18} /></span>
+                      <span className="tx-rank-digit">{item.digit}</span>
+                    </button>
+                    <span className="tx-rank-metrics">
+                      <b data-testid={`value-matches-observed-frequency-${item.digit}`}>
+                        {hasObservedSample ? `${item.rate.toFixed(1)}%` : "—"}
+                      </b>
+                      <small>
+                        {hasObservedSample ? `${item.count} / ${observedSampleSize} recent ticks` : "Awaiting tick sample"}
+                      </small>
+                    </span>
+                    <button
+                      type="button"
+                      className="tx-tap-trade"
+                      onClick={() => onTradeDigit(item.digit)}
+                      disabled={actionDisabled || !hasObservedSample}
+                      data-testid={`button-matches-tap-${item.digit}`}
+                    >
+                      TAP TO TRADE
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <p className="ma-frequency-disclaimer" data-testid="text-matches-frequency-disclaimer">
+                Recent digit frequency is descriptive only and does not predict the next tick. Automatic entries use settled outcome results separately.
+              </p>
+            </section>
+          </div>
         </div>
 
         <section className="ma-execution ma-surface" aria-labelledby="ma-execution-title">
@@ -285,12 +315,13 @@ export default function MatchesAnalysisPanel({
             <div className={`ma-ai-controls ${aiEnabled ? "is-enabled" : ""}`}>
               <div className="ma-ai-head">
                 <div><span className="ma-ai-mark"><Zap size={13} /></span><span><b>AI Matches</b><small>Automated digit batches</small></span></div>
-                <label className="ma-switch-control" aria-label="Flip Switch">
+                <label className="ma-switch-control" aria-label="AI Matches auto-entry switch">
                   <span className="ma-switch-state">{aiEnabled ? "ON" : "OFF"}</span>
                   <span className="ma-switch">
                     <input type="checkbox" role="switch" checked={aiEnabled}
                       onChange={(event) => onAiEnabledChange(event.target.checked)}
-                      disabled={disabled} aria-label="Flip Switch" data-testid="button-matches-ai-toggle" />
+                        disabled={disabled || (!aiDigitsConfirmed && !aiEnabled)}
+                        aria-label="AI Matches auto-entry switch" data-testid="button-matches-ai-toggle" />
                     <i />
                   </span>
                 </label>
@@ -299,7 +330,8 @@ export default function MatchesAnalysisPanel({
                 <span className="ma-field-label">TOP DIGITS / TRADE</span>
                 <div className="ma-batch-options" role="group" aria-label="AI Matches batch size">
                   {aiBatchSizes.map((value) => <button key={value} type="button"
-                    className={aiDigits === value ? "selected" : ""} aria-pressed={aiDigits === value}
+                    className={aiDigitsConfirmed && aiDigits === value ? "selected" : ""}
+                    aria-pressed={aiDigitsConfirmed && aiDigits === value}
                     onClick={() => onAiDigitsChange(value)} disabled={disabled || isRunning}
                     data-testid={`button-matches-ai-digits-${value}`}>{value}</button>)}
                 </div>

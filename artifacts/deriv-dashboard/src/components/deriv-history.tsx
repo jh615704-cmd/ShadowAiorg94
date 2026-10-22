@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Activity, Trash2 } from "lucide-react";
-import { createDerivHistoryRowView, isDerivHistoryOpen, summarizeDerivHistorySession, type DerivHistoryRow } from "../lib/deriv-history";
+import { createDerivHistoryRowView, isDerivHistoryOpen, summarizeDerivHistorySession, uniqueDerivHistoryRows, type DerivHistoryRow } from "../lib/deriv-history";
 export type { DerivHistoryRow } from "../lib/deriv-history";
 
 function money(amount: number, currency?: string) {
@@ -30,14 +30,16 @@ export default function DerivHistory({ title, strategy, className, rows, session
   const [filter, setFilter] = useState<"all" | "win" | "loss">("all");
   const listRef = useRef<HTMLDivElement>(null);
   const [listHeight, setListHeight] = useState<number>();
-  const summary = summarizeDerivHistorySession(sessionRows, sessionPnl, sessionTradeCount);
-  const historyWins = rows.filter((row) => !isDerivHistoryOpen(row.status) && row.profit > 0).length;
-  const historyLosses = rows.filter((row) => !isDerivHistoryOpen(row.status) && row.profit < 0).length;
-  const visible = useMemo(() => rows.filter((row) => {
+  const uniqueRows = useMemo(() => uniqueDerivHistoryRows(rows), [rows]);
+  const uniqueSessionRows = useMemo(() => uniqueDerivHistoryRows(sessionRows), [sessionRows]);
+  const summary = summarizeDerivHistorySession(uniqueSessionRows, sessionPnl, sessionTradeCount);
+  const historyWins = uniqueRows.filter((row) => !isDerivHistoryOpen(row.status) && row.profit > 0).length;
+  const historyLosses = uniqueRows.filter((row) => !isDerivHistoryOpen(row.status) && row.profit < 0).length;
+  const visible = useMemo(() => uniqueRows.filter((row) => {
     if (filter === "win") return !isDerivHistoryOpen(row.status) && row.profit > 0;
     if (filter === "loss") return !isDerivHistoryOpen(row.status) && row.profit < 0;
     return true;
-  }), [filter, rows]);
+  }), [filter, uniqueRows]);
 
   useLayoutEffect(() => {
     const list = listRef.current;
@@ -73,7 +75,7 @@ export default function DerivHistory({ title, strategy, className, rows, session
         <div className="deriv-history-title"><Activity size={18} /><span><b>This session</b><small>{title} · {strategy}</small></span></div>
         <div className="deriv-history-actions">
           {actions}
-          {onClear && <button type="button" onClick={onClear} disabled={(!rows.length && summary.trades === 0 && summary.pnl === 0) || fading} aria-label={clearArmed ? `Tap again to clear ${title} session` : `Clear ${title} session`}><Trash2 size={15} />{clearArmed ? "Tap again" : "Clear session"}</button>}
+          {onClear && <button type="button" onClick={onClear} disabled={(!uniqueRows.length && summary.trades === 0 && summary.pnl === 0) || fading} aria-label={clearArmed ? `Tap again to clear ${title} session` : `Clear ${title} session`}><Trash2 size={15} />{clearArmed ? "Tap again" : "Clear session"}</button>}
         </div>
       </header>
       {summaryMode !== "hidden" && <div className={`deriv-history-session ${summaryMode === "pnl-only" ? "pnl-only" : ""}`}>
@@ -89,10 +91,10 @@ export default function DerivHistory({ title, strategy, className, rows, session
         </div>}
       </div>}
       <nav className="deriv-history-filters" aria-label={`Filter ${title} history`}>
-        {(["all", "win", "loss"] as const).map((value) => <button type="button" key={value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)} aria-pressed={filter === value}>{value === "all" ? `All (${rows.length})` : value === "win" ? `Wins (${historyWins})` : `Losses (${historyLosses})`}</button>)}
+        {(["all", "win", "loss"] as const).map((value) => <button type="button" key={value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)} aria-pressed={filter === value}>{value === "all" ? `All (${uniqueRows.length})` : value === "win" ? `Wins (${historyWins})` : `Losses (${historyLosses})`}</button>)}
       </nav>
       <div ref={listRef} className="deriv-history-list" style={listHeight == null ? undefined : { maxHeight: `${listHeight}px` }}>
-        {!visible.length ? <div className="deriv-history-empty">{rows.length ? "No contracts match this filter." : "Deriv contracts will appear here when this feature trades."}</div> : visible.map((row) => {
+        {!visible.length ? <div className="deriv-history-empty">{uniqueRows.length ? "No contracts match this filter." : "Deriv contracts will appear here when this feature trades."}</div> : visible.map((row) => {
           const view = createDerivHistoryRowView(row, currency);
           return <article className="deriv-history-row" key={`${row.account_id}-${row.contract_id}`} data-testid={`deriv-history-${row.account_id}-${row.contract_id}`}>
             <div className="deriv-history-rowtop"><span className="deriv-history-feature">{strategy}</span><div className="deriv-history-result"><small>{view.resultLabel}</small><b className={`deriv-history-profit ${view.profitClass}`}>{view.profit}</b></div></div>

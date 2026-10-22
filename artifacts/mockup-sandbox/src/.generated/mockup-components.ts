@@ -4,5 +4,6 @@ export const modules: ModuleMap = {
   "./components/mockups/deriv/ControlRoomVariant.tsx": () => import("../components/mockups/deriv/ControlRoomVariant.tsx"),
   "./components/mockups/trade-x-reference/AiScannerAction.tsx": () => import("../components/mockups/trade-x-reference/AiScannerAction.tsx"),
   "./components/mockups/trade-x-reference/Current.tsx": () => import("../components/mockups/trade-x-reference/Current.tsx"),
+  "./components/mockups/trade-x-reference/MatchesTop3Style.tsx": () => import("../components/mockups/trade-x-reference/MatchesTop3Style.tsx"),
   "./components/mockups/trade-x-reference/Reference.tsx": () => import("../components/mockups/trade-x-reference/Reference.tsx")
 };

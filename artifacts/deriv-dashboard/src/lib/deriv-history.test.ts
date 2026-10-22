@@ -7,6 +7,7 @@ import {
   formatSignedDerivProfit,
   isDerivHistoryOpen,
   summarizeDerivHistorySession,
+  uniqueDerivHistoryRows,
   type DerivHistoryFeature,
   type DerivHistoryRow,
 } from "./deriv-history.ts";
@@ -108,6 +109,17 @@ test("history summary deduplicates contract rows and prefers complete settled De
     { pnl: summary.pnl, trades: summary.trades, wins: summary.wins, losses: summary.losses },
     { pnl: 1, trades: 1, wins: 1, losses: 0 },
   );
+});
+
+test("visible history deduplicates by account and contract while keeping the newest settled row", () => {
+  const oldOpen = row({ contract_id: "same", status: "open", buy_time: 10 });
+  const settled = row({ contract_id: "same", status: "won", profit: 1, buy_time: 10, sell_time: 12 });
+  const otherAccount = row({ contract_id: "same", account_id: "account-2", status: "lost", profit: -1 });
+  const uniqueRows = uniqueDerivHistoryRows([oldOpen, settled, otherAccount]);
+
+  assert.equal(uniqueRows.length, 2);
+  assert.equal(uniqueRows[0].status, "won");
+  assert.equal(uniqueRows[1].account_id, "account-2");
 });
 
 test("feature ownership claims only exact Deriv-confirmed contract ids", () => {

@@ -22,6 +22,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { DerivAccountSwitcher } from '@/components/deriv-account-switcher';
 import { useAccessSessionLogout } from '@/hooks/use-access-session-logout';
 import { FeatureStatusText } from '@/components/feature-status';
+import { GlobalFeatureAnnouncement } from '@/components/layout/global-feature-announcement';
 
 interface AppShellProps {
   children: ReactNode;
@@ -186,9 +187,11 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
 
         <div className="content-wrap">
           {featureSettings.data?.global_announcement_enabled && featureSettings.data.global_announcement.trim() && (
-            <div className="global-feature-announcement" role="status">
-              {featureSettings.data.global_announcement}
-            </div>
+            <GlobalFeatureAnnouncement
+              message={featureSettings.data.global_announcement}
+              viewerId={accessSession.data?.key_id ?? user?.id ?? "anonymous"}
+              identityResolved={accessSession.isFetched}
+            />
           )}
           {featureUnavailable ? (
             <section className="feature-availability-panel" role="status">
