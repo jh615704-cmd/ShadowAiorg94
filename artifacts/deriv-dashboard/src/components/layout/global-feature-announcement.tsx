@@ -6,6 +6,7 @@ type Props = {
   message: string;
   viewerId: string;
   identityResolved: boolean;
+  placement?: "banner" | "inline";
 };
 
 function splitAnnouncement(message: string) {
@@ -17,7 +18,12 @@ function splitAnnouncement(message: string) {
   };
 }
 
-export function GlobalFeatureAnnouncement({ message, viewerId, identityResolved }: Props) {
+export function GlobalFeatureAnnouncement({
+  message,
+  viewerId,
+  identityResolved,
+  placement = "banner",
+}: Props) {
   const normalizedMessage = message.trim();
   const dismissalKey = createGlobalAnnouncementDismissalKey(viewerId, normalizedMessage);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
@@ -67,7 +73,7 @@ export function GlobalFeatureAnnouncement({ message, viewerId, identityResolved 
 
   return (
     <div
-      className={`global-feature-announcement ${fadingKey === dismissalKey ? "is-fading" : ""}`}
+      className={`global-feature-announcement ${placement === "inline" ? "is-inline" : ""} ${fadingKey === dismissalKey ? "is-fading" : ""}`}
       role="status"
       aria-live="polite"
       aria-atomic="true"

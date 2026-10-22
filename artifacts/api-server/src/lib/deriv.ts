@@ -2136,7 +2136,7 @@ export async function buyClockWorkContracts(
   // All prices are quoted before any buy. Do not retry or auto-close a partial
   // batch: a buy acknowledgement timeout can be ambiguous, so the account
   // history must be checked before a user resubmits.
-  const results = await sendBatchBuysSequentially(proposals, ({ contract, proposal }) => sendDirectBuyWithRateLimitRetry(proposal, {
+  const results = await sendBatchBuysTogether(proposals, ({ contract, proposal }) => sendDirectBuyWithRateLimitRetry(proposal, {
     amount: contract.amount,
     duration: contract.duration,
     duration_unit: contract.duration_unit,
@@ -2270,7 +2270,7 @@ export async function buyMatchesContracts(
 
   // Acknowledgement failures are returned for history verification. Never
   // retry or auto-sell an order whose acceptance is uncertain.
-  const results = await sendBatchBuysSequentially(proposals, ({ contract, proposal }) => sendDirectBuyWithRateLimitRetry(proposal, {
+  const results = await sendBatchBuysTogether(proposals, ({ contract, proposal }) => sendDirectBuyWithRateLimitRetry(proposal, {
     amount: contract.amount,
     duration: contract.duration,
     duration_unit: contract.duration_unit,
@@ -2436,7 +2436,7 @@ export async function dualBuyContracts(input: {
   const connected = await connect();
   if (!connected) throw new Error("Deriv WebSocket is not ready");
   await assertAuthorized?.();
-   const buyResults = await sendBatchBuysSequentially(
+   const buyResults = await sendBatchBuysTogether(
      proposals,
      ({ proposal, input: buyInput }) => sendDirectBuyWithRateLimitRetry(proposal, buyInput),
    );

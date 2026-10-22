@@ -1325,6 +1325,9 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
     assert.equal(result.failed.length, 0);
     const buyMessages = latestSocket().sent.filter((message) => message.buy);
     assert.equal(buyMessages.length, 4);
+    assert.ok(buyMessages.every((message) =>
+      message.parameters.duration === 5 && message.parameters.duration_unit === "t",
+    ));
     assert.deepEqual(
       buyMessages.map((message) => message.parameters.contract_type).sort(),
       ["HIGHER", "HIGHER", "LOWER", "LOWER"],
@@ -1351,6 +1354,12 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
     const buys = latestSocket().sent.filter((message) => message.buy);
     assert.equal(buys.length, 3);
     assert.ok(buys.every((message) => message.parameters.contract_type === "DIGITMATCH"));
+    assert.deepEqual(
+      buys.map((message) => message.parameters.duration).sort(),
+      [1, 3, 5],
+      "each contract must keep its selected tick expiry",
+    );
+    assert.ok(buys.every((message) => message.parameters.duration_unit === "t"));
     assert.equal(latestSocket().sent.some((message) => message.sell), false);
   });
 

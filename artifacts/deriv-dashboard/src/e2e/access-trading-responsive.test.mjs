@@ -30,6 +30,19 @@ const bulkViewports = [
   ...viewports,
   { name: "small-phone", width: 320, height: 740 },
 ];
+const fixtureFeatureIds = [
+  "edge",
+  "digit-flip",
+  "trade-x",
+  "bulk-trader",
+  "clock-work",
+  "matches-analysis",
+  "cash-grab",
+  "money-bank",
+  "auto-trader",
+  "auto-trader-2",
+  "settings",
+];
 const tradeXViewports = [
   ...viewports,
   { name: "small-phone", width: 320, height: 740 },
@@ -184,6 +197,50 @@ test("restricted homepage feature cards and switches glow red without enabling c
   }
 });
 
+test("global announcement sits beside the cockpit brand and stays dismissed for that viewer", async () => {
+  const state = createState(userSession(["edge"]));
+  state.featureSettings.global_announcement_enabled = true;
+  state.featureSettings.global_announcement = "Update complete. New feature now live.";
+  const { context, page, pageErrors } = await createMockPage(state, viewports[2]);
+  try {
+    await page.goto(`${baseUrl}/app`);
+    const announcement = page.getByTestId("global-announcement");
+    await announcement.waitFor();
+
+    assert.ok(await announcement.evaluate((element) => element.classList.contains("is-inline")));
+    const brandBounds = await page.locator(".xt-brand").boundingBox();
+    const announcementBounds = await announcement.boundingBox();
+    assert.ok(brandBounds && announcementBounds);
+    assert.ok(announcementBounds.x > brandBounds.x + brandBounds.width, "The announcement should sit beside the Shadow Ai Trading brand.");
+    const appearance = await announcement.evaluate((element) => ({
+      background: getComputedStyle(element).backgroundImage,
+      color: getComputedStyle(element.querySelector(".global-announcement-copy")).color,
+      closeButton: Boolean(element.querySelector('[aria-label="Dismiss announcement"]')),
+    }));
+    assert.match(appearance.background, /linear-gradient/);
+    assert.equal(appearance.color, "rgb(216, 255, 231)");
+    assert.equal(appearance.closeButton, true);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await assertNoHorizontalOverflow(page, viewports[0], "global announcement");
+    await announcement.getByRole("button", { name: "Dismiss announcement" }).click();
+    await announcement.waitFor({ state: "detached" });
+
+    const settingsResponse = page.waitForResponse((response) =>
+      response.url().includes("/api/access/feature-settings") && response.request().method() === "GET",
+    );
+    await page.reload();
+    await settingsResponse;
+    await page.getByRole("heading", { name: "Trading Strategies" }).waitFor();
+    assert.equal(await page.getByTestId("global-announcement").count(), 0, "Dismissal should persist after reload for the same viewer and message.");
+    assert.deepEqual(state.tradeRequests, []);
+    assert.deepEqual(state.unhandledApis, []);
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+});
+
 test("DigitFlip history stays visible after switching the feature off", async () => {
   const state = createState(userSession(["digit-flip"]));
   state.hasToken = true;
@@ -219,6 +276,24 @@ test("Matches stops after the current buy and keeps its history available while 
   const state = createState(userSession(["matches-analysis"]));
   state.hasToken = true;
   state.allowFixtureTrades = true;
+  state.history = Array.from({ length: 5 }, (_, index) => ({
+    account_id: account.id,
+    contract_id: `fixture-settled-match-${index}`,
+    contract_type: "DIGITMATCH",
+    symbol: "R_75",
+    account_type: "demo",
+    currency: "USD",
+    barrier: 4,
+    duration: 1,
+    duration_unit: "t",
+    buy_price: 0.35,
+    current_value: 0.7,
+    payout: 0.7,
+    profit: 0.35,
+    status: "won",
+    buy_time: 1_700_000_000 + index,
+    sell_time: 1_700_000_001 + index,
+  }));
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {
     await page.goto(`${baseUrl}/app`);
@@ -229,6 +304,7 @@ test("Matches stops after the current buy and keeps its history available while 
     await page.getByTestId("matches-analysis-panel").waitFor();
     await page.waitForFunction(() => Number(document.querySelector('[data-testid="value-matches-sample-count"]')?.textContent ?? 0) >= 20, undefined, { timeout: 15_000 });
 
+    await page.getByTestId("button-matches-ai-digits-1").click();
     const firstBuy = page.waitForRequest((request) => request.url().includes("/api/deriv/matches/buy"), { timeout: 8_000 });
     await page.getByTestId("button-matches-start").click();
     const request = await firstBuy;
@@ -1051,6 +1127,21 @@ function createState(session) {
     createdKeyBody: null,
     statusVersion: 0,
     activeContractCount: 0,
+    featureSettings: {
+      features: fixtureFeatureIds.map((feature) => ({
+        feature,
+        mode: "available",
+        audience: "all",
+        user_ids: [],
+        countdown_at: null,
+        notice: "",
+      })),
+      global_announcement_enabled: false,
+      global_announcement: "",
+      auto_trader_2_paused: false,
+      auto_trader_2_pause_message: "Auto Trader 2.0 is temporarily paused by an administrator.",
+      updated_at: null,
+    },
   };
 }
 
@@ -1155,6 +1246,10 @@ async function mockApiRequest(route, state, pathname, method) {
 
   if (pathname === "/api/access/session" && method === "GET") {
     await fulfillJson(route, state.session);
+    return;
+  }
+  if (pathname === "/api/access/feature-settings" && method === "GET") {
+    await fulfillJson(route, state.featureSettings);
     return;
   }
   if (pathname === "/api/access/heartbeat" && method === "POST") {
