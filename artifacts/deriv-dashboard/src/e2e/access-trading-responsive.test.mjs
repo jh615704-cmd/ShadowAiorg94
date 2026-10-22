@@ -125,12 +125,17 @@ test("Auto Trader and Auto Trader 2.0 grants stay independent during key creatio
     assert.ok(state.createdKeyBody, "The admin form should submit a key-creation request.");
     assert.deepEqual(state.createdKeyBody.features, ["edge", "auto-trader"]);
 
-    state.session = userSession(state.createdKeyBody.features);
-    state.hasToken = true;
-    await page.goto(`${baseUrl}/auto-trader`);
-    await page.getByRole("heading", { name: "Auto Trader" }).waitFor();
-    assert.equal(await page.getByTestId("status-auto-trader-restricted").count(), 0);
-    assert.ok(state.apiCalls.some((call) => call.path === "/api/deriv/accounts"));
+    const tradingState = createState(userSession(state.createdKeyBody.features));
+    tradingState.hasToken = true;
+    const trading = await createMockPage(tradingState, viewports[0]);
+    try {
+      await trading.page.goto(`${baseUrl}/auto-trader`);
+      await trading.page.getByRole("heading", { name: "Auto Trader" }).waitFor();
+      assert.equal(await trading.page.getByTestId("status-auto-trader-restricted").count(), 0);
+      assert.ok(tradingState.apiCalls.some((call) => call.path === "/api/deriv/accounts"));
+    } finally {
+      await trading.context.close();
+    }
 
     const deniedState = createState(userSession(["settings"]));
     deniedState.hasToken = true;
@@ -153,6 +158,88 @@ test("Auto Trader and Auto Trader 2.0 grants stay independent during key creatio
     assert.deepEqual(state.unhandledApis, [], `Unexpected API requests: ${JSON.stringify(state.unhandledApis)}`);
     assert.deepEqual(state.tradeRequests, [], "The access-flow test must never submit a trade.");
     assert.deepEqual(pageErrors, [], "The app should render without browser exceptions.");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the whole workspace locks as soon as the bot is exited", async () => {
+  const state = createState(userSession(["settings"]));
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/`);
+    await page.locator(".xt-feature-card-restricted").first().waitFor();
+
+    await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
+
+    await page.getByRole("heading", { name: "Login to Shadow Ai" }).waitFor();
+    await page.getByText(/Workspace locked because you left the bot/).waitFor();
+    assert.equal(state.logoutCount, 1, "Leaving the bot should end the active access session.");
+    await page.reload();
+    await page.getByRole("heading", { name: "Login to Shadow Ai" }).waitFor();
+    assert.ok(state.sessionRevoked, "Returning to the app should not restore the previous session.");
+    assert.deepEqual(pageErrors, [], "Leaving the bot should not cause browser errors.");
+    assert.deepEqual(state.unhandledApis, []);
+  } finally {
+    await context.close();
+  }
+});
+
+test("the workspace locks when the bot browser window loses focus", async () => {
+  const state = createState(userSession(["settings"]));
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/`);
+    await page.locator(".xt-feature-card-restricted").first().waitFor();
+    await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+
+    await page.getByRole("heading", { name: "Login to Shadow Ai" }).waitFor();
+    await page.getByText(/Workspace locked because you left the bot/).waitFor();
+    assert.equal(state.logoutCount, 1, "Losing focus should end the active access session.");
+    assert.deepEqual(pageErrors, [], "Losing focus should not cause browser errors.");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the workspace locks after two hours without interaction while the page stays open", async () => {
+  const state = createState(userSession(["settings"]));
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/`);
+    await page.locator(".xt-feature-card-restricted").first().waitFor();
+    await page.evaluate(() => {
+      localStorage.setItem("shadow-access-session-active", "1");
+      localStorage.setItem("shadow-access-last-activity", String(Date.now() - 2 * 60 * 60 * 1_000 - 1_000));
+    });
+
+    await page.getByRole("heading", { name: "Login to Shadow Ai" }).waitFor({ timeout: 5_000 });
+    await page.getByText(/Workspace locked after 2 hours without activity/).waitFor();
+    assert.equal(state.logoutCount, 1, "Two hours without interaction should end the active session.");
+    assert.deepEqual(pageErrors, [], "The idle lock should not cause browser errors.");
+    assert.deepEqual(state.unhandledApis, []);
+  } finally {
+    await context.close();
+  }
+});
+
+test("real user interaction refreshes the inactivity timer", async () => {
+  const state = createState(userSession(["settings"]));
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/`);
+    await page.locator(".xt-feature-card-restricted").first().waitFor();
+    const oldActivityAt = Date.now() - 60_000;
+    await page.evaluate((timestamp) => {
+      localStorage.setItem("shadow-access-session-active", "1");
+      localStorage.setItem("shadow-access-last-activity", String(timestamp));
+    }, oldActivityAt);
+    await page.mouse.move(140, 120);
+
+    const refreshedActivityAt = Number(await page.evaluate(() => localStorage.getItem("shadow-access-last-activity")));
+    assert.ok(refreshedActivityAt > oldActivityAt, "Pointer activity should refresh the stored timestamp.");
+    assert.equal(await page.getByRole("heading", { name: "Login to Shadow Ai" }).count(), 0);
+    assert.deepEqual(pageErrors, [], "User activity should not cause browser errors.");
   } finally {
     await context.close();
   }
@@ -197,7 +284,7 @@ test("restricted homepage feature cards and switches glow red without enabling c
   }
 });
 
-test("global announcement sits beside the cockpit brand and stays dismissed for that viewer", async () => {
+test("global announcement sits beside the cockpit brand and its dismissal remains saved when access locks", async () => {
   const state = createState(userSession(["edge"]));
   state.featureSettings.global_announcement_enabled = true;
   state.featureSettings.global_announcement = "Update complete. New feature now live.";
@@ -226,13 +313,13 @@ test("global announcement sits beside the cockpit brand and stays dismissed for 
     await announcement.getByRole("button", { name: "Dismiss announcement" }).click();
     await announcement.waitFor({ state: "detached" });
 
-    const settingsResponse = page.waitForResponse((response) =>
-      response.url().includes("/api/access/feature-settings") && response.request().method() === "GET",
-    );
+    const dismissalKey = await page.evaluate(() => Object.keys(localStorage).find((key) =>
+      key.startsWith("shadow-ai:announcement:v1:") && localStorage.getItem(key) === "dismissed",
+    ) ?? null);
+    assert.ok(dismissalKey, "Dismissing the announcement should save its viewer-specific state.");
     await page.reload();
-    await settingsResponse;
-    await page.getByRole("heading", { name: "Trading Strategies" }).waitFor();
-    assert.equal(await page.getByTestId("global-announcement").count(), 0, "Dismissal should persist after reload for the same viewer and message.");
+    await page.getByRole("heading", { name: "Login to Shadow Ai" }).waitFor();
+    assert.equal(await page.evaluate((key) => localStorage.getItem(key), dismissalKey), "dismissed");
     assert.deepEqual(state.tradeRequests, []);
     assert.deepEqual(state.unhandledApis, []);
     assert.deepEqual(pageErrors, []);
@@ -744,7 +831,8 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
     );
     assert.deepEqual(menuEntries, ["Log out", "Auto Trader", "Auto Trader 2.0"]);
     await page.getByRole("button", { name: "Close navigation menu" }).click();
-    await page.goto(`${baseUrl}/auto-trader-2`);
+    await page.getByRole("button", { name: "Open navigation menu" }).click();
+    await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Auto Trader 2.0" }).click();
     await page.locator(".auto-trader-2-page").waitFor();
     const autoTraderNavLink = page.getByTestId("link-nav-auto-trader");
     const autoTrader2NavLink = page.getByTestId("link-nav-auto-trader-2");
@@ -755,7 +843,7 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
     assert.equal(await autoTrader2NavLink.getAttribute("aria-current"), "page");
     assert.equal(await autoTrader2NavLink.locator(".nav-live").count(), 1);
 
-    await page.goto(`${baseUrl}/auto-trader`);
+    await page.getByTestId("link-nav-auto-trader").evaluate((link) => link.click());
     await page.getByRole("heading", { name: "Auto Trader" }).waitFor();
     assert.equal((await autoTraderNavLink.getAttribute("class"))?.includes("nav-item-active"), true);
     assert.equal(await autoTraderNavLink.getAttribute("aria-current"), "page");
@@ -764,7 +852,7 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
     assert.equal(await autoTrader2NavLink.getAttribute("aria-current"), null);
     assert.equal(await autoTrader2NavLink.locator(".nav-live").count(), 0);
 
-    await page.goto(`${baseUrl}/app`);
+    await page.getByTestId("link-nav-dashboard").evaluate((link) => link.click());
     const strategyCards = page.locator(".xt-feature-card");
     assert.ok(await strategyCards.count() >= 6, "The homepage should render the complete trading feature card set.");
     for (const viewport of bulkViewports) {
@@ -1146,11 +1234,13 @@ test("Bulk Trader digits match Trade X pill styling and fit phone, tablet, and l
 function createState(session) {
   return {
     session,
+    sessionRevoked: false,
     hasToken: false,
     allowFixtureTrades: false,
     tradeSequence: 0,
     apiCalls: [],
     unhandledApis: [],
+    logoutCount: 0,
     tradeRequests: [],
     createdKeyBody: null,
     statusVersion: 0,
@@ -1273,7 +1363,11 @@ async function mockApiRequest(route, state, pathname, method) {
   const request = route.request();
 
   if (pathname === "/api/access/session" && method === "GET") {
-    await fulfillJson(route, state.session);
+    await fulfillJson(
+      route,
+      state.sessionRevoked ? { error: "The access session is no longer active." } : state.session,
+      state.sessionRevoked ? 401 : 200,
+    );
     return;
   }
   if (pathname === "/api/access/feature-settings" && method === "GET") {
@@ -1281,6 +1375,12 @@ async function mockApiRequest(route, state, pathname, method) {
     return;
   }
   if (pathname === "/api/access/heartbeat" && method === "POST") {
+    await fulfillJson(route, { success: true });
+    return;
+  }
+  if (pathname === "/api/access/logout" && method === "POST") {
+    state.logoutCount += 1;
+    state.sessionRevoked = true;
     await fulfillJson(route, { success: true });
     return;
   }

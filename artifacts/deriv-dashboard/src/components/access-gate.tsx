@@ -56,7 +56,8 @@ export function AccessGate({ children }: { children: ReactNode }) {
   const forcedExitRef = useRef(false);
   const initialAwayLockRef = useRef(accessRejected);
   const logoutInFlightRef = useRef(false);
-  const hiddenAtRef = useRef<number | null>(null);
+  const observedActivityAtRef = useRef(0);
+  const lastPersistedActivityAtRef = useRef(0);
   const accessSession = useGetAccessSession({
     query: {
       retry: false,
@@ -80,12 +81,14 @@ export function AccessGate({ children }: { children: ReactNode }) {
     accessRejectedRef.current = accessRejected;
   }, [accessRejected]);
 
-  const lockAfterAway = useCallback(() => {
+  const lockAfterAway = useCallback((
+    message = "Workspace locked after 2 hours without activity. Enter your access key again.",
+  ) => {
     if (accessRejectedRef.current || !sessionWasActiveRef.current) return;
     accessRejectedRef.current = true;
     sessionWasActiveRef.current = false;
     setAccessRejected(true);
-    setLockReason("Workspace locked after 2 hours away. Enter your access key again.");
+    setLockReason(message);
     setExitDeadline(null);
     setLogoutPending(true);
     // Keep a stale marker until the server confirms logout, so a reload during
@@ -143,7 +146,9 @@ export function AccessGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!accessSession.data || accessRejected) return;
     sessionWasActiveRef.current = true;
-    markAccessActivity();
+    if (window.localStorage.getItem(ACCESS_ACTIVE_MARKER) !== "1") {
+      markAccessActivity();
+    }
   }, [accessSession.data, accessRejected]);
 
   useEffect(() => {
@@ -176,61 +181,83 @@ export function AccessGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!accessSession.data || accessRejected) return;
-    markAccessActivity();
 
-    const keepForegroundActivityFresh = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        markAccessActivity();
+    const isIdleLockDue = () => {
+      const persistedActivityAt = Number(window.localStorage.getItem(ACCESS_LAST_ACTIVITY));
+      const mostRecentActivityAt = Math.max(
+        Number.isFinite(persistedActivityAt) ? persistedActivityAt : 0,
+        observedActivityAtRef.current,
+      );
+      return isAccessAwayLockDue(
+        window.localStorage.getItem(ACCESS_ACTIVE_MARKER),
+        mostRecentActivityAt > 0 ? String(mostRecentActivityAt) : null,
+      );
+    };
+
+    const onUserActivity = () => {
+      if (document.visibilityState !== "visible" || accessRejectedRef.current) return;
+      if (isIdleLockDue()) {
+        lockAfterAway();
         return;
       }
-      if (isAccessAwayLockDue(
-        window.localStorage.getItem(ACCESS_ACTIVE_MARKER),
-        window.localStorage.getItem(ACCESS_LAST_ACTIVITY),
-      )) {
-        lockAfterAway();
+      const now = Date.now();
+      observedActivityAtRef.current = now;
+      if (now - lastPersistedActivityAtRef.current >= 1_000) {
+        markAccessActivity(now);
+        lastPersistedActivityAtRef.current = now;
       }
-    }, 1_000);
+    };
+
+    const checkIdleLock = () => {
+      if (isIdleLockDue()) lockAfterAway();
+    };
+
+    const idleLockTimer = window.setInterval(checkIdleLock, 1_000);
 
     const onVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
-        markAccessActivity();
+        lockAfterAway("Workspace locked because you left the bot. Enter your access key again.");
         return;
       }
 
-      if (isAccessAwayLockDue(
-        window.localStorage.getItem(ACCESS_ACTIVE_MARKER),
-        window.localStorage.getItem(ACCESS_LAST_ACTIVITY),
-      )) {
+      if (accessRejectedRef.current || isIdleLockDue()) {
         lockAfterAway();
         return;
       }
-      markAccessActivity();
       heartbeatAccess();
       void queryClient.invalidateQueries({ queryKey: getGetAccessSessionQueryKey() });
     };
 
-    const onPageHide = () => {
-      markAccessActivity();
+    const onPageExit = () => {
+      lockAfterAway("Workspace locked because you left the bot. Enter your access key again.");
     };
     const onPageShow = () => {
-      if (isAccessAwayLockDue(
-        window.localStorage.getItem(ACCESS_ACTIVE_MARKER),
-        window.localStorage.getItem(ACCESS_LAST_ACTIVITY),
-      )) {
+      if (accessRejectedRef.current) return;
+      if (isIdleLockDue()) {
         lockAfterAway();
         return;
       }
-      markAccessActivity();
       heartbeatAccess();
     };
 
+    const activityEvents = ["pointerdown", "pointermove", "keydown", "input", "touchstart", "wheel", "scroll", "click"] as const;
+    for (const eventName of activityEvents) {
+      window.addEventListener(eventName, onUserActivity, { passive: true });
+    }
     document.addEventListener("visibilitychange", onVisibilityChange);
-    window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("blur", onPageExit);
+    window.addEventListener("pagehide", onPageExit);
+    window.addEventListener("beforeunload", onPageExit);
     window.addEventListener("pageshow", onPageShow);
     return () => {
-      window.clearInterval(keepForegroundActivityFresh);
+      window.clearInterval(idleLockTimer);
+      for (const eventName of activityEvents) {
+        window.removeEventListener(eventName, onUserActivity);
+      }
       document.removeEventListener("visibilitychange", onVisibilityChange);
-      window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("blur", onPageExit);
+      window.removeEventListener("pagehide", onPageExit);
+      window.removeEventListener("beforeunload", onPageExit);
       window.removeEventListener("pageshow", onPageShow);
     };
   }, [accessRejected, accessSession.data, heartbeatAccess, lockAfterAway, queryClient]);

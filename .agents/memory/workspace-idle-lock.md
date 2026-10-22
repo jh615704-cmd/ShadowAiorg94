@@ -3,8 +3,8 @@ name: Workspace idle lock
 description: User-defined idle-lock policy for the full Shadow AI Trading workspace.
 ---
 
-Lock access to the entire Shadow AI Trading workspace after two hours away, rather than after a few seconds. This applies to the workspace and all trading features, not only Auto Trader 2.0. Keep the fast forced-exit countdown for server-side access revocation separate from the idle-lock duration.
+Lock access to the entire Shadow AI Trading workspace after two hours without real user interaction, not merely after two hours away from the browser. Leaving, hiding, or closing the bot should lock it immediately so returning requires the access key again. This applies to the workspace and all trading features, not only Auto Trader 2.0. Keep the fast forced-exit countdown for server-side access revocation separate.
 
-**Why:** On October 22, 2026, the user clarified that the two-hour idle lock applies to the whole bot, not one trading feature, and replaces the previous ten-second away lock.
+**Why:** The user clarified that the whole bot should lock after two hours with no interaction, and should lock immediately when they leave the bot or browser.
 
-**How to apply:** When adjusting session/access behavior, use the two-hour duration for away-idle checks across the workspace. Do not reuse it for unrelated timeouts such as revocation countdowns or trade acknowledgements.
+**How to apply:** Track actual user input rather than page visibility or background polling as activity. Lock on hidden/exit lifecycle events and re-require the access key on return. Do not reuse the two-hour duration for unrelated timeouts such as revocation countdowns or trade acknowledgements.
