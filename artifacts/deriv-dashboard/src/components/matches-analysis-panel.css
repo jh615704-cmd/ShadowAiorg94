@@ -89,6 +89,36 @@
 .ma-radar-label.is-leading text { fill: #ffe18b; }
 .ma-radar-label.is-selected circle { fill: #642d3a; stroke: #ff6875; stroke-width: 1.8; filter: drop-shadow(0 0 5px rgba(255,83,98,.62)); }
 .ma-radar-label.is-selected text { fill: #f4ffff; }
+.ma-panel .matches-ranking-scope .tx-rank-row-selected {
+  border-color: rgba(255, 111, 126, .9);
+  background: linear-gradient(145deg, rgba(88, 39, 58, .98), rgba(52, 34, 55, .98));
+  box-shadow: 0 0 13px rgba(255, 78, 99, .24), inset 0 0 0 1px rgba(255, 132, 143, .12);
+}
+.ma-panel .matches-ranking-scope .tx-rank-row-selected .tx-rank-digit,
+.ma-panel .matches-ranking-scope .tx-rank-row-selected .tx-rank-metrics b {
+  color: #fff2f3;
+  text-shadow: 0 0 8px rgba(255, 126, 139, .35);
+}
+.ma-panel .matches-ranking-scope .tx-rank-row-selected .tx-rank-metrics small {
+  color: #f0c5ca;
+}
+.ma-panel .matches-ranking-scope .tx-rank-row-selected .tx-rank-select:focus-visible {
+  outline-color: #ff8794;
+}
+.ma-settled-empty {
+  grid-column: 1 / -1;
+  min-height: 82px;
+  display: grid;
+  place-items: center;
+  padding: 14px;
+  border: 1px dashed rgba(112, 149, 184, .28);
+  border-radius: 12px;
+  color: #a9bfd4;
+  background: rgba(6, 27, 46, .72);
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+}
 .ma-radar-empty { min-height: 264px; display: grid; align-content: center; justify-items: center; gap: 8px; color: #6fa7bf; text-align: center; }
 .ma-radar-empty b { color: #b8d9e8; font-size: 10px; }
 .ma-radar-empty span { max-width: 225px; color: #719db9; font-size: 8px; line-height: 1.5; }

@@ -67,9 +67,23 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
     featureSettings.isError
     || (routeControl !== undefined && routeControl.mode !== "available")
   );
+  const announcementEnabled = Boolean(
+    featureSettings.data?.global_announcement_enabled
+    && featureSettings.data.global_announcement.trim(),
+  );
 
   return (
-    <div className="app-frame">
+    <>
+      {announcementEnabled && (
+        <div className="global-announcement-frame">
+          <GlobalFeatureAnnouncement
+            message={featureSettings.data!.global_announcement}
+            viewerId={accessSession.data?.key_id ?? user?.id ?? "anonymous"}
+            identityResolved={accessSession.isFetched}
+          />
+        </div>
+      )}
+      <div className="app-frame">
       <aside className="sidebar">
         <div>
           <div className="brand-lockup">
@@ -186,13 +200,6 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
         </header>
 
         <div className="content-wrap">
-          {featureSettings.data?.global_announcement_enabled && featureSettings.data.global_announcement.trim() && (
-            <GlobalFeatureAnnouncement
-              message={featureSettings.data.global_announcement}
-              viewerId={accessSession.data?.key_id ?? user?.id ?? "anonymous"}
-              identityResolved={accessSession.isFetched}
-            />
-          )}
           {featureUnavailable ? (
             <section className="feature-availability-panel" role="status">
               {featureSettings.isError
@@ -202,6 +209,7 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
           ) : children}
         </div>
       </main>
-    </div>
+      </div>
+    </>
   );
 }

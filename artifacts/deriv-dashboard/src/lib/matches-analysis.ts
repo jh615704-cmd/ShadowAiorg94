@@ -50,7 +50,7 @@ export function rankObservedMatchDigits(digits: readonly number[]): MatchesDigit
     });
 }
 
-export function rankSettledMatchOutcomes(
+export function summarizeSettledMatchOutcomes(
   rows: readonly MatchesSettlementRow[],
   accountId: string | null | undefined,
   symbol: string,
@@ -85,13 +85,23 @@ export function rankSettledMatchOutcomes(
   }
 
   return results
-    .filter((result) => result.wins + result.losses >= MATCHES_MINIMUM_SETTLED_TRADES_PER_DIGIT)
+    .filter((result) => result.wins + result.losses > 0)
     .map(({ digit, wins, losses }) => ({
       digit,
       count: wins + losses,
       rate: (wins / (wins + losses)) * 100,
     }))
     .sort((left, right) => right.rate - left.rate || right.count - left.count || left.digit - right.digit);
+}
+
+export function rankSettledMatchOutcomes(
+  rows: readonly MatchesSettlementRow[],
+  accountId: string | null | undefined,
+  symbol: string,
+  duration: number,
+): MatchesDigitStat[] {
+  return summarizeSettledMatchOutcomes(rows, accountId, symbol, duration)
+    .filter((result) => result.count >= MATCHES_MINIMUM_SETTLED_TRADES_PER_DIGIT);
 }
 
 export function chooseQualifiedMatchesDigits(

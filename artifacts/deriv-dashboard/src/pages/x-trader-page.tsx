@@ -130,8 +130,8 @@ import {
 import {
   chooseQualifiedMatchesDigits,
   MATCHES_HISTORY_LIMIT,
-  rankObservedMatchDigits,
   rankSettledMatchOutcomes,
+  summarizeSettledMatchOutcomes,
   type MatchesDigitStat as ObservedMatchesDigitStat,
 } from "../lib/matches-analysis";
 import {
@@ -814,8 +814,13 @@ export default function XTraderPage() {
     && !matchesHiddenHistoryIds.has(String(trade.contract_id))
   ));
   const matchesTopDigits = useMemo<ObservedMatchesDigitStat[]>(
-    () => rankObservedMatchDigits(matchesObservedDigits).slice(0, 3),
-    [matchesObservedDigits],
+    () => summarizeSettledMatchOutcomes(
+      matchesAllRows,
+      currentAccount?.id,
+      matchesSymbol,
+      matchesDuration,
+    ).slice(0, 3),
+    [currentAccount?.id, matchesAllRows, matchesDuration, matchesSymbol],
   );
   const matchesSettledOutcomeDigits = useMemo<ObservedMatchesDigitStat[]>(
     () => rankSettledMatchOutcomes(

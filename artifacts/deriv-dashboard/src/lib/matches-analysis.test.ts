@@ -7,6 +7,7 @@ import {
   MATCHES_MINIMUM_STAKE,
   rankObservedMatchDigits,
   rankSettledMatchOutcomes,
+  summarizeSettledMatchOutcomes,
   type MatchesSettlementRow,
 } from "./matches-analysis.ts";
 
@@ -89,6 +90,26 @@ test("Matches ranks settled Digit Match outcomes for the selected account, marke
     { digit: 0, count: 5, rate: 20 },
     { digit: 6, count: 10, rate: 10 },
   ]);
+});
+
+test("Matches displays win-rate rankings as soon as a digit has a settled result", () => {
+  const rows = [
+    ...contractsForDigit(7, 1, 1),
+    ...contractsForDigit(2, 1, 2),
+    ...contractsForDigit(9, 0, 1),
+    row({ contract_id: "still-open", barrier: 4, status: "open" }),
+  ];
+
+  assert.deepEqual(summarizeSettledMatchOutcomes(rows, "account-1", "R_75", 2), [
+    { digit: 7, count: 1, rate: 100 },
+    { digit: 2, count: 2, rate: 50 },
+    { digit: 9, count: 1, rate: 0 },
+  ]);
+  assert.deepEqual(
+    rankSettledMatchOutcomes(rows, "account-1", "R_75", 2),
+    [],
+    "automation still waits for five settled outcomes per digit",
+  );
 });
 
 test("Matches needs five resolved wins or losses before a digit can be ranked", () => {

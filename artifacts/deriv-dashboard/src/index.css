@@ -2739,21 +2739,24 @@ body { overflow-x: hidden; }
   .bulk-trader-panel .bulk-digit > .bulk-digit-streak { font-size: 10px !important; }
 }
 
+.global-announcement-frame {
+  width: 100%;
+}
 .global-feature-announcement {
   display: grid;
   grid-template-columns: 10px minmax(0, 1fr) 30px;
   align-items: center;
   gap: 12px;
-  min-height: 54px;
-  margin: 0 0 14px;
-  padding: 8px 13px;
-  border: 1px solid rgba(90, 205, 173, .22);
-  border-radius: 8px;
+  min-height: 64px;
+  margin: 0;
+  padding: 8px clamp(14px, 3vw, 34px);
+  border: 0;
+  border-bottom: 1px solid rgba(90, 205, 173, .28);
   background: linear-gradient(90deg, rgba(4, 19, 18, .98), rgba(9, 34, 32, .98) 50%, rgba(4, 19, 18, .98));
   color: #edf7f4;
   font-size: 13px;
   line-height: 1.5;
-  box-shadow: inset 0 -1px 0 rgba(89, 207, 174, .12), 0 8px 22px rgba(0, 0, 0, .14);
+  box-shadow: inset 0 -1px 0 rgba(89, 207, 174, .12);
   transition: opacity 340ms ease, transform 340ms ease;
 }
 .global-announcement-indicator {
@@ -2805,7 +2808,7 @@ body { overflow-x: hidden; }
   .global-feature-announcement {
     grid-template-columns: 8px minmax(0, 1fr) 28px;
     gap: 8px;
-    min-height: 50px;
+    min-height: 54px;
     padding: 7px 9px;
     font-size: 12px;
   }

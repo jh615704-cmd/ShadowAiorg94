@@ -85,9 +85,6 @@ export default function MatchesAnalysisPanel({
     .filter((item) => item.digit >= 0 && item.digit <= 9)
     .sort((a, b) => b.rate - a.rate || b.count - a.count)
     .slice(0, 3);
-  const visibleRankedDigits = rankedDigits.length
-    ? rankedDigits
-    : [0, 1, 2].map((digit) => ({ digit, count: 0, rate: 0 }));
   const observedSampleSize = counts.reduce((total, count) => total + count, 0);
   const hasObservedSample = observedSampleSize > 0;
   const actionDisabled = disabled || isPlacing || tradeSlotBlocked;
@@ -244,17 +241,17 @@ export default function MatchesAnalysisPanel({
                 <div>
                   <span className="tx-index">03</span>
                   <div>
-                    <h3 id="ma-observed-title"><Target size={16} aria-hidden="true" />Top 3 observed digits</h3>
-                    <p>Ranked by recent tick frequency</p>
+                    <h3 id="ma-observed-title"><Target size={16} aria-hidden="true" />Top 3 settled win rates</h3>
+                    <p>Ranked from settled Digit Match trades</p>
                   </div>
                 </div>
               </div>
               <div className="tx-ranking-list">
-                {visibleRankedDigits.map((item, index) => (
+                {rankedDigits.length ? rankedDigits.map((item, index) => (
                   <div
                     className={`tx-rank-row ${selectedDigit === item.digit ? "tx-rank-row-selected" : ""}`}
                     key={item.digit}
-                    data-testid={`matches-top-digit-${item.digit}`}
+                    data-testid={`matches-settled-digit-${item.digit}`}
                   >
                     <button
                       type="button"
@@ -262,17 +259,17 @@ export default function MatchesAnalysisPanel({
                       onClick={() => onSelectedDigitChange(item.digit)}
                       disabled={disabled}
                       aria-pressed={selectedDigit === item.digit}
-                      aria-label={`Select observed digit ${item.digit}`}
+                      aria-label={`Select settled win-rate digit ${item.digit}`}
                     >
                       <span className={`tx-rank-medal medal-${index + 1}`} aria-hidden="true"><Medal size={18} /></span>
                       <span className="tx-rank-digit">{item.digit}</span>
                     </button>
                     <span className="tx-rank-metrics">
-                      <b data-testid={`value-matches-observed-frequency-${item.digit}`}>
-                        {hasObservedSample ? `${item.rate.toFixed(1)}%` : "—"}
+                      <b data-testid={`value-matches-settled-win-rate-${item.digit}`}>
+                        {item.rate.toFixed(1)}%
                       </b>
                       <small>
-                        {hasObservedSample ? `${item.count} / ${observedSampleSize} recent ticks` : "Awaiting tick sample"}
+                        {`${Math.round((item.rate * item.count) / 100)} wins · ${item.count} settled`}
                       </small>
                     </span>
                     <button
@@ -285,10 +282,14 @@ export default function MatchesAnalysisPanel({
                       TAP TO TRADE
                     </button>
                   </div>
-                ))}
+                )) : (
+                  <div className="tx-rank-empty ma-settled-empty" data-testid="matches-settled-empty">
+                    Settled Digit Match results for this market and duration will appear here.
+                  </div>
+                )}
               </div>
               <p className="ma-frequency-disclaimer" data-testid="text-matches-frequency-disclaimer">
-                Recent digit frequency is descriptive only and does not predict the next tick. Automatic entries use settled outcome results separately.
+                Win rates describe settled results only and do not predict future trades. Automation separately requires at least five settled results per digit.
               </p>
             </section>
           </div>
