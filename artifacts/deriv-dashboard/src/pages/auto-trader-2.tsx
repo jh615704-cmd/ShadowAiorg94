@@ -1149,6 +1149,7 @@ function AutoTrader2Content() {
       || (runRef.current.pendingContractId === null
         && (runRef.current.pendingContractType !== null || isPlacing))
     ) {
+      reportAdminDiagnostic("auto-trader-2", "trade_outcome_uncertain", "warning");
       setMessage({
         tone: "info",
         text: "A pending or uncertain order must be checked before clearing this feature's history. No Deriv contracts or account history were changed.",

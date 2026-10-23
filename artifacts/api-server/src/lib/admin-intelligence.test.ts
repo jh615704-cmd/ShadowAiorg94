@@ -32,7 +32,9 @@ test("diagnostic aggregation exposes only safe summaries and counts", () => {
   assert.equal(scan.findings[0]?.affected_sessions, 2);
   assert.equal(scan.findings[0]?.occurrences, 2);
   assert.equal(scan.findings[0]?.fix_available, false);
-  assert.match(scan.findings[0]?.guidance ?? "", /Deriv account history/);
+  assert.match(scan.findings[0]?.summary ?? "", /last order may have been submitted/);
+  assert.match(scan.findings[0]?.guidance ?? "", /will not resend the order/);
+  assert.match(scan.findings[0]?.guidance ?? "", /scanner does not change Deriv contracts or account history/);
   assert.equal(scan.features.find((feature) => feature.feature === "auto-trader-2")?.status, "issue");
 });
 

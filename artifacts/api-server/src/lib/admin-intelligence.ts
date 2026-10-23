@@ -28,7 +28,7 @@ const diagnosticCopy: Record<DiagnosticCode, DiagnosticCopy> = {
   },
   trade_outcome_uncertain: {
     summary: "A trade request may have been accepted, but its response was not confirmed.",
-    guidance: "Check Deriv account history and open contracts before acting. Never resend or clear this state automatically.",
+    guidance: "Check Deriv history and open contracts before acting. Never resend or clear an uncertain order automatically. The diagnostic scanner does not change Deriv contracts or account history.",
   },
   saved_state_invalid: {
     summary: "Auto Trader 2.0 could not validate saved session state.",
@@ -91,20 +91,31 @@ export class AdminIntelligenceRegistry {
     this.prune(now);
     const findings = [...this.records.values()]
       .sort((left, right) => right.lastSeenAt - left.lastSeenAt)
-      .map((record) => ({
-        id: record.id,
-        feature: record.feature,
-        code: record.code,
-        severity: record.severity,
-        ...diagnosticCopy[record.code],
-        first_seen_at: new Date(record.firstSeenAt),
-        last_seen_at: new Date(record.lastSeenAt),
-        occurrences: record.occurrences,
-        affected_sessions: record.sessionReports.size,
-        // The current diagnostic categories have no safe one-click repair.
-        // In particular, no trade or saved-session action may be automated.
-        fix_available: false,
-      }));
+      .map((record) => {
+        const isAutoTrader2UncertainOrder = record.feature === "auto-trader-2"
+          && record.code === "trade_outcome_uncertain";
+        const copy = isAutoTrader2UncertainOrder
+          ? {
+            summary: "The last order may have been submitted. Check Deriv history and open contracts before deciding what to do.",
+            guidance: "Auto Trader 2.0 will not resend the order. A pending or uncertain order must be reviewed before clearing this feature's history. The diagnostic scanner does not change Deriv contracts or account history.",
+          }
+          : diagnosticCopy[record.code];
+
+        return {
+          id: record.id,
+          feature: record.feature,
+          code: record.code,
+          severity: record.severity,
+          ...copy,
+          first_seen_at: new Date(record.firstSeenAt),
+          last_seen_at: new Date(record.lastSeenAt),
+          occurrences: record.occurrences,
+          affected_sessions: record.sessionReports.size,
+          // The current diagnostic categories have no safe one-click repair.
+          // In particular, no trade or saved-session action may be automated.
+          fix_available: false,
+        };
+      });
 
     const featureStatuses = ACCESS_FEATURES
       .filter((feature): feature is Exclude<AccessFeature, "admin"> => feature !== "admin")

@@ -1,5 +1,5 @@
 import { getScanAdminIntelligenceQueryKey, useScanAdminIntelligence } from "@workspace/api-client-react";
-import { Activity, AlertTriangle, ArrowUpRight, Check, CircleDot, Clock3, LockKeyhole, RefreshCw, ShieldCheck } from "lucide-react";
+import { Activity, AlertTriangle, ArrowUpRight, Check, Clock3, LockKeyhole, MessageSquareText, RefreshCw, ShieldCheck } from "lucide-react";
 import "./admin-intelligence-panel.css";
 
 const featureLabels: Record<string, string> = {
@@ -45,12 +45,18 @@ function featureName(value: string) {
 
 function findingSafeguard(code: string) {
   if (code === "trade_outcome_uncertain") {
-    return "Check the trade outcome in Deriv before taking action. Do not retry or alter the contract.";
+    return "This is a safety hold, not a bot fault. Review the affected account's Deriv history and open contracts; do not retry or alter the contract.";
   }
   if (code === "client_runtime_error" || code === "client_unhandled_rejection") {
-    return "A source-code repair requires review and a release.";
+    return "A source-code repair needs review and a release. This monitor will not change running user sessions.";
   }
-  return "No verified safe repair is available for this finding.";
+  if (code === "saved_state_invalid") {
+    return "Keep automation paused and review Deriv history and open contracts before clearing or resuming saved state.";
+  }
+  if (code === "storage_unavailable") {
+    return "The affected user must restore browser storage. This monitor cannot safely change another user's browser state.";
+  }
+  return "No verified one-click repair is available. Review the feature and its service logs before making changes.";
 }
 
 export default function AdminIntelligencePanel() {
@@ -74,8 +80,8 @@ export default function AdminIntelligencePanel() {
           <div className="intel-mark" aria-hidden="true"><Activity size={18} strokeWidth={2.2} /></div>
           <div>
             <p className="intel-eyebrow">OPERATIONS / DIAGNOSTICS</p>
-            <h2 id="intel-title">System intelligence</h2>
-            <p className="intel-subtitle">Rule-based health signals across active features. No user or account details.</p>
+            <h2 id="intel-title">Diagnostics chat</h2>
+            <p className="intel-subtitle">Read-only, rule-based checks every five seconds. No AI; no user or trade state is changed.</p>
           </div>
         </div>
         <div className="intel-scan-state" data-testid="status-intelligence-scan">
@@ -140,8 +146,8 @@ export default function AdminIntelligencePanel() {
           </div>
 
           <div className="intel-feed-heading">
-            <div><span className="intel-section-label">FINDINGS FEED</span><span className="intel-feed-count">{findings.length.toString().padStart(2, "0")}</span></div>
-            <span className="intel-feed-caption">Most recent signal first</span>
+            <div><span className="intel-section-label">DIAGNOSTIC CHAT</span><span className="intel-feed-count">{findings.length.toString().padStart(2, "0")}</span></div>
+            <span className="intel-feed-caption">Read-only reports · newest first</span>
           </div>
 
           {scan.isError && (
@@ -151,19 +157,16 @@ export default function AdminIntelligencePanel() {
           {findings.length === 0 ? (
             <div className="intel-empty" data-testid="state-intelligence-empty">
               <span className="intel-empty-icon"><ShieldCheck size={21} /></span>
-              <strong>No open findings</strong>
-              <p>All monitored features are clear. This feed updates automatically every five seconds.</p>
+              <strong>No feature issues reported</strong>
+              <p>All monitored features are clear. I’ll check again in five seconds while this admin panel is open.</p>
             </div>
           ) : (
-            <ol className="intel-timeline" data-testid="list-intelligence-findings">
-              {findings.map((finding, index) => {
-                const safeFixAvailable = finding.fix_available === true;
+            <ol className="intel-chat-thread" aria-live="polite" data-testid="list-intelligence-findings">
+              {findings.map((finding) => {
                 return (
-                  <li className="intel-timeline-item" key={finding.id} data-testid={`finding-${finding.id}`}>
-                    <div className={`intel-timeline-rail ${finding.severity}`} aria-hidden="true">
-                      <span>{finding.severity === "error" ? <AlertTriangle size={13} /> : <CircleDot size={12} />}</span>
-                    </div>
-                    <article className="intel-finding">
+                  <li className="intel-chat-message" key={finding.id} data-testid={`finding-${finding.id}`}>
+                    <span className="intel-chat-avatar" aria-hidden="true"><MessageSquareText size={15} /></span>
+                    <article className="intel-finding intel-chat-bubble">
                       <div className="intel-finding-top">
                         <div className="intel-finding-tags">
                           <span className={`intel-severity ${finding.severity}`}>{finding.severity}</span>
@@ -183,24 +186,14 @@ export default function AdminIntelligencePanel() {
                           <span><b>{finding.occurrences.toLocaleString()}</b> occurrences</span>
                           <span>First seen {formatDate(finding.first_seen_at)}</span>
                         </div>
-                        {safeFixAvailable ? (
-                          <div className="intel-fix-wrap">
-                            <button className="intel-fix-button" disabled title="No repair operation is available in this panel." data-testid={`button-fix-finding-${finding.id}`}>
-                              Fix it now
-                            </button>
-                            <small>Repair is flagged as safe, but no repair operation is available here.</small>
-                          </div>
-                        ) : (
-                          <div className="intel-fix-wrap">
-                            <button className="intel-fix-button is-disabled" disabled aria-describedby={`safeguard-${finding.id}`} data-testid={`button-fix-finding-${finding.id}`}>
-                              <LockKeyhole size={13} /> No verified safe fix
-                            </button>
-                            <small id={`safeguard-${finding.id}`}>{findingSafeguard(finding.code)}</small>
-                          </div>
-                        )}
+                        <div className="intel-fix-wrap">
+                          <button className="intel-fix-button is-disabled" disabled title="No verified safe repair is available." aria-describedby={`safeguard-${finding.id}`} data-testid={`button-fix-finding-${finding.id}`}>
+                            <LockKeyhole size={13} /> Fix it now
+                          </button>
+                          <small id={`safeguard-${finding.id}`}>{findingSafeguard(finding.code)}</small>
+                        </div>
                       </div>
                     </article>
-                    {index < findings.length - 1 && <span className="intel-rail-tail" aria-hidden="true" />}
                   </li>
                 );
               })}

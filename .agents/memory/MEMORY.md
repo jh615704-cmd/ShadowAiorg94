@@ -18,6 +18,7 @@
 - [API test runtime](api-test-runtime.md) — run API TypeScript tests through the workspace TSX runner because source imports use bundler-style extensionless paths.
 - [PostgreSQL pool instrumentation](pg-pool-callback-overload.md) — preserve both promise and callback forms; `pool.query()` relies on callback-style `connect()`.
 - [Admin PAT separation](admin-pat-separation.md) — workspace Deriv secret rotation does not change per-user PATs; verify secret presence and API health, then reconnect expired user credentials.
+- [Admin diagnostics safety](admin-diagnostics-safety.md) — diagnostics are non-AI and read-only; never auto-replay or clear uncertain trades or saved sessions.
 - [Runtime health checks](runtime-health-check.md) — restart stale workflows before diagnosing missing bootstrap secrets; API health is served at `/api/healthz`.
 - [Deriv Accumulator contract](deriv-accumulator-contract.md) — Accumulator trades use ACCU with decimal growth_rate in both proposal and buy payloads.
 - [Money Bank JDY gate](money-bank-jdy-gate.md) — evaluate the user-selected setup at entry; alternatives are advisory and must never be auto-applied.
