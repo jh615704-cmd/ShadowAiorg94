@@ -4,13 +4,12 @@ import {
   ReportAccessDiagnosticResponse,
   ScanAdminIntelligenceResponse,
 } from "@workspace/api-zod";
-import { requireAdmin, requireAuth } from "../middlewares/requireAuth";
-import { requireAccess as requireAccessSession } from "../middlewares/requireAccess";
+import { requireAccess, requireAccessAdmin } from "../middlewares/requireAccess";
 import { adminIntelligenceRegistry } from "../lib/admin-intelligence";
 
 const router: IRouter = Router();
 
-router.post("/access/diagnostics", requireAccessSession, (req, res): void => {
+router.post("/access/diagnostics", requireAccess, (req, res): void => {
   const parsed = ReportAccessDiagnosticBody.safeParse(req.body);
   if (!parsed.success || parsed.data.feature === "admin") {
     res.status(400).json({ error: "Invalid diagnostic report" });
@@ -36,8 +35,8 @@ router.post("/access/diagnostics", requireAccessSession, (req, res): void => {
 
 router.get(
   "/admin/intelligence/scan",
-  requireAuth,
-  requireAdmin,
+  requireAccess,
+  requireAccessAdmin,
   (_req, res): void => {
     res.json(ScanAdminIntelligenceResponse.parse(adminIntelligenceRegistry.scan()));
   },
