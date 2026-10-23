@@ -28,6 +28,7 @@ import type {
   AccessSession,
   AdminFeatureSettings,
   AdminFeatureSettingsUpdate,
+  AdminIntelligenceScan,
   AdminUserInput,
   ApprovedUser,
   AuthAccess,
@@ -54,6 +55,8 @@ import type {
   DerivTokenStatus,
   DerivTokenTestResponse,
   DerivTradeEventStream,
+  DiagnosticReportInput,
+  DiagnosticReportResponse,
   ErrorResponse,
   HealthStatus,
   MatchesBatchBuyResponse,
@@ -394,6 +397,84 @@ export const useCreateAdminUser = <TError = ErrorType<ErrorResponse>,
       return useMutation(getCreateAdminUserMutationOptions(options));
     }
 
+export const getScanAdminIntelligenceUrl = () => {
+
+
+
+
+  return `/api/admin/intelligence/scan`
+}
+
+/**
+ * Returns sanitized, aggregated client diagnostics without account credentials, account IDs, trade payloads, or raw exception messages.
+ * @summary Get the latest cross-feature diagnostic scan
+ */
+export const scanAdminIntelligence = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminIntelligenceScan> => {
+
+  return customFetch<AdminIntelligenceScan>(getScanAdminIntelligenceUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getScanAdminIntelligenceQueryKey = () => {
+    return [
+    `/api/admin/intelligence/scan`
+    ] as const;
+    }
+
+
+export const getScanAdminIntelligenceQueryOptions = <TData = Awaited<ReturnType<typeof scanAdminIntelligence>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof scanAdminIntelligence>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getScanAdminIntelligenceQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof scanAdminIntelligence>>> = ({ signal }) => scanAdminIntelligence({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof scanAdminIntelligence>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ScanAdminIntelligenceQueryResult = NonNullable<Awaited<ReturnType<typeof scanAdminIntelligence>>>
+export type ScanAdminIntelligenceQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get the latest cross-feature diagnostic scan
+ */
+
+export function useScanAdminIntelligence<TData = Awaited<ReturnType<typeof scanAdminIntelligence>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof scanAdminIntelligence>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getScanAdminIntelligenceQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getLoginAccessKeyUrl = () => {
 
 
@@ -682,6 +763,78 @@ export const useLogoutAccessSession = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getLogoutAccessSessionMutationOptions(options));
+    }
+
+export const getReportAccessDiagnosticUrl = () => {
+
+
+
+
+  return `/api/access/diagnostics`
+}
+
+/**
+ * Accepts only an allowlisted feature and issue code; raw messages and trading data are never accepted.
+ * @summary Report a sanitized feature diagnostic
+ */
+export const reportAccessDiagnostic = async (diagnosticReportInput: DiagnosticReportInput, options?: Parameters<typeof customFetch>[1]): Promise<DiagnosticReportResponse> => {
+
+  return customFetch<DiagnosticReportResponse>(getReportAccessDiagnosticUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(diagnosticReportInput)
+  }
+);}
+
+
+
+
+
+export const getReportAccessDiagnosticMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reportAccessDiagnostic>>, TError,{data: BodyType<DiagnosticReportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reportAccessDiagnostic>>, TError,{data: BodyType<DiagnosticReportInput>}, TContext> => {
+
+const mutationKey = ['reportAccessDiagnostic'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reportAccessDiagnostic>>, {data: BodyType<DiagnosticReportInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  reportAccessDiagnostic(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReportAccessDiagnosticMutationResult = NonNullable<Awaited<ReturnType<typeof reportAccessDiagnostic>>>
+    export type ReportAccessDiagnosticMutationBody = BodyType<DiagnosticReportInput>
+    export type ReportAccessDiagnosticMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Report a sanitized feature diagnostic
+ */
+export const useReportAccessDiagnostic = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reportAccessDiagnostic>>, TError,{data: BodyType<DiagnosticReportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reportAccessDiagnostic>>,
+        TError,
+        {data: BodyType<DiagnosticReportInput>},
+        TContext
+      > => {
+      return useMutation(getReportAccessDiagnosticMutationOptions(options));
     }
 
 export const getGetTradingProtectionUrl = () => {

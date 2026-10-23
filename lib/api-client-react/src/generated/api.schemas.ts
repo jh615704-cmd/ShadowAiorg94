@@ -44,25 +44,24 @@ export interface AdminUserInput {
   password: string;
 }
 
-export interface AccessKeyLoginInput {
-  /**
-     * @minLength 12
-     * @maxLength 200
-     */
-  access_key: string;
-  /**
-     * @minLength 8
-     * @maxLength 200
-     */
-  device_id: string;
-}
-
-export type AccessKeyCreateInputKind = typeof AccessKeyCreateInputKind[keyof typeof AccessKeyCreateInputKind];
+export type DiagnosticCode = typeof DiagnosticCode[keyof typeof DiagnosticCode];
 
 
-export const AccessKeyCreateInputKind = {
-  admin: 'admin',
-  user: 'user',
+export const DiagnosticCode = {
+  client_runtime_error: 'client_runtime_error',
+  client_unhandled_rejection: 'client_unhandled_rejection',
+  api_server_error: 'api_server_error',
+  trade_outcome_uncertain: 'trade_outcome_uncertain',
+  saved_state_invalid: 'saved_state_invalid',
+  storage_unavailable: 'storage_unavailable',
+} as const;
+
+export type DiagnosticSeverity = typeof DiagnosticSeverity[keyof typeof DiagnosticSeverity];
+
+
+export const DiagnosticSeverity = {
+  warning: 'warning',
+  error: 'error',
 } as const;
 
 export type AccessFeature = typeof AccessFeature[keyof typeof AccessFeature];
@@ -83,6 +82,82 @@ export const AccessFeature = {
   settings: 'settings',
   history: 'history',
   admin: 'admin',
+} as const;
+
+export interface DiagnosticReportInput {
+  feature: AccessFeature;
+  code: DiagnosticCode;
+  severity: DiagnosticSeverity;
+}
+
+export interface DiagnosticReportResponse {
+  accepted: boolean;
+}
+
+export type AdminIntelligenceFeatureStatusStatus = typeof AdminIntelligenceFeatureStatusStatus[keyof typeof AdminIntelligenceFeatureStatusStatus];
+
+
+export const AdminIntelligenceFeatureStatusStatus = {
+  clear: 'clear',
+  issue: 'issue',
+} as const;
+
+export interface AdminIntelligenceFeatureStatus {
+  feature: AccessFeature;
+  status: AdminIntelligenceFeatureStatusStatus;
+  /** @minimum 0 */
+  open_findings: number;
+}
+
+export interface AdminIntelligenceFinding {
+  id: string;
+  feature: AccessFeature;
+  code: DiagnosticCode;
+  severity: DiagnosticSeverity;
+  summary: string;
+  guidance: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  /** @minimum 1 */
+  occurrences: number;
+  /** @minimum 1 */
+  affected_sessions: number;
+  fix_available: boolean;
+}
+
+export type AdminIntelligenceScanServerStatus = typeof AdminIntelligenceScanServerStatus[keyof typeof AdminIntelligenceScanServerStatus];
+
+
+export const AdminIntelligenceScanServerStatus = {
+  healthy: 'healthy',
+} as const;
+
+export interface AdminIntelligenceScan {
+  scanned_at: string;
+  server_status: AdminIntelligenceScanServerStatus;
+  features: AdminIntelligenceFeatureStatus[];
+  findings: AdminIntelligenceFinding[];
+}
+
+export interface AccessKeyLoginInput {
+  /**
+     * @minLength 12
+     * @maxLength 200
+     */
+  access_key: string;
+  /**
+     * @minLength 8
+     * @maxLength 200
+     */
+  device_id: string;
+}
+
+export type AccessKeyCreateInputKind = typeof AccessKeyCreateInputKind[keyof typeof AccessKeyCreateInputKind];
+
+
+export const AccessKeyCreateInputKind = {
+  admin: 'admin',
+  user: 'user',
 } as const;
 
 export interface AccessKeyCreateInput {

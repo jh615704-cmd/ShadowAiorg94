@@ -63,6 +63,40 @@ export const CreateAdminUserResponse = zod.object({
 
 
 /**
+ * Returns sanitized, aggregated client diagnostics without account credentials, account IDs, trade payloads, or raw exception messages.
+ * @summary Get the latest cross-feature diagnostic scan
+ */
+export const scanAdminIntelligenceResponseFeaturesItemOpenFindingsMin = 0;
+
+
+
+
+
+export const ScanAdminIntelligenceResponse = zod.object({
+  "scanned_at": zod.coerce.date(),
+  "server_status": zod.enum(['healthy']),
+  "features": zod.array(zod.object({
+  "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin']),
+  "status": zod.enum(['clear', 'issue']),
+  "open_findings": zod.number().int().min(scanAdminIntelligenceResponseFeaturesItemOpenFindingsMin)
+})),
+  "findings": zod.array(zod.object({
+  "id": zod.string(),
+  "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin']),
+  "code": zod.enum(['client_runtime_error', 'client_unhandled_rejection', 'api_server_error', 'trade_outcome_uncertain', 'saved_state_invalid', 'storage_unavailable']),
+  "severity": zod.enum(['warning', 'error']),
+  "summary": zod.string(),
+  "guidance": zod.string(),
+  "first_seen_at": zod.coerce.date(),
+  "last_seen_at": zod.coerce.date(),
+  "occurrences": zod.number().int().min(1),
+  "affected_sessions": zod.number().int().min(1),
+  "fix_available": zod.boolean()
+}))
+})
+
+
+/**
  * @summary Open an access-key session
  */
 export const loginAccessKeyBodyAccessKeyMin = 12;
@@ -122,6 +156,21 @@ export const HeartbeatAccessSessionResponse = zod.object({
  */
 export const LogoutAccessSessionResponse = zod.object({
   "success": zod.boolean()
+})
+
+
+/**
+ * Accepts only an allowlisted feature and issue code; raw messages and trading data are never accepted.
+ * @summary Report a sanitized feature diagnostic
+ */
+export const ReportAccessDiagnosticBody = zod.object({
+  "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin']),
+  "code": zod.enum(['client_runtime_error', 'client_unhandled_rejection', 'api_server_error', 'trade_outcome_uncertain', 'saved_state_invalid', 'storage_unavailable']),
+  "severity": zod.enum(['warning', 'error'])
+})
+
+export const ReportAccessDiagnosticResponse = zod.object({
+  "accepted": zod.boolean()
 })
 
 

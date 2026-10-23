@@ -3,6 +3,7 @@ import healthRouter from "./health";
 import derivRouter from "./deriv";
 import tokenRouter from "./token";
 import adminRouter from "./admin";
+import intelligenceRouter from "./intelligence";
 import accessRouter from "./access";
 import { requireAccess, requireAccessFeature, requireAnyAccessFeature } from "../middlewares/requireAccess";
 import { TRADING_ACCESS_FEATURES } from "../lib/access-keys";
@@ -11,6 +12,7 @@ const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(accessRouter);
+router.use(intelligenceRouter);
 const tradingFeatures = TRADING_ACCESS_FEATURES;
 const tokenFeatures = [...tradingFeatures, "settings"] as const;
 

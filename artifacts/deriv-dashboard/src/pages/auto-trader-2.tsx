@@ -31,6 +31,7 @@ import AutoTrader2Panel from "@/components/auto-trader-2-panel";
 import type { DerivHistoryRow } from "@/components/deriv-history";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getAccountBalance } from "@/lib/account-balance";
+import { reportAdminDiagnostic } from "@/lib/admin-diagnostics";
 import {
   getAutoTrader2StopReason,
   parseAutoTrader2SavedSession,
@@ -182,6 +183,16 @@ function AutoTrader2Content() {
   const [sessionLoadedForAccount, setSessionLoadedForAccount] = useState<string | null>(null);
   const [verifyingSavedSession, setVerifyingSavedSession] = useState(false);
   const clearTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (savedSessionIssue) {
+      reportAdminDiagnostic("auto-trader-2", "saved_state_invalid", "error");
+      return;
+    }
+    if (savedSession?.phase === "placing" || savedSession?.phase === "manual-review") {
+      reportAdminDiagnostic("auto-trader-2", "trade_outcome_uncertain", "warning");
+    }
+  }, [savedSession?.phase, savedSessionIssue]);
   const runRef = useRef<Runtime>({
     generation: 0,
     active: false,

@@ -344,6 +344,15 @@ function isTradeMutation(method: string, pathname: string): boolean {
   return method === "POST" && /^\/api\/deriv\/(?:buy|bulk-buy|dual-buy|sell|clock-work\/buy|matches\/buy)$/.test(pathname);
 }
 
+function reportAdminDiagnostic(code: "api_server_error" | "trade_outcome_uncertain", severity: "warning" | "error") {
+  if (typeof window === "undefined") return;
+  try {
+    window.dispatchEvent(new CustomEvent("shadow-admin-diagnostic", { detail: { code, severity } }));
+  } catch {
+    // Diagnostics must never interfere with the original request.
+  }
+}
+
 function createRequestId(): string {
   if (typeof globalThis.crypto?.randomUUID === "function") {
     return globalThis.crypto.randomUUID();
@@ -504,6 +513,10 @@ export async function customFetch<T = unknown>(
     // A trade mutation is deliberately never retried: the server may have
     // completed it even if the browser did not receive its response.
     if (method !== "GET" && method !== "HEAD") {
+      reportAdminDiagnostic(
+        isTradeMutation(method, getPathname(requestInfo.url)) ? "trade_outcome_uncertain" : "api_server_error",
+        isTradeMutation(method, getPathname(requestInfo.url)) ? "warning" : "error",
+      );
       throw new ApiTransportError(error, requestInfo, requestId);
     }
 
@@ -512,12 +525,17 @@ export async function customFetch<T = unknown>(
       response = await fetch(input, requestInit);
     } catch (retryError) {
       if (isAbortError(retryError, init.signal)) throw retryError;
+      reportAdminDiagnostic("api_server_error", "error");
       throw new ApiTransportError(retryError, requestInfo, requestId);
     }
   }
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
+    if (response.status >= 500) {
+      const uncertainTrade = isTradeMutation(method, getPathname(requestInfo.url));
+      reportAdminDiagnostic(uncertainTrade ? "trade_outcome_uncertain" : "api_server_error", uncertainTrade ? "warning" : "error");
+    }
     throw new ApiError(response, errorData, requestInfo);
   }
 

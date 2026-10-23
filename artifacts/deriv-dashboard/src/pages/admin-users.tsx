@@ -21,6 +21,7 @@ import {
   type AccessKeySummary,
 } from "@workspace/api-client-react";
 import { AppShell } from "@/components/layout/app-shell";
+import AdminIntelligencePanel from "@/components/admin-intelligence-panel";
 import { useToast } from "@/hooks/use-toast";
 import {
   Activity,
@@ -524,6 +525,8 @@ export default function AdminUsersPage() {
           </div>
            <button type="button" className="refresh-control" onClick={() => void refreshEverything()} disabled={keysQuery.isFetching}><RefreshCw size={14} className={keysQuery.isFetching ? "spin" : ""} /> Refresh everything</button>
         </section>
+
+        <AdminIntelligencePanel />
 
         <section className="panel admin-feature-control-card">
           <div className="panel-header">

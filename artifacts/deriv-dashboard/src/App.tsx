@@ -15,6 +15,7 @@ import AutoTrader2Page from '@/pages/auto-trader-2';
 import { AccessGate } from '@/components/access-gate';
 import SignInPage from '@/pages/sign-in';
 import { DerivCredentialWarning } from '@/components/deriv-credential-warning';
+import { AdminDiagnosticsReporter } from '@/components/admin-diagnostics-reporter';
 
 const queryClient = new QueryClient();
 
@@ -52,7 +53,7 @@ function App() {
       <ThemeProvider>
         <TooltipProvider>
           <WouterRouter base={basePath}>
-             <QueryClientProvider client={queryClient}><AccessGate><DerivCredentialWarning /><Router /></AccessGate></QueryClientProvider>
+             <QueryClientProvider client={queryClient}><AdminDiagnosticsReporter /><AccessGate><DerivCredentialWarning /><Router /></AccessGate></QueryClientProvider>
           </WouterRouter>
           <Toaster />
         </TooltipProvider>
@@ -65,7 +66,7 @@ function App() {
       <ThemeProvider>
         <TooltipProvider>
           <WouterRouter base={basePath}>
-             <QueryClientProvider client={queryClient}><AccessGate><DerivCredentialWarning /><Router /></AccessGate></QueryClientProvider>
+             <QueryClientProvider client={queryClient}><AdminDiagnosticsReporter /><AccessGate><DerivCredentialWarning /><Router /></AccessGate></QueryClientProvider>
           </WouterRouter>
           <Toaster />
         </TooltipProvider>
