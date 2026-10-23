@@ -6,6 +6,8 @@ import {
   claimDerivHistoryFeatureContractIds,
   formatSignedDerivProfit,
   isDerivHistoryOpen,
+  removeSettledHistoryAcknowledgements,
+  shouldShowFeatureHistoryWhenStopped,
   summarizeDerivHistorySession,
   uniqueDerivHistoryRows,
   type DerivHistoryFeature,
@@ -100,6 +102,28 @@ test("history treats pending and active contracts as unsettled and excludes thei
     { pnl: summary.pnl, trades: summary.trades, wins: summary.wins, losses: summary.losses, winRate: summary.winRate },
     { pnl: 1, trades: 3, wins: 1, losses: 0, winRate: 100 },
   );
+});
+
+test("stopped feature history hides settled rows but remains for open or not-yet-reconciled acknowledged contracts", () => {
+  const settledRows = [row({ status: "won" })];
+  const openRows = [row({ status: "open" })];
+
+  assert.equal(shouldShowFeatureHistoryWhenStopped(false, settledRows, new Set()), false);
+  assert.equal(shouldShowFeatureHistoryWhenStopped(false, openRows, new Set()), true);
+  assert.equal(shouldShowFeatureHistoryWhenStopped(false, [], new Set(["acknowledged-contract"])), true);
+  assert.equal(shouldShowFeatureHistoryWhenStopped(true, [], new Set()), true);
+});
+
+test("acknowledged history stays visible until a settled row is actually observed", () => {
+  const remaining = removeSettledHistoryAcknowledgements(
+    new Set(["open-contract", "settled-contract", "not-yet-listed"]),
+    [
+      row({ contract_id: "open-contract", status: "active" }),
+      row({ contract_id: "settled-contract", status: "won" }),
+    ],
+  );
+
+  assert.deepEqual([...remaining].sort(), ["not-yet-listed", "open-contract"]);
 });
 
 test("history summary deduplicates contract rows and prefers complete settled Deriv results", () => {

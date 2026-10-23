@@ -7,10 +7,10 @@ Every trading feature's history should show run P/L, trade count, wins/losses, w
 
 A contract ID belongs only to the feature that acknowledged its buy, scoped to the selected Deriv account. Do not assign history by contract type alone, and clear local claims when the account changes.
 
-A feature stop prevents new automatic entries but does not cancel buys already acknowledged by Deriv. Keep that feature's history visible for acknowledged open contracts even after its control panel is switched off.
+A feature stop prevents new automatic entries but does not cancel buys already acknowledged by Deriv. Keep that feature's history visible for acknowledged open contracts even after its control panel is switched off. Once all owned contracts are confirmed settled, hide its inactive history panel to avoid stale or duplicate-looking cards.
 
 The shared history read is a display snapshot, not a trade-safety authority. On transient Deriv refresh failures, serve the account-scoped cache with an explicit stale signal and server warning; filter malformed cached rows rather than failing every feature's history panel. Keep credential and capacity errors visible, and use verified portfolio/status data for trade-lock decisions.
 
-**Why:** The user asked for accurate metrics, feature-specific history, and for automatic Matches entries to stop without preventing open contracts from settling or disappearing from history.
+**Why:** The user asked for accurate, feature-specific history, open contracts to remain visible through settlement, and stale or duplicate-looking history panels not to remain after features are turned off.
 
-**How to apply:** Keep history resilient, account-scoped, and explicitly owned by its originating feature. When stopping automation or switching off a panel, preserve rows for acknowledged open contracts until settlement. Test cross-feature and cross-account contract-ID collisions alongside absent profit fields, settled and open contracts, cumulative stakes, partial snapshots, malformed rows, and transient refresh failures; never let a stale display snapshot release a trade lock.
+**How to apply:** Keep history resilient, account-scoped, and explicitly owned by its originating feature. Render one history panel per feature. When the feature is off, keep the panel only while an acknowledged contract is open or not yet reconciled; hide it after settlement is confirmed. Clear only local rows and never hide unsettled contracts. Test cross-feature and cross-account contract-ID collisions alongside absent profit fields, settled and open contracts, cumulative stakes, partial snapshots, malformed rows, and transient refresh failures; never let a stale display snapshot release a trade lock.

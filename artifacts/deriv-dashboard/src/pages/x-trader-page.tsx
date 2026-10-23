@@ -126,6 +126,8 @@ import { readCachedHistorySnapshot } from "../lib/history-snapshot";
 import {
   claimDerivHistoryFeatureContractIds,
   isDerivHistoryOpen,
+  removeSettledHistoryAcknowledgements,
+  shouldShowFeatureHistoryWhenStopped,
   type DerivHistoryFeature,
 } from "../lib/deriv-history";
 import {
@@ -524,6 +526,7 @@ export default function XTraderPage() {
   const [matchesStatusMessage, setMatchesStatusMessage] = useState("Rescan to start a fresh digit sample.");
   const [matchesHistoryClearArmed, setMatchesHistoryClearArmed] = useState(false);
   const [matchesHiddenHistoryIds, setMatchesHiddenHistoryIds] = useState<Set<string>>(new Set());
+  const [matchesPendingHistoryIds, setMatchesPendingHistoryIds] = useState<Set<string>>(new Set());
   const [clockWorkEnabled, setClockWorkEnabled] = useState(false);
   const [clockWorkSymbol, setClockWorkSymbol] = useState("R_75");
   const [clockWorkBarrierMode, setClockWorkBarrierMode] = useState<"offset" | "absolute">("offset");
@@ -597,6 +600,7 @@ export default function XTraderPage() {
   const [digitFlipClearArmed, setDigitFlipClearArmed] = useState(false);
   const [edgeHiddenHistoryIds, setEdgeHiddenHistoryIds] = useState<Set<string>>(new Set());
   const [digitFlipHiddenHistoryIds, setDigitFlipHiddenHistoryIds] = useState<Set<string>>(new Set());
+  const [digitFlipPendingHistoryIds, setDigitFlipPendingHistoryIds] = useState<Set<string>>(new Set());
   const [edgeMinWinRate, setEdgeMinWinRate] = useState(90);
   const [tradeXTradesSent, setTradeXTradesSent] = useState(0);
   const [tradeXSubmitting, setTradeXSubmitting] = useState(false);
@@ -802,7 +806,8 @@ export default function XTraderPage() {
   const tradeXRows = tradeXAllRows.filter((trade) => tradeXClaimedHistoryIdsRef.current.has(trade.contract_id) && !tradeXHiddenHistoryIds.has(trade.contract_id));
   const tradeXSessionRows = tradeXAllRows.filter((trade) => tradeXClaimedHistoryIdsRef.current.has(trade.contract_id));
   const tradeXVisibleSessionRows = tradeXSessionRows.filter((trade) => !tradeXHiddenHistoryIds.has(trade.contract_id));
-  const digitFlipRows = digitFlipAllRows.filter((trade) => digitFlipClaimedHistoryIdsRef.current.has(String(trade.contract_id)) && !digitFlipHiddenHistoryIds.has(String(trade.contract_id)));
+  const digitFlipOwnedRows = digitFlipAllRows.filter((trade) => digitFlipClaimedHistoryIdsRef.current.has(String(trade.contract_id)));
+  const digitFlipRows = digitFlipOwnedRows.filter((trade) => !digitFlipHiddenHistoryIds.has(String(trade.contract_id)));
   const matchesSessionRows = matchesSessionKnownIdsRef.current
     ? matchesAllRows.filter((trade) => (
       matchesClaimedHistoryIdsRef.current.has(String(trade.contract_id))
@@ -810,10 +815,8 @@ export default function XTraderPage() {
     ))
     : [];
   const matchesVisibleSessionRows = matchesSessionRows.filter((trade) => !matchesHiddenHistoryIds.has(String(trade.contract_id)));
-  const matchesRows = matchesAllRows.filter((trade) => (
-    matchesClaimedHistoryIdsRef.current.has(String(trade.contract_id))
-    && !matchesHiddenHistoryIds.has(String(trade.contract_id))
-  ));
+  const matchesOwnedRows = matchesAllRows.filter((trade) => matchesClaimedHistoryIdsRef.current.has(String(trade.contract_id)));
+  const matchesRows = matchesOwnedRows.filter((trade) => !matchesHiddenHistoryIds.has(String(trade.contract_id)));
   const matchesTopDigits = useMemo<ObservedMatchesDigitStat[]>(
     () => summarizeSettledMatchOutcomes(
       matchesAllRows,
@@ -1199,6 +1202,8 @@ export default function XTraderPage() {
     clockWorkClaimedHistoryIdsRef.current.clear();
     matchesClaimedHistoryIdsRef.current.clear();
     moneyBankClaimedHistoryIdsRef.current.clear();
+    setDigitFlipPendingHistoryIds(new Set());
+    setMatchesPendingHistoryIds(new Set());
     setEdgeHiddenHistoryIds(new Set());
     setTradeXHiddenHistoryIds(new Set());
     setDigitFlipHiddenHistoryIds(new Set());
@@ -1212,6 +1217,17 @@ export default function XTraderPage() {
     setEdgeAccountBalance(currentAccountBalance == null ? "" : currentAccountBalance.toFixed(2));
     setDigitFlipAccountBalance(currentAccountBalance == null ? "" : currentAccountBalance.toFixed(2));
   }, [currentAccount?.id]);
+
+  useEffect(() => {
+    setDigitFlipPendingHistoryIds((current) => {
+      const next = removeSettledHistoryAcknowledgements(current, digitFlipAllRows);
+      return next.size === current.size ? current : next;
+    });
+    setMatchesPendingHistoryIds((current) => {
+      const next = removeSettledHistoryAcknowledgements(current, matchesAllRows);
+      return next.size === current.size ? current : next;
+    });
+  }, [rows]);
 
   useEffect(() => {
     if (currentAccountBalance == null) return;
@@ -3322,7 +3338,9 @@ export default function XTraderPage() {
       // The buy acknowledgement is authoritative. Claim its contract id now,
       // and let history polling populate the full row when Deriv publishes it.
       if (result.buy?.contract_id) {
-        claimFeatureRows("digit-flip", digitFlipClaimedHistoryIdsRef.current, [result.buy.contract_id]);
+        const contractId = String(result.buy.contract_id);
+        claimFeatureRows("digit-flip", digitFlipClaimedHistoryIdsRef.current, [contractId]);
+        setDigitFlipPendingHistoryIds((current) => new Set(current).add(contractId));
       }
       setConnectionMessage(null);
       setDigitFlipTradeCount((value) => value + 1);
@@ -3535,7 +3553,9 @@ export default function XTraderPage() {
     await sleep(260);
     setDigitFlipHiddenHistoryIds((current) => {
       const next = new Set(current);
-          digitFlipRows.forEach((trade) => next.add(String(trade.contract_id)));
+      digitFlipRows
+        .filter((trade) => !isDerivHistoryOpen(trade.status))
+        .forEach((trade) => next.add(String(trade.contract_id)));
       return next;
     });
     setHistoryFading(false);
@@ -3552,7 +3572,9 @@ export default function XTraderPage() {
     await sleep(260);
     setMatchesHiddenHistoryIds((current) => {
       const next = new Set(current);
-      matchesRows.forEach((trade) => next.add(String(trade.contract_id)));
+      matchesRows
+        .filter((trade) => !isDerivHistoryOpen(trade.status))
+        .forEach((trade) => next.add(String(trade.contract_id)));
       return next;
     });
     setHistoryFading(false);
@@ -3773,11 +3795,16 @@ export default function XTraderPage() {
     setMatchesStatusMessage(automated ? "Sending fresh Matches proposals and buy requests." : "Sending the manual Matches trade.");
     try {
       const result = await matchesBuyMutation.mutateAsync({ data: { contracts } });
+      const confirmedContractIds = result.contracts
+        .map((entry) => entry.buy.contract_id)
+        .filter((contractId) => contractId != null && String(contractId).length > 0)
+        .map(String);
       claimFeatureRows(
         "matches-analysis",
         matchesClaimedHistoryIdsRef.current,
-        result.contracts.map((entry) => String(entry.buy.contract_id)),
+        confirmedContractIds,
       );
+      setMatchesPendingHistoryIds((current) => new Set([...current, ...confirmedContractIds]));
       refreshTradeResults();
       if (!result.ok) {
         toggleMatchesAi(false, `${result.message} Automatic entries are stopped. Open contracts can continue to settle.`);
@@ -4710,7 +4737,11 @@ export default function XTraderPage() {
         />
       )}
 
-      {canUseDigitFlip && canViewHistory && (digitFlipEnabled || digitFlipClaimedHistoryIdsRef.current.size > 0) && (
+      {canUseDigitFlip && canViewHistory && shouldShowFeatureHistoryWhenStopped(
+        digitFlipEnabled,
+        digitFlipOwnedRows,
+        digitFlipPendingHistoryIds,
+      ) && (
         <section className="xt-bottom-feature">
           <DerivHistory
             className="digit-flip-history"
@@ -5091,7 +5122,11 @@ export default function XTraderPage() {
         </section>
       )}
 
-      {canUseMatchesAnalysis && canViewHistory && !clockWorkEnabled && (matchesAnalysisEnabled || matchesClaimedHistoryIdsRef.current.size > 0) && (
+      {canUseMatchesAnalysis && canViewHistory && !clockWorkEnabled && shouldShowFeatureHistoryWhenStopped(
+        matchesAnalysisEnabled,
+        matchesOwnedRows,
+        matchesPendingHistoryIds,
+      ) && (
         <section className="xt-bottom-feature">
           <DerivHistory
             title="Matches Analysis History"

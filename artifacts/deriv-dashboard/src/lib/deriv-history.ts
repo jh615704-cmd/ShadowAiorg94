@@ -48,6 +48,28 @@ export function isDerivHistoryOpen(status: string): boolean {
   return ["open", "pending", "active"].includes(status.trim().toLowerCase());
 }
 
+export function shouldShowFeatureHistoryWhenStopped(
+  enabled: boolean,
+  ownedRows: readonly Pick<DerivHistoryRow, "status">[],
+  pendingAcknowledgements: ReadonlySet<string>,
+): boolean {
+  return enabled
+    || pendingAcknowledgements.size > 0
+    || ownedRows.some((row) => isDerivHistoryOpen(row.status));
+}
+
+export function removeSettledHistoryAcknowledgements(
+  pendingAcknowledgements: ReadonlySet<string>,
+  rows: readonly Pick<DerivHistoryRow, "contract_id" | "status">[],
+): Set<string> {
+  const settledIds = new Set(
+    rows
+      .filter((row) => !isDerivHistoryOpen(row.status))
+      .map((row) => String(row.contract_id)),
+  );
+  return new Set([...pendingAcknowledgements].filter((contractId) => !settledIds.has(contractId)));
+}
+
 export function claimConfirmedDerivContractIds(
   target: Set<string>,
   contractIds: readonly string[],
