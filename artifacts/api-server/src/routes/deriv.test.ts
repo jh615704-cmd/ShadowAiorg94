@@ -27,8 +27,15 @@ let forceAccessRevoked = false;
 let forceHistoryRefreshError = false;
 let buyInvocations = 0;
 let bulkBuyInvocations = 0;
+const bulkBuyDurations: number[] = [];
 let dualBuyInvocations = 0;
 let knockoutScanInvocations = 0;
+const marketTickListeners = new Set<(tick: {
+  symbol: string;
+  tick_sequence: number;
+  recent_digits: number[];
+  tick_epoch: number;
+}) => void>();
 
 class MockDerivCapacityError extends Error {}
 class MockDerivCredentialError extends Error {
@@ -167,7 +174,22 @@ mock.module("../lib/deriv", {
       observePat();
       return historyRows;
     },
+    getMarketTickSnapshot: () => [{
+      symbol: "R_75",
+      tick_sequence: 0,
+      recent_digits: [],
+      tick_epoch: 0,
+    }],
     subscribeDerivHistoryUpdates: () => () => {},
+    subscribeDerivMarketTickUpdates: (listener: (tick: {
+      symbol: string;
+      tick_sequence: number;
+      recent_digits: number[];
+      tick_epoch: number;
+    }) => void) => {
+      marketTickListeners.add(listener);
+      return () => marketTickListeners.delete(listener);
+    },
     refreshDerivHistory: async () => {
       if (forceHistoryRefreshError) throw new Error("Deriv history refresh timed out");
       return;
@@ -197,6 +219,7 @@ mock.module("../lib/deriv", {
     bulkBuyContracts: async (input: { duration: number; contract_type: string }) => {
       observePat();
       bulkBuyInvocations += 1;
+      bulkBuyDurations.push(input.duration);
       if (input.duration > 5 && input.contract_type !== "CALL" && input.contract_type !== "PUT") {
         throw new Error("Tick durations above 5 are only supported for Rise/Fall contracts.");
       }
@@ -253,7 +276,7 @@ app.use(express.json());
 app.use((req, res, next) => {
   Object.assign(req, { log: { error() {}, warn() {} } });
   res.locals.userId = sessionId;
-  res.locals.accessKey = { features: ["clock-work", "edge"] };
+  res.locals.accessKey = { features: ["clock-work", "edge", "auto-trader"] };
   next();
 });
 app.use(derivRouter);
@@ -266,6 +289,7 @@ async function readJson(response: Response) {
 test("admin Deriv routes require the session PAT and forget it on disconnect", async () => {
   userPats.set(sessionId, "prior-session-pat");
   observedPats.length = 0;
+  bulkBuyDurations.length = 0;
   credentials.clear();
 
   const server = createServer(app);
@@ -378,7 +402,42 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
     });
     assert.equal(digitBulkResponse.status, 400);
     assert.match(String((await readJson(digitBulkResponse)).error), /duration/);
-    assert.deepEqual(observedPats, [enteredPat, enteredPat, enteredPat, enteredPat, enteredPat, enteredPat, enteredPat]);
+    const autoTraderDurationOffset = bulkBuyDurations.length;
+    for (const duration of [1, 2, 3, 4, 5]) {
+      const autoTraderBulkResponse = await fetch(`${baseUrl}/deriv/bulk-buy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          access_feature: "auto-trader",
+          amount: 1,
+          duration,
+          duration_unit: "t",
+          contract_type: "DIGITDIFF",
+          barrier: 5,
+          symbol: "R_75",
+          count: 1,
+        }),
+      });
+      assert.equal(autoTraderBulkResponse.status, 202, `Auto Trader should accept ${duration} tick duration.`);
+    }
+    assert.deepEqual(bulkBuyDurations.slice(autoTraderDurationOffset), [1, 2, 3, 4, 5]);
+    const outOfRangeAutoTraderResponse = await fetch(`${baseUrl}/deriv/bulk-buy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        access_feature: "auto-trader",
+        amount: 1,
+        duration: 6,
+        duration_unit: "t",
+        contract_type: "DIGITDIFF",
+        barrier: 5,
+        symbol: "R_75",
+        count: 1,
+      }),
+    });
+    assert.equal(outOfRangeAutoTraderResponse.status, 400);
+    assert.match(String((await readJson(outOfRangeAutoTraderResponse)).error), /1 to 5 ticks/);
+    assert.deepEqual(observedPats, Array.from({ length: 12 }, () => enteredPat));
 
     const priorBuyInvocations = buyInvocations;
     const priorBulkBuyInvocations = bulkBuyInvocations;
@@ -432,6 +491,33 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
     assert.equal(deniedDualBuy.status, 403);
     assert.equal(dualBuyInvocations, priorDualBuyInvocations, "revoked sessions must not reach the Deriv dual-buy handler");
     forceAccessRevoked = false;
+
+    const tickStreamAbort = new AbortController();
+    const tickStreamResponse = await fetch(`${baseUrl}/deriv/events?market_ticks=true`, {
+      signal: tickStreamAbort.signal,
+    });
+    assert.equal(tickStreamResponse.status, 200);
+    const tickStreamReader = tickStreamResponse.body?.getReader();
+    assert.ok(tickStreamReader);
+    const decoder = new TextDecoder();
+    let initialEvents = "";
+    while (!initialEvents.includes("event: market-tick-snapshot")) {
+      const chunk = await tickStreamReader.read();
+      assert.equal(chunk.done, false, "the stream should send its initial tick snapshot");
+      initialEvents += decoder.decode(chunk.value, { stream: true });
+    }
+    assert.match(initialEvents, /event: history-snapshot/);
+    assert.match(initialEvents, /event: market-tick-snapshot/);
+
+    const nextEvent = tickStreamReader.read();
+    for (const listener of marketTickListeners) {
+      listener({ symbol: "R_75", tick_sequence: 1, recent_digits: [6], tick_epoch: 1 });
+    }
+    const liveTick = await nextEvent;
+    assert.match(decoder.decode(liveTick.value), /event: market-tick/);
+    tickStreamAbort.abort();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(marketTickListeners.size, 0, "closing the response must remove its per-user tick listener");
 
     const disconnectResponse = await fetch(`${baseUrl}/token`, { method: "DELETE" });
     assert.equal(disconnectResponse.status, 200);

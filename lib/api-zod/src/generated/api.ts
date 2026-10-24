@@ -621,9 +621,15 @@ export const GetDerivStatusResponse = zod.object({
 
 
 /**
- * Sends an initial account-scoped history snapshot followed by trade-update events over Server-Sent Events.
- * @summary Stream account history snapshots and live trade updates
+ * Sends an account-scoped history snapshot followed by trade-update events over Server-Sent Events. Set market_ticks=true to also receive a market-tick-snapshot followed by live market-tick events for the Auto Trader scanner.
+ * @summary Stream account history, live trades, and optional market ticks
  */
+export const streamDerivTradeUpdatesQueryMarketTicksDefault = false;
+
+export const StreamDerivTradeUpdatesQueryParams = zod.object({
+  "market_ticks": zod.coerce.boolean().default(streamDerivTradeUpdatesQueryMarketTicksDefault).describe('Include real Deriv tick updates for the Auto Trader scanner.')
+})
+
 export const StreamDerivTradeUpdatesResponse = zod.unknown()
 
 

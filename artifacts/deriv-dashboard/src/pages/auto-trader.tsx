@@ -21,6 +21,8 @@ import {
   useGetDerivTokenStatus,
 } from "@workspace/api-client-react";
 import type { DerivHistoryItem } from "@workspace/api-client-react";
+import { mergeDerivTradeUpdate } from "@/lib/deriv-trade-feed";
+import { collectAutoTraderTickChanges, type AutoTraderMarketTickSignal } from "@/lib/auto-trader-ticks";
 import { AppShell } from "@/components/layout/app-shell";
 import { DerivAccountSwitcher } from "@/components/deriv-account-switcher";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -118,11 +120,11 @@ function AutoTraderContent() {
       queryKey: getGetDerivStatusQueryKey(),
       enabled: hasAutoTraderAccess && hasToken,
       retry: false,
-      refetchInterval: scanning ? 500 : false,
+      refetchInterval: scanning ? 5_000 : false,
     },
   });
   const history = useGetDerivHistory({
-    query: { queryKey: getGetDerivHistoryQueryKey(), enabled: hasAutoTraderAccess && hasToken, retry: false, refetchInterval: hasAutoTraderAccess && hasToken ? 5_000 : false },
+    query: { queryKey: getGetDerivHistoryQueryKey(), enabled: hasAutoTraderAccess && hasToken, retry: false, refetchInterval: false },
   });
   const bulkBuy = useBulkBuyDerivContracts();
   const batchSubmitLockRef = useRef(false);
@@ -149,6 +151,8 @@ function AutoTraderContent() {
   const currentSignals = status.data?.market_signals ?? [];
 
   const [localContracts, setLocalContracts] = useState<LocalContract[]>([]);
+  const localContractsRef = useRef(localContracts);
+  localContractsRef.current = localContracts;
 
   useEffect(() => {
     if (!hasAutoTraderAccess) setScanning(false);
@@ -203,49 +207,93 @@ function AutoTraderContent() {
   }, []);
 
   useEffect(() => {
-    if (!scanning) return;
-    const arrivals: Array<{ symbol: string; digit: number }> = [];
-    const progress: TickMap = {};
-    for (const market of markets) {
-      const signal = currentSignals.find((candidate) => candidate.symbol === market.symbol);
-      if (!signal || (signal.tick_sequence === 0 && signal.recent_digits.length === 0)) continue;
+    if (!hasAutoTraderAccess || !hasToken || !accountId || !history.isFetched) return;
 
-      let previous = seenTicks.current[market.symbol];
-      if (previous == null) {
-        // If a market first appears after Go Live, count its first newly
-        // observed tick rather than importing its pre-scan history.
-        previous = signal.tick_sequence - 1;
-        seenTicks.current[market.symbol] = previous;
-        baselineTicks.current[market.symbol] = previous;
+    const eventUrl = scanning
+      ? "/api/deriv/events?market_ticks=true"
+      : "/api/deriv/events";
+    const source = new EventSource(eventUrl, { withCredentials: true });
+    const applySignals = (signals: AutoTraderMarketTickSignal[]) => {
+      if (!scanning || !Array.isArray(signals)) return;
+      const { arrivals, progress } = collectAutoTraderTickChanges(
+        signals,
+        seenTicks.current,
+        baselineTicks.current,
+      );
+      if (arrivals.length) {
+        setFrequencies((old) => {
+          const next = { ...old };
+          for (const arrival of arrivals) {
+            const counts = [...(next[arrival.symbol] ?? Array(10).fill(0))];
+            counts[arrival.digit] += 1;
+            next[arrival.symbol] = counts;
+          }
+          return next;
+        });
       }
-
-      const firstSequence = signal.tick_sequence - signal.recent_digits.length + 1;
-      if (signal.tick_sequence > previous) {
-        for (let index = 0; index < signal.recent_digits.length; index += 1) {
-          const sequence = firstSequence + index;
-          if (sequence <= previous) continue;
-          const digit = signal.recent_digits[index];
-          if (digit >= 0 && digit <= 9) arrivals.push({ symbol: market.symbol, digit });
-        }
-        seenTicks.current[market.symbol] = signal.tick_sequence;
+      if (Object.keys(progress).length) {
+        setMarketTicks((current) => ({ ...current, ...progress }));
       }
+    };
 
-      const baseline = baselineTicks.current[market.symbol] ?? previous;
-      progress[market.symbol] = Math.max(0, signal.tick_sequence - baseline);
-    }
-    if (arrivals.length) {
-      setFrequencies((old) => {
-        const next = { ...old };
-        for (const arrival of arrivals) {
-          const counts = [...(next[arrival.symbol] ?? Array(10).fill(0))];
-          counts[arrival.digit] += 1;
-          next[arrival.symbol] = counts;
-        }
-        return next;
-      });
-    }
-    setMarketTicks((current) => ({ ...current, ...progress }));
-  }, [scanning, currentSignals]);
+    source.addEventListener("market-tick-snapshot", (event) => {
+      try {
+        applySignals(JSON.parse((event as MessageEvent<string>).data) as AutoTraderMarketTickSignal[]);
+      } catch {
+        // Ignore malformed tick snapshots; EventSource will reconnect with a fresh snapshot.
+      }
+    });
+    source.addEventListener("market-tick", (event) => {
+      try {
+        applySignals([JSON.parse((event as MessageEvent<string>).data) as AutoTraderMarketTickSignal]);
+      } catch {
+        // Ignore malformed ticks and keep the stream open for later updates.
+      }
+    });
+    source.addEventListener("history-snapshot", (event) => {
+      try {
+        const rows = JSON.parse((event as MessageEvent<string>).data) as DerivHistoryItem[];
+        if (!Array.isArray(rows)) return;
+        const trackedIds = new Set(localContractsRef.current.map((entry) => entry.id));
+        queryClient.setQueryData<DerivHistoryItem[]>(
+          getGetDerivHistoryQueryKey(),
+          (current) => {
+            const merged = new Map(
+              rows
+                .filter((row) => row.account_id === accountId)
+                .map((row) => [row.contract_id, row]),
+            );
+            for (const row of current ?? []) {
+              if (
+                row.account_id === accountId
+                && trackedIds.has(row.contract_id)
+                && !merged.has(row.contract_id)
+              ) {
+                merged.set(row.contract_id, row);
+              }
+            }
+            return [...merged.values()];
+          },
+        );
+      } catch {
+        // Keep the last known account-scoped history if a snapshot is malformed.
+      }
+    });
+    source.addEventListener("trade-update", (event) => {
+      try {
+        const row = JSON.parse((event as MessageEvent<string>).data) as DerivHistoryItem;
+        if (!row || row.account_id !== accountId || typeof row.contract_id !== "string") return;
+        queryClient.setQueryData<DerivHistoryItem[]>(
+          getGetDerivHistoryQueryKey(),
+          (current) => mergeDerivTradeUpdate(current, row),
+        );
+      } catch {
+        // Ignore malformed frames and keep the stream open for later updates.
+      }
+    });
+
+    return () => source.close();
+  }, [accountId, hasAutoTraderAccess, hasToken, history.isFetched, queryClient, scanning]);
 
   const startScan = async () => {
     if (!hasAutoTraderAccess) return;

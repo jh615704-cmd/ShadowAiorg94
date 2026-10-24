@@ -126,6 +126,13 @@ export type DerivStatus = {
   }>;
 };
 
+export type DerivMarketTickUpdate = {
+  symbol: string;
+  tick_sequence: number;
+  recent_digits: number[];
+  tick_epoch: number;
+};
+
 type ProposalInput = {
   amount: number;
   duration: number;
@@ -229,6 +236,7 @@ return {
   openContractsReady: false,
   history: [] as DerivHistoryItem[],
   historyListeners: new Set<(item: DerivHistoryItem) => void>(),
+  marketTickListeners: new Set<(tick: DerivMarketTickUpdate) => void>(),
   profitTableReady: false,
   profitTableRefreshAt: 0,
   profitTableRetryAfter: 0,
@@ -358,6 +366,7 @@ export function disposeUser(userId: string) {
   if (!runtime) return;
   runtime.shuttingDown = true;
   runtime.historyListeners.clear();
+  runtime.marketTickListeners.clear();
   for (const waiter of runtime.proposalWaiters.values()) {
     clearTimeout(waiter.timer);
     waiter.reject(new Error("Deriv runtime disposed"));
@@ -661,6 +670,19 @@ function recordMarketTick(symbol: string, quote: unknown, epoch: number, pipSize
   if (lastDigit !== undefined) market.digitHistory.push(Number(lastDigit));
   market.digitHistory = market.digitHistory.slice(-1000);
   runtime.marketHistory.set(symbol, market);
+  const tickUpdate: DerivMarketTickUpdate = {
+    symbol,
+    tick_sequence: market.tickSequence,
+    recent_digits: market.digitHistory.slice(-100),
+    tick_epoch: epoch,
+  };
+  for (const listener of runtime.marketTickListeners) {
+    try {
+      listener(tickUpdate);
+    } catch (error) {
+      logger.warn({ err: error, symbol }, "Deriv market tick listener failed");
+    }
+  }
   if (symbol === runtime.selectedSymbol) {
     runtime.lastTick = { symbol, quote: market.quote, epoch };
     runtime.digitHistory = [...market.digitHistory];
@@ -709,6 +731,15 @@ function getMarketSignals() {
       }),
     };
   });
+}
+
+export function getMarketTickSnapshot(): DerivMarketTickUpdate[] {
+  return getMarketSignals().map(({ symbol, tick_sequence, recent_digits, tick_epoch }) => ({
+    symbol,
+    tick_sequence,
+    recent_digits,
+    tick_epoch,
+  }));
 }
 
 function getDigitPercentages() {
@@ -2468,6 +2499,12 @@ export function subscribeDerivHistoryUpdates(listener: (item: DerivHistoryItem) 
   const runtime = getState();
   runtime.historyListeners.add(listener);
   return () => runtime.historyListeners.delete(listener);
+}
+
+export function subscribeDerivMarketTickUpdates(listener: (tick: DerivMarketTickUpdate) => void) {
+  const runtime = getState();
+  runtime.marketTickListeners.add(listener);
+  return () => runtime.marketTickListeners.delete(listener);
 }
 
 export function clearHistory() {

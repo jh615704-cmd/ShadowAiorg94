@@ -7,6 +7,6 @@
  */
 
 /**
- * SSE frames use event history-snapshot with a DerivHistoryResponse JSON payload, then trade-update with a DerivHistoryItem JSON payload.
+ * SSE frames use history-snapshot with a DerivHistoryResponse payload and trade-update with a DerivHistoryItem payload. When market_ticks=true, market-tick-snapshot carries an array of {symbol, tick_sequence, recent_digits, tick_epoch} signals, followed by market-tick frames with one signal each.
  */
 export type DerivTradeEventStream = string;

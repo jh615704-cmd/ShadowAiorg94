@@ -415,6 +415,42 @@ describe("Deriv market subscriptions", { concurrency: false }, () => {
       assert.equal(countSubscriptionsFor("R_50"), 1);
     });
   });
+
+  test("publishes real market ticks to Auto Trader listeners and supports a reconnect snapshot", async () => {
+    await withSelectedAccount("auto-trader-market-feed-user", async () => {
+      const updates: Array<{
+        symbol: string;
+        tick_sequence: number;
+        recent_digits: number[];
+        tick_epoch: number;
+      }> = [];
+      const unsubscribe = deriv.subscribeDerivMarketTickUpdates((update) => updates.push(update));
+      const socket = latestSocket();
+
+      emitMessage(socket, {
+        msg_type: "tick",
+        tick: { symbol: "R_75", quote: 1234.56, epoch: 1_700_000_001, pip_size: 2 },
+      });
+
+      assert.deepEqual(updates, [{
+        symbol: "R_75",
+        tick_sequence: 1,
+        recent_digits: [6],
+        tick_epoch: 1_700_000_001,
+      }]);
+      assert.deepEqual(
+        deriv.getMarketTickSnapshot().find((signal: { symbol: string }) => signal.symbol === "R_75"),
+        updates[0],
+      );
+
+      unsubscribe();
+      emitMessage(socket, {
+        msg_type: "tick",
+        tick: { symbol: "R_75", quote: 1234.57, epoch: 1_700_000_002, pip_size: 2 },
+      });
+      assert.equal(updates.length, 1, "unsubscribed Auto Trader screens must stop receiving ticks");
+    });
+  });
 });
 
 describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
@@ -1064,6 +1100,34 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
         /still reports an open contract|previous contract is still settling/,
       );
     });
+  });
+
+  test("Auto Trader 1–5 tick durations are passed unchanged to Deriv proposals and buys", async () => {
+    for (const duration of [1, 2, 3, 4, 5]) {
+      mockPortfolioContracts = [];
+      const userId = `auto-trader-duration-${duration}`;
+      const result = await withSelectedAccount(userId, () => deriv.bulkBuyContracts({
+        amount: 1,
+        duration,
+        duration_unit: "t",
+        contract_type: "DIGITDIFF",
+        barrier: 4,
+        symbol: "R_75",
+        count: 1,
+      }, undefined, true));
+
+      assert.equal(result.count, 1);
+      const socket = latestSocket();
+      const proposal = socket.sent.find((message) => message.proposal === 1);
+      const buy = socket.sent.find((message) => message.buy === "1");
+      assert.equal(proposal?.duration, duration);
+      assert.equal(proposal?.duration_unit, "t");
+      assert.equal((buy?.parameters as Record<string, unknown> | undefined)?.duration, duration);
+      assert.equal((buy?.parameters as Record<string, unknown> | undefined)?.duration_unit, "t");
+      deriv.disposeUser(userId);
+      testUserIds.delete(userId);
+      mockPortfolioContracts = [];
+    }
   });
 
   test("three- and six-contract synchronized batches dispatch every buy before acknowledgement", async () => {

@@ -29,7 +29,9 @@ import {
   getStatus,
   getLiveStatus,
   getHistory,
+  getMarketTickSnapshot,
   subscribeDerivHistoryUpdates,
+  subscribeDerivMarketTickUpdates,
   refreshDerivHistory,
   clearHistory,
   requestProposal,
@@ -227,11 +229,15 @@ router.get("/deriv/history", async (req, res) => {
 });
 
 router.get("/deriv/events", async (req, res): Promise<void> => {
-  let unsubscribe: (() => void) | null = null;
+  let unsubscribeHistory: (() => void) | null = null;
+  let unsubscribeMarketTicks: (() => void) | null = null;
   let heartbeat: NodeJS.Timeout | null = null;
+  const includeMarketTicks = req.query.market_ticks === "true";
   const cleanup = () => {
-    unsubscribe?.();
-    unsubscribe = null;
+    unsubscribeHistory?.();
+    unsubscribeHistory = null;
+    unsubscribeMarketTicks?.();
+    unsubscribeMarketTicks = null;
     if (heartbeat) clearInterval(heartbeat);
     heartbeat = null;
   };
@@ -251,12 +257,20 @@ router.get("/deriv/events", async (req, res): Promise<void> => {
       });
       res.flushHeaders();
 
-      unsubscribe = subscribeDerivHistoryUpdates((item) => {
+      unsubscribeHistory = subscribeDerivHistoryUpdates((item) => {
         if (!res.destroyed) {
           res.write(`event: trade-update\ndata: ${JSON.stringify(item)}\n\n`);
         }
       });
       res.write(`event: history-snapshot\ndata: ${JSON.stringify(getHistory())}\n\n`);
+      if (includeMarketTicks) {
+        unsubscribeMarketTicks = subscribeDerivMarketTickUpdates((tick) => {
+          if (!res.destroyed) {
+            res.write(`event: market-tick\ndata: ${JSON.stringify(tick)}\n\n`);
+          }
+        });
+        res.write(`event: market-tick-snapshot\ndata: ${JSON.stringify(getMarketTickSnapshot())}\n\n`);
+      }
       heartbeat = setInterval(() => {
         if (!res.destroyed) res.write(": keep-alive\n\n");
         void withUser(res.locals.userId, async () => undefined);
@@ -493,6 +507,13 @@ router.post("/deriv/sell", async (req, res) => {
 router.post("/deriv/bulk-buy", requireTradeAccessFeature, async (req, res) => {
   const parsed = BulkBuyDerivContractsBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid bulk buy request" });
+  if (
+    parsed.data.access_feature === "auto-trader"
+    && (!Number.isInteger(parsed.data.duration) || parsed.data.duration < 1 || parsed.data.duration > 5)
+  ) {
+    res.status(400).json({ error: "Auto Trader supports whole-number durations from 1 to 5 ticks." });
+    return;
+  }
   if (
     parsed.data.access_feature === "cash-grab"
     && (!Number.isInteger(parsed.data.duration) || parsed.data.duration < 1 || parsed.data.duration > 5)

@@ -102,6 +102,7 @@ export * from './matchesContractOrderDuration';
 export * from './matchesContractOrderDurationUnit';
 export * from './matchesFailedBuy';
 export * from './matchesFailedBuyContractType';
+export * from './streamDerivTradeUpdatesParams';
 export * from './successResponse';
 export * from './tokenDeleteResponse';
 export * from './tradingProtectionSettings';

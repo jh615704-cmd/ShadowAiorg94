@@ -61,6 +61,7 @@ import type {
   HealthStatus,
   MatchesBatchBuyResponse,
   MatchesBatchInput,
+  StreamDerivTradeUpdatesParams,
   SuccessResponse,
   TokenDeleteResponse,
   TradingProtectionSettings,
@@ -1870,21 +1871,28 @@ export function useGetDerivStatus<TData = Awaited<ReturnType<typeof getDerivStat
 
 
 
-export const getStreamDerivTradeUpdatesUrl = () => {
+export const getStreamDerivTradeUpdatesUrl = (params?: StreamDerivTradeUpdatesParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/deriv/events`
+  return stringifiedParams.length > 0 ? `/api/deriv/events?${stringifiedParams}` : `/api/deriv/events`
 }
 
 /**
- * Sends an initial account-scoped history snapshot followed by trade-update events over Server-Sent Events.
- * @summary Stream account history snapshots and live trade updates
+ * Sends an account-scoped history snapshot followed by trade-update events over Server-Sent Events. Set market_ticks=true to also receive a market-tick-snapshot followed by live market-tick events for the Auto Trader scanner.
+ * @summary Stream account history, live trades, and optional market ticks
  */
-export const streamDerivTradeUpdates = async ( options?: Parameters<typeof customFetch>[1]): Promise<DerivTradeEventStream> => {
+export const streamDerivTradeUpdates = async (params?: StreamDerivTradeUpdatesParams, options?: Parameters<typeof customFetch>[1]): Promise<DerivTradeEventStream> => {
 
-  return customFetch<DerivTradeEventStream>(getStreamDerivTradeUpdatesUrl(),
+  return customFetch<DerivTradeEventStream>(getStreamDerivTradeUpdatesUrl(params),
   {
     ...options,
     method: 'GET'
@@ -1897,23 +1905,23 @@ export const streamDerivTradeUpdates = async ( options?: Parameters<typeof custo
 
 
 
-export const getStreamDerivTradeUpdatesQueryKey = () => {
+export const getStreamDerivTradeUpdatesQueryKey = (params?: StreamDerivTradeUpdatesParams,) => {
     return [
-    `/api/deriv/events`
+    `/api/deriv/events`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getStreamDerivTradeUpdatesQueryOptions = <TData = Awaited<ReturnType<typeof streamDerivTradeUpdates>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof streamDerivTradeUpdates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getStreamDerivTradeUpdatesQueryOptions = <TData = Awaited<ReturnType<typeof streamDerivTradeUpdates>>, TError = ErrorType<ErrorResponse>>(params?: StreamDerivTradeUpdatesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof streamDerivTradeUpdates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getStreamDerivTradeUpdatesQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getStreamDerivTradeUpdatesQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof streamDerivTradeUpdates>>> = ({ signal }) => streamDerivTradeUpdates({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof streamDerivTradeUpdates>>> = ({ signal }) => streamDerivTradeUpdates(params, { signal, ...requestOptions });
 
 
 
@@ -1927,15 +1935,15 @@ export type StreamDerivTradeUpdatesQueryError = ErrorType<ErrorResponse>
 
 
 /**
- * @summary Stream account history snapshots and live trade updates
+ * @summary Stream account history, live trades, and optional market ticks
  */
 
 export function useStreamDerivTradeUpdates<TData = Awaited<ReturnType<typeof streamDerivTradeUpdates>>, TError = ErrorType<ErrorResponse>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof streamDerivTradeUpdates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: StreamDerivTradeUpdatesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof streamDerivTradeUpdates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getStreamDerivTradeUpdatesQueryOptions(options)
+  const queryOptions = getStreamDerivTradeUpdatesQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -810,6 +810,88 @@ test("Auto Trader shows daily stats and detailed deep-blue trading history", asy
   }
 });
 
+test("Auto Trader reflects Deriv tick and settlement events without polling delays", async () => {
+  const state = createState(userSession(["auto-trader"]));
+  state.hasToken = true;
+  const buyTime = Math.floor(Date.now() / 1000);
+  state.history = [{
+    account_id: account.id,
+    contract_id: "auto-trader-live-settlement",
+    contract_type: "DIGITDIFF",
+    symbol: "R_10",
+    account_type: "demo",
+    currency: "USD",
+    barrier: 4,
+    duration: 1,
+    duration_unit: "t",
+    buy_price: 1,
+    current_value: 1,
+    payout: 2,
+    profit: 0,
+    status: "open",
+    buy_time: buyTime,
+    sell_time: null,
+  }];
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.addInitScript(({ historyKey, contract }) => {
+      localStorage.setItem(historyKey, JSON.stringify([contract]));
+    }, {
+      historyKey: `deriv-auto-trader-contracts:${account.id}`,
+      contract: { id: "auto-trader-live-settlement", placedAt: buyTime * 1000 },
+    });
+    await page.goto(`${baseUrl}/auto-trader`);
+    await page.getByTestId("row-trade-auto-trader-live-settlement").waitFor();
+    await page.getByTestId("button-go-live").click();
+    await page.getByTestId("card-market-R_10").waitFor();
+    await page.waitForFunction(() =>
+      window.__getDerivEventSourceUrls().some((url) => String(url).includes("market_ticks=true")),
+    );
+
+    const nextSequence = state.statusVersion + 1;
+    await page.evaluate((tickSequence) => {
+      window.__dispatchDerivEvent("market-tick", {
+        symbol: "R_10",
+        tick_sequence: tickSequence,
+        recent_digits: [7],
+        tick_epoch: 1_700_000_001,
+      });
+    }, nextSequence);
+
+    const market = page.getByTestId("card-market-R_10");
+    await market.locator(".at-market-tick-count").getByText("1 tick").waitFor();
+    await market.locator(".at-digit-column").nth(7).locator(".at-digit-count").getByText("1", { exact: true }).waitFor();
+
+    await page.evaluate(({ accountId, buyTime }) => {
+      window.__dispatchDerivEvent("trade-update", {
+        account_id: accountId,
+        contract_id: "auto-trader-live-settlement",
+        contract_type: "DIGITDIFF",
+        symbol: "R_10",
+        account_type: "demo",
+        currency: "USD",
+        barrier: 4,
+        duration: 1,
+        duration_unit: "t",
+        buy_price: 1,
+        current_value: 2,
+        payout: 2,
+        profit: 1,
+        status: "won",
+        buy_time: buyTime,
+        sell_time: buyTime + 1,
+      });
+    }, { accountId: account.id, buyTime });
+    await page.getByTestId("stat-daily-wins").getByText("1", { exact: true }).waitFor();
+    assert.match(await page.getByTestId("stat-daily-pnl").innerText(), /1\.00/);
+    assert.deepEqual(state.tradeRequests, [], "The event-stream check must not submit trades.");
+    assert.deepEqual(state.unhandledApis, []);
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+});
+
 test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports", async () => {
   const state = createState(userSession(["edge", "trade-x", "auto-trader", "auto-trader-2", "money-bank"]));
   state.hasToken = true;
@@ -1033,6 +1115,12 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
     await page.getByTestId("button-go-live").waitFor();
     await page.getByTestId("button-go-live").click();
     await page.locator(".at-market-list").waitFor();
+    await page.waitForFunction(() =>
+      window.__getDerivEventSourceUrls().some((url) => String(url).includes("market_ticks=true")),
+    );
+    await page.evaluate((signals) => {
+      window.__dispatchDerivEvent("market-tick-snapshot", signals);
+    }, makeDerivStatus(state.statusVersion + 1).market_signals);
     await page.waitForFunction(() => {
       const tradeButton = document.querySelector('[data-testid="button-trade-3x-R_10-0"]');
       return tradeButton instanceof HTMLButtonElement && !tradeButton.disabled;
@@ -1350,6 +1438,10 @@ async function createMockPage(state, viewport) {
         for (const source of openSources) source.dispatchEvent(event);
       },
     });
+    Object.defineProperty(window, "__getDerivEventSourceUrls", {
+      configurable: true,
+      value: () => [...openSources].map((source) => source.url),
+    });
   });
   const page = await context.newPage();
   page.on("pageerror", (error) => {
@@ -1377,6 +1469,19 @@ async function mockApiRequest(route, state, pathname, method) {
   }
   if (pathname === "/api/access/heartbeat" && method === "POST") {
     await fulfillJson(route, { success: true });
+    return;
+  }
+  if (pathname === "/api/access/diagnostics" && method === "POST") {
+    await fulfillJson(route, { accepted: true }, 202);
+    return;
+  }
+  if (pathname === "/api/admin/intelligence/scan" && method === "GET") {
+    await fulfillJson(route, {
+      scanned_at: new Date().toISOString(),
+      server_status: "healthy",
+      features: [],
+      findings: [],
+    });
     return;
   }
   if (pathname === "/api/access/logout" && method === "POST") {
