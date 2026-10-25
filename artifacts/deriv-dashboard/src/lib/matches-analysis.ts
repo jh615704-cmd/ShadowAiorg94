@@ -20,6 +20,17 @@ export type MatchesSettlementRow = {
   status: string;
 };
 
+export type MatchesMarketCandidate = {
+  value: string;
+};
+
+export type MatchesMarketSignal = {
+  symbol: string;
+  digit: number;
+  rate: number;
+  count: number;
+};
+
 export function rankObservedMatchDigits(digits: readonly number[]): MatchesDigitStat[] {
   const sample = digits
     .slice(-MATCHES_HISTORY_LIMIT)
@@ -102,6 +113,39 @@ export function rankSettledMatchOutcomes(
 ): MatchesDigitStat[] {
   return summarizeSettledMatchOutcomes(rows, accountId, symbol, duration)
     .filter((result) => result.count >= MATCHES_MINIMUM_SETTLED_TRADES_PER_DIGIT);
+}
+
+export function chooseBestMatchesMarket(
+  rows: readonly MatchesSettlementRow[],
+  accountId: string | null | undefined,
+  markets: readonly MatchesMarketCandidate[],
+  duration: number,
+  currentSymbol: string,
+): MatchesMarketSignal | null {
+  if (!accountId || !Number.isInteger(duration) || duration < 1) return null;
+
+  const candidates = markets.flatMap((market) => {
+    const ranked = rankSettledMatchOutcomes(rows, accountId, market.value, duration);
+    const bestDigit = chooseQualifiedMatchesDigits(ranked, 1)[0];
+    if (bestDigit === undefined) return [];
+
+    const stat = ranked.find((item) => item.digit === bestDigit);
+    if (!stat) return [];
+
+    return [{
+      symbol: market.value,
+      digit: stat.digit,
+      rate: stat.rate,
+      count: stat.count,
+    }];
+  });
+
+  return candidates.sort((left, right) =>
+    right.rate - left.rate
+    || right.count - left.count
+    || Number(right.symbol === currentSymbol) - Number(left.symbol === currentSymbol)
+    || left.symbol.localeCompare(right.symbol),
+  )[0] ?? null;
 }
 
 export function chooseQualifiedMatchesDigits(

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  chooseBestMatchesMarket,
   chooseQualifiedMatchesDigits,
   MATCHES_AUTO_MINIMUM_SETTLED_WIN_RATE,
   MATCHES_MINIMUM_SETTLED_TRADES_PER_DIGIT,
@@ -119,6 +120,38 @@ test("Matches needs five resolved wins or losses before a digit can be ranked", 
     [],
   );
   assert.deepEqual(rankSettledMatchOutcomes(contractsForDigit(3, 4, 5), null, "R_75", 2), []);
+});
+
+test("AI Auto chooses the market with the strongest qualified settled digit result", () => {
+  const rows = [
+    ...contractsForDigit(7, 4, 5).map((item) => ({ ...item, symbol: "R_75" })),
+    ...contractsForDigit(3, 5, 5).map((item) => ({ ...item, symbol: "JD50" })),
+    ...contractsForDigit(2, 1, 5).map((item) => ({ ...item, symbol: "R_25" })),
+  ];
+
+  assert.deepEqual(
+    chooseBestMatchesMarket(
+      rows,
+      "account-1",
+      [{ value: "R_75" }, { value: "JD50" }, { value: "R_25" }],
+      2,
+      "R_75",
+    ),
+    { symbol: "JD50", digit: 3, rate: 100, count: 5 },
+  );
+});
+
+test("AI Auto waits when no market has enough settled outcomes", () => {
+  assert.equal(
+    chooseBestMatchesMarket(
+      contractsForDigit(7, 4, 4),
+      "account-1",
+      [{ value: "R_75" }],
+      2,
+      "R_75",
+    ),
+    null,
+  );
 });
 
 test("Matches automation chooses only top settled win rates above the 10% baseline", () => {

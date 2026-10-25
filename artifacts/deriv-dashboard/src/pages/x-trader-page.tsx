@@ -131,10 +131,10 @@ import {
   type DerivHistoryFeature,
 } from "../lib/deriv-history";
 import {
+  chooseBestMatchesMarket,
   chooseQualifiedMatchesDigits,
   MATCHES_HISTORY_LIMIT,
   rankSettledMatchOutcomes,
-  summarizeSettledMatchOutcomes,
   type MatchesDigitStat as ObservedMatchesDigitStat,
 } from "../lib/matches-analysis";
 import {
@@ -258,18 +258,16 @@ const matchesAnalysisGuidePages = [
   { title: "Select a market", body: "The selected symbol supplies the live quotes and final digits shown by the radar and frequency list.", points: ["Wait for the selected market to connect.", "The server checks the symbol again before a buy.", "The same market is used for every contract in an AI batch."] },
   { title: "Read the live tick count", body: "The counter reports fresh ticks collected since the last rescan or market change.", points: ["A new scan starts at zero.", "The sample contains up to the most recent 120 collected digits.", "The AI runner waits for at least 20 fresh ticks."] },
   { title: "Rescan the market", body: "Rescan clears Matches' local digit sample and resets its tick counter. It does not change Deriv history or any open contract.", points: ["Use Rescan after changing how you want to inspect the data.", "The next live ticks begin the new sample.", "A rescan does not improve or guarantee an outcome."] },
-  { title: "The digit circle", body: "The radar places digits 0 through 9 around a circle. Select a digit on the radar or from the matching digit controls.", points: ["The selected digit is highlighted.", "Radar size reflects the number of times each digit appeared in this sample.", "It is a frequency display, not a probability guarantee."] },
+  { title: "The digit radar", body: "The radar places digits 0 through 9 around a circle. In A · Auto mode, the red rings mark digits selected from qualified settled results; in manual mode, your chosen digits use a different marker.", points: ["Radar size reflects the number of times each digit appeared in this sample.", "The red ring means a market-selected signal, not a manual selection.", "The display is historical context, not a probability guarantee."] },
   { title: "The spider-net plot", body: "The connected radar shape compares the observed counts for digits 0 through 9 in the current sample.", points: ["A farther point means more observations in this sample.", "The plot changes as new ticks arrive.", "A larger historical count does not ensure a future match."] },
   { title: "Top three observed digits", body: "The top three list ranks digits by their frequency in the current fresh sample. Recent frequency is not a dependable forecast of the next digit.", points: ["Counts and percentages use only the current sample.", "Ties use the most recently observed digit as a display tie-breaker.", "The list can change as ticks arrive."] },
-  { title: "Choose a manual digit", body: "Select any digit from 0 to 9 for a manual Matches trade. The selected number becomes the contract barrier.", points: ["Check the highlighted digit before buying.", "The button submits only the selected digit.", "The expiry digit decides the contract result."] },
+  { title: "Choose Auto or manual digits", body: "A · Auto selects qualified digits from settled Matches results. Turn Auto off to choose one or more digits yourself; the runner uses those selections for each entry.", points: ["One, two, or three auto digits can be chosen per batch.", "Manual digit selections remain visible on the radar.", "The expiry digit decides the contract result."] },
   { title: "What Digit Match means", body: "A Digit Match contract wins only when the final digit at expiry equals the selected barrier.", points: ["A different final digit loses the stake.", "The contract's displayed payout is set by Deriv.", "Observed frequency does not change the contract's rules."] },
   { title: "Choose duration", body: "Select 1, 2, 3, 4, or 5 ticks. Duration is sent with each order and is checked by the server.", points: ["Short duration settles sooner but can change quickly.", "The duration does not make a digit more likely.", "Open contracts block the next automatic batch until settlement."] },
   { title: "Set the stake", body: "Enter the amount to risk per selected digit. The minimum is 0.35; the connected account balance and Deriv's own rules still apply.", points: ["For a batch, the amount is applied to each selected digit.", "The server checks total batch stake against the balance.", "There is no promise that every entered amount will be accepted by Deriv."] },
-  { title: "Place a manual trade", body: "The manual Matches button submits one Digit Match contract for the selected digit, stake, market, and duration.", points: ["Confirm the selected account and setup first.", "Wait for the buy acknowledgement.", "If an acknowledgement is uncertain, check Deriv history before trying again."] },
-  { title: "Turn on AI Matches", body: "AI Matches can submit trades using the top one, two, or three digits from the current observed-frequency ranking.", points: ["The label does not mean an AI model knows the next result.", "Automatic trading waits for a fresh sample and available settlement slot.", "A losing trade is possible on every entry."] },
-  { title: "Select one, two, or three digits", body: "The AI digit-count setting controls how many of the current top-ranked digits are included in one batch.", points: ["Each selected digit becomes a separate contract.", "The stake is charged per contract, so a three-digit batch uses three stakes.", "The server limits a batch to three contracts and checks total balance."] },
-  { title: "Start continuous Matches", body: "Start Matches enables repeated automatic entries. It waits for live data, the sample floor, and all prior contracts to settle before sending another batch.", points: ["The AI toggle also starts or stops automatic entries.", "Stop Matches prevents future entries but does not close open contracts.", "An ambiguous buy pauses the runner for history verification."] },
-  { title: "Stop and pause safely", body: "Stop Matches pauses future automatic entries. An already-sent buy cannot be cancelled by the page and may still settle normally.", points: ["Check Deriv history if a request status is uncertain.", "Do not resubmit an unconfirmed buy.", "Open contracts can continue to settle after stopping."] },
+  { title: "Set limits and start", body: "Set a Loss Limit and Profit Target before starting. Matches Analysis continues after each settled entry until a limit is reached, the user stops it, or a required safety check pauses it.", points: ["A value of zero disables that limit.", "Limits are checked against settled session profit and loss.", "Limits do not close an open contract early."] },
+  { title: "AI Auto market selection", body: "AI Auto compares settled Digit Match results across available Volatility and Jump markets. It can change the selected market only between contracts and waits for fresh ticks after a market change.", points: ["The selector uses this account's settled results for the chosen duration.", "If no market has enough settled evidence, it keeps the current selection.", "Past results do not predict future outcomes."] },
+  { title: "Start and stop safely", body: "The Start Matches Analysis button becomes Stop while the runner is active. Stopping prevents future entries; a buy already sent cannot be cancelled by the page.", points: ["Open contracts can continue to settle after stopping.", "If a buy acknowledgement is uncertain, check Deriv history before retrying.", "A connection or permission safety hold can pause the runner."] },
   { title: "Matches trading history", body: "Matches history shows only contract IDs acknowledged by the Matches feature for the selected account, using the same history display as Trade X.", points: ["Other features' contracts are excluded.", "History is sourced from Deriv and can update after settlement.", "Clearing the local display does not delete Deriv account records."] },
   { title: "Risk and responsible use", body: "No frequency ranking or automated rule can promise accuracy, profit, or rare losses. Random digit outcomes can differ from the recent sample.", points: ["Never stake money you cannot afford to lose.", "Set an amount and stop when it reaches your own limit.", "Review results on a demo account before considering real funds."] },
 ] as const;
@@ -517,7 +515,11 @@ export default function XTraderPage() {
   const [matchesSymbol, setMatchesSymbol] = useState("R_75");
   const [matchesDuration, setMatchesDuration] = useState<MatchesDuration>(1);
   const [matchesStake, setMatchesStake] = useState(0.35);
-  const [matchesSelectedDigit, setMatchesSelectedDigit] = useState(5);
+  const [matchesSelectedDigits, setMatchesSelectedDigits] = useState<number[]>([5]);
+  const [matchesAutoMode, setMatchesAutoMode] = useState(true);
+  const [matchesAiAutoMarket, setMatchesAiAutoMarket] = useState(false);
+  const [matchesProfitTarget, setMatchesProfitTarget] = useState(0);
+  const [matchesLossLimit, setMatchesLossLimit] = useState(0);
   const [matchesAiEnabled, setMatchesAiEnabled] = useState(false);
   const [matchesAiDigits, setMatchesAiDigits] = useState<MatchesAiDigits>(1);
   const [matchesAiDigitsConfirmed, setMatchesAiDigitsConfirmed] = useState(false);
@@ -715,6 +717,7 @@ export default function XTraderPage() {
   const matchesAiRunningRef = useRef(false);
   const matchesActionLockRef = useRef(false);
   const matchesAutomationAttemptTickRef = useRef(-1);
+  const matchesAiNextSymbolRef = useRef<string | null>(null);
   const matchesSampleCursorRef = useRef({ symbol: "", tickCount: 0 });
   const clockWorkActionLockRef = useRef(false);
   const clockWorkAutoAttemptAtRef = useRef(0);
@@ -814,18 +817,10 @@ export default function XTraderPage() {
       && !matchesSessionKnownIdsRef.current?.has(String(trade.contract_id))
     ))
     : [];
+  const matchesSessionPnl = realizedProfit(matchesSessionRows);
   const matchesVisibleSessionRows = matchesSessionRows.filter((trade) => !matchesHiddenHistoryIds.has(String(trade.contract_id)));
   const matchesOwnedRows = matchesAllRows.filter((trade) => matchesClaimedHistoryIdsRef.current.has(String(trade.contract_id)));
   const matchesRows = matchesOwnedRows.filter((trade) => !matchesHiddenHistoryIds.has(String(trade.contract_id)));
-  const matchesTopDigits = useMemo<ObservedMatchesDigitStat[]>(
-    () => summarizeSettledMatchOutcomes(
-      matchesAllRows,
-      currentAccount?.id,
-      matchesSymbol,
-      matchesDuration,
-    ).slice(0, 3),
-    [currentAccount?.id, matchesAllRows, matchesDuration, matchesSymbol],
-  );
   const matchesSettledOutcomeDigits = useMemo<ObservedMatchesDigitStat[]>(
     () => rankSettledMatchOutcomes(
       matchesAllRows,
@@ -834,6 +829,10 @@ export default function XTraderPage() {
       matchesDuration,
     ),
     [currentAccount?.id, matchesAllRows, matchesDuration, matchesSymbol],
+  );
+  const matchesMarketSelectedDigits = useMemo(
+    () => chooseQualifiedMatchesDigits(matchesSettledOutcomeDigits, matchesAiDigits),
+    [matchesAiDigits, matchesSettledOutcomeDigits],
   );
   const bulkRows = bulkAllRows.filter((trade) => bulkClaimedHistoryIdsRef.current.has(trade.contract_id) && !bulkTraderHiddenHistoryIds.has(trade.contract_id));
   const moneyBankRows = moneyBankAllRows
@@ -3721,9 +3720,9 @@ export default function XTraderPage() {
 
   const toggleMatchesAi = (
     enabled: boolean,
-    stoppedMessage = "Automatic Matches entries are stopped. Open contracts can continue to settle.",
+    stoppedMessage = "Matches Analysis is stopped. Open contracts can continue to settle.",
   ) => {
-    if (enabled && !matchesAiDigitsConfirmed) {
+    if (enabled && matchesAutoMode && !matchesAiDigitsConfirmed) {
       setMatchesStatusMessage("Choose 1, 2, or 3 top digits before enabling automatic Matches entries.");
       return;
     }
@@ -3731,11 +3730,28 @@ export default function XTraderPage() {
       setMatchesStatusMessage("Enable Matches Analysis and connect a Deriv account before starting automatic entries.");
       return;
     }
+    if (enabled && tradeSlotBlocked) {
+      setMatchesStatusMessage(tradeSlotMessage ?? "Wait for the active contract to settle before starting.");
+      return;
+    }
+    if (enabled && !matchesAutoMode && !matchesSelectedDigits.length) {
+      setMatchesStatusMessage("Select at least one digit before starting Matches Analysis.");
+      return;
+    }
+    if (enabled) {
+      matchesSessionKnownIdsRef.current = new Set(
+        rows.filter((trade) => trade.contract_type === "DIGITMATCH").map((trade) => String(trade.contract_id)),
+      );
+      matchesAutomationAttemptTickRef.current = matchesTickCount;
+      matchesAiNextSymbolRef.current = null;
+    }
     matchesAiRunningRef.current = enabled;
     setMatchesAiEnabled(enabled);
-    matchesAutomationAttemptTickRef.current = enabled ? -1 : matchesTickCount;
+    if (!enabled) matchesAiNextSymbolRef.current = null;
     setMatchesStatusMessage(enabled
-      ? "AI Matches is on. Waiting for settled results at the selected duration and an available trade slot."
+      ? matchesAutoMode
+        ? "Matches Analysis is running. Waiting for fresh ticks and qualified settled digit results."
+        : "Matches Analysis is running with your selected digits. It will wait for fresh ticks and each contract to settle."
       : stoppedMessage);
   };
 
@@ -3744,12 +3760,28 @@ export default function XTraderPage() {
     setMatchesAiDigitsConfirmed(true);
   };
 
+  const toggleMatchesAiAutoMarket = (enabled: boolean) => {
+    setMatchesAiAutoMarket(enabled);
+    if (enabled) {
+      setMatchesStatusMessage(tradeSlotBlocked
+        ? "AI Auto is on and will compare markets after the active contract settles."
+        : "AI Auto is comparing settled results across Volatility and Jump markets.");
+      return;
+    }
+    matchesAiNextSymbolRef.current = null;
+    setMatchesStatusMessage("AI Auto market selection is off. The selected market will stay fixed.");
+  };
+
   const changeMatchesSymbol = (nextSymbol: string) => {
+    if (tradeSlotBlocked || matchesActionLockRef.current) {
+      setMatchesStatusMessage("The market stays fixed while a contract is open. It can change for the next entry after settlement.");
+      return;
+    }
+    setMatchesAiAutoMarket(false);
     const nextMarket = matchesMarkets.find((market) => market.value === nextSymbol);
     setMatchesSymbol(nextSymbol);
     if (nextMarket) setMatchesMarketType(nextMarket.marketType);
-    matchesAiRunningRef.current = false;
-    setMatchesAiEnabled(false);
+    matchesAiNextSymbolRef.current = nextSymbol;
     resetMatchesSample(nextSymbol);
     setMatchesStatusMessage("Market changed. Collecting a fresh sample.");
     if (matchesAnalysisEnabled) void selectMarket(nextSymbol);
@@ -3771,10 +3803,19 @@ export default function XTraderPage() {
       setMatchesStatusMessage(tradeSlotMessage ?? "Waiting for open contracts to settle.");
       return false;
     }
+    const stopReason = sessionStopReason(
+      matchesSessionPnl,
+      matchesProfitTarget > 0 ? matchesProfitTarget : Number.POSITIVE_INFINITY,
+      matchesLossLimit > 0 ? matchesLossLimit : Number.POSITIVE_INFINITY,
+    );
+    if (automated && stopReason) {
+      toggleMatchesAi(false, `${stopReason === "take-profit" ? "Profit target" : "Loss limit"} reached. Matches Analysis is stopped.`);
+      return false;
+    }
     const selectedDigits = Array.from(new Set(digits))
       .filter((digit) => Number.isInteger(digit) && digit >= 0 && digit <= 9)
       .slice(0, 3);
-    if (!selectedDigits.length || (automated && selectedDigits.length !== matchesAiDigits)) {
+    if (!selectedDigits.length || (automated && matchesAutoMode && selectedDigits.length !== matchesAiDigits)) {
       setMatchesStatusMessage("Waiting for enough settled Digit Match outcomes to qualify the selected top-digit count.");
       return false;
     }
@@ -3792,7 +3833,7 @@ export default function XTraderPage() {
     }));
     matchesActionLockRef.current = true;
     if (automated) matchesAutomationAttemptTickRef.current = matchesTickCount;
-    setMatchesStatusMessage(automated ? "Sending fresh Matches proposals and buy requests." : "Sending the manual Matches trade.");
+    setMatchesStatusMessage(automated ? "Sending the Matches proposal and buy request." : "Sending the Matches trade.");
     try {
       const result = await matchesBuyMutation.mutateAsync({ data: { contracts } });
       const confirmedContractIds = result.contracts
@@ -3833,6 +3874,53 @@ export default function XTraderPage() {
   };
 
   useEffect(() => {
+    if (!matchesAiAutoMarket || !matchesAnalysisEnabled || !canUseMatchesAnalysis) return;
+    if (!isConnected || !currentAccount || tradeSlotBlocked || matchesActionLockRef.current || matchesBuyMutation.isPending) return;
+
+    const marketSignal = chooseBestMatchesMarket(
+      matchesAllRows,
+      currentAccount.id,
+      matchesMarkets,
+      matchesDuration,
+      matchesSymbol,
+    );
+    if (!marketSignal || marketSignal.symbol === matchesSymbol) return;
+
+    const nextMarket = matchesMarkets.find((market) => market.value === marketSignal.symbol);
+    if (!nextMarket) return;
+    matchesAiNextSymbolRef.current = marketSignal.symbol;
+    setMatchesSymbol(marketSignal.symbol);
+    setMatchesMarketType(nextMarket.marketType);
+    resetMatchesSample(marketSignal.symbol);
+    setMatchesStatusMessage(
+      `AI Auto selected ${marketSignal.symbol} from settled results (${marketSignal.rate.toFixed(1)}% across ${marketSignal.count} contracts). Waiting for fresh ticks.`,
+    );
+    void selectMarket(marketSignal.symbol);
+  }, [
+    canUseMatchesAnalysis,
+    currentAccount,
+    isConnected,
+    matchesAiAutoMarket,
+    matchesAllRows,
+    matchesAnalysisEnabled,
+    matchesBuyMutation.isPending,
+    matchesDuration,
+    matchesSymbol,
+    tradeSlotBlocked,
+  ]);
+
+  useEffect(() => {
+    if (!matchesAiEnabled || !matchesAiRunningRef.current) return;
+    const stopReason = sessionStopReason(
+      matchesSessionPnl,
+      matchesProfitTarget > 0 ? matchesProfitTarget : Number.POSITIVE_INFINITY,
+      matchesLossLimit > 0 ? matchesLossLimit : Number.POSITIVE_INFINITY,
+    );
+    if (!stopReason) return;
+    toggleMatchesAi(false, `${stopReason === "take-profit" ? "Profit target" : "Loss limit"} reached at ${matchesSessionPnl.toFixed(2)} ${currentAccount?.currency ?? "USD"}.`);
+  }, [currentAccount?.currency, matchesAiEnabled, matchesLossLimit, matchesProfitTarget, matchesSessionPnl]);
+
+  useEffect(() => {
     if (!matchesAnalysisEnabled || !matchesAiEnabled || !matchesAiRunningRef.current) return;
     if (!canUseMatchesAnalysis) {
       toggleMatchesAi(false);
@@ -3855,10 +3943,18 @@ export default function XTraderPage() {
       return;
     }
     if (matchesBuyMutation.isPending || matchesActionLockRef.current) return;
+    if (matchesAiNextSymbolRef.current && matchesSymbol !== matchesAiNextSymbolRef.current) return;
+    if (matchesAiNextSymbolRef.current === matchesSymbol) matchesAiNextSymbolRef.current = null;
+    if (matchesTickCount <= 0) {
+      setMatchesStatusMessage("Waiting for fresh ticks from the selected market.");
+      return;
+    }
     if (matchesAutomationAttemptTickRef.current >= matchesTickCount) return;
-    const digits = chooseQualifiedMatchesDigits(matchesSettledOutcomeDigits, matchesAiDigits);
-    if (digits.length !== matchesAiDigits) {
-      setMatchesStatusMessage("Waiting for enough settled Digit Match outcomes at this market and duration.");
+    const digits = matchesAutoMode
+      ? chooseQualifiedMatchesDigits(matchesSettledOutcomeDigits, matchesAiDigits)
+      : matchesSelectedDigits;
+    if (matchesAutoMode && digits.length !== matchesAiDigits) {
+      setMatchesStatusMessage("Waiting for enough settled Digit Match results to qualify the selected auto-digit count.");
       return;
     }
 
@@ -3870,10 +3966,14 @@ export default function XTraderPage() {
     executeMatchesOrders,
     isConnected,
     isReal,
+    matchesAutoMode,
     matchesAiDigits,
     matchesAiEnabled,
+    matchesAiNextSymbolRef,
     matchesAnalysisEnabled,
     matchesBuyMutation.isPending,
+    matchesSelectedDigits,
+    matchesSymbol,
     matchesTickCount,
     matchesSettledOutcomeDigits,
     status.data?.live_trading_enabled,
@@ -5082,31 +5182,31 @@ export default function XTraderPage() {
             onSymbolChange={changeMatchesSymbol}
             digitHistory={matchesObservedDigits}
             tickCount={matchesTickCount}
-            topDigits={matchesTopDigits}
-            selectedDigit={matchesSelectedDigit}
-            onSelectedDigitChange={setMatchesSelectedDigit}
+            marketSelectedDigits={matchesMarketSelectedDigits}
+            selectedDigits={matchesSelectedDigits}
+            onSelectedDigitsChange={(digits) => setMatchesSelectedDigits(digits.slice(-3))}
             duration={matchesDuration}
             onDurationChange={setMatchesDuration}
             stake={matchesStake}
             onStakeChange={setMatchesStake}
-            aiEnabled={matchesAiEnabled}
-            onAiEnabledChange={toggleMatchesAi}
             aiDigits={matchesAiDigits}
             aiDigitsConfirmed={matchesAiDigitsConfirmed}
             onAiDigitsChange={selectMatchesAiDigits}
+            autoMarketSelection={matchesAiAutoMarket}
+            onAutoMarketSelectionChange={toggleMatchesAiAutoMarket}
+            autoDigitMode={matchesAutoMode}
+            onAutoDigitModeChange={setMatchesAutoMode}
+            lossLimit={matchesLossLimit}
+            onLossLimitChange={setMatchesLossLimit}
+            profitTarget={matchesProfitTarget}
+            onProfitTargetChange={setMatchesProfitTarget}
+            sessionPnl={matchesSessionPnl}
+            currency={currentAccount?.currency ?? "USD"}
             isRunning={matchesAiEnabled}
             isPlacing={matchesBuyMutation.isPending}
             disabled={!isConnected || !currentAccount || !canUseMatchesAnalysis}
             tradeSlotBlocked={tradeSlotBlocked}
             statusMessage={matchesStatusMessage}
-            onManualTrade={() => {
-              toggleMatchesAi(false);
-              void executeMatchesOrders([matchesSelectedDigit], false);
-            }}
-            onTradeDigit={(digit) => {
-              toggleMatchesAi(false);
-              void executeMatchesOrders([digit], false);
-            }}
             onStartMatches={() => toggleMatchesAi(true)}
             onStopMatches={() => toggleMatchesAi(false)}
             onRescan={() => {
