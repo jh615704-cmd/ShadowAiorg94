@@ -1,7 +1,7 @@
 export const MATCHES_MINIMUM_STAKE = 0.35;
 export const MATCHES_HISTORY_LIMIT = 120;
 export const MATCHES_MINIMUM_SETTLED_TRADES_PER_DIGIT = 5;
-export const MATCHES_AUTO_MINIMUM_SETTLED_WIN_RATE = 10;
+export const MATCHES_AUTO_MINIMUM_SETTLED_WIN_RATE = 50;
 
 export type MatchesDigitStat = {
   digit: number;
@@ -18,6 +18,15 @@ export type MatchesSettlementRow = {
   duration: number | null;
   duration_unit: string | null;
   status: string;
+  buy_price?: number;
+  buy_time?: number | null;
+};
+
+export type MatchesAttemptedOrder = {
+  amount: number;
+  duration: number;
+  symbol: string;
+  barrier: number;
 };
 
 export type MatchesMarketCandidate = {
@@ -146,6 +155,36 @@ export function chooseBestMatchesMarket(
     || Number(right.symbol === currentSymbol) - Number(left.symbol === currentSymbol)
     || left.symbol.localeCompare(right.symbol),
   )[0] ?? null;
+}
+
+export function findUnconfirmedMatchesRows(
+  rows: readonly MatchesSettlementRow[],
+  accountId: string,
+  baselineContractIds: ReadonlySet<string>,
+  attemptedOrders: readonly MatchesAttemptedOrder[],
+  startedAtMs: number,
+): MatchesSettlementRow[] {
+  const earliestBuyTime = Math.floor(startedAtMs / 1000) - 3;
+  return rows.filter((row) => {
+    if (
+      row.account_id !== accountId
+      || row.contract_type !== "DIGITMATCH"
+      || baselineContractIds.has(String(row.contract_id))
+      || !Number.isInteger(row.barrier)
+      || row.barrier == null
+    ) return false;
+
+    if (row.buy_time != null && row.buy_time < earliestBuyTime) return false;
+
+    return attemptedOrders.some((order) => (
+      row.symbol === order.symbol
+      && row.duration === order.duration
+      && row.duration_unit === "t"
+      && row.barrier === order.barrier
+      && Number.isFinite(row.buy_price)
+      && Math.round((row.buy_price ?? 0) * 100) === Math.round(order.amount * 100)
+    ));
+  });
 }
 
 export function chooseQualifiedMatchesDigits(
