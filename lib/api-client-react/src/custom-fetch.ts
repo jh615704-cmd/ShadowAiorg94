@@ -385,15 +385,46 @@ function isUnconfirmedTradeResponse(payload: unknown): boolean {
     || (typeof result.message === "string" && /unconfirmed|uncertain|could not be confirmed/i.test(result.message));
 }
 
+type TradeDiagnosticSource = "browser_app" | "api_server" | "deriv" | "transport" | "unknown";
+
+const diagnosticSources = new Set<TradeDiagnosticSource>([
+  "browser_app",
+  "api_server",
+  "deriv",
+  "transport",
+  "unknown",
+]);
+
+function diagnosticSource(value: unknown, fallback: TradeDiagnosticSource): TradeDiagnosticSource {
+  return typeof value === "string" && diagnosticSources.has(value as TradeDiagnosticSource)
+    ? value as TradeDiagnosticSource
+    : fallback;
+}
+
+function responseDiagnosticSource(payload: unknown, fallback: TradeDiagnosticSource): TradeDiagnosticSource {
+  if (!payload || typeof payload !== "object") return fallback;
+  return diagnosticSource((payload as { diagnostic_source?: unknown }).diagnostic_source, fallback);
+}
+
+function tradeFailureEntries(payload: unknown): Array<{ source: unknown; outcome: unknown; error: unknown }> {
+  if (!payload || typeof payload !== "object") return [];
+  const failed = (payload as { failed?: unknown }).failed;
+  if (!Array.isArray(failed)) return [];
+  return failed.filter((item): item is { source: unknown; outcome: unknown; error: unknown } =>
+    Boolean(item && typeof item === "object"),
+  );
+}
+
 function reportAdminDiagnostic(
   code: "api_server_error" | "trade_outcome_uncertain",
   severity: "warning" | "error",
   feature?: string,
+  source: TradeDiagnosticSource = "unknown",
 ) {
   if (typeof window === "undefined") return;
   try {
     window.dispatchEvent(new CustomEvent("shadow-admin-diagnostic", {
-      detail: { code, severity, ...(feature ? { feature } : {}) },
+      detail: { code, severity, source, ...(feature ? { feature } : {}) },
     }));
   } catch {
     // Diagnostics must never interfere with the original request.
@@ -566,6 +597,7 @@ export async function customFetch<T = unknown>(
         tradeFeature ? "trade_outcome_uncertain" : "api_server_error",
         tradeFeature ? "warning" : "error",
         tradeFeature,
+        "transport",
       );
       throw new ApiTransportError(error, requestInfo, requestId);
     }
@@ -575,18 +607,29 @@ export async function customFetch<T = unknown>(
       response = await fetch(input, requestInit);
     } catch (retryError) {
       if (isAbortError(retryError, init.signal)) throw retryError;
-      reportAdminDiagnostic("api_server_error", "error");
+      reportAdminDiagnostic("api_server_error", "error", undefined, "transport");
       throw new ApiTransportError(retryError, requestInfo, requestId);
     }
   }
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
-    if (response.status >= 500) {
+    const outcome = getStringField(errorData, "trade_outcome");
+    if (
+      response.status >= 500
+      || (tradeFeature && (response.status === 429 || outcome === "uncertain"))
+    ) {
+      const source = responseDiagnosticSource(errorData, tradeFeature ? "unknown" : "api_server");
+      const tradeOutcomeUncertain = tradeFeature
+        && (outcome === "uncertain"
+          || ((response.status >= 500 || response.status === 429)
+            && outcome !== "not_sent"
+            && outcome !== "rejected"));
       reportAdminDiagnostic(
-        tradeFeature ? "trade_outcome_uncertain" : "api_server_error",
-        tradeFeature ? "warning" : "error",
+        tradeOutcomeUncertain ? "trade_outcome_uncertain" : "api_server_error",
+        tradeOutcomeUncertain ? "warning" : "error",
         tradeFeature,
+        source,
       );
     }
     throw new ApiError(response, errorData, requestInfo);
@@ -594,7 +637,21 @@ export async function customFetch<T = unknown>(
 
   const payload = await parseSuccessBody(response, responseType, requestInfo);
   if (tradeFeature && isUnconfirmedTradeResponse(payload)) {
-    reportAdminDiagnostic("trade_outcome_uncertain", "warning", tradeFeature);
+    const failed = tradeFailureEntries(payload);
+    const sources = failed.length
+      ? Array.from(new Set(failed.map((entry) => diagnosticSource(entry.source, "unknown"))))
+      : [responseDiagnosticSource(payload, "unknown")];
+    const uncertain = failed.length === 0
+      || failed.some((entry) => entry.outcome === "uncertain"
+        || (entry.outcome == null && typeof entry.error === "string" && /could not be confirmed|unconfirmed|uncertain/i.test(entry.error)));
+    for (const source of sources) {
+      reportAdminDiagnostic(
+        uncertain ? "trade_outcome_uncertain" : "api_server_error",
+        uncertain ? "warning" : "error",
+        tradeFeature,
+        source,
+      );
+    }
   }
   return payload as T;
 }

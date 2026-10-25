@@ -3,6 +3,7 @@ import type {
   AdminIntelligenceFinding,
   AdminIntelligenceScan,
   DiagnosticCode,
+  DiagnosticSource,
   DiagnosticReportInput,
 } from "@workspace/api-zod";
 import { ACCESS_FEATURES } from "./access-keys";
@@ -44,6 +45,7 @@ interface DiagnosticRecord {
   id: string;
   feature: AccessFeature;
   code: DiagnosticCode;
+  source: DiagnosticSource;
   severity: "warning" | "error";
   firstSeenAt: number;
   lastSeenAt: number;
@@ -56,13 +58,15 @@ export class AdminIntelligenceRegistry {
 
   report(input: DiagnosticReportInput, sessionId: string, now = Date.now()): void {
     this.prune(now);
-    const id = `${input.feature}:${input.code}`;
+    const source = input.source ?? "unknown";
+    const id = `${input.feature}:${input.code}:${source}`;
     let record = this.records.get(id);
     if (!record) {
       record = {
         id,
         feature: input.feature,
         code: input.code,
+        source,
         severity: input.severity,
         firstSeenAt: now,
         lastSeenAt: now,
@@ -105,6 +109,7 @@ export class AdminIntelligenceRegistry {
           id: record.id,
           feature: record.feature,
           code: record.code,
+          source: record.source,
           severity: record.severity,
           ...copy,
           first_seen_at: new Date(record.firstSeenAt),

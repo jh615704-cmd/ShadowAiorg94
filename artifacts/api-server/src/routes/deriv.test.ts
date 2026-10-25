@@ -264,6 +264,8 @@ mock.module("../lib/deriv", {
       userPats.delete(userId);
     },
     isDerivBuyRateLimitError: () => false,
+    isDerivApiError: () => false,
+    getTradeErrorSource: () => "api_server",
   },
 });
 

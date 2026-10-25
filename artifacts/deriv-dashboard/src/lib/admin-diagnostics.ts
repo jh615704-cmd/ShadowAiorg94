@@ -21,13 +21,21 @@ export type AdminDiagnosticFeature =
   | "settings"
   | "history";
 
+export type AdminDiagnosticSource =
+  | "browser_app"
+  | "api_server"
+  | "deriv"
+  | "transport"
+  | "unknown";
+
 export function reportAdminDiagnostic(
   feature: AdminDiagnosticFeature,
   code: AdminDiagnosticCode,
   severity: "warning" | "error",
+  source: AdminDiagnosticSource = "browser_app",
 ) {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent("shadow-admin-diagnostic", {
-    detail: { feature, code, severity },
+    detail: { feature, code, severity, source },
   }));
 }

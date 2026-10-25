@@ -161,6 +161,7 @@ describe("customFetch transport recovery", () => {
       code: "trade_outcome_uncertain",
       severity: "warning",
       feature: "digit-flip",
+      source: "transport",
     });
   });
 
@@ -185,6 +186,65 @@ describe("customFetch transport recovery", () => {
       code: "trade_outcome_uncertain",
       severity: "warning",
       feature: "matches-analysis",
+      source: "unknown",
+    });
+  });
+
+  it("attributes an explicit Deriv rejection separately from an uncertain acknowledgement", async () => {
+    const events = new EventTarget();
+    let reported: unknown;
+    events.addEventListener("shadow-admin-diagnostic", (event) => {
+      reported = (event as CustomEvent).detail;
+    });
+    Object.defineProperty(globalThis, "window", { configurable: true, value: events });
+    globalThis.fetch = (async () => new Response(
+      JSON.stringify({
+        ok: false,
+        message: "Deriv declined an order.",
+        failed: [{ key: "abc", outcome: "rejected", source: "deriv", error: "Deriv declined an order." }],
+      }),
+      { status: 202, headers: { "content-type": "application/json" } },
+    )) as typeof fetch;
+
+    await customFetch("/api/deriv/matches/buy", {
+      method: "POST",
+      body: JSON.stringify({ contracts: [] }),
+    });
+
+    assert.deepEqual(reported, {
+      code: "api_server_error",
+      severity: "error",
+      feature: "matches-analysis",
+      source: "deriv",
+    });
+  });
+
+  it("reports an API-confirmed not-sent trade failure as an app/API issue, not an uncertain trade", async () => {
+    const events = new EventTarget();
+    let reported: unknown;
+    events.addEventListener("shadow-admin-diagnostic", (event) => {
+      reported = (event as CustomEvent).detail;
+    });
+    Object.defineProperty(globalThis, "window", { configurable: true, value: events });
+    globalThis.fetch = (async () => new Response(
+      JSON.stringify({
+        error: "The Deriv connection is not ready.",
+        diagnostic_source: "api_server",
+        trade_outcome: "not_sent",
+      }),
+      { status: 503, headers: { "content-type": "application/json" } },
+    )) as typeof fetch;
+
+    await assert.rejects(customFetch("/api/deriv/matches/buy", {
+      method: "POST",
+      body: JSON.stringify({ contracts: [] }),
+    }));
+
+    assert.deepEqual(reported, {
+      code: "api_server_error",
+      severity: "error",
+      feature: "matches-analysis",
+      source: "api_server",
     });
   });
 

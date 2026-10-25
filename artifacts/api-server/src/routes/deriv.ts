@@ -53,6 +53,8 @@ import {
   DerivCredentialError,
   DerivCapacityError,
   isDerivBuyRateLimitError,
+  classifyBuyFailure,
+  getTradeErrorSource,
 } from "../lib/deriv";
 import { withDistributedUserLock } from "../lib/distributed-user-lock";
 import { assertAccessSessionActive, AccessSessionRevokedError } from "../lib/access-keys";
@@ -73,6 +75,18 @@ function isCredentialError(error: unknown): error is Error {
 
 function credentialHttpStatus(error: unknown): number {
   return error instanceof DerivCredentialError ? error.status : 401;
+}
+
+function tradeOutcomeForRouteError(
+  error: unknown,
+  status: number,
+): "rejected" | "uncertain" | "not_sent" {
+  if (error && typeof error === "object" && "name" in error && error.name === "ZodError") return "uncertain";
+  const outcome = classifyBuyFailure(error).outcome;
+  if (outcome !== "uncertain") return outcome;
+  if (status === 429) return "rejected";
+  if (status >= 400 && status < 500) return "not_sent";
+  return "uncertain";
 }
 
 function isCapacityError(error: unknown): error is DerivCapacityError {
@@ -458,6 +472,8 @@ router.post("/deriv/buy", requireTradeAccessFeature, async (req, res) => {
       return res.status(429).json({
         error: "Deriv temporarily limited new buys. The request was safely retried; check account history before repeating it.",
         code: "DERIV_BUY_RATE_LIMITED",
+        diagnostic_source: "deriv",
+        trade_outcome: tradeOutcomeForRouteError(error, 429),
       });
     }
      const status = isCapacityError(error)
@@ -477,7 +493,11 @@ router.post("/deriv/buy", requireTradeAccessFeature, async (req, res) => {
         : message.includes("did not return a proposal") || message.includes("WebSocket is not ready")
           ? 504
         : 502;
-    return res.status(status).json({ error: message });
+     return res.status(status).json({
+       error: message,
+       diagnostic_source: getTradeErrorSource(error),
+       trade_outcome: tradeOutcomeForRouteError(error, status),
+     });
   }
 });
 
@@ -500,7 +520,7 @@ router.post("/deriv/sell", async (req, res) => {
       : message.includes("WebSocket is not ready")
         ? 504
         : 502;
-    return res.status(status).json({ error: message });
+     return res.status(status).json({ error: message, diagnostic_source: getTradeErrorSource(error) });
   }
 });
 
@@ -541,6 +561,8 @@ router.post("/deriv/bulk-buy", requireTradeAccessFeature, async (req, res) => {
       return res.status(429).json({
         error: "Deriv temporarily limited new buys. Some earlier batch contracts may already be open; check account history before sending another batch.",
         code: "DERIV_BUY_RATE_LIMITED",
+        diagnostic_source: "deriv",
+        trade_outcome: tradeOutcomeForRouteError(error, 429),
       });
     }
     const status = isCapacityError(error)
@@ -558,7 +580,11 @@ router.post("/deriv/bulk-buy", requireTradeAccessFeature, async (req, res) => {
         : message.includes("did not return a proposal") || message.includes("WebSocket is not ready")
           ? 504
         : 502;
-    return res.status(status).json({ error: message });
+     return res.status(status).json({
+       error: message,
+       diagnostic_source: getTradeErrorSource(error),
+       trade_outcome: tradeOutcomeForRouteError(error, status),
+     });
   }
 });
 
@@ -582,6 +608,8 @@ router.post("/deriv/dual-buy", requireTradeAccessFeature, async (req, res) => {
       return res.status(429).json({
         error: "Deriv temporarily limited new buys. One contract may already be open; check account history before repeating the pair.",
         code: "DERIV_BUY_RATE_LIMITED",
+        diagnostic_source: "deriv",
+        trade_outcome: tradeOutcomeForRouteError(error, 429),
       });
     }
     const status = isCapacityError(error)
@@ -599,7 +627,11 @@ router.post("/deriv/dual-buy", requireTradeAccessFeature, async (req, res) => {
         : message.includes("did not return a proposal") || message.includes("WebSocket is not ready")
           ? 504
         : 502;
-    return res.status(status).json({ error: message });
+     return res.status(status).json({
+       error: message,
+       diagnostic_source: getTradeErrorSource(error),
+       trade_outcome: tradeOutcomeForRouteError(error, status),
+     });
   }
 });
 
@@ -644,6 +676,8 @@ router.post("/deriv/clock-work/buy", requireAccessFeature("clock-work"), async (
       return res.status(429).json({
         error: "Deriv temporarily limited new buys. Check account history before sending another Clock Work batch.",
         code: "DERIV_BUY_RATE_LIMITED",
+        diagnostic_source: "deriv",
+        trade_outcome: tradeOutcomeForRouteError(error, 429),
       });
     }
     const status = isCapacityError(error)
@@ -661,7 +695,11 @@ router.post("/deriv/clock-work/buy", requireAccessFeature("clock-work"), async (
       : message.includes("did not return a proposal") || message.includes("WebSocket is not ready")
       ? 503
       : 502;
-    return res.status(status).json({ error: message });
+    return res.status(status).json({
+      error: message,
+      diagnostic_source: getTradeErrorSource(error),
+      trade_outcome: tradeOutcomeForRouteError(error, status),
+    });
   }
 });
 
@@ -687,6 +725,8 @@ router.post("/deriv/matches/buy", requireAccessFeature("matches-analysis"), asyn
       return res.status(429).json({
         error: "Deriv temporarily limited new buys. Check account history before sending another Matches batch.",
         code: "DERIV_BUY_RATE_LIMITED",
+        diagnostic_source: "deriv",
+        trade_outcome: tradeOutcomeForRouteError(error, 429),
       });
     }
     const status = isCapacityError(error)
@@ -704,7 +744,11 @@ router.post("/deriv/matches/buy", requireAccessFeature("matches-analysis"), asyn
       : message.includes("did not return a proposal") || message.includes("WebSocket is not ready")
       ? 503
       : 502;
-    return res.status(status).json({ error: message });
+    return res.status(status).json({
+      error: message,
+      diagnostic_source: getTradeErrorSource(error),
+      trade_outcome: tradeOutcomeForRouteError(error, status),
+    });
   }
 });
 

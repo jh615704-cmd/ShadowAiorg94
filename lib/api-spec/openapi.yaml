@@ -1105,6 +1105,12 @@ components:
     DiagnosticSeverity:
       type: string
       enum: [warning, error]
+    DiagnosticSource:
+      type: string
+      enum: [browser_app, api_server, deriv, transport, unknown]
+    TradeBuyFailureOutcome:
+      type: string
+      enum: [rejected, uncertain, not_sent]
     DiagnosticReportInput:
       type: object
       required: [feature, code, severity]
@@ -1115,6 +1121,8 @@ components:
           $ref: "#/components/schemas/DiagnosticCode"
         severity:
           $ref: "#/components/schemas/DiagnosticSeverity"
+        source:
+          $ref: "#/components/schemas/DiagnosticSource"
     DiagnosticReportResponse:
       type: object
       required: [accepted]
@@ -1130,7 +1138,7 @@ components:
         open_findings: { type: integer, minimum: 0 }
     AdminIntelligenceFinding:
       type: object
-      required: [id, feature, code, severity, summary, guidance, first_seen_at, last_seen_at, occurrences, affected_sessions, fix_available]
+      required: [id, feature, code, severity, source, summary, guidance, first_seen_at, last_seen_at, occurrences, affected_sessions, fix_available]
       properties:
         id: { type: string }
         feature:
@@ -1139,6 +1147,8 @@ components:
           $ref: "#/components/schemas/DiagnosticCode"
         severity:
           $ref: "#/components/schemas/DiagnosticSeverity"
+        source:
+          $ref: "#/components/schemas/DiagnosticSource"
         summary: { type: string }
         guidance: { type: string }
         first_seen_at: { type: string, format: date-time }
@@ -1756,7 +1766,7 @@ components:
           $ref: "#/components/schemas/DerivBuy"
     ClockWorkFailedBuy:
       type: object
-      required: [key, contract_type, error]
+      required: [key, contract_type, error, outcome, source]
       properties:
         key:
           type: string
@@ -1765,6 +1775,10 @@ components:
           enum: [HIGHER, LOWER]
         error:
           type: string
+        outcome:
+          $ref: "#/components/schemas/TradeBuyFailureOutcome"
+        source:
+          $ref: "#/components/schemas/DiagnosticSource"
     ClockWorkBatchBuyResponse:
       type: object
       required: [ok, message, requested_count, completed_count, contracts, failed]
@@ -1844,7 +1858,7 @@ components:
           $ref: "#/components/schemas/DerivBuy"
     MatchesFailedBuy:
       type: object
-      required: [key, contract_type, error]
+      required: [key, contract_type, error, outcome, source]
       properties:
         key:
           type: string
@@ -1853,6 +1867,10 @@ components:
           enum: [DIGITMATCH]
         error:
           type: string
+        outcome:
+          $ref: "#/components/schemas/TradeBuyFailureOutcome"
+        source:
+          $ref: "#/components/schemas/DiagnosticSource"
     MatchesBatchBuyResponse:
       type: object
       required: [ok, message, requested_count, completed_count, contracts, failed]
@@ -1942,7 +1960,7 @@ components:
           type: number
     DerivBulkBuyResponse:
       type: object
-      required: [ok, message, count, proposals, buys]
+      required: [ok, message, count, proposals, buys, failed]
       properties:
         ok:
           type: boolean
@@ -1958,6 +1976,23 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/DerivBuy"
+        failed:
+          type: array
+          items:
+            $ref: "#/components/schemas/DerivBulkBuyFailure"
+    DerivBulkBuyFailure:
+      type: object
+      required: [index, outcome, source, error]
+      properties:
+        index:
+          type: integer
+          minimum: 0
+        outcome:
+          $ref: "#/components/schemas/TradeBuyFailureOutcome"
+        source:
+          $ref: "#/components/schemas/DiagnosticSource"
+        error:
+          type: string
     DerivContract:
       type: object
       required: [contract_id, status, is_sold, profit, buy_price, payout]
@@ -2043,4 +2078,8 @@ components:
           type: string
         code:
           type: string
+        diagnostic_source:
+          $ref: "#/components/schemas/DiagnosticSource"
+        trade_outcome:
+          $ref: "#/components/schemas/TradeBuyFailureOutcome"
 

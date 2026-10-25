@@ -6,9 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ClockWorkFailedBuyContractType } from './clockWorkFailedBuyContractType';
+import type { DiagnosticSource } from './diagnosticSource';
+import type { TradeBuyFailureOutcome } from './tradeBuyFailureOutcome';
 
 export interface ClockWorkFailedBuy {
   key: string;
   contract_type: ClockWorkFailedBuyContractType;
   error: string;
+  outcome: TradeBuyFailureOutcome;
+  source: DiagnosticSource;
 }

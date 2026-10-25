@@ -29,6 +29,11 @@ export type MatchesAttemptedOrder = {
   barrier: number;
 };
 
+export type MatchesOrderReconciliation = {
+  matchedRows: MatchesSettlementRow[];
+  unresolvedOrderCount: number;
+};
+
 export type MatchesMarketCandidate = {
   value: string;
 };
@@ -164,27 +169,59 @@ export function findUnconfirmedMatchesRows(
   attemptedOrders: readonly MatchesAttemptedOrder[],
   startedAtMs: number,
 ): MatchesSettlementRow[] {
+  return reconcileUnconfirmedMatchesOrders(
+    rows,
+    accountId,
+    baselineContractIds,
+    attemptedOrders,
+    startedAtMs,
+  ).matchedRows;
+}
+
+export function reconcileUnconfirmedMatchesOrders(
+  rows: readonly MatchesSettlementRow[],
+  accountId: string,
+  baselineContractIds: ReadonlySet<string>,
+  attemptedOrders: readonly MatchesAttemptedOrder[],
+  startedAtMs: number,
+): MatchesOrderReconciliation {
   const earliestBuyTime = Math.floor(startedAtMs / 1000) - 3;
-  return rows.filter((row) => {
+  const remainingOrders = new Set(attemptedOrders.map((_, index) => index));
+  const matchedRows: MatchesSettlementRow[] = [];
+  const seenContractIds = new Set<string>();
+
+  for (const row of rows) {
     if (
       row.account_id !== accountId
       || row.contract_type !== "DIGITMATCH"
       || baselineContractIds.has(String(row.contract_id))
+      || seenContractIds.has(String(row.contract_id))
       || !Number.isInteger(row.barrier)
       || row.barrier == null
-    ) return false;
+    ) continue;
 
-    if (row.buy_time != null && row.buy_time < earliestBuyTime) return false;
+    if (row.buy_time != null && row.buy_time < earliestBuyTime) continue;
 
-    return attemptedOrders.some((order) => (
-      row.symbol === order.symbol
-      && row.duration === order.duration
-      && row.duration_unit === "t"
-      && row.barrier === order.barrier
-      && Number.isFinite(row.buy_price)
-      && Math.round((row.buy_price ?? 0) * 100) === Math.round(order.amount * 100)
-    ));
-  });
+    const matchedOrderIndex = Array.from(remainingOrders).find((index) => {
+      const order = attemptedOrders[index];
+      return row.symbol === order.symbol
+        && row.duration === order.duration
+        && row.duration_unit === "t"
+        && row.barrier === order.barrier
+        && Number.isFinite(row.buy_price)
+        && Math.round((row.buy_price ?? 0) * 100) === Math.round(order.amount * 100);
+    });
+    if (matchedOrderIndex === undefined) continue;
+
+    remainingOrders.delete(matchedOrderIndex);
+    seenContractIds.add(String(row.contract_id));
+    matchedRows.push(row);
+  }
+
+  return {
+    matchedRows,
+    unresolvedOrderCount: remainingOrders.size,
+  };
 }
 
 export function chooseQualifiedMatchesDigits(

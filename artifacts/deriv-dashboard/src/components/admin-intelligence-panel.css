@@ -100,6 +100,9 @@
 .intel-severity.error { color: #ff9c9e; background: rgba(146, 49, 60, .23); }
 .intel-feature-tag { color: #83d9e9; background: rgba(21, 116, 143, .19); }
 .intel-code { color: #9eb5ca; background: rgba(111, 137, 162, .12); font-family: var(--app-font-mono, monospace); font-weight: 500; }
+.intel-source-tag { min-height: 20px; display: inline-flex; align-items: center; padding: 0 7px; border: 1px solid rgba(76, 169, 191, .2); border-radius: 5px; color: #a9dce5; background: rgba(22, 115, 136, .13); font-size: 8px; font-weight: 750; }
+.intel-source-tag.source-deriv { border-color: rgba(255, 181, 93, .28); color: #ffd08a; background: rgba(153, 91, 23, .15); }
+.intel-source-tag.source-transport, .intel-source-tag.source-unknown { border-color: rgba(193, 166, 126, .24); color: #d7c7aa; background: rgba(112, 82, 45, .13); }
 .intel-finding-top time { flex: 0 0 auto; padding-top: 3px; color: #7895b0; font: 500 9px var(--app-font-mono, monospace); }
 .intel-summary { margin: 10px 0 11px; color: #e4eef9; font-size: 12px; font-weight: 750; line-height: 1.5; }
 .intel-guidance { padding: 9px 11px; border-left: 2px solid #1e9bb5; border-radius: 0 6px 6px 0; background: rgba(13, 68, 89, .18); }

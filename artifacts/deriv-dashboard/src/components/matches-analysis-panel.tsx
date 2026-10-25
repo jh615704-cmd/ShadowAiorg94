@@ -30,6 +30,7 @@ export interface MatchesAnalysisPanelProps {
   disabled: boolean;
   tradeSlotBlocked: boolean;
   statusMessage: string;
+  reconciliationMessage?: string;
   onStartMatches: () => void;
   onStopMatches: () => void;
   onRescan: () => void;
@@ -365,6 +366,7 @@ export default function MatchesAnalysisPanel(props: MatchesAnalysisPanelProps) {
           </button>
           {tradeSlotBlocked && <p className="ma-slot-warning" role="status" data-testid="status-matches-trade-slot">An active contract is settling. Analysis can start when the trade slot is clear.</p>}
           {visibleStatusMessage && <p className="ma-status-message" role="status" aria-live="polite" data-testid="status-matches-message" style={{ opacity: isStatusMessageFading ? 0 : 1, transition: "opacity 300ms ease" }}>{visibleStatusMessage}</p>}
+          {props.reconciliationMessage && <p className="ma-reconciliation-message" role="status" aria-live="polite" data-testid="status-matches-reconciliation"><RefreshCw size={12} aria-hidden="true" />{props.reconciliationMessage}</p>}
         </section>
       </div>
     </section>

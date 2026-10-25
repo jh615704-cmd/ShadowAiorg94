@@ -8,9 +8,11 @@
 import type { AccessFeature } from './accessFeature';
 import type { DiagnosticCode } from './diagnosticCode';
 import type { DiagnosticSeverity } from './diagnosticSeverity';
+import type { DiagnosticSource } from './diagnosticSource';
 
 export interface DiagnosticReportInput {
   feature: AccessFeature;
   code: DiagnosticCode;
   severity: DiagnosticSeverity;
+  source?: DiagnosticSource;
 }

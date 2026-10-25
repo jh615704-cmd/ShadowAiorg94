@@ -64,6 +64,26 @@ export const DiagnosticSeverity = {
   error: 'error',
 } as const;
 
+export type DiagnosticSource = typeof DiagnosticSource[keyof typeof DiagnosticSource];
+
+
+export const DiagnosticSource = {
+  browser_app: 'browser_app',
+  api_server: 'api_server',
+  deriv: 'deriv',
+  transport: 'transport',
+  unknown: 'unknown',
+} as const;
+
+export type TradeBuyFailureOutcome = typeof TradeBuyFailureOutcome[keyof typeof TradeBuyFailureOutcome];
+
+
+export const TradeBuyFailureOutcome = {
+  rejected: 'rejected',
+  uncertain: 'uncertain',
+  not_sent: 'not_sent',
+} as const;
+
 export type AccessFeature = typeof AccessFeature[keyof typeof AccessFeature];
 
 
@@ -88,6 +108,7 @@ export interface DiagnosticReportInput {
   feature: AccessFeature;
   code: DiagnosticCode;
   severity: DiagnosticSeverity;
+  source?: DiagnosticSource;
 }
 
 export interface DiagnosticReportResponse {
@@ -114,6 +135,7 @@ export interface AdminIntelligenceFinding {
   feature: AccessFeature;
   code: DiagnosticCode;
   severity: DiagnosticSeverity;
+  source: DiagnosticSource;
   summary: string;
   guidance: string;
   first_seen_at: string;
@@ -846,6 +868,8 @@ export interface ClockWorkFailedBuy {
   key: string;
   contract_type: ClockWorkFailedBuyContractType;
   error: string;
+  outcome: TradeBuyFailureOutcome;
+  source: DiagnosticSource;
 }
 
 export interface ClockWorkBatchBuyResponse {
@@ -941,6 +965,8 @@ export interface MatchesFailedBuy {
   key: string;
   contract_type: MatchesFailedBuyContractType;
   error: string;
+  outcome: TradeBuyFailureOutcome;
+  source: DiagnosticSource;
 }
 
 export interface MatchesBatchBuyResponse {
@@ -1065,6 +1091,8 @@ export interface DerivHistoryClearResponse {
 export interface ErrorResponse {
   error: string;
   code?: string;
+  diagnostic_source?: DiagnosticSource;
+  trade_outcome?: TradeBuyFailureOutcome;
 }
 
 export type StreamDerivTradeUpdatesParams = {

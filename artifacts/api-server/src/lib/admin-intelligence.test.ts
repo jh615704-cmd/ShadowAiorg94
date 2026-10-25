@@ -28,6 +28,7 @@ test("diagnostic aggregation exposes only safe summaries and counts", () => {
   const scan = registry.scan(12_000);
   assert.equal(scan.findings.length, 1);
   assert.equal(scan.findings[0]?.feature, "auto-trader-2");
+  assert.equal(scan.findings[0]?.source, "unknown");
   assert.equal(scan.findings[0]?.severity, "error");
   assert.equal(scan.findings[0]?.affected_sessions, 2);
   assert.equal(scan.findings[0]?.occurrences, 2);
@@ -36,6 +37,27 @@ test("diagnostic aggregation exposes only safe summaries and counts", () => {
   assert.match(scan.findings[0]?.guidance ?? "", /will not resend the order/);
   assert.match(scan.findings[0]?.guidance ?? "", /scanner does not change Deriv contracts or account history/);
   assert.equal(scan.features.find((feature) => feature.feature === "auto-trader-2")?.status, "issue");
+});
+
+test("diagnostics keep distinct failure sources visible without storing raw errors", () => {
+  const registry = new AdminIntelligenceRegistry();
+  registry.report({
+    feature: "matches-analysis",
+    code: "trade_outcome_uncertain",
+    severity: "warning",
+    source: "transport",
+  }, "session-1", 10_000);
+  registry.report({
+    feature: "matches-analysis",
+    code: "trade_outcome_uncertain",
+    severity: "warning",
+    source: "deriv",
+  }, "session-2", 11_000);
+
+  const findings = registry.scan(12_000).findings;
+  assert.equal(findings.length, 2);
+  assert.deepEqual(new Set(findings.map((finding) => finding.source)), new Set(["transport", "deriv"]));
+  assert.ok(findings.every((finding) => !("raw_error" in finding)));
 });
 
 test("repeated reports from one session are throttled and old findings expire", () => {

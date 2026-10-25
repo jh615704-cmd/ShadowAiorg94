@@ -133,8 +133,10 @@ import {
 import {
   chooseBestMatchesMarket,
   chooseQualifiedMatchesDigits,
+  reconcileUnconfirmedMatchesOrders,
   MATCHES_HISTORY_LIMIT,
   rankSettledMatchOutcomes,
+  type MatchesAttemptedOrder,
   type MatchesDigitStat as ObservedMatchesDigitStat,
 } from "../lib/matches-analysis";
 import {
@@ -385,6 +387,14 @@ const errorMessage = (error: unknown) => {
   return getUserFacingErrorMessage(error, "Request failed");
 };
 
+type PendingMatchesReconciliation = {
+  id: string;
+  accountId: string;
+  baselineContractIds: string[];
+  attemptedOrders: MatchesAttemptedOrder[];
+  startedAtMs: number;
+};
+
 type MartingaleSettlementWatch = {
   knownIds: Set<string>;
   processedIds: Set<string>;
@@ -529,6 +539,7 @@ export default function XTraderPage() {
   const [matchesHistoryClearArmed, setMatchesHistoryClearArmed] = useState(false);
   const [matchesHiddenHistoryIds, setMatchesHiddenHistoryIds] = useState<Set<string>>(new Set());
   const [matchesPendingHistoryIds, setMatchesPendingHistoryIds] = useState<Set<string>>(new Set());
+  const [matchesPendingReconciliation, setMatchesPendingReconciliation] = useState<PendingMatchesReconciliation | null>(null);
   const [clockWorkEnabled, setClockWorkEnabled] = useState(false);
   const [clockWorkSymbol, setClockWorkSymbol] = useState("R_75");
   const [clockWorkBarrierMode, setClockWorkBarrierMode] = useState<"offset" | "absolute">("offset");
@@ -717,6 +728,9 @@ export default function XTraderPage() {
   const matchesAiRunningRef = useRef(false);
   const matchesActionLockRef = useRef(false);
   const matchesAutomationAttemptTickRef = useRef(-1);
+  const matchesPendingReconciliationRef = useRef<PendingMatchesReconciliation | null>(null);
+  const matchesTickCountRef = useRef(0);
+  matchesTickCountRef.current = matchesTickCount;
   const matchesAiNextSymbolRef = useRef<string | null>(null);
   const matchesSampleCursorRef = useRef({ symbol: "", tickCount: 0 });
   const clockWorkActionLockRef = useRef(false);
@@ -3722,6 +3736,13 @@ export default function XTraderPage() {
     enabled: boolean,
     stoppedMessage = "Matches Analysis is stopped. Open contracts can continue to settle.",
   ) => {
+    const pendingReconciliation = matchesPendingReconciliationRef.current;
+    if (enabled && pendingReconciliation) {
+      setMatchesStatusMessage(pendingReconciliation.accountId === currentAccount?.id
+        ? "Matches is waiting for Deriv history to safely reconcile the previous order."
+        : "A Matches order is still pending reconciliation on another Deriv account.");
+      return;
+    }
     if (enabled && matchesAutoMode && !matchesAiDigitsConfirmed) {
       setMatchesStatusMessage("Choose 1, 2, or 3 top digits before enabling automatic Matches entries.");
       return;
@@ -3773,8 +3794,10 @@ export default function XTraderPage() {
   };
 
   const changeMatchesSymbol = (nextSymbol: string) => {
-    if (tradeSlotBlocked || matchesActionLockRef.current) {
-      setMatchesStatusMessage("The market stays fixed while a contract is open. It can change for the next entry after settlement.");
+    if (tradeSlotBlocked || matchesActionLockRef.current || matchesPendingReconciliationRef.current) {
+      setMatchesStatusMessage(matchesPendingReconciliationRef.current
+        ? "The market stays fixed until the uncertain order is reconciled."
+        : "The market stays fixed while a contract is open. It can change for the next entry after settlement.");
       return;
     }
     setMatchesAiAutoMarket(false);
@@ -3787,9 +3810,31 @@ export default function XTraderPage() {
     if (matchesAnalysisEnabled) void selectMarket(nextSymbol);
   };
 
+  const startMatchesReconciliation = (
+    attemptedOrders: MatchesAttemptedOrder[],
+    baselineContractIds: ReadonlySet<string>,
+    startedAtMs: number,
+  ) => {
+    if (!currentAccount) return;
+    const pending: PendingMatchesReconciliation = {
+      id: crypto.randomUUID().replace(/-/g, ""),
+      accountId: currentAccount.id,
+      baselineContractIds: Array.from(baselineContractIds),
+      attemptedOrders,
+      startedAtMs,
+    };
+    matchesPendingReconciliationRef.current = pending;
+    setMatchesPendingReconciliation(pending);
+    setMatchesStatusMessage("Deriv has not confirmed every Matches order. New entries are paused while account history is checked.");
+  };
+
   const executeMatchesOrders = async (digits: readonly number[], automated: boolean) => {
     if (matchesActionLockRef.current || matchesBuyMutation.isPending) return false;
     if (automated && (!matchesAnalysisEnabled || !matchesAiEnabled || !matchesAiRunningRef.current)) return false;
+    if (matchesPendingReconciliationRef.current) {
+      setMatchesStatusMessage("Matches is waiting for the previous order to be safely reconciled.");
+      return false;
+    }
     if (!matchesAnalysisEnabled || !canUseMatchesAnalysis || !isConnected || !currentAccount) {
       setMatchesStatusMessage("Enable Matches Analysis and connect a Deriv account before trading.");
       return false;
@@ -3831,6 +3876,8 @@ export default function XTraderPage() {
       barrier: digit,
       symbol: matchesSymbol,
     }));
+    const attemptedAtMs = Date.now();
+    const baselineContractIds = new Set(matchesAllRows.map((trade) => String(trade.contract_id)));
     matchesActionLockRef.current = true;
     if (automated) matchesAutomationAttemptTickRef.current = matchesTickCount;
     setMatchesStatusMessage(automated ? "Sending the Matches proposal and buy request." : "Sending the Matches trade.");
@@ -3848,6 +3895,20 @@ export default function XTraderPage() {
       setMatchesPendingHistoryIds((current) => new Set([...current, ...confirmedContractIds]));
       refreshTradeResults();
       if (!result.ok) {
+        const uncertainKeys = new Set(result.failed
+          .filter((failure) => failure.outcome !== "rejected" && failure.outcome !== "not_sent")
+          .map((failure) => failure.key));
+        if (uncertainKeys.size || (result.failed.length === 0 && !result.ok)) {
+          const uncertainOrders = contracts
+            .filter((contract) => uncertainKeys.has(contract.key))
+            .map(({ amount, duration, symbol, barrier }) => ({ amount, duration, symbol, barrier }));
+          startMatchesReconciliation(
+            uncertainOrders.length ? uncertainOrders : contracts.map(({ amount, duration, symbol, barrier }) => ({ amount, duration, symbol, barrier })),
+            baselineContractIds,
+            attemptedAtMs,
+          );
+          return false;
+        }
         toggleMatchesAi(false, `${result.message} Automatic entries are stopped. Open contracts can continue to settle.`);
       } else {
         setMatchesStatusMessage(automated && !matchesAiRunningRef.current
@@ -3860,6 +3921,22 @@ export default function XTraderPage() {
       const status = error && typeof error === "object" && "status" in error
         ? Number((error as { status?: unknown }).status)
         : NaN;
+      const errorData = error && typeof error === "object" && "data" in error
+        ? (error as { data?: { trade_outcome?: unknown } }).data
+        : undefined;
+      const tradeOutcome = errorData?.trade_outcome;
+      if (status >= 500 && (tradeOutcome === "not_sent" || tradeOutcome === "rejected")) {
+        setMatchesStatusMessage(`${message} No Matches buy was accepted. Waiting for a fresh tick before continuing.`);
+        return false;
+      }
+      if (status >= 500 || !Number.isFinite(status)) {
+        startMatchesReconciliation(
+          contracts.map(({ amount, duration, symbol, barrier }) => ({ amount, duration, symbol, barrier })),
+          baselineContractIds,
+          attemptedAtMs,
+        );
+        return false;
+      }
       const stoppedMessage = status >= 400 && status < 500
         ? `${message} No Matches order was submitted. Automatic entries are stopped. Open contracts can continue to settle.`
         : `${message} Check Deriv history before retrying an unconfirmed order. Automatic entries are stopped. Open contracts can continue to settle.`;
@@ -3875,6 +3952,7 @@ export default function XTraderPage() {
 
   useEffect(() => {
     if (!matchesAiAutoMarket || !matchesAnalysisEnabled || !canUseMatchesAnalysis) return;
+    if (matchesPendingReconciliationRef.current) return;
     if (!isConnected || !currentAccount || tradeSlotBlocked || matchesActionLockRef.current || matchesBuyMutation.isPending) return;
 
     const marketSignal = chooseBestMatchesMarket(
@@ -3904,6 +3982,7 @@ export default function XTraderPage() {
     matchesAllRows,
     matchesAnalysisEnabled,
     matchesBuyMutation.isPending,
+    matchesPendingReconciliation,
     matchesDuration,
     matchesSymbol,
     tradeSlotBlocked,
@@ -3921,7 +4000,87 @@ export default function XTraderPage() {
   }, [currentAccount?.currency, matchesAiEnabled, matchesLossLimit, matchesProfitTarget, matchesSessionPnl]);
 
   useEffect(() => {
+    const pending = matchesPendingReconciliation;
+    if (!pending || pending.accountId !== currentAccount?.id || !isConnected) return;
+
+    let disposed = false;
+    let checking = false;
+    let resolved = false;
+    let timer: number | undefined;
+
+    const reconcile = async () => {
+      if (disposed || checking) return;
+      checking = true;
+      try {
+        const historyKey = getGetDerivHistoryQueryKey();
+        const fallbackRows = queryClient.getQueryData<typeof rows>(historyKey) ?? [];
+        const [historySnapshot, statusSnapshot] = await Promise.all([
+          readCachedHistorySnapshot(() => getDerivHistory(), fallbackRows),
+          status.refetch(),
+        ]);
+        if (disposed || !historySnapshot.fresh || statusSnapshot.isError) return;
+
+        queryClient.setQueryData(historyKey, historySnapshot.rows);
+        const freshStatus = statusSnapshot.data;
+        if (
+          !freshStatus
+          || freshStatus.account?.id !== pending.accountId
+          || !freshStatus.connected
+          || !freshStatus.authorized
+          || !freshStatus.open_contracts_ready
+        ) return;
+
+        const result = reconcileUnconfirmedMatchesOrders(
+          historySnapshot.rows,
+          pending.accountId,
+          new Set(pending.baselineContractIds),
+          pending.attemptedOrders,
+          pending.startedAtMs,
+        );
+        if (
+          result.unresolvedOrderCount > 0
+          || result.matchedRows.some((trade) => isDerivHistoryOpen(trade.status))
+          || (freshStatus.active_contract_count ?? 0) > 0
+        ) return;
+
+        const reconciledIds = result.matchedRows.map((trade) => String(trade.contract_id));
+        claimFeatureRows(
+          "matches-analysis",
+          matchesClaimedHistoryIdsRef.current,
+          reconciledIds,
+        );
+        setMatchesPendingHistoryIds((current) => new Set([...current, ...reconciledIds]));
+        matchesAutomationAttemptTickRef.current = matchesTickCountRef.current;
+        resolved = true;
+        matchesPendingReconciliationRef.current = null;
+        setMatchesPendingReconciliation(null);
+        setMatchesStatusMessage(matchesAiRunningRef.current
+          ? "Deriv history confirms the previous order is settled. Matches will continue on the next fresh tick."
+          : "Deriv history confirms the previous order is settled. You can safely start Matches again.");
+      } catch {
+        // Failed reads are not evidence that the uncertain order is absent.
+      } finally {
+        checking = false;
+        if (!disposed && !resolved) timer = window.setTimeout(() => void reconcile(), 3_000);
+      }
+    };
+
+    void reconcile();
+    return () => {
+      disposed = true;
+      if (timer != null) window.clearTimeout(timer);
+    };
+  }, [
+    currentAccount?.id,
+    isConnected,
+    matchesPendingReconciliation?.id,
+    queryClient,
+    status.refetch,
+  ]);
+
+  useEffect(() => {
     if (!matchesAnalysisEnabled || !matchesAiEnabled || !matchesAiRunningRef.current) return;
+    if (matchesPendingReconciliationRef.current) return;
     if (!canUseMatchesAnalysis) {
       toggleMatchesAi(false);
       return;
@@ -3969,6 +4128,7 @@ export default function XTraderPage() {
     matchesAutoMode,
     matchesAiDigits,
     matchesAiEnabled,
+    matchesPendingReconciliation,
     matchesAiNextSymbolRef,
     matchesAnalysisEnabled,
     matchesBuyMutation.isPending,
@@ -5207,6 +5367,13 @@ export default function XTraderPage() {
             disabled={!isConnected || !currentAccount || !canUseMatchesAnalysis}
             tradeSlotBlocked={tradeSlotBlocked}
             statusMessage={matchesStatusMessage}
+            reconciliationMessage={matchesPendingReconciliation
+              ? matchesPendingReconciliation.accountId === currentAccount?.id
+                ? isConnected
+                  ? "Checking fresh Deriv history and open contracts. Matches will continue only after every attempted order is confirmed and settled."
+                  : "Reconnect the same Deriv account to continue checking the uncertain order."
+                : "An uncertain Matches order belongs to another Deriv account. Switch back to that account to complete reconciliation."
+              : undefined}
             onStartMatches={() => toggleMatchesAi(true)}
             onStopMatches={() => toggleMatchesAi(false)}
             onRescan={() => {

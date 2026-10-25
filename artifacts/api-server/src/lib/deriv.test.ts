@@ -65,6 +65,17 @@ mock.module("ws", {
   defaultExport: FakeWebSocket,
 });
 
+mock.module("./trading-protection", {
+  namedExports: {
+    assertTradingProtection: () => {},
+    getTradingProtectionSettings: async () => ({
+      weekdaysEnabled: false,
+      weekendsEnabled: false,
+      dualWeekendsWeekdaysEnabled: false,
+    }),
+  },
+});
+
 const deriv = await import("./deriv.ts");
 
 function emitMessage(socket: FakeWebSocket, message: SocketMessage) {

@@ -8,12 +8,14 @@
 import type { AccessFeature } from './accessFeature';
 import type { DiagnosticCode } from './diagnosticCode';
 import type { DiagnosticSeverity } from './diagnosticSeverity';
+import type { DiagnosticSource } from './diagnosticSource';
 
 export interface AdminIntelligenceFinding {
   id: string;
   feature: AccessFeature;
   code: DiagnosticCode;
   severity: DiagnosticSeverity;
+  source: DiagnosticSource;
   summary: string;
   guidance: string;
   first_seen_at: Date;

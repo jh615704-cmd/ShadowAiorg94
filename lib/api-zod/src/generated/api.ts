@@ -85,6 +85,7 @@ export const ScanAdminIntelligenceResponse = zod.object({
   "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin']),
   "code": zod.enum(['client_runtime_error', 'client_unhandled_rejection', 'api_server_error', 'trade_outcome_uncertain', 'saved_state_invalid', 'storage_unavailable']),
   "severity": zod.enum(['warning', 'error']),
+  "source": zod.enum(['browser_app', 'api_server', 'deriv', 'transport', 'unknown']),
   "summary": zod.string(),
   "guidance": zod.string(),
   "first_seen_at": zod.coerce.date(),
@@ -166,7 +167,8 @@ export const LogoutAccessSessionResponse = zod.object({
 export const ReportAccessDiagnosticBody = zod.object({
   "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin']),
   "code": zod.enum(['client_runtime_error', 'client_unhandled_rejection', 'api_server_error', 'trade_outcome_uncertain', 'saved_state_invalid', 'storage_unavailable']),
-  "severity": zod.enum(['warning', 'error'])
+  "severity": zod.enum(['warning', 'error']),
+  "source": zod.enum(['browser_app', 'api_server', 'deriv', 'transport', 'unknown']).optional()
 })
 
 export const ReportAccessDiagnosticResponse = zod.object({
@@ -1358,7 +1360,9 @@ export const BuyClockWorkContractsResponse = zod.object({
   "failed": zod.array(zod.object({
   "key": zod.string(),
   "contract_type": zod.enum(['HIGHER', 'LOWER']),
-  "error": zod.string()
+  "error": zod.string(),
+  "outcome": zod.enum(['rejected', 'uncertain', 'not_sent']),
+  "source": zod.enum(['browser_app', 'api_server', 'deriv', 'transport', 'unknown'])
 }))
 })
 
@@ -1423,7 +1427,9 @@ export const BuyMatchesContractsResponse = zod.object({
   "failed": zod.array(zod.object({
   "key": zod.string(),
   "contract_type": zod.enum(['DIGITMATCH']),
-  "error": zod.string()
+  "error": zod.string(),
+  "outcome": zod.enum(['rejected', 'uncertain', 'not_sent']),
+  "source": zod.enum(['browser_app', 'api_server', 'deriv', 'transport', 'unknown'])
 }))
 })
 

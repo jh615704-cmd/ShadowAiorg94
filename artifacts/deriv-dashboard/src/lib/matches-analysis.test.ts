@@ -8,6 +8,7 @@ import {
   MATCHES_MINIMUM_STAKE,
   rankObservedMatchDigits,
   rankSettledMatchOutcomes,
+  reconcileUnconfirmedMatchesOrders,
   summarizeSettledMatchOutcomes,
   type MatchesSettlementRow,
 } from "./matches-analysis.ts";
@@ -168,4 +169,42 @@ test("Matches Auto accepts settled win rates strictly above 50%", () => {
   assert.deepEqual(chooseQualifiedMatchesDigits(ranked, 3), [7, 2, 9]);
   assert.equal(MATCHES_AUTO_MINIMUM_SETTLED_WIN_RATE, 50);
   assert.equal(MATCHES_MINIMUM_STAKE, 0.35);
+});
+
+test("Matches order reconciliation requires a distinct matching history row for every uncertain order", () => {
+  const startedAtMs = 1_700_000_000_000;
+  const attempts = [
+    { amount: 0.35, duration: 1, symbol: "R_75", barrier: 5 },
+    { amount: 0.7, duration: 2, symbol: "R_75", barrier: 8 },
+  ];
+  const rows = [
+    row({ contract_id: "baseline", barrier: 5, duration: 1, buy_price: 0.35, buy_time: 1_700_000_000 }),
+    row({ contract_id: "match-5", barrier: 5, duration: 1, buy_price: 0.35, buy_time: 1_700_000_001, status: "open" }),
+    row({ contract_id: "match-8", barrier: 8, duration: 2, buy_price: 0.7, buy_time: 1_700_000_002, status: "won" }),
+  ];
+
+  const reconciliation = reconcileUnconfirmedMatchesOrders(
+    rows,
+    "account-1",
+    new Set(["baseline"]),
+    attempts,
+    startedAtMs,
+  );
+
+  assert.deepEqual(reconciliation.matchedRows.map((item) => item.contract_id), ["match-5", "match-8"]);
+  assert.equal(reconciliation.unresolvedOrderCount, 0);
+});
+
+test("Matches order reconciliation does not treat one history row as proof of two buys", () => {
+  const attempt = { amount: 0.35, duration: 1, symbol: "R_75", barrier: 5 };
+  const reconciliation = reconcileUnconfirmedMatchesOrders(
+    [row({ contract_id: "only-match", barrier: 5, duration: 1, buy_price: 0.35, buy_time: 1_700_000_000 })],
+    "account-1",
+    new Set(),
+    [attempt, attempt],
+    1_700_000_000_000,
+  );
+
+  assert.equal(reconciliation.matchedRows.length, 1);
+  assert.equal(reconciliation.unresolvedOrderCount, 1);
 });

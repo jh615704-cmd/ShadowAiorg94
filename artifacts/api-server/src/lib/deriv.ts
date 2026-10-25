@@ -182,6 +182,38 @@ export function isDerivBuyRateLimitError(error: unknown): boolean {
   return (error as Record<string, unknown>).code === "DERIV_BUY_RATE_LIMITED";
 }
 
+export function isDerivApiError(error: unknown): boolean {
+  return error instanceof DerivApiError;
+}
+
+export type TradeDiagnosticSource = "browser_app" | "api_server" | "deriv" | "transport" | "unknown";
+
+function embeddedTradeFailure(error: unknown): {
+  outcome?: "rejected" | "uncertain" | "not_sent";
+  source?: TradeDiagnosticSource;
+} {
+  if (typeof error !== "object" || error === null) return {};
+  const record = error as Record<string, unknown>;
+  const outcome = record.tradeOutcome;
+  const source = record.diagnosticSource;
+  return {
+    ...(outcome === "rejected" || outcome === "uncertain" || outcome === "not_sent" ? { outcome } : {}),
+    ...(source === "browser_app" || source === "api_server" || source === "deriv" || source === "transport" || source === "unknown"
+      ? { source }
+      : {}),
+  };
+}
+
+export function getTradeErrorSource(error: unknown): TradeDiagnosticSource {
+  const embeddedSource = embeddedTradeFailure(error).source;
+  if (embeddedSource) return embeddedSource;
+  if (isDerivApiError(error) || isDerivBuyRateLimitError(error)) return "deriv";
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (message.includes("did not confirm") || message.includes("acknowledgement")) return "unknown";
+  if (message.includes("websocket is not ready")) return "transport";
+  return "api_server";
+}
+
 export class DerivCredentialError extends Error {
   readonly status: number;
 
@@ -1063,6 +1095,27 @@ function safeBuyFailureMessage(error: unknown): string {
     return "Deriv declined an order. Any confirmed contracts remain open; check account history before resubmitting.";
   }
   return "An order could not be confirmed. Check account history before resubmitting.";
+}
+
+export function classifyBuyFailure(error: unknown): {
+  outcome: "rejected" | "uncertain" | "not_sent";
+  source: TradeDiagnosticSource;
+} {
+  const embedded = embeddedTradeFailure(error);
+  if (embedded.outcome) {
+    return { outcome: embedded.outcome, source: embedded.source ?? getTradeErrorSource(error) };
+  }
+  if (isDerivApiError(error) || isDerivBuyRateLimitError(error)) {
+    return { outcome: "rejected", source: "deriv" };
+  }
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (message.includes("this order was not sent")) {
+    return { outcome: "not_sent", source: "api_server" };
+  }
+  if (message.includes("websocket is not ready")) {
+    return { outcome: "not_sent", source: "transport" };
+  }
+  return { outcome: "uncertain", source: "unknown" };
 }
 
 async function sendSell(contractId: string): Promise<SellResult> {
@@ -2025,10 +2078,25 @@ export async function bulkBuyContracts(input: {
     );
   const buys = buyResults.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
   const failures = buyResults.filter((result): result is PromiseRejectedResult => result.status === "rejected");
+  const failed = buyResults.flatMap((result, index) => {
+    if (result.status !== "rejected") return [];
+    return [{
+      index,
+      ...classifyBuyFailure(result.reason),
+      error: safeBuyFailureMessage(result.reason),
+    }];
+  });
   const ok = failures.length === 0;
   if (failures.length > 0 && !(sendTogether && input.count > 1)) {
     const failedBuy = failures[0];
-    const error = new Error(`Bulk buy could not be fully confirmed. ${safeBuyFailureMessage(failedBuy.reason)}`);
+    const failureClass = classifyBuyFailure(failedBuy.reason);
+    const error = Object.assign(
+      new Error(`Bulk buy could not be fully confirmed. ${safeBuyFailureMessage(failedBuy.reason)}`),
+      {
+        diagnosticSource: failureClass.source,
+        tradeOutcome: buys.length > 0 ? "uncertain" as const : failureClass.outcome,
+      },
+    );
     if (isDerivBuyRateLimitError(failedBuy.reason)) Object.assign(error, { code: "DERIV_BUY_RATE_LIMITED" });
     throw error;
   }
@@ -2041,6 +2109,7 @@ export async function bulkBuyContracts(input: {
       : `${buys.length} of ${proposals.length} contracts were confirmed. The remaining order status is uncertain or rejected; check Deriv history before resubmitting.`,
     proposals,
     buys,
+    failed,
   };
 }
 
@@ -2191,6 +2260,7 @@ export async function buyClockWorkContracts(
         key: proposals[index].contract.key,
         contract_type: proposals[index].contract.contract_type,
         error: safeBuyFailureMessage(result.reason),
+        ...classifyBuyFailure(result.reason),
       }]
     : []);
   const ok = failed.length === 0;
@@ -2325,6 +2395,7 @@ export async function buyMatchesContracts(
         key: proposals[index].contract.key,
         contract_type: proposals[index].contract.contract_type,
         error: safeBuyFailureMessage(result.reason),
+        ...classifyBuyFailure(result.reason),
       }]
     : []);
   const ok = failed.length === 0;
@@ -2473,7 +2544,15 @@ export async function dualBuyContracts(input: {
    );
   const failedBuy = buyResults.find((result): result is PromiseRejectedResult => result.status === "rejected");
   if (failedBuy) {
-     const error = new Error(`Dual buy could not be fully confirmed. ${safeBuyFailureMessage(failedBuy.reason)}`);
+     const failureClass = classifyBuyFailure(failedBuy.reason);
+     const hasConfirmedBuy = buyResults.some((result) => result.status === "fulfilled");
+     const error = Object.assign(
+       new Error(`Dual buy could not be fully confirmed. ${safeBuyFailureMessage(failedBuy.reason)}`),
+       {
+         diagnosticSource: failureClass.source,
+         tradeOutcome: hasConfirmedBuy ? "uncertain" as const : failureClass.outcome,
+       },
+     );
      if (isDerivBuyRateLimitError(failedBuy.reason)) Object.assign(error, { code: "DERIV_BUY_RATE_LIMITED" });
      throw error;
   }
@@ -2486,6 +2565,7 @@ export async function dualBuyContracts(input: {
       : "Dual Mode sent one demo Over and one demo Under request.",
     proposals: proposals.map(({ proposal }) => proposal),
     buys: buyResults.map((result) => (result as PromiseFulfilledResult<DerivBuy>).value),
+    failed: [],
   };
 }
 

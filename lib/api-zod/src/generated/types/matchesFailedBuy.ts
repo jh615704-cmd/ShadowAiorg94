@@ -5,10 +5,14 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { DiagnosticSource } from './diagnosticSource';
 import type { MatchesFailedBuyContractType } from './matchesFailedBuyContractType';
+import type { TradeBuyFailureOutcome } from './tradeBuyFailureOutcome';
 
 export interface MatchesFailedBuy {
   key: string;
   contract_type: MatchesFailedBuyContractType;
   error: string;
+  outcome: TradeBuyFailureOutcome;
+  source: DiagnosticSource;
 }

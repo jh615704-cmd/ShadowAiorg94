@@ -28,6 +28,14 @@ const codeLabels: Record<string, string> = {
   storage_unavailable: "Browser storage",
 };
 
+const sourceLabels: Record<string, string> = {
+  browser_app: "Browser app",
+  api_server: "App API",
+  deriv: "Deriv",
+  transport: "Connection",
+  unknown: "Unverified",
+};
+
 function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Time unavailable";
@@ -172,6 +180,7 @@ export default function AdminIntelligencePanel() {
                           <span className={`intel-severity ${finding.severity}`}>{finding.severity}</span>
                           <span className="intel-feature-tag">{featureName(finding.feature)}</span>
                           <span className="intel-code">{codeLabels[finding.code] ?? finding.code.replaceAll("_", " ")}</span>
+                          <span className={`intel-source-tag source-${finding.source}`}>{sourceLabels[finding.source] ?? "Unverified"}</span>
                         </div>
                         <time dateTime={finding.last_seen_at}>{formatDate(finding.last_seen_at)}</time>
                       </div>

@@ -5,8 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { DiagnosticSource } from './diagnosticSource';
+import type { TradeBuyFailureOutcome } from './tradeBuyFailureOutcome';
 
 export interface ErrorResponse {
   error: string;
   code?: string;
+  diagnostic_source?: DiagnosticSource;
+  trade_outcome?: TradeBuyFailureOutcome;
 }

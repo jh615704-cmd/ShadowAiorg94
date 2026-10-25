@@ -23,6 +23,8 @@ type DiagnosticFeature =
   | "settings"
   | "history";
 
+type DiagnosticSource = "browser_app" | "api_server" | "deriv" | "transport" | "unknown";
+
 const allowedFeatures = new Set<DiagnosticFeature>([
   "edge",
   "digit-flip",
@@ -52,9 +54,14 @@ function featureForCurrentRoute(): DiagnosticFeature | null {
   return "trade-x";
 }
 
-function sendDiagnostic(feature: DiagnosticFeature, code: DiagnosticCode, severity: "warning" | "error") {
+function sendDiagnostic(
+  feature: DiagnosticFeature,
+  code: DiagnosticCode,
+  severity: "warning" | "error",
+  source: DiagnosticSource,
+) {
   const now = Date.now();
-  const key = `${feature}:${code}`;
+  const key = `${feature}:${code}:${source}`;
   const lastSent = diagnosticWindow.__shadowDiagnosticLastSent ?? new Map<string, number>();
   diagnosticWindow.__shadowDiagnosticLastSent = lastSent;
   if (now - (lastSent.get(key) ?? 0) < 30_000) return;
@@ -64,16 +71,21 @@ function sendDiagnostic(feature: DiagnosticFeature, code: DiagnosticCode, severi
     method: "POST",
     credentials: "same-origin",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ feature, code, severity }),
+    body: JSON.stringify({ feature, code, severity, source }),
   }).catch(() => undefined);
 }
 
 export function AdminDiagnosticsReporter() {
   useEffect(() => {
-    const report = (code: DiagnosticCode, severity: "warning" | "error", feature?: DiagnosticFeature) => {
+    const report = (
+      code: DiagnosticCode,
+      severity: "warning" | "error",
+      feature?: DiagnosticFeature,
+      source: DiagnosticSource = "browser_app",
+    ) => {
       const resolvedFeature = feature ?? featureForCurrentRoute();
       if (!resolvedFeature || !allowedFeatures.has(resolvedFeature)) return;
-      sendDiagnostic(resolvedFeature, code, severity);
+      sendDiagnostic(resolvedFeature, code, severity, source);
     };
 
     const onError = () => report("client_runtime_error", "error");
@@ -83,6 +95,7 @@ export function AdminDiagnosticsReporter() {
         feature?: unknown;
         code?: unknown;
         severity?: unknown;
+        source?: unknown;
       }>).detail;
       if (!detail || typeof detail !== "object") return;
       if (
@@ -91,7 +104,10 @@ export function AdminDiagnosticsReporter() {
         || !["client_runtime_error", "client_unhandled_rejection", "api_server_error", "trade_outcome_uncertain", "saved_state_invalid", "storage_unavailable"].includes(String(detail.code))
         || (detail.severity !== "warning" && detail.severity !== "error")
       ) return;
-      report(detail.code as DiagnosticCode, detail.severity, detail.feature as DiagnosticFeature);
+      const source = ["browser_app", "api_server", "deriv", "transport", "unknown"].includes(String(detail.source))
+        ? detail.source as DiagnosticSource
+        : "unknown";
+      report(detail.code as DiagnosticCode, detail.severity, detail.feature as DiagnosticFeature, source);
     };
 
     window.addEventListener("error", onError);
