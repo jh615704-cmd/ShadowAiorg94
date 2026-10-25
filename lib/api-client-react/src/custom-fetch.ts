@@ -344,10 +344,57 @@ function isTradeMutation(method: string, pathname: string): boolean {
   return method === "POST" && /^\/api\/deriv\/(?:buy|bulk-buy|dual-buy|sell|clock-work\/buy|matches\/buy)$/.test(pathname);
 }
 
-function reportAdminDiagnostic(code: "api_server_error" | "trade_outcome_uncertain", severity: "warning" | "error") {
+const diagnosticTradeFeatures = new Set([
+  "edge",
+  "digit-flip",
+  "trade-x",
+  "bulk-trader",
+  "matches-analysis",
+  "clock-work",
+  "cash-grab",
+  "money-bank",
+  "jdy-ai-3",
+  "auto-trader",
+  "auto-trader-2",
+]);
+
+function tradeFeatureForDiagnostic(method: string, pathname: string, body: BodyInit | null | undefined): string | undefined {
+  if (!isTradeMutation(method, pathname)) return undefined;
+  if (pathname.endsWith("/matches/buy")) return "matches-analysis";
+  if (pathname.endsWith("/clock-work/buy")) return "clock-work";
+
+  if (typeof body === "string") {
+    try {
+      const payload: unknown = JSON.parse(body);
+      if (payload && typeof payload === "object" && "access_feature" in payload) {
+        const feature = (payload as { access_feature?: unknown }).access_feature;
+        if (typeof feature === "string" && diagnosticTradeFeatures.has(feature)) return feature;
+      }
+    } catch {
+      // Diagnostic attribution must not interfere with the original request.
+    }
+  }
+
+  return pathname.endsWith("/dual-buy") || pathname.endsWith("/sell") ? "edge" : "trade-x";
+}
+
+function isUnconfirmedTradeResponse(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object") return false;
+  const result = payload as { ok?: unknown; message?: unknown };
+  return result.ok === false
+    || (typeof result.message === "string" && /unconfirmed|uncertain|could not be confirmed/i.test(result.message));
+}
+
+function reportAdminDiagnostic(
+  code: "api_server_error" | "trade_outcome_uncertain",
+  severity: "warning" | "error",
+  feature?: string,
+) {
   if (typeof window === "undefined") return;
   try {
-    window.dispatchEvent(new CustomEvent("shadow-admin-diagnostic", { detail: { code, severity } }));
+    window.dispatchEvent(new CustomEvent("shadow-admin-diagnostic", {
+      detail: { code, severity, ...(feature ? { feature } : {}) },
+    }));
   } catch {
     // Diagnostics must never interfere with the original request.
   }
@@ -492,6 +539,8 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: resolveUrl(input) };
   const requestId = createRequestId();
+  const requestPath = getPathname(requestInfo.url);
+  const tradeFeature = tradeFeatureForDiagnostic(method, requestPath, init.body);
   headers.set("x-client-request-id", requestId);
   const requestInit: RequestInit = {
     ...init,
@@ -514,8 +563,9 @@ export async function customFetch<T = unknown>(
     // completed it even if the browser did not receive its response.
     if (method !== "GET" && method !== "HEAD") {
       reportAdminDiagnostic(
-        isTradeMutation(method, getPathname(requestInfo.url)) ? "trade_outcome_uncertain" : "api_server_error",
-        isTradeMutation(method, getPathname(requestInfo.url)) ? "warning" : "error",
+        tradeFeature ? "trade_outcome_uncertain" : "api_server_error",
+        tradeFeature ? "warning" : "error",
+        tradeFeature,
       );
       throw new ApiTransportError(error, requestInfo, requestId);
     }
@@ -533,11 +583,18 @@ export async function customFetch<T = unknown>(
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
     if (response.status >= 500) {
-      const uncertainTrade = isTradeMutation(method, getPathname(requestInfo.url));
-      reportAdminDiagnostic(uncertainTrade ? "trade_outcome_uncertain" : "api_server_error", uncertainTrade ? "warning" : "error");
+      reportAdminDiagnostic(
+        tradeFeature ? "trade_outcome_uncertain" : "api_server_error",
+        tradeFeature ? "warning" : "error",
+        tradeFeature,
+      );
     }
     throw new ApiError(response, errorData, requestInfo);
   }
 
-  return (await parseSuccessBody(response, responseType, requestInfo)) as T;
+  const payload = await parseSuccessBody(response, responseType, requestInfo);
+  if (tradeFeature && isUnconfirmedTradeResponse(payload)) {
+    reportAdminDiagnostic("trade_outcome_uncertain", "warning", tradeFeature);
+  }
+  return payload as T;
 }

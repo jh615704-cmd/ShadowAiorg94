@@ -154,18 +154,18 @@ test("AI Auto waits when no market has enough settled outcomes", () => {
   );
 });
 
-test("Matches automation chooses only top settled win rates above the 10% baseline", () => {
+test("Matches Auto accepts settled win rates strictly above 50%", () => {
   const ranked = [
     { digit: 7, count: 5, rate: 80 },
     { digit: 2, count: 5, rate: 60 },
-    { digit: 9, count: 5, rate: 40 },
-    { digit: 0, count: 5, rate: 20 },
+    { digit: 9, count: 10, rate: 50.1 },
+    { digit: 0, count: 10, rate: 50 },
     { digit: 6, count: 10, rate: 10 },
   ];
 
   assert.deepEqual(chooseQualifiedMatchesDigits(ranked, 1), [7]);
   assert.deepEqual(chooseQualifiedMatchesDigits(ranked, 2), [7, 2]);
   assert.deepEqual(chooseQualifiedMatchesDigits(ranked, 3), [7, 2, 9]);
-  assert.equal(MATCHES_AUTO_MINIMUM_SETTLED_WIN_RATE, 10);
+  assert.equal(MATCHES_AUTO_MINIMUM_SETTLED_WIN_RATE, 50);
   assert.equal(MATCHES_MINIMUM_STAKE, 0.35);
 });

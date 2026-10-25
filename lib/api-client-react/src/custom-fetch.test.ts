@@ -3,9 +3,11 @@ import { afterEach, describe, it } from "node:test";
 import { ApiTransportError, customFetch } from "./custom-fetch.ts";
 
 const originalFetch = globalThis.fetch;
+const originalWindow = (globalThis as typeof globalThis & { window?: Window }).window;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
 });
 
 describe("customFetch transport recovery", () => {
@@ -137,6 +139,53 @@ describe("customFetch transport recovery", () => {
     );
 
     assert.equal(calls, 1);
+  });
+
+  it("attributes uncertain shared buys to their own feature in admin diagnostics", async () => {
+    const events = new EventTarget();
+    let reported: unknown;
+    events.addEventListener("shadow-admin-diagnostic", (event) => {
+      reported = (event as CustomEvent).detail;
+    });
+    Object.defineProperty(globalThis, "window", { configurable: true, value: events });
+    globalThis.fetch = (async () => {
+      throw new TypeError("Failed to fetch");
+    }) as typeof fetch;
+
+    await assert.rejects(customFetch("/api/deriv/buy", {
+      method: "POST",
+      body: JSON.stringify({ access_feature: "digit-flip", amount: 1 }),
+    }));
+
+    assert.deepEqual(reported, {
+      code: "trade_outcome_uncertain",
+      severity: "warning",
+      feature: "digit-flip",
+    });
+  });
+
+  it("reports partial trade acknowledgements from successful HTTP responses", async () => {
+    const events = new EventTarget();
+    let reported: unknown;
+    events.addEventListener("shadow-admin-diagnostic", (event) => {
+      reported = (event as CustomEvent).detail;
+    });
+    Object.defineProperty(globalThis, "window", { configurable: true, value: events });
+    globalThis.fetch = (async () => new Response(
+      JSON.stringify({ ok: false, message: "A contract remains unconfirmed." }),
+      { status: 202, headers: { "content-type": "application/json" } },
+    )) as typeof fetch;
+
+    await customFetch("/api/deriv/matches/buy", {
+      method: "POST",
+      body: JSON.stringify({ contracts: [] }),
+    });
+
+    assert.deepEqual(reported, {
+      code: "trade_outcome_uncertain",
+      severity: "warning",
+      feature: "matches-analysis",
+    });
   });
 
   it("treats an interrupted Clock Work batch as uncertain and never replays it", async () => {

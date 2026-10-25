@@ -2927,7 +2927,7 @@ export default function XTraderPage() {
   };
   const executeTradeX = async (
     count = 1,
-    durationOverride = tradeXConfigRef.current.duration,
+    durationOverride = tradeXDuration,
     digitOverride?: number,
     symbolOverride?: string,
   ) => {
@@ -5032,7 +5032,7 @@ export default function XTraderPage() {
                setTradeXManualSelect(true);
                void executeTradeX(1, tradeXDuration, digit);
              }}
-            onPlaceTrade={() => void executeTradeX(1)}
+             onPlaceTrade={() => void executeTradeX(1, tradeXDuration)}
             onAiScan={runTradeXAiScanner}
             onRefreshAnalysis={refreshAnalysis}
           />

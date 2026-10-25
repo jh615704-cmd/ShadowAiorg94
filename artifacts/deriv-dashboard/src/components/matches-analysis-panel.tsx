@@ -1,5 +1,5 @@
 import { Activity, BookOpen, Check, Play, Radar, RefreshCw, Square, Target, Zap } from "lucide-react";
-import type { KeyboardEvent } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import "./matches-analysis-panel.css";
 
 export type MatchesMarketType = "volatility" | "jumps";
@@ -71,6 +71,8 @@ export default function MatchesAnalysisPanel(props: MatchesAnalysisPanelProps) {
   const sessionPnl = props.sessionPnl ?? 0;
   const lossLimit = props.lossLimit ?? 0;
   const profitTarget = props.profitTarget ?? 0;
+  const [dismissedStatusMessage, setDismissedStatusMessage] = useState<string | null>(null);
+  const [isStatusMessageFading, setIsStatusMessageFading] = useState(false);
   const activeMarkets = markets.filter((market) => market.marketType === marketType);
   const counts = Array.from({ length: 10 }, (_, digit) =>
     digitHistory.reduce((total, observed) => total + (observed === digit ? 1 : 0), 0),
@@ -113,6 +115,23 @@ export default function MatchesAnalysisPanel(props: MatchesAnalysisPanelProps) {
       onSelectedDigitsChange([...selectedDigits, digit]);
     }
   };
+
+  useEffect(() => {
+    setDismissedStatusMessage(null);
+    setIsStatusMessageFading(false);
+    if (!statusMessage) return;
+
+    const fadeTimer = window.setTimeout(() => setIsStatusMessageFading(true), 4_700);
+    const dismissTimer = window.setTimeout(() => setDismissedStatusMessage(statusMessage), 5_000);
+    return () => {
+      window.clearTimeout(fadeTimer);
+      window.clearTimeout(dismissTimer);
+    };
+  }, [statusMessage]);
+
+  const visibleStatusMessage = statusMessage && statusMessage !== dismissedStatusMessage
+    ? statusMessage
+    : null;
 
   return (
     <section className={`ma-panel ${isRunning ? "ma-is-running" : ""}`} data-testid="matches-analysis-panel">
@@ -345,8 +364,7 @@ export default function MatchesAnalysisPanel(props: MatchesAnalysisPanelProps) {
             {!isRunning && <span className="ma-button-arrow" aria-hidden="true"><Check size={15} /></span>}
           </button>
           {tradeSlotBlocked && <p className="ma-slot-warning" role="status" data-testid="status-matches-trade-slot">An active contract is settling. Analysis can start when the trade slot is clear.</p>}
-          {statusMessage && <p className="ma-status-message" role="status" aria-live="polite" data-testid="status-matches-message">{statusMessage}</p>}
-          <p className="ma-risk-note" data-testid="text-matches-risk-note">Observed historical results are descriptive, not predictions or promises. Trading synthetic indices involves risk.</p>
+          {visibleStatusMessage && <p className="ma-status-message" role="status" aria-live="polite" data-testid="status-matches-message" style={{ opacity: isStatusMessageFading ? 0 : 1, transition: "opacity 300ms ease" }}>{visibleStatusMessage}</p>}
         </section>
       </div>
     </section>
