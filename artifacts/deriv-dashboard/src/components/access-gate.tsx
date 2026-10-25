@@ -11,12 +11,16 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { KeyRound, Loader2, LockKeyhole, MessageCircle, ShieldCheck } from "lucide-react";
 import {
+  ACCESS_AWAY_LOCK_MS,
+  ACCESS_AWAY_STARTED,
   ACCESS_ACTIVE_MARKER,
   ACCESS_IDLE_LOCK_MS,
   ACCESS_LAST_ACTIVITY,
   ACCESS_REVOCATION_EXIT_DELAY_MS,
+  clearAccessAway,
   clearAccessActivity,
   isAccessAwayLockDue,
+  markAccessAway,
   markAccessActivity,
 } from "@/lib/access-lock";
 
@@ -46,6 +50,8 @@ export function AccessGate({ children }: { children: ReactNode }) {
   const [accessRejected, setAccessRejected] = useState(() => isAccessAwayLockDue(
     window.localStorage.getItem(ACCESS_ACTIVE_MARKER),
     window.localStorage.getItem(ACCESS_LAST_ACTIVITY),
+    Date.now(),
+    window.localStorage.getItem(ACCESS_AWAY_STARTED),
   ));
   const [lockReason, setLockReason] = useState("");
   const [exitDeadline, setExitDeadline] = useState<number | null>(null);
@@ -191,13 +197,23 @@ export function AccessGate({ children }: { children: ReactNode }) {
       return isAccessAwayLockDue(
         window.localStorage.getItem(ACCESS_ACTIVE_MARKER),
         mostRecentActivityAt > 0 ? String(mostRecentActivityAt) : null,
+        Date.now(),
+        window.localStorage.getItem(ACCESS_AWAY_STARTED),
       );
+    };
+
+    const getLockMessage = () => {
+      const awayStarted = Number(window.localStorage.getItem(ACCESS_AWAY_STARTED));
+      if (Number.isFinite(awayStarted) && awayStarted > 0 && Date.now() - awayStarted >= ACCESS_AWAY_LOCK_MS) {
+        return "Workspace locked because you were away for more than 30 minutes. Enter your access key again.";
+      }
+      return "Workspace locked after 2 hours without activity. Enter your access key again.";
     };
 
     const onUserActivity = () => {
       if (document.visibilityState !== "visible" || accessRejectedRef.current) return;
       if (isIdleLockDue()) {
-        lockAfterAway();
+        lockAfterAway(getLockMessage());
         return;
       }
       const now = Date.now();
@@ -209,36 +225,41 @@ export function AccessGate({ children }: { children: ReactNode }) {
     };
 
     const checkIdleLock = () => {
-      if (isIdleLockDue()) lockAfterAway();
+      if (document.visibilityState !== "visible" || !document.hasFocus()) return;
+      if (isIdleLockDue()) lockAfterAway(getLockMessage());
     };
 
     const idleLockTimer = window.setInterval(checkIdleLock, 1_000);
 
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        lockAfterAway("Workspace locked because you left the bot. Enter your access key again.");
-        return;
-      }
-
+    const onResume = () => {
+      if (document.visibilityState !== "visible" || accessRejectedRef.current) return;
       if (accessRejectedRef.current || isIdleLockDue()) {
-        lockAfterAway();
+        lockAfterAway(getLockMessage());
         return;
       }
+      clearAccessAway();
       heartbeatAccess();
       void queryClient.invalidateQueries({ queryKey: getGetAccessSessionQueryKey() });
     };
 
-    const onPageExit = () => {
-      lockAfterAway("Workspace locked because you left the bot. Enter your access key again.");
-    };
-    const onPageShow = () => {
-      if (accessRejectedRef.current) return;
-      if (isIdleLockDue()) {
-        lockAfterAway();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        markAccessAway();
         return;
       }
-      heartbeatAccess();
+      onResume();
     };
+
+    const onPageExit = () => {
+      markAccessAway();
+    };
+    const onPageShow = () => {
+      onResume();
+    };
+
+    if (document.visibilityState === "visible" && window.localStorage.getItem(ACCESS_AWAY_STARTED) !== null) {
+      onResume();
+    }
 
     const activityEvents = ["pointerdown", "pointermove", "keydown", "input", "touchstart", "wheel", "scroll", "click"] as const;
     for (const eventName of activityEvents) {
@@ -246,6 +267,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
     }
     document.addEventListener("visibilitychange", onVisibilityChange);
     window.addEventListener("blur", onPageExit);
+    window.addEventListener("focus", onResume);
     window.addEventListener("pagehide", onPageExit);
     window.addEventListener("beforeunload", onPageExit);
     window.addEventListener("pageshow", onPageShow);
@@ -256,6 +278,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
       }
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("blur", onPageExit);
+      window.removeEventListener("focus", onResume);
       window.removeEventListener("pagehide", onPageExit);
       window.removeEventListener("beforeunload", onPageExit);
       window.removeEventListener("pageshow", onPageShow);

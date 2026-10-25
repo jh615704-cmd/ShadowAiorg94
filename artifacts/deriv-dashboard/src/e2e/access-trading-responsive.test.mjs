@@ -163,7 +163,7 @@ test("Auto Trader and Auto Trader 2.0 grants stay independent during key creatio
   }
 });
 
-test("the whole workspace locks as soon as the bot is exited", async () => {
+test("the workspace stays unlocked during a short departure and locks on return after 30 minutes", async () => {
   const state = createState(userSession(["settings"]));
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {
@@ -172,20 +172,27 @@ test("the whole workspace locks as soon as the bot is exited", async () => {
 
     await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
 
+    assert.equal(await page.getByRole("heading", { name: "Login to Shadow Ai" }).count(), 0, "A brief departure should not lock the workspace.");
+    assert.equal(state.logoutCount, 0, "A brief departure should keep the access session active.");
+    await page.evaluate(() => {
+      localStorage.setItem("shadow-access-away-started", String(Date.now() - 30 * 60 * 1_000 - 1));
+      window.dispatchEvent(new Event("pageshow"));
+    });
+
     await page.getByRole("heading", { name: "Login to Shadow Ai" }).waitFor();
-    await page.getByText(/Workspace locked because you left the bot/).waitFor();
-    assert.equal(state.logoutCount, 1, "Leaving the bot should end the active access session.");
+    await page.getByText(/Workspace locked because you were away for more than 30 minutes/).waitFor();
+    assert.equal(state.logoutCount, 1, "Returning after more than 30 minutes away should end the active access session.");
     await page.reload();
     await page.getByRole("heading", { name: "Login to Shadow Ai" }).waitFor();
     assert.ok(state.sessionRevoked, "Returning to the app should not restore the previous session.");
-    assert.deepEqual(pageErrors, [], "Leaving the bot should not cause browser errors.");
+    assert.deepEqual(pageErrors, [], "The away lock should not cause browser errors.");
     assert.deepEqual(state.unhandledApis, []);
   } finally {
     await context.close();
   }
 });
 
-test("the workspace locks when the bot browser window loses focus", async () => {
+test("the workspace does not lock just because the bot browser window loses focus", async () => {
   const state = createState(userSession(["settings"]));
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {
@@ -193,10 +200,9 @@ test("the workspace locks when the bot browser window loses focus", async () => 
     await page.locator(".xt-feature-card-restricted").first().waitFor();
     await page.evaluate(() => window.dispatchEvent(new Event("blur")));
 
-    await page.getByRole("heading", { name: "Login to Shadow Ai" }).waitFor();
-    await page.getByText(/Workspace locked because you left the bot/).waitFor();
-    assert.equal(state.logoutCount, 1, "Losing focus should end the active access session.");
-    assert.deepEqual(pageErrors, [], "Losing focus should not cause browser errors.");
+    assert.equal(await page.getByRole("heading", { name: "Login to Shadow Ai" }).count(), 0, "Losing focus for a short time should not lock the workspace.");
+    assert.equal(state.logoutCount, 0, "A short focus change should not end the active access session.");
+    assert.deepEqual(pageErrors, [], "A short focus change should not cause browser errors.");
   } finally {
     await context.close();
   }
