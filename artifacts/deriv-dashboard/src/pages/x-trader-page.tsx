@@ -131,11 +131,13 @@ import {
   type DerivHistoryFeature,
 } from "../lib/deriv-history";
 import {
+  collectFreshMatchesMarketTicks,
   chooseBestMatchesMarket,
   chooseQualifiedMatchesDigits,
   reconcileUnconfirmedMatchesOrders,
   MATCHES_HISTORY_LIMIT,
   rankSettledMatchOutcomes,
+  summarizeSettledMatchOutcomes,
   type MatchesAttemptedOrder,
   type MatchesDigitStat as ObservedMatchesDigitStat,
 } from "../lib/matches-analysis";
@@ -731,8 +733,7 @@ export default function XTraderPage() {
   const matchesPendingReconciliationRef = useRef<PendingMatchesReconciliation | null>(null);
   const matchesTickCountRef = useRef(0);
   matchesTickCountRef.current = matchesTickCount;
-  const matchesAiNextSymbolRef = useRef<string | null>(null);
-  const matchesSampleCursorRef = useRef({ symbol: "", tickCount: 0 });
+  const matchesSampleCursorRef = useRef({ symbol: "", tickSequence: 0 });
   const clockWorkActionLockRef = useRef(false);
   const clockWorkAutoAttemptAtRef = useRef(0);
   const clockWorkAutomationRef = useRef<(() => void) | null>(null);
@@ -836,7 +837,7 @@ export default function XTraderPage() {
   const matchesOwnedRows = matchesAllRows.filter((trade) => matchesClaimedHistoryIdsRef.current.has(String(trade.contract_id)));
   const matchesRows = matchesOwnedRows.filter((trade) => !matchesHiddenHistoryIds.has(String(trade.contract_id)));
   const matchesSettledOutcomeDigits = useMemo<ObservedMatchesDigitStat[]>(
-    () => rankSettledMatchOutcomes(
+    () => summarizeSettledMatchOutcomes(
       matchesAllRows,
       currentAccount?.id,
       matchesSymbol,
@@ -1484,29 +1485,19 @@ export default function XTraderPage() {
 
   useEffect(() => {
     if (!matchesAnalysisEnabled) return;
-    const cursor = matchesSampleCursorRef.current;
-    if (symbol !== matchesSymbol) {
-      if (cursor.symbol !== matchesSymbol) {
-        matchesSampleCursorRef.current = { symbol: matchesSymbol, tickCount: analysisTickCount };
-        setMatchesObservedDigits([]);
-        setMatchesTickCount(0);
-      }
-      return;
-    }
-    if (cursor.symbol !== matchesSymbol || analysisTickCount < cursor.tickCount) {
-      matchesSampleCursorRef.current = { symbol: matchesSymbol, tickCount: analysisTickCount };
+    const marketSignal = status.data?.market_signals.find((signal) => signal.symbol === matchesSymbol);
+    if (!marketSignal) return;
+    const sample = collectFreshMatchesMarketTicks(marketSignal, matchesSampleCursorRef.current);
+    matchesSampleCursorRef.current = sample.cursor;
+    if (sample.reset) {
       setMatchesObservedDigits([]);
       setMatchesTickCount(0);
       return;
     }
-    const tickDelta = analysisTickCount - cursor.tickCount;
-    if (tickDelta <= 0) return;
-
-    matchesSampleCursorRef.current = { symbol: matchesSymbol, tickCount: analysisTickCount };
-    const freshDigits = analysisDigits.slice(-tickDelta).filter((digit) => Number.isInteger(digit) && digit >= 0 && digit <= 9);
-    setMatchesObservedDigits((current) => [...current, ...freshDigits].slice(-MATCHES_HISTORY_LIMIT));
-    setMatchesTickCount((current) => current + tickDelta);
-  }, [analysisDigits, analysisTickCount, matchesAnalysisEnabled, matchesSymbol, symbol]);
+    if (!sample.freshDigits.length) return;
+    setMatchesObservedDigits((current) => [...current, ...sample.freshDigits].slice(-MATCHES_HISTORY_LIMIT));
+    setMatchesTickCount((current) => current + sample.freshDigits.length);
+  }, [matchesAnalysisEnabled, matchesSymbol, status.data?.market_signals]);
 
   useEffect(() => {
     digitFlipAssaultRef.current = digitFlipAssault;
@@ -3685,7 +3676,8 @@ export default function XTraderPage() {
   };
 
   const resetMatchesSample = (symbol = matchesSymbol) => {
-    matchesSampleCursorRef.current = { symbol, tickCount: analysisTickCount };
+    const tickSequence = status.data?.market_signals.find((signal) => signal.symbol === symbol)?.tick_sequence ?? 0;
+    matchesSampleCursorRef.current = { symbol, tickSequence };
     setMatchesObservedDigits([]);
     setMatchesTickCount(0);
     matchesAutomationAttemptTickRef.current = -1;
@@ -3728,13 +3720,12 @@ export default function XTraderPage() {
       rows.filter((trade) => trade.contract_type === "DIGITMATCH").map((trade) => String(trade.contract_id)),
     );
     resetMatchesSample();
-    setMatchesStatusMessage("Collecting fresh ticks for this market.");
-    void selectMarket(matchesSymbol);
+    setMatchesStatusMessage("Collecting fresh ticks for this Matches market.");
   };
 
   const toggleMatchesAi = (
     enabled: boolean,
-    stoppedMessage = "Matches Analysis is stopped. Open contracts can continue to settle.",
+    stoppedMessage = "Matches Analysis is stopped. Automatic Matches entries are stopped. Open contracts can continue to settle.",
   ) => {
     const pendingReconciliation = matchesPendingReconciliationRef.current;
     if (enabled && pendingReconciliation) {
@@ -3764,11 +3755,9 @@ export default function XTraderPage() {
         rows.filter((trade) => trade.contract_type === "DIGITMATCH").map((trade) => String(trade.contract_id)),
       );
       matchesAutomationAttemptTickRef.current = matchesTickCount;
-      matchesAiNextSymbolRef.current = null;
     }
     matchesAiRunningRef.current = enabled;
     setMatchesAiEnabled(enabled);
-    if (!enabled) matchesAiNextSymbolRef.current = null;
     setMatchesStatusMessage(enabled
       ? matchesAutoMode
         ? "Matches Analysis is running. Waiting for fresh ticks and qualified settled digit results."
@@ -3789,7 +3778,6 @@ export default function XTraderPage() {
         : "AI Auto is comparing settled results across Volatility and Jump markets.");
       return;
     }
-    matchesAiNextSymbolRef.current = null;
     setMatchesStatusMessage("AI Auto market selection is off. The selected market will stay fixed.");
   };
 
@@ -3804,10 +3792,8 @@ export default function XTraderPage() {
     const nextMarket = matchesMarkets.find((market) => market.value === nextSymbol);
     setMatchesSymbol(nextSymbol);
     if (nextMarket) setMatchesMarketType(nextMarket.marketType);
-    matchesAiNextSymbolRef.current = nextSymbol;
     resetMatchesSample(nextSymbol);
-    setMatchesStatusMessage("Market changed. Collecting a fresh sample.");
-    if (matchesAnalysisEnabled) void selectMarket(nextSymbol);
+    setMatchesStatusMessage("Matches market changed. Collecting fresh ticks without changing other features' selected market.");
   };
 
   const startMatchesReconciliation = (
@@ -3975,14 +3961,12 @@ export default function XTraderPage() {
 
     const nextMarket = matchesMarkets.find((market) => market.value === marketSignal.symbol);
     if (!nextMarket) return;
-    matchesAiNextSymbolRef.current = marketSignal.symbol;
     setMatchesSymbol(marketSignal.symbol);
     setMatchesMarketType(nextMarket.marketType);
     resetMatchesSample(marketSignal.symbol);
     setMatchesStatusMessage(
-      `AI Auto selected ${marketSignal.symbol} from settled results (${marketSignal.rate.toFixed(1)}% across ${marketSignal.count} contracts). Waiting for fresh ticks.`,
+      `AI Auto selected ${marketSignal.symbol} from settled results (${marketSignal.rate.toFixed(1)}% across ${marketSignal.count} contract${marketSignal.count === 1 ? "" : "s"}). Waiting for fresh ticks without changing other features' selected market.`,
     );
-    void selectMarket(marketSignal.symbol);
   }, [
     canUseMatchesAnalysis,
     currentAccount,
@@ -4111,8 +4095,6 @@ export default function XTraderPage() {
       return;
     }
     if (matchesBuyMutation.isPending || matchesActionLockRef.current) return;
-    if (matchesAiNextSymbolRef.current && matchesSymbol !== matchesAiNextSymbolRef.current) return;
-    if (matchesAiNextSymbolRef.current === matchesSymbol) matchesAiNextSymbolRef.current = null;
     if (matchesTickCount <= 0) {
       setMatchesStatusMessage("Waiting for fresh ticks from the selected market.");
       return;
@@ -4138,7 +4120,6 @@ export default function XTraderPage() {
     matchesAiDigits,
     matchesAiEnabled,
     matchesPendingReconciliation,
-    matchesAiNextSymbolRef,
     matchesAnalysisEnabled,
     matchesBuyMutation.isPending,
     matchesSelectedDigits,

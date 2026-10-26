@@ -290,7 +290,7 @@ test("restricted homepage feature cards and switches glow red without enabling c
   }
 });
 
-test("global announcement sits beside the cockpit brand and its dismissal remains saved when access locks", async () => {
+test("global announcement sits beside the cockpit brand and stays dismissed after reload", async () => {
   const state = createState(userSession(["edge"]));
   state.featureSettings.global_announcement_enabled = true;
   state.featureSettings.global_announcement = "Update complete. New feature now live.";
@@ -324,7 +324,8 @@ test("global announcement sits beside the cockpit brand and its dismissal remain
     ) ?? null);
     assert.ok(dismissalKey, "Dismissing the announcement should save its viewer-specific state.");
     await page.reload();
-    await page.getByRole("heading", { name: "Login to Shadow Ai" }).waitFor();
+    await page.locator(".xt-brand").waitFor();
+    await announcement.waitFor({ state: "detached" });
     assert.equal(await page.evaluate((key) => localStorage.getItem(key), dismissalKey), "dismissed");
     assert.deepEqual(state.tradeRequests, []);
     assert.deepEqual(state.unhandledApis, []);
@@ -395,7 +396,15 @@ test("Matches stops after the current buy and keeps its history available while 
     await matchesToggle.waitFor();
     await matchesSwitch.click();
     await page.getByTestId("matches-analysis-panel").waitFor();
+    await page.getByTestId("select-matches-market").selectOption("R_50");
+    await page.waitForFunction(() => Number(document.querySelector('[data-testid="value-matches-sample-count"]')?.textContent ?? 0) >= 5, undefined, { timeout: 10_000 });
+    await page.getByTestId("select-matches-market").selectOption("R_75");
     await page.waitForFunction(() => Number(document.querySelector('[data-testid="value-matches-sample-count"]')?.textContent ?? 0) >= 20, undefined, { timeout: 15_000 });
+    assert.equal(
+      state.apiCalls.filter(({ path }) => path === "/api/deriv/select-symbol").length,
+      0,
+      "Matches market selection must not change the shared market used by other features.",
+    );
 
     await page.getByTestId("button-matches-ai-digits-1").click();
     const firstBuy = page.waitForRequest((request) => request.url().includes("/api/deriv/matches/buy"), { timeout: 8_000 });
@@ -435,7 +444,8 @@ test("Clock Work hides the preceding Matches history while active without cleari
     await page.getByTestId("matches-analysis-panel").waitFor();
     const matchesHistory = page.getByRole("region", { name: "Matches Analysis History Deriv history" });
     const matchBuy = page.waitForRequest((request) => request.url().includes("/api/deriv/matches/buy"), { timeout: 8_000 });
-    await page.getByTestId("button-matches-manual-trade").click();
+    await page.getByTestId("button-matches-digit-mode-manual").click();
+    await page.getByTestId("button-matches-start").click();
     await matchBuy;
     await matchesHistory.locator(".deriv-history-row").waitFor({ timeout: 10_000 });
 

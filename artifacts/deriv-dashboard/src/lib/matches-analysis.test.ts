@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  collectFreshMatchesMarketTicks,
   chooseBestMatchesMarket,
   chooseQualifiedMatchesDigits,
   MATCHES_AUTO_MINIMUM_SETTLED_WIN_RATE,
@@ -34,6 +35,32 @@ function contractsForDigit(digit: number, wins: number, total: number): MatchesS
     status: index < wins ? "won" : "lost",
   }));
 }
+
+test("Matches samples only new ticks from its own selected market feed", () => {
+  const sample = collectFreshMatchesMarketTicks(
+    { symbol: "JD50", tick_sequence: 12, recent_digits: [1, 4, 7, 2] },
+    { symbol: "JD50", tickSequence: 10 },
+  );
+
+  assert.deepEqual(sample, {
+    cursor: { symbol: "JD50", tickSequence: 12 },
+    freshDigits: [7, 2],
+    reset: false,
+  });
+});
+
+test("Matches starts a new market sample without replaying that market's old ticks", () => {
+  const sample = collectFreshMatchesMarketTicks(
+    { symbol: "R_100", tick_sequence: 31, recent_digits: [1, 2, 3] },
+    { symbol: "R_75", tickSequence: 80 },
+  );
+
+  assert.deepEqual(sample, {
+    cursor: { symbol: "R_100", tickSequence: 31 },
+    freshDigits: [],
+    reset: true,
+  });
+});
 
 test("Matches observed digit cards always have three visible ranks, with current sample frequency", () => {
   const ranked = rankObservedMatchDigits([7, 2, 7, 9, 2, 7, 4, 9]);
@@ -94,7 +121,7 @@ test("Matches ranks settled Digit Match outcomes for the selected account, marke
   ]);
 });
 
-test("Matches displays win-rate rankings as soon as a digit has a settled result", () => {
+test("Matches uses settled results immediately for the observed win rate", () => {
   const rows = [
     ...contractsForDigit(7, 1, 1),
     ...contractsForDigit(2, 1, 2),
@@ -107,20 +134,27 @@ test("Matches displays win-rate rankings as soon as a digit has a settled result
     { digit: 2, count: 2, rate: 50 },
     { digit: 9, count: 1, rate: 0 },
   ]);
-  assert.deepEqual(
-    rankSettledMatchOutcomes(rows, "account-1", "R_75", 2),
-    [],
-    "automation still waits for five settled outcomes per digit",
-  );
+  assert.deepEqual(rankSettledMatchOutcomes(rows, "account-1", "R_75", 2), []);
 });
 
-test("Matches needs five resolved wins or losses before a digit can be ranked", () => {
+test("Matches A · Auto qualifies any digit whose settled win rate is above 50%", () => {
   assert.equal(MATCHES_MINIMUM_SETTLED_TRADES_PER_DIGIT, 5);
   assert.deepEqual(
-    rankSettledMatchOutcomes(contractsForDigit(3, 4, 4), "account-1", "R_75", 2),
+    chooseQualifiedMatchesDigits(
+      summarizeSettledMatchOutcomes(contractsForDigit(3, 1, 1), "account-1", "R_75", 2),
+      1,
+    ),
+    [3],
+  );
+  assert.deepEqual(
+    chooseQualifiedMatchesDigits(
+      summarizeSettledMatchOutcomes(contractsForDigit(3, 1, 2), "account-1", "R_75", 2),
+      1,
+    ),
     [],
   );
-  assert.deepEqual(rankSettledMatchOutcomes(contractsForDigit(3, 4, 5), null, "R_75", 2), []);
+  assert.deepEqual(rankSettledMatchOutcomes(contractsForDigit(3, 1, 1), null, "R_75", 2), []);
+  assert.deepEqual(rankSettledMatchOutcomes(contractsForDigit(3, 4, 4), "account-1", "R_75", 2), []);
 });
 
 test("AI Auto chooses the market with the strongest qualified settled digit result", () => {

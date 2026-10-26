@@ -45,6 +45,36 @@ export type MatchesMarketSignal = {
   count: number;
 };
 
+export type MatchesTickCursor = {
+  symbol: string;
+  tickSequence: number;
+};
+
+export function collectFreshMatchesMarketTicks(
+  signal: { symbol: string; tick_sequence: number; recent_digits: readonly number[] },
+  cursor: MatchesTickCursor,
+): { cursor: MatchesTickCursor; freshDigits: number[]; reset: boolean } {
+  if (cursor.symbol !== signal.symbol || signal.tick_sequence < cursor.tickSequence) {
+    return {
+      cursor: { symbol: signal.symbol, tickSequence: signal.tick_sequence },
+      freshDigits: [],
+      reset: true,
+    };
+  }
+
+  const tickDelta = signal.tick_sequence - cursor.tickSequence;
+  const freshDigits = tickDelta > 0
+    ? signal.recent_digits
+      .slice(-Math.min(tickDelta, signal.recent_digits.length))
+      .filter((digit) => Number.isInteger(digit) && digit >= 0 && digit <= 9)
+    : [];
+  return {
+    cursor: { symbol: signal.symbol, tickSequence: signal.tick_sequence },
+    freshDigits,
+    reset: false,
+  };
+}
+
 export function rankObservedMatchDigits(digits: readonly number[]): MatchesDigitStat[] {
   const sample = digits
     .slice(-MATCHES_HISTORY_LIMIT)
