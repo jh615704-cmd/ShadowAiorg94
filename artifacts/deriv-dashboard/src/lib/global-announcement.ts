@@ -6,7 +6,7 @@ function hashText(value: string, seed: number): string {
   return (hash >>> 0).toString(36);
 }
 
-export function createGlobalAnnouncementDismissalKey(viewerId: string, message: string): string {
-  const value = `${viewerId.trim()}\u0000${message.trim()}`;
-  return `shadow-ai:announcement:v1:${hashText(value, 2_166_136_261)}-${hashText(value, 2_654_435_761)}`;
+export function createGlobalAnnouncementDismissalKey(viewerId: string, message: string, revision: string): string {
+  const value = `${viewerId.trim()}\u0000${revision.trim()}\u0000${message.trim()}`;
+  return `shadow-ai:announcement:v2:${hashText(value, 2_166_136_261)}-${hashText(value, 2_654_435_761)}`;
 }

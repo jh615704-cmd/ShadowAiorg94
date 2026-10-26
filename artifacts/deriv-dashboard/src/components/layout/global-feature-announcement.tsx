@@ -4,6 +4,7 @@ import { createGlobalAnnouncementDismissalKey } from "@/lib/global-announcement"
 
 type Props = {
   message: string;
+  revision: string;
   viewerId: string;
   identityResolved: boolean;
   placement?: "banner" | "inline";
@@ -20,12 +21,13 @@ function splitAnnouncement(message: string) {
 
 export function GlobalFeatureAnnouncement({
   message,
+  revision,
   viewerId,
   identityResolved,
   placement = "banner",
 }: Props) {
   const normalizedMessage = message.trim();
-  const dismissalKey = createGlobalAnnouncementDismissalKey(viewerId, normalizedMessage);
+  const dismissalKey = createGlobalAnnouncementDismissalKey(viewerId, normalizedMessage, revision);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [dismissedKey, setDismissedKey] = useState<string | null>(null);
   const [fadingKey, setFadingKey] = useState<string | null>(null);

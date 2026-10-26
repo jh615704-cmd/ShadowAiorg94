@@ -2751,12 +2751,12 @@ body { overflow-x: hidden; }
   margin: 0;
   padding: 8px clamp(14px, 3vw, 34px);
   border: 0;
-  border-bottom: 1px solid rgba(90, 205, 173, .28);
-  background: linear-gradient(90deg, rgba(4, 19, 18, .98), rgba(9, 34, 32, .98) 50%, rgba(4, 19, 18, .98));
-  color: #edf7f4;
+  border-bottom: 1px solid rgba(101, 237, 155, .28);
+  background: linear-gradient(90deg, rgba(4, 19, 13, .98), rgba(9, 36, 23, .98) 50%, rgba(4, 19, 13, .98));
+  color: #d8ffe7;
   font-size: 13px;
   line-height: 1.5;
-  box-shadow: inset 0 -1px 0 rgba(89, 207, 174, .12);
+  box-shadow: inset 0 -1px 0 rgba(89, 207, 142, .12);
   transition: opacity 340ms ease, transform 340ms ease;
 }
 .global-feature-announcement.is-inline {
@@ -2803,18 +2803,18 @@ body { overflow-x: hidden; }
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #60ddb8;
-  box-shadow: 0 0 12px rgba(96, 221, 184, .68);
+  background: #65ed9b;
+  box-shadow: 0 0 12px rgba(101, 237, 155, .68);
 }
 .global-announcement-copy {
   min-width: 0;
   margin: 0;
-  color: #edf7f4;
+  color: #d8ffe7;
   text-align: center;
   overflow-wrap: anywhere;
 }
 .global-announcement-copy strong {
-  color: #fff;
+  color: #86f2a8;
   font-weight: 800;
 }
 .global-announcement-dismiss {
@@ -2825,18 +2825,18 @@ body { overflow-x: hidden; }
   padding: 0;
   border: 1px solid transparent;
   border-radius: 5px;
-  color: #e6f1ed;
+  color: #baf9cd;
   background: transparent;
   cursor: pointer;
   transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
 }
 .global-announcement-dismiss:hover {
-  border-color: rgba(126, 221, 194, .28);
+  border-color: rgba(112, 235, 151, .34);
   color: #fff;
-  background: rgba(126, 221, 194, .1);
+  background: rgba(105, 235, 151, .14);
 }
 .global-announcement-dismiss:focus-visible {
-  outline: 2px solid #70dfbd;
+  outline: 2px solid #70df9c;
   outline-offset: 2px;
 }
 .global-feature-announcement.is-fading {

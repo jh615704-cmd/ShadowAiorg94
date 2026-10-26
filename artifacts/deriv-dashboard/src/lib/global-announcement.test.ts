@@ -3,13 +3,14 @@ import test from "node:test";
 import { createGlobalAnnouncementDismissalKey } from "./global-announcement.ts";
 
 test("announcement dismissal keys are stable for a user and message", () => {
-  const key = createGlobalAnnouncementDismissalKey("access-key-1", "Update complete.");
-  assert.equal(key, createGlobalAnnouncementDismissalKey("access-key-1", "Update complete."));
-  assert.equal(key, createGlobalAnnouncementDismissalKey(" access-key-1 ", " Update complete. "));
+  const key = createGlobalAnnouncementDismissalKey("access-key-1", "Update complete.", "broadcast-1");
+  assert.equal(key, createGlobalAnnouncementDismissalKey("access-key-1", "Update complete.", "broadcast-1"));
+  assert.equal(key, createGlobalAnnouncementDismissalKey(" access-key-1 ", " Update complete. ", " broadcast-1 "));
 });
 
-test("announcement dismissal keys change for a different user or updated message", () => {
-  const key = createGlobalAnnouncementDismissalKey("access-key-1", "Update complete.");
-  assert.notEqual(key, createGlobalAnnouncementDismissalKey("access-key-2", "Update complete."));
-  assert.notEqual(key, createGlobalAnnouncementDismissalKey("access-key-1", "New feature available."));
+test("announcement dismissal keys change for a different user, message, or broadcast", () => {
+  const key = createGlobalAnnouncementDismissalKey("access-key-1", "Update complete.", "broadcast-1");
+  assert.notEqual(key, createGlobalAnnouncementDismissalKey("access-key-2", "Update complete.", "broadcast-1"));
+  assert.notEqual(key, createGlobalAnnouncementDismissalKey("access-key-1", "New feature available.", "broadcast-1"));
+  assert.notEqual(key, createGlobalAnnouncementDismissalKey("access-key-1", "Update complete.", "broadcast-2"));
 });

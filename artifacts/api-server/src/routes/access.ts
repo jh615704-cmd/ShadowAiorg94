@@ -53,6 +53,7 @@ function defaultFeatureSettings() {
       })),
     global_announcement_enabled: false,
     global_announcement: "",
+    global_announcement_revision: "",
     auto_trader_2_paused: false,
     auto_trader_2_pause_message: "Auto Trader 2.0 is temporarily paused by an administrator.",
   };
@@ -82,6 +83,9 @@ function normalizeFeatureSettings(value: Record<string, unknown> | undefined, up
     features,
     global_announcement_enabled: value?.global_announcement_enabled === true,
     global_announcement: typeof value?.global_announcement === "string" ? value.global_announcement.slice(0, 500) : "",
+    global_announcement_revision: typeof value?.global_announcement_revision === "string"
+      ? value.global_announcement_revision.slice(0, 128)
+      : "",
     auto_trader_2_paused: value?.auto_trader_2_paused === true,
     auto_trader_2_pause_message: typeof value?.auto_trader_2_pause_message === "string"
       ? value.auto_trader_2_pause_message.slice(0, 300)
@@ -350,7 +354,18 @@ router.patch("/access/feature-settings", requireAccess, requireAccessAdmin, asyn
     return;
   }
   const [existing] = await db.select().from(adminFeatureSettingsTable).limit(1);
-  const values = { settings: parsed.data, updatedAt: new Date() };
+  const previousSettings = existing?.settings;
+  const previousRevision = previousSettings && typeof previousSettings === "object" && !Array.isArray(previousSettings)
+    ? (previousSettings as Record<string, unknown>).global_announcement_revision
+    : undefined;
+  const values = {
+    settings: {
+      ...parsed.data,
+      global_announcement_revision: parsed.data.global_announcement_revision
+        ?? (typeof previousRevision === "string" ? previousRevision : ""),
+    },
+    updatedAt: new Date(),
+  };
   const [row] = existing
     ? await db.update(adminFeatureSettingsTable).set(values)
       .where(eq(adminFeatureSettingsTable.id, existing.id)).returning()

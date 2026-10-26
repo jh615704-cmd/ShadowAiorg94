@@ -1279,13 +1279,14 @@ components:
         notice: { type: string, maxLength: 500 }
     AdminFeatureSettings:
       type: object
-      required: [features, global_announcement_enabled, global_announcement, auto_trader_2_paused, auto_trader_2_pause_message, updated_at]
+      required: [features, global_announcement_enabled, global_announcement, global_announcement_revision, auto_trader_2_paused, auto_trader_2_pause_message, updated_at]
       properties:
         features:
           type: array
           items: { $ref: "#/components/schemas/FeatureControl" }
         global_announcement_enabled: { type: boolean }
         global_announcement: { type: string, maxLength: 500 }
+        global_announcement_revision: { type: string, maxLength: 128 }
         auto_trader_2_paused: { type: boolean }
         auto_trader_2_pause_message: { type: string, maxLength: 300 }
         updated_at: { type: ["string", "null"], format: date-time }
@@ -1298,6 +1299,7 @@ components:
           items: { $ref: "#/components/schemas/FeatureControl" }
         global_announcement_enabled: { type: boolean }
         global_announcement: { type: string, maxLength: 500 }
+        global_announcement_revision: { type: string, maxLength: 128 }
         auto_trader_2_paused: { type: boolean }
         auto_trader_2_pause_message: { type: string, maxLength: 300 }
     SuccessResponse:

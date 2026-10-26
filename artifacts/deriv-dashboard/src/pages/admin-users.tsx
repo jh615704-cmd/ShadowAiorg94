@@ -413,6 +413,7 @@ export default function AdminUsersPage() {
     features: featureOverrides,
     global_announcement_enabled: extra?.global_announcement_enabled ?? base.global_announcement_enabled,
     global_announcement: extra?.global_announcement ?? base.global_announcement,
+    global_announcement_revision: extra?.global_announcement_revision ?? base.global_announcement_revision,
     auto_trader_2_paused: extra?.auto_trader_2_paused ?? base.auto_trader_2_paused,
     auto_trader_2_pause_message: extra?.auto_trader_2_pause_message ?? base.auto_trader_2_pause_message,
   });
@@ -453,15 +454,21 @@ export default function AdminUsersPage() {
         data: featureSettingsPayload(base, base.features, {
           global_announcement_enabled: draft.global_announcement_enabled,
           global_announcement: draft.global_announcement,
+          global_announcement_revision: crypto.randomUUID(),
         }),
       },
       {
         onSuccess: (saved) => {
           queryClient.setQueryData(getGetAdminFeatureSettingsQueryKey(), saved);
           setFeatureSettingsDraft((current) => current
-            ? { ...current, global_announcement_enabled: saved.global_announcement_enabled, global_announcement: saved.global_announcement }
+            ? {
+                ...current,
+                global_announcement_enabled: saved.global_announcement_enabled,
+                global_announcement: saved.global_announcement,
+                global_announcement_revision: saved.global_announcement_revision,
+              }
             : saved);
-          toast({ title: "Global announcement saved", description: "The announcement is now visible to users." });
+          toast({ title: "Global announcement broadcast", description: "It's live for all users, including new accounts, until each user dismisses it." });
         },
         onError: (error) => toast({ variant: "destructive", title: "Announcement could not be saved", description: errorMessage(error) }),
       },
@@ -472,7 +479,12 @@ export default function AdminUsersPage() {
     const saved = featureSettingsQuery.data;
     if (!saved) return;
     setFeatureSettingsDraft((current) => current
-      ? { ...current, global_announcement_enabled: saved.global_announcement_enabled, global_announcement: saved.global_announcement }
+      ? {
+          ...current,
+          global_announcement_enabled: saved.global_announcement_enabled,
+          global_announcement: saved.global_announcement,
+          global_announcement_revision: saved.global_announcement_revision,
+        }
       : saved);
   };
 
@@ -630,11 +642,11 @@ export default function AdminUsersPage() {
                 <label className="admin-protection-toggle admin-announcement-toggle">
                   <input type="checkbox" checked={featureSettingsDraft.global_announcement_enabled} onChange={(event) => setFeatureSettingsDraft({ ...featureSettingsDraft, global_announcement_enabled: event.target.checked })} />
                   <span className="admin-protection-switch"><i /></span>
-                  <span><b>Show a global announcement</b><small>Displayed across the workspace.</small></span>
+                  <span><b>Show a global announcement</b><small>Broadcast to every user until they dismiss it. Saving again republishes it.</small></span>
                 </label>
                 <label className="admin-control-field admin-announcement-message"><span>Global announcement</span><textarea rows={2} maxLength={500} value={featureSettingsDraft.global_announcement} onChange={(event) => setFeatureSettingsDraft({ ...featureSettingsDraft, global_announcement: event.target.value })} placeholder="Enter the message users should see" /></label>
                 <div className="admin-feature-control-actions admin-announcement-actions">
-                  <button type="button" className="secondary-button" onClick={saveAnnouncement} disabled={!featureSettingsQuery.data || updateFeatureSettings.isPending || (featureSettingsDraft.global_announcement_enabled === featureSettingsQuery.data.global_announcement_enabled && featureSettingsDraft.global_announcement === featureSettingsQuery.data.global_announcement)}>
+                  <button type="button" className="secondary-button" onClick={saveAnnouncement} disabled={!featureSettingsQuery.data || updateFeatureSettings.isPending || (featureSettingsDraft.global_announcement_enabled === featureSettingsQuery.data.global_announcement_enabled && featureSettingsDraft.global_announcement === featureSettingsQuery.data.global_announcement && (!featureSettingsDraft.global_announcement_enabled || !featureSettingsDraft.global_announcement.trim()))}>
                     <Save size={14} />{updateFeatureSettings.isPending ? "Saving…" : "Save"}
                   </button>
                   <button type="button" className="key-action" onClick={cancelAnnouncement} disabled={!featureSettingsQuery.data || updateFeatureSettings.isPending || (featureSettingsDraft.global_announcement_enabled === featureSettingsQuery.data.global_announcement_enabled && featureSettingsDraft.global_announcement === featureSettingsQuery.data.global_announcement)}>

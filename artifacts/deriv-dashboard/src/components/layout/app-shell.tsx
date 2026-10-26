@@ -75,9 +75,10 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
   return (
     <>
       {announcementEnabled && (
-        <div className="global-announcement-frame">
+        <div className="global-announcement-frame" data-testid="global-announcement-frame">
           <GlobalFeatureAnnouncement
             message={featureSettings.data!.global_announcement}
+            revision={featureSettings.data!.global_announcement_revision}
             viewerId={accessSession.data?.key_id ?? user?.id ?? "anonymous"}
             identityResolved={accessSession.isFetched}
           />

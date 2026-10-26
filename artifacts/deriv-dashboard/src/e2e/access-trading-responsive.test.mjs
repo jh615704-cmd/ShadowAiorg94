@@ -290,48 +290,100 @@ test("restricted homepage feature cards and switches glow red without enabling c
   }
 });
 
-test("global announcement sits beside the cockpit brand and stays dismissed after reload", async () => {
-  const state = createState(userSession(["edge"]));
-  state.featureSettings.global_announcement_enabled = true;
-  state.featureSettings.global_announcement = "Update complete. New feature now live.";
-  const { context, page, pageErrors } = await createMockPage(state, viewports[2]);
+test("global announcement reaches existing and new users, stays dismissed until republished", async () => {
+  const adminState = createState(adminSession());
+  const admin = await createMockPage(adminState, viewports[2]);
+  let existingUser;
+  let newUser;
   try {
-    await page.goto(`${baseUrl}/app`);
-    const announcement = page.getByTestId("global-announcement");
-    await announcement.waitFor();
+    await admin.page.goto(`${baseUrl}/admin`);
+    await admin.page.getByRole("heading", { name: "Create a new key" }).waitFor();
+    const message = "Update complete. Our newest feature is now live — BFBX Premium AI.";
+    await admin.page.getByRole("checkbox", { name: /Show a global announcement/ }).check({ force: true });
+    await admin.page.getByRole("textbox", { name: "Global announcement" }).fill(message);
+    const save = admin.page.locator(".admin-announcement-actions").getByRole("button", { name: "Save" });
+    const firstSaveResponse = admin.page.waitForResponse((response) =>
+      response.url().includes("/api/access/feature-settings") && response.request().method() === "PATCH",
+    );
+    await save.click();
+    const firstBroadcast = await (await firstSaveResponse).json();
+    assert.equal(firstBroadcast.global_announcement, message);
+    assert.ok(firstBroadcast.global_announcement_revision, "Saving creates a distinct broadcast revision.");
 
-    assert.ok(await announcement.evaluate((element) => element.classList.contains("is-inline")));
-    const brandBounds = await page.locator(".xt-brand").boundingBox();
+    const existingUserState = createState(userSession(["edge"]));
+    existingUserState.featureSettings = adminState.featureSettings;
+    existingUser = await createMockPage(existingUserState, viewports[2]);
+    await existingUser.page.goto(`${baseUrl}/app`);
+    const announcement = existingUser.page.getByTestId("global-announcement");
+    try {
+      await announcement.waitFor({ timeout: 8_000 });
+    } catch (error) {
+      console.error("Global announcement user diagnostics", {
+        settings: existingUserState.featureSettings,
+        apiCalls: existingUserState.apiCalls,
+        unhandledApis: existingUserState.unhandledApis,
+        body: (await existingUser.page.locator("body").innerText()).slice(0, 1400),
+        pageErrors: existingUser.pageErrors,
+      });
+      throw error;
+    }
+    assert.match(await announcement.innerText(), /Update complete\.\s+Our newest feature is now live/);
+    assert.equal(await announcement.evaluate((element) => element.classList.contains("is-inline")), false);
     const announcementBounds = await announcement.boundingBox();
-    assert.ok(brandBounds && announcementBounds);
-    assert.ok(announcementBounds.x > brandBounds.x + brandBounds.width, "The announcement should sit beside the Shadow Ai Trading brand.");
+    const strategiesBounds = await existingUser.page.locator(".xt-trading-strategies-heading").boundingBox();
+    assert.ok(announcementBounds && strategiesBounds);
+    assert.ok(announcementBounds.y < strategiesBounds.y, "The full-width announcement must appear above Trading Strategies.");
     const appearance = await announcement.evaluate((element) => ({
       background: getComputedStyle(element).backgroundImage,
       color: getComputedStyle(element.querySelector(".global-announcement-copy")).color,
-      closeButton: Boolean(element.querySelector('[aria-label="Dismiss announcement"]')),
+      closeButtonBounds: element.querySelector('[aria-label="Dismiss announcement"]')?.getBoundingClientRect().toJSON(),
+      width: element.getBoundingClientRect().width,
     }));
     assert.match(appearance.background, /linear-gradient/);
     assert.equal(appearance.color, "rgb(216, 255, 231)");
-    assert.equal(appearance.closeButton, true);
+    assert.ok(appearance.closeButtonBounds);
+    assert.ok(appearance.closeButtonBounds.x > announcementBounds.x + announcementBounds.width * 0.9, "The X should stay at the far right of the banner.");
 
-    await page.setViewportSize({ width: 390, height: 844 });
-    await assertNoHorizontalOverflow(page, viewports[0], "global announcement");
+    await existingUser.page.setViewportSize({ width: 390, height: 844 });
+    await assertNoHorizontalOverflow(existingUser.page, viewports[0], "global announcement");
     await announcement.getByRole("button", { name: "Dismiss announcement" }).click();
     await announcement.waitFor({ state: "detached" });
 
-    const dismissalKey = await page.evaluate(() => Object.keys(localStorage).find((key) =>
-      key.startsWith("shadow-ai:announcement:v1:") && localStorage.getItem(key) === "dismissed",
+    const dismissalKey = await existingUser.page.evaluate(() => Object.keys(localStorage).find((key) =>
+      key.startsWith("shadow-ai:announcement:v2:") && localStorage.getItem(key) === "dismissed",
     ) ?? null);
     assert.ok(dismissalKey, "Dismissing the announcement should save its viewer-specific state.");
-    await page.reload();
-    await page.locator(".xt-brand").waitFor();
-    await announcement.waitFor({ state: "detached" });
-    assert.equal(await page.evaluate((key) => localStorage.getItem(key), dismissalKey), "dismissed");
-    assert.deepEqual(state.tradeRequests, []);
-    assert.deepEqual(state.unhandledApis, []);
-    assert.deepEqual(pageErrors, []);
+    await existingUser.page.reload();
+    await existingUser.page.getByTestId("global-announcement-frame").waitFor();
+    await existingUser.page.waitForFunction(() => !document.querySelector('[data-testid="global-announcement"]'));
+    assert.equal(await existingUser.page.evaluate((key) => localStorage.getItem(key), dismissalKey), "dismissed");
+
+    const secondSaveResponse = admin.page.waitForResponse((response) =>
+      response.url().includes("/api/access/feature-settings") && response.request().method() === "PATCH",
+    );
+    await save.waitFor({ state: "visible" });
+    assert.equal(await save.isEnabled(), true, "An unchanged active announcement can be broadcast again.");
+    await save.click();
+    const secondBroadcast = await (await secondSaveResponse).json();
+    assert.notEqual(secondBroadcast.global_announcement_revision, firstBroadcast.global_announcement_revision);
+    await announcement.waitFor({ timeout: 8_000 });
+
+    const newUserState = createState({
+      ...userSession(["edge"]),
+      key_id: "33333333-3333-4333-8333-333333333333",
+    });
+    newUserState.featureSettings = adminState.featureSettings;
+    newUser = await createMockPage(newUserState, viewports[2]);
+    await newUser.page.goto(`${baseUrl}/app`);
+    await newUser.page.getByTestId("global-announcement").waitFor();
+    assert.deepEqual(adminState.unhandledApis, []);
+    assert.deepEqual(existingUserState.unhandledApis, []);
+    assert.deepEqual(newUserState.unhandledApis, []);
+    assert.deepEqual(admin.pageErrors, []);
+    assert.deepEqual(existingUser.pageErrors, []);
+    assert.deepEqual(newUser.pageErrors, []);
   } finally {
-    await context.close();
+    await Promise.all([admin.context.close(), existingUser?.context.close(), newUser?.context.close()]);
   }
 });
 
@@ -1361,6 +1413,7 @@ function createState(session) {
       })),
       global_announcement_enabled: false,
       global_announcement: "",
+      global_announcement_revision: "",
       auto_trader_2_paused: false,
       auto_trader_2_pause_message: "Auto Trader 2.0 is temporarily paused by an administrator.",
       updated_at: null,
@@ -1480,6 +1533,12 @@ async function mockApiRequest(route, state, pathname, method) {
     return;
   }
   if (pathname === "/api/access/feature-settings" && method === "GET") {
+    await fulfillJson(route, state.featureSettings);
+    return;
+  }
+  if (pathname === "/api/access/feature-settings" && method === "PATCH") {
+    Object.assign(state.featureSettings, request.postDataJSON());
+    state.featureSettings.updated_at = new Date().toISOString();
     await fulfillJson(route, state.featureSettings);
     return;
   }

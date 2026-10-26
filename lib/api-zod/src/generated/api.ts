@@ -211,6 +211,8 @@ export const getAdminFeatureSettingsResponseFeaturesItemNoticeMax = 500;
 
 export const getAdminFeatureSettingsResponseGlobalAnnouncementMax = 500;
 
+export const getAdminFeatureSettingsResponseGlobalAnnouncementRevisionMax = 128;
+
 export const getAdminFeatureSettingsResponseAutoTrader2PauseMessageMax = 300;
 
 
@@ -226,6 +228,7 @@ export const GetAdminFeatureSettingsResponse = zod.object({
 })),
   "global_announcement_enabled": zod.boolean(),
   "global_announcement": zod.string().max(getAdminFeatureSettingsResponseGlobalAnnouncementMax),
+  "global_announcement_revision": zod.string().max(getAdminFeatureSettingsResponseGlobalAnnouncementRevisionMax),
   "auto_trader_2_paused": zod.boolean(),
   "auto_trader_2_pause_message": zod.string().max(getAdminFeatureSettingsResponseAutoTrader2PauseMessageMax),
   "updated_at": zod.coerce.date().nullable()
@@ -238,6 +241,8 @@ export const GetAdminFeatureSettingsResponse = zod.object({
 export const updateAdminFeatureSettingsBodyFeaturesItemNoticeMax = 500;
 
 export const updateAdminFeatureSettingsBodyGlobalAnnouncementMax = 500;
+
+export const updateAdminFeatureSettingsBodyGlobalAnnouncementRevisionMax = 128;
 
 export const updateAdminFeatureSettingsBodyAutoTrader2PauseMessageMax = 300;
 
@@ -254,6 +259,7 @@ export const UpdateAdminFeatureSettingsBody = zod.object({
 })),
   "global_announcement_enabled": zod.boolean(),
   "global_announcement": zod.string().max(updateAdminFeatureSettingsBodyGlobalAnnouncementMax),
+  "global_announcement_revision": zod.string().max(updateAdminFeatureSettingsBodyGlobalAnnouncementRevisionMax).optional(),
   "auto_trader_2_paused": zod.boolean(),
   "auto_trader_2_pause_message": zod.string().max(updateAdminFeatureSettingsBodyAutoTrader2PauseMessageMax)
 })
@@ -261,6 +267,8 @@ export const UpdateAdminFeatureSettingsBody = zod.object({
 export const updateAdminFeatureSettingsResponseFeaturesItemNoticeMax = 500;
 
 export const updateAdminFeatureSettingsResponseGlobalAnnouncementMax = 500;
+
+export const updateAdminFeatureSettingsResponseGlobalAnnouncementRevisionMax = 128;
 
 export const updateAdminFeatureSettingsResponseAutoTrader2PauseMessageMax = 300;
 
@@ -277,6 +285,7 @@ export const UpdateAdminFeatureSettingsResponse = zod.object({
 })),
   "global_announcement_enabled": zod.boolean(),
   "global_announcement": zod.string().max(updateAdminFeatureSettingsResponseGlobalAnnouncementMax),
+  "global_announcement_revision": zod.string().max(updateAdminFeatureSettingsResponseGlobalAnnouncementRevisionMax),
   "auto_trader_2_paused": zod.boolean(),
   "auto_trader_2_pause_message": zod.string().max(updateAdminFeatureSettingsResponseAutoTrader2PauseMessageMax),
   "updated_at": zod.coerce.date().nullable()

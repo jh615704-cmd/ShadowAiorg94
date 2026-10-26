@@ -12,6 +12,8 @@ export interface AdminFeatureSettingsUpdate {
   global_announcement_enabled: boolean;
   /** @maxLength 500 */
   global_announcement: string;
+  /** @maxLength 128 */
+  global_announcement_revision?: string;
   auto_trader_2_paused: boolean;
   /** @maxLength 300 */
   auto_trader_2_pause_message: string;

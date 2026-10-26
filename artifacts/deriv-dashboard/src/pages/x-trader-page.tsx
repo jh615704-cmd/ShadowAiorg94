@@ -34,7 +34,6 @@ import {
 import { Link } from "wouter";
 import { DerivAccountSwitcher } from "@/components/deriv-account-switcher";
 import { FeatureStatusText } from "@/components/feature-status";
-import { GlobalFeatureAnnouncement } from "@/components/layout/global-feature-announcement";
 import { useAccessSessionLogout } from "@/hooks/use-access-session-logout";
 import {
   Activity, BookOpen, Bot, ChevronDown, ChevronLeft, ChevronRight, Gauge, Link2, Loader2,
@@ -4699,16 +4698,6 @@ export default function XTraderPage() {
               </div>
             </div>
           </div>
-          {adminFeatureSettings.data?.global_announcement_enabled
-            && adminFeatureSettings.data.global_announcement.trim()
-            && (
-              <GlobalFeatureAnnouncement
-                message={adminFeatureSettings.data.global_announcement}
-                viewerId={accessSession.data?.key_id ?? "anonymous"}
-                identityResolved={accessSession.isFetched}
-                placement="inline"
-              />
-            )}
         </div>
         <div className="xt-header-right">
           <DerivAccountSwitcher
