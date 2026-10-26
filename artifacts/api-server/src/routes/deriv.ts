@@ -89,6 +89,15 @@ function tradeOutcomeForRouteError(
   return "uncertain";
 }
 
+function tradeErrorSourceForRoute(error: unknown, status: number) {
+  const source = getTradeErrorSource(error);
+  if (source !== "unknown") return source;
+  if (isCapacityError(error) || isCredentialError(error) || error instanceof AccessSessionRevokedError) {
+    return "api_server" as const;
+  }
+  return status >= 400 && status < 500 ? "api_server" as const : "unknown" as const;
+}
+
 function isCapacityError(error: unknown): error is DerivCapacityError {
   return error instanceof DerivCapacityError;
 }
@@ -495,7 +504,7 @@ router.post("/deriv/buy", requireTradeAccessFeature, async (req, res) => {
         : 502;
      return res.status(status).json({
        error: message,
-       diagnostic_source: getTradeErrorSource(error),
+       diagnostic_source: tradeErrorSourceForRoute(error, status),
        trade_outcome: tradeOutcomeForRouteError(error, status),
      });
   }
@@ -520,7 +529,11 @@ router.post("/deriv/sell", async (req, res) => {
       : message.includes("WebSocket is not ready")
         ? 504
         : 502;
-     return res.status(status).json({ error: message, diagnostic_source: getTradeErrorSource(error) });
+     return res.status(status).json({
+       error: message,
+       diagnostic_source: tradeErrorSourceForRoute(error, status),
+       trade_outcome: tradeOutcomeForRouteError(error, status),
+     });
   }
 });
 
@@ -582,7 +595,7 @@ router.post("/deriv/bulk-buy", requireTradeAccessFeature, async (req, res) => {
         : 502;
      return res.status(status).json({
        error: message,
-       diagnostic_source: getTradeErrorSource(error),
+       diagnostic_source: tradeErrorSourceForRoute(error, status),
        trade_outcome: tradeOutcomeForRouteError(error, status),
      });
   }
@@ -629,7 +642,7 @@ router.post("/deriv/dual-buy", requireTradeAccessFeature, async (req, res) => {
         : 502;
      return res.status(status).json({
        error: message,
-       diagnostic_source: getTradeErrorSource(error),
+       diagnostic_source: tradeErrorSourceForRoute(error, status),
        trade_outcome: tradeOutcomeForRouteError(error, status),
      });
   }
@@ -697,7 +710,7 @@ router.post("/deriv/clock-work/buy", requireAccessFeature("clock-work"), async (
       : 502;
     return res.status(status).json({
       error: message,
-      diagnostic_source: getTradeErrorSource(error),
+      diagnostic_source: tradeErrorSourceForRoute(error, status),
       trade_outcome: tradeOutcomeForRouteError(error, status),
     });
   }
@@ -746,7 +759,7 @@ router.post("/deriv/matches/buy", requireAccessFeature("matches-analysis"), asyn
       : 502;
     return res.status(status).json({
       error: message,
-      diagnostic_source: getTradeErrorSource(error),
+      diagnostic_source: tradeErrorSourceForRoute(error, status),
       trade_outcome: tradeOutcomeForRouteError(error, status),
     });
   }

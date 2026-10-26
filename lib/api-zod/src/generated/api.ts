@@ -1250,6 +1250,10 @@ export const BulkBuyDerivContractsBody = zod.object({
   "count": zod.number().int().min(1).max(bulkBuyDerivContractsBodyCountMax)
 })
 
+export const bulkBuyDerivContractsResponseFailedItemIndexMin = 0;
+
+
+
 export const BulkBuyDerivContractsResponse = zod.object({
   "ok": zod.boolean(),
   "message": zod.string(),
@@ -1266,6 +1270,12 @@ export const BulkBuyDerivContractsResponse = zod.object({
   "buy_price": zod.number(),
   "payout": zod.number(),
   "start_time": zod.number().int().nullish()
+})),
+  "failed": zod.array(zod.object({
+  "index": zod.number().int().min(bulkBuyDerivContractsResponseFailedItemIndexMin),
+  "outcome": zod.enum(['rejected', 'uncertain', 'not_sent']),
+  "source": zod.enum(['browser_app', 'api_server', 'deriv', 'transport', 'unknown']),
+  "error": zod.string()
 }))
 })
 
@@ -1472,6 +1482,10 @@ export const DualBuyDerivContractsBody = zod.object({
   "symbol": zod.string().optional()
 })
 
+export const dualBuyDerivContractsResponseFailedItemIndexMin = 0;
+
+
+
 export const DualBuyDerivContractsResponse = zod.object({
   "ok": zod.boolean(),
   "message": zod.string(),
@@ -1488,6 +1502,12 @@ export const DualBuyDerivContractsResponse = zod.object({
   "buy_price": zod.number(),
   "payout": zod.number(),
   "start_time": zod.number().int().nullish()
+})),
+  "failed": zod.array(zod.object({
+  "index": zod.number().int().min(dualBuyDerivContractsResponseFailedItemIndexMin),
+  "outcome": zod.enum(['rejected', 'uncertain', 'not_sent']),
+  "source": zod.enum(['browser_app', 'api_server', 'deriv', 'transport', 'unknown']),
+  "error": zod.string()
 }))
 })
 

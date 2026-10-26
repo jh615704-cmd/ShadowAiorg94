@@ -223,12 +223,12 @@ mock.module("../lib/deriv", {
       if (input.duration > 5 && input.contract_type !== "CALL" && input.contract_type !== "PUT") {
         throw new Error("Tick durations above 5 are only supported for Rise/Fall contracts.");
       }
-      return { ok: true, message: "contracts bought", count: 1, proposals: [], buys: [] };
+      return { ok: true, message: "contracts bought", count: 1, proposals: [], buys: [], failed: [] };
     },
     dualBuyContracts: async () => {
       observePat();
       dualBuyInvocations += 1;
-      return { ok: true, message: "contracts bought", count: 2, results: [] };
+      return { ok: true, message: "contracts bought", count: 2, proposals: [], buys: [], failed: [] };
     },
     quoteClockWorkContracts: async () => {
       observePat();
@@ -265,6 +265,7 @@ mock.module("../lib/deriv", {
     },
     isDerivBuyRateLimitError: () => false,
     isDerivApiError: () => false,
+    classifyBuyFailure: () => ({ outcome: "uncertain", source: "unknown" }),
     getTradeErrorSource: () => "api_server",
   },
 });

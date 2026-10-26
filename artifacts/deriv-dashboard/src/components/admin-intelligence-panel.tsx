@@ -51,9 +51,16 @@ function featureName(value: string) {
   return featureLabels[value] ?? value.replaceAll("-", " ");
 }
 
-function findingSafeguard(code: string) {
+function findingSafeguard(code: string, source: string) {
   if (code === "trade_outcome_uncertain") {
-    return "This is a safety hold, not a bot fault. Review the affected account's Deriv history and open contracts; do not retry or alter the contract.";
+    const sourceDescriptions: Record<string, string> = {
+      browser_app: "The browser app reported this issue.",
+      api_server: "The app API reported this issue.",
+      deriv: "Deriv returned this issue.",
+      transport: "The connection transport reported this issue.",
+      unknown: "The origin could not be verified.",
+    };
+    return `${sourceDescriptions[source] ?? sourceDescriptions.unknown} This attribution does not prove fault. Review Deriv history and open contracts before resuming; do not replay or alter a contract.`;
   }
   if (code === "client_runtime_error" || code === "client_unhandled_rejection") {
     return "A source-code repair needs review and a release. This monitor will not change running user sessions.";
@@ -199,7 +206,7 @@ export default function AdminIntelligencePanel() {
                           <button className="intel-fix-button is-disabled" disabled title="No verified safe repair is available." aria-describedby={`safeguard-${finding.id}`} data-testid={`button-fix-finding-${finding.id}`}>
                             <LockKeyhole size={13} /> Fix it now
                           </button>
-                          <small id={`safeguard-${finding.id}`}>{findingSafeguard(finding.code)}</small>
+                          <small id={`safeguard-${finding.id}`}>{findingSafeguard(finding.code, finding.source)}</small>
                         </div>
                       </div>
                     </article>

@@ -3828,6 +3828,14 @@ export default function XTraderPage() {
     setMatchesStatusMessage("Deriv has not confirmed every Matches order. New entries are paused while account history is checked.");
   };
 
+  const deferMatchesAfterDefiniteFailure = (message: string) => {
+    matchesAutomationAttemptTickRef.current = Math.max(
+      matchesAutomationAttemptTickRef.current,
+      matchesTickCountRef.current + 2,
+    );
+    setMatchesStatusMessage(`${message} No uncertain order remains. Matches will continue after two fresh ticks.`);
+  };
+
   const executeMatchesOrders = async (digits: readonly number[], automated: boolean) => {
     if (matchesActionLockRef.current || matchesBuyMutation.isPending) return false;
     if (automated && (!matchesAnalysisEnabled || !matchesAiEnabled || !matchesAiRunningRef.current)) return false;
@@ -3909,7 +3917,7 @@ export default function XTraderPage() {
           );
           return false;
         }
-        toggleMatchesAi(false, `${result.message} Automatic entries are stopped. Open contracts can continue to settle.`);
+        deferMatchesAfterDefiniteFailure(result.message);
       } else {
         setMatchesStatusMessage(automated && !matchesAiRunningRef.current
           ? `${result.message} Automatic entries remain stopped. Open contracts can continue to settle.`
@@ -3925,11 +3933,12 @@ export default function XTraderPage() {
         ? (error as { data?: { trade_outcome?: unknown } }).data
         : undefined;
       const tradeOutcome = errorData?.trade_outcome;
-      if (status >= 500 && (tradeOutcome === "not_sent" || tradeOutcome === "rejected")) {
-        setMatchesStatusMessage(`${message} No Matches buy was accepted. Waiting for a fresh tick before continuing.`);
+      if (tradeOutcome === "not_sent" || tradeOutcome === "rejected") {
+        if (status !== 401 && status !== 403) deferMatchesAfterDefiniteFailure(message);
+        else toggleMatchesAi(false, `${message} Automatic entries are stopped until access is restored.`);
         return false;
       }
-      if (status >= 500 || !Number.isFinite(status)) {
+      if (status >= 500 || status === 429 || !Number.isFinite(status) || tradeOutcome === "uncertain") {
         startMatchesReconciliation(
           contracts.map(({ amount, duration, symbol, barrier }) => ({ amount, duration, symbol, barrier })),
           baselineContractIds,
@@ -3938,7 +3947,7 @@ export default function XTraderPage() {
         return false;
       }
       const stoppedMessage = status >= 400 && status < 500
-        ? `${message} No Matches order was submitted. Automatic entries are stopped. Open contracts can continue to settle.`
+        ? `${message} Automatic entries are stopped until the request can be reviewed. Open contracts can continue to settle.`
         : `${message} Check Deriv history before retrying an unconfirmed order. Automatic entries are stopped. Open contracts can continue to settle.`;
       toggleMatchesAi(
         false,

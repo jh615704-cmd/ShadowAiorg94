@@ -211,7 +211,7 @@ export function getTradeErrorSource(error: unknown): TradeDiagnosticSource {
   const message = error instanceof Error ? error.message.toLowerCase() : "";
   if (message.includes("did not confirm") || message.includes("acknowledgement")) return "unknown";
   if (message.includes("websocket is not ready")) return "transport";
-  return "api_server";
+  return "unknown";
 }
 
 export class DerivCredentialError extends Error {

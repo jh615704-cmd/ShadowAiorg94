@@ -45,6 +45,7 @@ export * from './clockWorkQuoteResponse';
 export * from './derivAccount';
 export * from './derivAccountSelection';
 export * from './derivAccountType';
+export * from './derivBulkBuyFailure';
 export * from './derivBulkBuyInput';
 export * from './derivBulkBuyInputAccessFeature';
 export * from './derivBulkBuyInputContractType';

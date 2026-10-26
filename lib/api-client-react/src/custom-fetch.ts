@@ -642,8 +642,7 @@ export async function customFetch<T = unknown>(
       ? Array.from(new Set(failed.map((entry) => diagnosticSource(entry.source, "unknown"))))
       : [responseDiagnosticSource(payload, "unknown")];
     const uncertain = failed.length === 0
-      || failed.some((entry) => entry.outcome === "uncertain"
-        || (entry.outcome == null && typeof entry.error === "string" && /could not be confirmed|unconfirmed|uncertain/i.test(entry.error)));
+      || failed.some((entry) => entry.outcome !== "not_sent" && entry.outcome !== "rejected");
     for (const source of sources) {
       reportAdminDiagnostic(
         uncertain ? "trade_outcome_uncertain" : "api_server_error",

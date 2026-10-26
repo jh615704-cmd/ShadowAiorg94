@@ -78,6 +78,30 @@ mock.module("./trading-protection", {
 
 const deriv = await import("./deriv.ts");
 
+test("trade failure diagnostics distinguish app, transport, Deriv, and unverified outcomes", () => {
+  assert.deepEqual(
+    deriv.classifyBuyFailure(new Error("WebSocket is not ready")),
+    { outcome: "not_sent", source: "transport" },
+  );
+  assert.deepEqual(
+    deriv.classifyBuyFailure(new Error("The buy acknowledgement did not arrive")),
+    { outcome: "uncertain", source: "unknown" },
+  );
+  assert.deepEqual(
+    deriv.classifyBuyFailure({ code: "DERIV_BUY_RATE_LIMITED" }),
+    { outcome: "rejected", source: "deriv" },
+  );
+  const annotatedFailure = Object.assign(new Error("A previous batch was partly accepted."), {
+    tradeOutcome: "uncertain",
+    diagnosticSource: "deriv",
+  });
+  assert.deepEqual(deriv.classifyBuyFailure(annotatedFailure), {
+    outcome: "uncertain",
+    source: "deriv",
+  });
+  assert.equal(deriv.getTradeErrorSource(annotatedFailure), "deriv");
+});
+
 function emitMessage(socket: FakeWebSocket, message: SocketMessage) {
   if (
     message.msg_type === "proposal_open_contract"
@@ -1174,6 +1198,9 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
     assert.equal(result.ok, false);
     assert.equal(result.count, 2);
     assert.equal(result.buys.length, 2);
+    assert.equal(result.failed.length, 1);
+    assert.equal(result.failed[0]?.outcome, "rejected");
+    assert.equal(result.failed[0]?.source, "deriv");
     assert.match(result.message, /2 of 3 contracts were confirmed/);
     assert.match(result.message, /check Deriv history before resubmitting/);
   });

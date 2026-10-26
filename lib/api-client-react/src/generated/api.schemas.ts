@@ -1035,12 +1035,21 @@ export interface DerivSellResponse {
   sold_for: number;
 }
 
+export interface DerivBulkBuyFailure {
+  /** @minimum 0 */
+  index: number;
+  outcome: TradeBuyFailureOutcome;
+  source: DiagnosticSource;
+  error: string;
+}
+
 export interface DerivBulkBuyResponse {
   ok: boolean;
   message: string;
   count: number;
   proposals: DerivProposal[];
   buys: DerivBuy[];
+  failed: DerivBulkBuyFailure[];
 }
 
 export type DerivHistoryItemAccountType = typeof DerivHistoryItemAccountType[keyof typeof DerivHistoryItemAccountType];
