@@ -1,15 +1,39 @@
+import { useEffect, useState } from "react";
+import { RefreshCw } from "lucide-react";
+import {
+  advanceMoneyBankChartSession,
+  startMoneyBankChartSession,
+} from "../lib/money-bank-chart-session";
+
 type Props = {
+  symbol: string;
   marketName: string;
   connected: boolean;
   quote?: number | null;
   quotes: readonly number[];
-  tickCount?: number;
+  tickSequence?: number;
 };
 
 const plot = { left: 66, right: 790, top: 22, bottom: 214 };
 
-export function MoneyBankMarketChart({ marketName, connected, quote, quotes, tickCount }: Props) {
-  const chartQuotes = quotes.filter(Number.isFinite).slice(-30);
+export function MoneyBankMarketChart({
+  symbol,
+  marketName,
+  connected,
+  quote,
+  quotes,
+  tickSequence,
+}: Props) {
+  const [session, setSession] = useState(() => startMoneyBankChartSession(symbol, tickSequence));
+
+  useEffect(() => {
+    setSession((current) => advanceMoneyBankChartSession(current, symbol, tickSequence, quotes));
+  }, [symbol, tickSequence, quotes]);
+
+  const activeSession = session.symbol === symbol
+    ? session
+    : startMoneyBankChartSession(symbol, tickSequence);
+  const chartQuotes = activeSession.quotes;
   const first = chartQuotes[0];
   const latest = quote ?? chartQuotes.at(-1) ?? null;
   const change = first != null && latest != null ? latest - first : 0;
@@ -34,6 +58,7 @@ export function MoneyBankMarketChart({ marketName, connected, quote, quotes, tic
     : "";
   const formattedChange = `${changePercent > 0 ? "+" : ""}${changePercent.toFixed(2)}%`;
   const colorClass = trend === "falling" ? "is-falling" : trend === "rising" ? "is-rising" : "is-flat";
+  const resetChart = () => setSession(startMoneyBankChartSession(symbol, tickSequence));
 
   return (
     <section className={`money-bank-market-chart ${colorClass}`} aria-label={`${marketName} Above Market price chart`}>
@@ -43,23 +68,30 @@ export function MoneyBankMarketChart({ marketName, connected, quote, quotes, tic
           <h3>{marketName}</h3>
           <p>
             {connected
-              ? tickCount != null
-                ? `${tickCount.toLocaleString()} market ticks observed`
-                : chartQuotes.length
-                  ? `${chartQuotes.length} recent ticks buffered`
-                  : "Waiting for this market's first tick"
+              ? `${activeSession.tickCount.toLocaleString()} ticks since reset`
               : "Connect Deriv for live market data"}
           </p>
         </div>
-        <div className="money-bank-market-quote">
-          <strong>{latest == null ? "—" : latest.toFixed(2)}</strong>
-          <span>{latest == null ? "Waiting for quote" : formattedChange}</span>
+        <div className="money-bank-market-chart-actions">
+          <div className="money-bank-market-quote">
+            <strong>{latest == null ? "—" : latest.toFixed(2)}</strong>
+            <span>{latest == null ? "Waiting for quote" : formattedChange}</span>
+          </div>
+          <button
+            type="button"
+            className="money-bank-chart-reset"
+            onClick={resetChart}
+            title="Reset chart and tick count"
+            aria-label="Reset chart and tick count"
+          >
+            <RefreshCw size={16} aria-hidden="true" />
+          </button>
         </div>
       </div>
 
       {points.length > 0 ? (
         <div className="money-bank-chart-plot">
-          <svg viewBox="0 0 800 250" role="img" aria-label={`${marketName} recent price movement ${trend}; ${formattedChange} across ${chartQuotes.length} ticks`}>
+          <svg viewBox="0 0 800 250" role="img" aria-label={`${marketName} recent price movement ${trend}; ${formattedChange}; ${activeSession.tickCount} ticks since reset`}>
             <defs>
               <linearGradient id="money-bank-market-fill" x1="0" x2="0" y1="0" y2="1">
                 <stop offset="0%" className="money-bank-chart-fill-start" />

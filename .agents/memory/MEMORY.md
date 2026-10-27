@@ -23,6 +23,7 @@
 - [Deriv Accumulator contract](deriv-accumulator-contract.md) — Accumulator trades use ACCU with decimal growth_rate in both proposal and buy payloads.
 - [Money Bank JDY gate](money-bank-jdy-gate.md) — evaluate the user-selected setup at entry; alternatives are advisory and must never be auto-applied.
 - [Money Bank Auto Knockout](money-bank-auto-knockout.md) — show a smooth 10-second countdown without blocking buys or closing contracts.
+- [Money Bank chart session](money-bank-chart-session.md) — switching volatility or pressing refresh resets only the top chart’s local tick count and line to zero.
 - [Money Bank budget cap](money-bank-budget-cap.md) — Auto Budget caps cumulative planned stakes, with fewer steps when the minimum stake leaves insufficient budget.
 - [Access feature registry](access-feature-registry.md) — keep runtime access, API schemas, generated clients, route guards, UI history polling, and admin controls synchronized.
 - [Cash Grab auto-switch](cash-grab-auto-switch.md) — scan live evidence every 20 seconds, keep one contract open at a time, and retain immediate stop controls.

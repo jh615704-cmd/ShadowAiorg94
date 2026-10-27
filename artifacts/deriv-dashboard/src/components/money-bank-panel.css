@@ -1254,6 +1254,13 @@
   font-size: .76rem;
 }
 
+.money-bank-market-chart-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
 .money-bank-market-quote {
   display: grid;
   justify-items: end;
@@ -1275,6 +1282,32 @@
   font-size: .86rem;
   font-variant-numeric: tabular-nums;
   font-weight: 750;
+}
+
+.money-bank-chart-reset {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(113, 151, 188, .27);
+  border-radius: 13px;
+  background: rgba(18, 35, 55, .8);
+  color: #b6c7d9;
+  cursor: pointer;
+  transition: color .16s ease, border-color .16s ease, background .16s ease, transform .16s ease;
+}
+
+.money-bank-chart-reset:hover {
+  transform: translateY(-1px);
+  border-color: rgba(47, 205, 170, .58);
+  background: rgba(28, 65, 76, .75);
+  color: #44e0b2;
+}
+
+.money-bank-chart-reset:focus-visible {
+  outline: 2px solid #34d4a6;
+  outline-offset: 2px;
 }
 
 .money-bank-chart-plot {
@@ -1664,6 +1697,8 @@
     padding: 16px 14px 12px;
     border-radius: 16px;
   }
+  .money-bank-market-chart-actions { gap: 8px; }
+  .money-bank-chart-reset { width: 42px; height: 42px; border-radius: 12px; }
 
   .money-bank-chart-plot { padding-right: 2px; }
   .money-bank-chart-axis-label { font-size: 10px; }
