@@ -108,6 +108,10 @@ import MatchesAnalysisPanel, {
 import DerivHistory from "../components/deriv-history";
 import { getAccountBalance } from "../lib/account-balance";
 import {
+  readMoneyBankHistoryClaims,
+  saveMoneyBankHistoryClaims,
+} from "../lib/money-bank-history-claims";
+import {
   appendClockWorkQuote,
   CLOCK_WORK_AGGRESSIVE_MIN_WIN_RATE,
   getClockWorkAggressiveBudget,
@@ -189,6 +193,14 @@ const matchesMarkets: MatchesMarketOption[] = [
 
 const realizedProfit = (trades: readonly { status: string; profit: number }[]) =>
   trades.reduce((sum, trade) => sum + (isDerivHistoryOpen(trade.status) ? 0 : trade.profit), 0);
+
+const getMoneyBankHistoryStorage = () => {
+  try {
+    return typeof window === "undefined" ? null : window.localStorage;
+  } catch {
+    return null;
+  }
+};
 
 const guidePages = [
   { title: "Welcome to EDGE 🏔️", body: "EDGE is a digit-contract workspace for testing Over and Under ideas with a controlled stake, a selected market, and visible session results.", points: ["Use demo accounts while learning.", "Every trade uses the selected duration, stake, market, and barrier.", "The guide explains the controls before you start."] },
@@ -725,6 +737,10 @@ export default function XTraderPage() {
   const clockWorkClaimedHistoryIdsRef = useRef(new Set<string>());
   const matchesClaimedHistoryIdsRef = useRef(new Set<string>());
   const moneyBankClaimedHistoryIdsRef = useRef(new Set<string>());
+  const [moneyBankHistoryClaims, setMoneyBankHistoryClaims] = useState<{
+    accountId: string | null;
+    ids: string[];
+  }>({ accountId: null, ids: [] });
   const matchesSessionKnownIdsRef = useRef<Set<string> | null>(null);
   const historyFeatureOwnersRef = useRef(new Map<string, DerivHistoryFeature>());
   const matchesAiRunningRef = useRef(false);
@@ -850,8 +866,12 @@ export default function XTraderPage() {
     [matchesAiDigits, matchesSettledOutcomeDigits],
   );
   const bulkRows = bulkAllRows.filter((trade) => bulkClaimedHistoryIdsRef.current.has(trade.contract_id) && !bulkTraderHiddenHistoryIds.has(trade.contract_id));
+  const visibleMoneyBankContractIds = new Set(
+    moneyBankHistoryClaims.accountId === currentAccount?.id ? moneyBankHistoryClaims.ids : [],
+  );
   const moneyBankRows = moneyBankAllRows
-    .filter((trade) => moneyBankClaimedHistoryIdsRef.current.has(trade.contract_id)) as MoneyBankTrade[];
+    .filter((trade) => trade.account_id === currentAccount?.id)
+    .filter((trade) => visibleMoneyBankContractIds.has(trade.contract_id)) as MoneyBankTrade[];
   const cashGrabRows = cashGrabAllRows
     .filter((trade) => !cashGrabHiddenHistoryIds.has(trade.contract_id))
     .filter((trade) => cashGrabClaimedHistoryIdsRef.current.has(trade.contract_id)) as CashGrabTrade[];
@@ -1224,6 +1244,16 @@ export default function XTraderPage() {
     clockWorkClaimedHistoryIdsRef.current.clear();
     matchesClaimedHistoryIdsRef.current.clear();
     moneyBankClaimedHistoryIdsRef.current.clear();
+    const accountId = currentAccount?.id ?? null;
+    const savedMoneyBankContractIds = readMoneyBankHistoryClaims(getMoneyBankHistoryStorage(), accountId);
+    claimDerivHistoryFeatureContractIds(
+      historyFeatureOwnersRef.current,
+      accountId,
+      "money-bank",
+      moneyBankClaimedHistoryIdsRef.current,
+      savedMoneyBankContractIds,
+    );
+    setMoneyBankHistoryClaims({ accountId, ids: savedMoneyBankContractIds });
     setDigitFlipPendingHistoryIds(new Set());
     setMatchesPendingHistoryIds(new Set());
     setEdgeHiddenHistoryIds(new Set());
@@ -1706,6 +1736,17 @@ export default function XTraderPage() {
     return queryClient.getQueryData<typeof rows>(getGetDerivHistoryQueryKey()) ?? rows;
   };
 
+  const claimMoneyBankContract = (contractId: string) => {
+    const accountId = currentAccountRef.current?.id ?? null;
+    claimFeatureRows("money-bank", moneyBankClaimedHistoryIdsRef.current, [contractId]);
+    const ids = saveMoneyBankHistoryClaims(
+      getMoneyBankHistoryStorage(),
+      accountId,
+      [...moneyBankClaimedHistoryIdsRef.current],
+    );
+    setMoneyBankHistoryClaims({ accountId, ids });
+  };
+
   const waitForEdgeSettlement = async (contractIds: readonly string[]) => {
     if (!contractIds.length) return true;
     const expectedIds = new Set(contractIds);
@@ -2150,7 +2191,7 @@ export default function XTraderPage() {
       });
       const contractId = result.buy?.contract_id;
       if (typeof contractId === "string" && contractId) {
-        claimFeatureRows("money-bank", moneyBankClaimedHistoryIdsRef.current, [contractId]);
+        claimMoneyBankContract(contractId);
         moneyBankOpenContractIdRef.current = contractId;
       }
       setConnectionMessage(null);

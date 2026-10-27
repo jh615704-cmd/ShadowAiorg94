@@ -1682,7 +1682,25 @@
   }
   .money-bank-knockout-rate-row-head strong { white-space: nowrap; }
   .money-bank-knockout-rate-row-head small { text-align: right; }
-  .money-bank-knockout-summary { gap: 3px; }
-  .money-bank-knockout-summary > div { padding-inline: 2px; }
-  .money-bank-knockout-summary small { font-size: .43rem; }
+  .money-bank-knockout-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+  .money-bank-knockout-summary > div {
+    min-height: 58px;
+    padding: 8px 6px;
+  }
+  .money-bank-knockout-summary small {
+    font-size: .59rem;
+    letter-spacing: .06em;
+    line-height: 1.25;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: center;
+  }
+  .money-bank-knockout-summary b { font-size: .78rem; }
+}
+
+@media (min-width: 641px) and (max-width: 940px) {
+  .money-bank-knockout-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

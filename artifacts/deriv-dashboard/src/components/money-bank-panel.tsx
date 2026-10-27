@@ -272,6 +272,7 @@ export function MoneyBankPanel({
           connected={isConnected}
           quote={quote}
           quotes={marketSignal?.recent_quotes ?? []}
+          tickCount={marketSignal?.tick_sequence}
         />
         <div className="money-bank-main">
           <section className="money-bank-card money-bank-market-card">
@@ -487,7 +488,7 @@ export function MoneyBankPanel({
           </section>
 
           <MoneyBankKnockoutHistory
-            rows={visibleTrades}
+            rows={recentTrades}
             symbol={symbol}
             growthRate={growthRate}
             stakesByRate={stakesByRate}

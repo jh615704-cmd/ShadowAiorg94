@@ -3,11 +3,12 @@ type Props = {
   connected: boolean;
   quote?: number | null;
   quotes: readonly number[];
+  tickCount?: number;
 };
 
 const plot = { left: 66, right: 790, top: 22, bottom: 214 };
 
-export function MoneyBankMarketChart({ marketName, connected, quote, quotes }: Props) {
+export function MoneyBankMarketChart({ marketName, connected, quote, quotes, tickCount }: Props) {
   const chartQuotes = quotes.filter(Number.isFinite).slice(-30);
   const first = chartQuotes[0];
   const latest = quote ?? chartQuotes.at(-1) ?? null;
@@ -40,7 +41,15 @@ export function MoneyBankMarketChart({ marketName, connected, quote, quotes }: P
         <div className="money-bank-market-chart-title">
           <span className="money-bank-chart-eyebrow"><i /> ABOVE MARKET</span>
           <h3>{marketName}</h3>
-          <p>{connected ? `Recent ${chartQuotes.length || 30} ticks` : "Connect Deriv for live market data"}</p>
+          <p>
+            {connected
+              ? tickCount != null
+                ? `${tickCount.toLocaleString()} market ticks observed`
+                : chartQuotes.length
+                  ? `${chartQuotes.length} recent ticks buffered`
+                  : "Waiting for this market's first tick"
+              : "Connect Deriv for live market data"}
+          </p>
         </div>
         <div className="money-bank-market-quote">
           <strong>{latest == null ? "—" : latest.toFixed(2)}</strong>

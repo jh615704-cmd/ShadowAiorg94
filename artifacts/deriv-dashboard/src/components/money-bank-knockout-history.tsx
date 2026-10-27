@@ -46,7 +46,11 @@ export function MoneyBankKnockoutHistory({
         <div>
           <small>MONEY BANK STATS</small>
           <h3>Knockout History</h3>
-          <p>{totalKnockouts} knockouts · {totalRuns} settled runs tracked for {symbol}</p>
+          <p>
+            {totalRuns
+              ? `${totalKnockouts} knockouts · ${totalRuns} settled runs tracked for ${symbol}`
+              : `No settled Money Bank runs recorded for ${symbol} yet.`}
+          </p>
         </div>
         <span className={`money-bank-knockout-live ${connected ? "is-live" : ""}`}>
           <i /> {connected ? "LIVE" : "OFFLINE"}
@@ -62,20 +66,26 @@ export function MoneyBankKnockoutHistory({
           >
             <strong>{item.growthRate}%</strong>
             <span>{money(stakesByRate[item.growthRate] ?? 0, currency)} BASE</span>
-            <small>{item.knockouts} KO · {item.trackedRuns} runs</small>
+            <small>{item.trackedRuns ? `${item.knockouts} KO · ${item.trackedRuns} runs` : "No history"}</small>
           </div>
         ))}
       </div>
 
       {active && (
         <>
-          <div className="money-bank-knockout-summary" aria-label={`${active.growthRate}% settled run summary`}>
-            <div><small>KNOCKOUTS</small><b>{active.knockouts}</b></div>
-            <div><small>COMPLETED</small><b>{active.completed}</b></div>
-            <div><small>LONGEST</small><b>{formatTicks(active.longestTicks)}</b></div>
-            <div><small>AVERAGE</small><b>{formatAverageTicks(active.averageTicks)}</b></div>
-            <div><small>SHORTEST</small><b>{formatTicks(active.shortestTicks)}</b></div>
-          </div>
+          {active.trackedRuns ? (
+            <div className="money-bank-knockout-summary" aria-label={`${active.growthRate}% settled run summary`}>
+              <div><small>KNOCKOUTS</small><b>{active.knockouts}</b></div>
+              <div><small>COMPLETED</small><b>{active.completed}</b></div>
+              <div><small>LONGEST</small><b>{formatTicks(active.longestTicks)}</b></div>
+              <div><small>AVERAGE</small><b>{formatAverageTicks(active.averageTicks)}</b></div>
+              <div><small>SHORTEST</small><b>{formatTicks(active.shortestTicks)}</b></div>
+            </div>
+          ) : (
+            <div className="money-bank-knockout-empty">
+              No settled {active.growthRate}% Money Bank outcomes for {symbol} yet. Results appear after a Money Bank contract settles.
+            </div>
+          )}
 
           {active.liveTicks != null && (
             <p className="money-bank-knockout-current" role="status">
@@ -104,7 +114,7 @@ export function MoneyBankKnockoutHistory({
                   <header className="money-bank-knockout-rate-row-head">
                     <strong>{item.growthRate}% growth</strong>
                     <span>{money(rateStake, currency)} BASE stake</span>
-                    <small>{item.knockouts} KO · {item.trackedRuns} runs</small>
+                    <small>{item.trackedRuns ? `${item.knockouts} KO · ${item.trackedRuns} runs` : "No settled runs"}</small>
                   </header>
 
                   {item.exitOptions.length ? (

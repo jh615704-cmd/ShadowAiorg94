@@ -14,3 +14,9 @@ The shared history read is a display snapshot, not a trade-safety authority. On 
 **Why:** The user asked for accurate, feature-specific history, open contracts to remain visible through settlement, and stale or duplicate-looking history panels not to remain after features are turned off.
 
 **How to apply:** Keep history resilient, account-scoped, and explicitly owned by its originating feature. Render one history panel per feature. When the feature is off, keep the panel only while an acknowledged contract is open or not yet reconciled; hide it after settlement is confirmed. Clear only local rows and never hide unsettled contracts. Test cross-feature and cross-account contract-ID collisions alongside absent profit fields, settled and open contracts, cumulative stakes, partial snapshots, malformed rows, and transient refresh failures; never let a stale display snapshot release a trade lock.
+
+Money Bank persists confirmed contract IDs in account-scoped browser storage so its history survives page refreshes. This is device-local; do not reconstruct Money Bank ownership from `ACCU` alone, because other features can also use Accumulator contracts.
+
+**Why:** Feature ownership is not included in Deriv history rows, and page-only claims disappeared on refresh. Claiming every Accumulator trade would mix results from other features into Money Bank.
+
+**How to apply:** Restore only Money Bank's saved IDs for the selected Deriv account. If cross-device sync or recovery of older unclaimed trades is needed, use server-side ownership or explicit user review rather than inferring ownership.
