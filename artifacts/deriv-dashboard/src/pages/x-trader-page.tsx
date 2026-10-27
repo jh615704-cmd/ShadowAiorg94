@@ -593,6 +593,7 @@ export default function XTraderPage() {
   const digitFlipRunningRef = useRef(false);
   const moneyBankRunningRef = useRef(false);
   const moneyBankActionLockRef = useRef(false);
+  const moneyBankBudgetExhaustedRef = useRef(false);
   const moneyBankClosePromiseRef = useRef<Promise<void> | null>(null);
   const moneyBankOpenContractIdRef = useRef<string | null>(null);
   const moneyBankJdyScanInFlightRef = useRef(false);
@@ -1940,6 +1941,14 @@ export default function XTraderPage() {
   const executeMoneyBankTrade = async () => {
     const config = moneyBankConfigRef.current;
     if (!config || !moneyBankRunningRef.current || moneyBankActionLockRef.current) return;
+    if (moneyBankBudgetExhaustedRef.current) {
+      setConnectionMessage({
+        kind: "info",
+        text: "Money Bank remains active, but its planned recovery cycle is exhausted. No further orders will be sent until you stop and start a new cycle.",
+      });
+      await sleep(2_000);
+      return;
+    }
     if (!isConnected) {
       setConnectionMessage({ kind: "info", text: "Money Bank remains active and is waiting for the Deriv connection." });
       await sleep(1_500);
@@ -2000,6 +2009,7 @@ export default function XTraderPage() {
       moneyBankSessionPnlRef.current = nextSessionPnl;
       setMoneyBankSessionPnl(nextSessionPnl);
       setMoneyBankLastSettledProfit(settledAccumulator.profit);
+      let recoveryCycleExhausted = false;
       if (settledAccumulator.profit > 0) {
         moneyBankLevelRef.current = 0;
         if (config.reinvestProfit) {
@@ -2020,16 +2030,17 @@ export default function XTraderPage() {
         }
       } else {
         const currentLadder = moneyBankConfigRef.current?.ladder ?? config.ladder;
-        if (moneyBankLevelRef.current + 1 >= currentLadder.length) {
-          throw new Error("Money Bank reached the Auto Budget limit; no planned recovery level remains.");
-        }
-        moneyBankLevelRef.current += 1;
+        recoveryCycleExhausted = moneyBankLevelRef.current + 1 >= currentLadder.length;
+        if (!recoveryCycleExhausted) moneyBankLevelRef.current += 1;
       }
       if (config.profitTarget != null && config.profitTarget > 0 && nextSessionPnl >= config.profitTarget) {
         throw new Error("Money Bank reached the session Profit target.");
       }
       if (config.lossLimit != null && config.lossLimit > 0 && nextSessionPnl <= -config.lossLimit) {
         throw new Error("Money Bank reached the session Loss limit.");
+      }
+      if (recoveryCycleExhausted) {
+        throw new Error("Money Bank reached the planned recovery limit; no planned recovery level remains.");
       }
     }
 
@@ -2057,10 +2068,10 @@ export default function XTraderPage() {
       });
     }
     const level = currentConfig.ladder?.[Math.min(6, moneyBankLevelRef.current)];
-    if (!level) throw new Error("Money Bank reached its Auto Budget limit; no planned recovery level remains.");
+    if (!level) throw new Error("Money Bank reached the planned recovery limit; no planned recovery level remains.");
     const accountBalance = currentAccountBalance ?? 0;
     if (!accountBalance || level.stake > accountBalance) {
-      throw new Error(`Money Bank stopped because ${level.stake.toFixed(2)} ${currentAccount?.currency ?? "USD"} exceeds the connected balance.`);
+      throw new Error(`Money Bank is waiting because ${level.stake.toFixed(2)} ${currentAccount?.currency ?? "USD"} exceeds the connected balance.`);
     }
 
     if (tradeSymbol !== moneyBankSymbol) {
@@ -2139,10 +2150,11 @@ export default function XTraderPage() {
           await sleep(750);
           continue;
         }
-        if (message.includes("reached the Auto Budget limit") || message.includes("reached its Auto Budget limit")) {
+        if (message.includes("reached the planned recovery limit")) {
+          moneyBankBudgetExhaustedRef.current = true;
           setConnectionMessage({
             kind: "info",
-            text: `${message} Money Bank remains active but will not exceed the selected budget. Press Stop to change the budget.`,
+            text: `${message} Money Bank remains active but will send no further orders in this cycle. Stop the feature before starting a new cycle.`,
           });
           await sleep(2_000);
           continue;
@@ -2220,6 +2232,7 @@ export default function XTraderPage() {
        }
        moneyBankOpenContractIdRef.current = existingOpenAccumulator?.contract_id ?? null;
       moneyBankLevelRef.current = 0;
+       moneyBankBudgetExhaustedRef.current = false;
       moneyBankConfigRef.current = config;
       moneyBankSessionPnlRef.current = 0;
       setMoneyBankSessionPnl(0);
@@ -3713,9 +3726,10 @@ export default function XTraderPage() {
       setClockWorkStatusMessage(result.message);
       refreshTradeResults();
       if (!result.ok) {
-        setClockWorkAutoEnabled(false);
-        setClockWorkAggressiveEnabled(false);
-        setClockWorkAutoStatus("Automation paused. Check Deriv history before retrying an unconfirmed order.");
+        clockWorkAutoAttemptAtRef.current = Date.now() + (result.contracts.length > 0 ? 5_000 : 2_000);
+        setClockWorkAutoStatus(result.contracts.length > 0
+          ? `Deriv accepted ${result.contracts.length} Clock Work order${result.contracts.length === 1 ? "" : "s"} from this batch. Automation remains active and will wait for them to settle before checking again.`
+          : "Deriv accepted no Clock Work contracts from this batch. Automation remains active and will check again.");
       } else if (source === "aggressive") {
         setClockWorkAggressiveRounds((rounds) => rounds + 1);
         setClockWorkAutoStatus("Aggressive cycle submitted. Waiting for all contracts to settle before another entry.");
@@ -3728,6 +3742,10 @@ export default function XTraderPage() {
       setClockWorkStatusMessage(message);
       if (source !== "manual" && isConfirmedUnavailableDurationRejection(error)) {
         setClockWorkAutoStatus(unavailableDurationRetryMessage("Clock Work"));
+        clockWorkAutoAttemptAtRef.current = Date.now() + 2_000;
+      } else if (source !== "manual" && isConfirmedNoContractRejection(error)) {
+        setClockWorkAutoStatus(confirmedNoContractRetryMessage("Clock Work"));
+        clockWorkAutoAttemptAtRef.current = Date.now() + 2_000;
       } else if (source !== "manual") {
         setClockWorkAutoEnabled(false);
         setClockWorkAggressiveEnabled(false);
@@ -4836,8 +4854,6 @@ export default function XTraderPage() {
               setCashGrabAutoSwitchRecommendation(null);
               setCashGrabAutoSwitchSafestPairStatus("off");
               if (currentConfig) cashGrabConfigRef.current = { ...currentConfig, autoSwitchSafestPair: false };
-              stopCashGrab();
-              setCashGrabAutoSwitchSafestPairStatus("off");
               return;
             }
             cashGrabAutoSwitchRecommendationRef.current = null;
@@ -4877,9 +4893,9 @@ export default function XTraderPage() {
               setClockWorkAggressiveRounds(0);
               clockWorkAutoAttemptAtRef.current = 0;
               setClockWorkSymbol(next);
-              setClockWorkAutoEnabled(false);
-              setClockWorkAggressiveEnabled(false);
-              setClockWorkAutoStatus("Automation stopped because the selected market changed.");
+              setClockWorkAutoStatus(clockWorkAutoEnabled || clockWorkAggressiveEnabled
+                ? "Automation remains active and is waiting for fresh data from the selected market."
+                : "The selected market changed. Fresh live data is loading.");
               void selectMarket(next);
             }}
             quote={clockWorkCurrentQuote}
@@ -4935,10 +4951,9 @@ export default function XTraderPage() {
             onMinLeanChange={(value) => {
               setClockWorkMinLean(value);
               if (value == null) {
-                setClockWorkAutoEnabled(false);
-                if (!clockWorkAggressiveEnabled) {
-                  setClockWorkAutoStatus("Choose a minimum lean to resume Auto Trading.");
-                }
+                setClockWorkAutoStatus(clockWorkAutoEnabled && !clockWorkAggressiveEnabled
+                  ? "Auto Trading remains active and is waiting for a minimum lean."
+                  : "Choose a minimum lean before Auto Trading can place another order.");
               }
             }}
             autoEnabled={clockWorkAutoEnabled}

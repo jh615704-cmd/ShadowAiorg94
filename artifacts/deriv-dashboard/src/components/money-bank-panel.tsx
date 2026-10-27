@@ -465,7 +465,7 @@ export function MoneyBankPanel({
                 </div>
               ))}
             </div>
-             <p className="money-bank-helper"><Info size={14} /> Auto Budget includes only levels affordable within its cap. A loss at the last planned level stops the run; a win resets to BASE unless Reinvest Profit is enabled.</p>
+             <p className="money-bank-helper"><Info size={14} /> Auto Budget includes only levels affordable within its cap. A loss at the final planned level exhausts the cycle, so no further order is sent; the run remains active. A win resets to BASE unless Reinvest Profit is enabled.</p>
           </section>
 
           <section className="money-bank-card money-bank-risk-card">
