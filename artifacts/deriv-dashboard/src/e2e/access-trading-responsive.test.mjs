@@ -290,6 +290,52 @@ test("restricted homepage feature cards and switches glow red without enabling c
   }
 });
 
+test("administrators see selected feature statuses in red text without a red card glow", async () => {
+  const state = createState(adminSession());
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/admin`);
+    await page.getByRole("heading", { name: "Create a new key" }).waitFor();
+    const statusChanges = [
+      ["Matches Analysis", "restricted"],
+      ["Clock Work", "coming_soon"],
+      ["Cash Grab", "under_construction"],
+    ];
+    for (const [featureName, mode] of statusChanges) {
+      const row = page.locator(".admin-feature-control-row").filter({ hasText: featureName });
+      await row.locator(".admin-feature-control-fields select").first().selectOption(mode);
+      const saveResponse = page.waitForResponse((response) =>
+        response.url().includes("/api/access/feature-settings") && response.request().method() === "PATCH",
+      );
+      await row.getByRole("button", { name: "Save" }).click();
+      assert.equal((await saveResponse).ok(), true);
+    }
+
+    await page.goto(`${baseUrl}/app`);
+    const expectedStatuses = [
+      [".xt-feature-card-matches", "Restricted — admin access only"],
+      [".xt-feature-card-clock-work", "Coming soon"],
+      [".xt-feature-card-cash-grab", "Under construction"],
+    ];
+    for (const [cardSelector, statusText] of expectedStatuses) {
+      const card = page.locator(cardSelector);
+      const status = card.locator(".xt-admin-feature-status");
+      await status.getByText(statusText, { exact: true }).waitFor();
+      assert.equal(await card.evaluate((element) => element.classList.contains("xt-feature-card-restricted")), false);
+      const appearance = await status.evaluate((element) => ({
+        color: getComputedStyle(element).color,
+        cardShadow: getComputedStyle(element.closest(".xt-feature-card")).boxShadow,
+      }));
+      assert.equal(appearance.color, "rgb(255, 115, 127)");
+      assert.doesNotMatch(appearance.cardShadow, /255,\s*77,\s*93/, "Admin status text must not glow the full card red.");
+    }
+    assert.deepEqual(state.unhandledApis, []);
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+});
+
 test("global announcement reaches existing and new users, stays dismissed until republished", async () => {
   const adminState = createState(adminSession());
   const admin = await createMockPage(adminState, viewports[2]);
@@ -315,18 +361,7 @@ test("global announcement reaches existing and new users, stays dismissed until 
     existingUser = await createMockPage(existingUserState, viewports[2]);
     await existingUser.page.goto(`${baseUrl}/app`);
     const announcement = existingUser.page.getByTestId("global-announcement");
-    try {
-      await announcement.waitFor({ timeout: 8_000 });
-    } catch (error) {
-      console.error("Global announcement user diagnostics", {
-        settings: existingUserState.featureSettings,
-        apiCalls: existingUserState.apiCalls,
-        unhandledApis: existingUserState.unhandledApis,
-        body: (await existingUser.page.locator("body").innerText()).slice(0, 1400),
-        pageErrors: existingUser.pageErrors,
-      });
-      throw error;
-    }
+    await announcement.waitFor();
     assert.match(await announcement.innerText(), /Update complete\.\s+Our newest feature is now live/);
     assert.equal(await announcement.evaluate((element) => element.classList.contains("is-inline")), false);
     const announcementBounds = await announcement.boundingBox();
@@ -354,7 +389,7 @@ test("global announcement reaches existing and new users, stays dismissed until 
     ) ?? null);
     assert.ok(dismissalKey, "Dismissing the announcement should save its viewer-specific state.");
     await existingUser.page.reload();
-    await existingUser.page.getByTestId("global-announcement-frame").waitFor();
+    await existingUser.page.getByTestId("global-announcement-frame").waitFor({ state: "attached" });
     await existingUser.page.waitForFunction(() => !document.querySelector('[data-testid="global-announcement"]'));
     assert.equal(await existingUser.page.evaluate((key) => localStorage.getItem(key), dismissalKey), "dismissed");
 

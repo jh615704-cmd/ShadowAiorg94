@@ -2451,6 +2451,10 @@ body { overflow-x: hidden; }
     0 0 36px rgba(255, 77, 93, .16),
     0 10px 26px rgba(73, 16, 39, .2);
 }
+.xt-admin-feature-status {
+  color: #ff737f !important;
+  font-weight: 800 !important;
+}
 .xt-feature-card-restricted > div:first-child > svg { color: #ff7c88 !important; }
 .xt-feature-card-restricted > div:first-child > span > small {
   color: #ff9ba3 !important;

@@ -26,8 +26,17 @@ export function FeatureStatusText({
     return () => window.clearInterval(timer);
   }, [countdownAt]);
 
-  if (!control || isAdmin || control.mode === "available") {
+  if (!control || control.mode === "available") {
     return <>{control?.notice || fallback}</>;
+  }
+
+  if (isAdmin) {
+    return (
+      <>
+        <span className="xt-admin-feature-status">{featureModeLabel(control.mode)}</span>
+        {control.notice ? ` · ${control.notice}` : ""}
+      </>
+    );
   }
 
   const countdownTarget = countdownAt ? Date.parse(String(countdownAt)) : null;

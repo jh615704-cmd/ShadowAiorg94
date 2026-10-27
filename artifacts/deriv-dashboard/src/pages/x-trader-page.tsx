@@ -34,6 +34,7 @@ import {
 import { Link } from "wouter";
 import { DerivAccountSwitcher } from "@/components/deriv-account-switcher";
 import { FeatureStatusText } from "@/components/feature-status";
+import { GlobalFeatureAnnouncement } from "@/components/layout/global-feature-announcement";
 import { useAccessSessionLogout } from "@/hooks/use-access-session-logout";
 import {
   Activity, BookOpen, Bot, ChevronDown, ChevronLeft, ChevronRight, Gauge, Link2, Loader2,
@@ -4744,6 +4745,18 @@ export default function XTraderPage() {
         )}
       </section>
 
+      {adminFeatureSettings.data?.global_announcement_enabled
+        && adminFeatureSettings.data.global_announcement.trim()
+        && (
+          <div className="global-announcement-frame" data-testid="global-announcement-frame">
+            <GlobalFeatureAnnouncement
+              message={adminFeatureSettings.data.global_announcement}
+              revision={adminFeatureSettings.data.global_announcement_revision}
+              viewerId={accessSession.data?.key_id ?? "anonymous"}
+              identityResolved={accessSession.isFetched}
+            />
+          </div>
+        )}
       <h2 className="xt-trading-strategies-heading">Trading Strategies</h2>
 
       <section className={`xt-feature-card xt-feature-card-matches ${!canUseMatchesAnalysis ? "xt-feature-card-restricted" : ""}`} id="matches-analysis-feature">
