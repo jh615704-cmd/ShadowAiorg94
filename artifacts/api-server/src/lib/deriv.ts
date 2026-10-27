@@ -79,6 +79,8 @@ export type DerivHistoryItem = {
   symbol: string;
   duration: number | null;
   duration_unit: string | null;
+  growth_rate: number | null;
+  tick_passed: number | null;
   buy_price: number;
   current_value: number;
   payout: number;
@@ -632,7 +634,15 @@ function upsertHistory(item: DerivHistoryItem) {
     entry.account_id === item.account_id && entry.contract_id === item.contract_id,
   );
   if (existingIndex >= 0) {
-    getState().history[existingIndex] = { ...getState().history[existingIndex], ...item };
+    const existing = getState().history[existingIndex];
+    getState().history[existingIndex] = {
+      ...existing,
+      ...item,
+      growth_rate: item.growth_rate ?? existing.growth_rate,
+      tick_passed: item.tick_passed == null
+        ? existing.tick_passed
+        : Math.max(existing.tick_passed ?? 0, item.tick_passed),
+    };
   } else {
     getState().history.push(item);
   }
@@ -813,6 +823,16 @@ function normalizeHistory(raw: unknown, fallbackStatus = "closed"): DerivHistory
   const duration_unit = typeof rawDurationUnit === "string" && rawDurationUnit.trim()
     ? rawDurationUnit.trim()
     : null;
+  const rawGrowthRate = record.growth_rate ?? contractInput?.growth_rate;
+  const parsedGrowthRate = rawGrowthRate == null ? Number.NaN : Number(rawGrowthRate);
+  const growth_rate = Number.isFinite(parsedGrowthRate) && parsedGrowthRate > 0
+    ? parsedGrowthRate
+    : null;
+  const rawTickPassed = record.tick_passed;
+  const parsedTickPassed = rawTickPassed == null ? Number.NaN : Number(rawTickPassed);
+  const tick_passed = Number.isSafeInteger(parsedTickPassed) && parsedTickPassed >= 0
+    ? parsedTickPassed
+    : null;
   const reportedCurrentValue = record.bid_price
     ?? record.current_value
     ?? (settled ? returnedValue ?? undefined : undefined);
@@ -832,6 +852,8 @@ function normalizeHistory(raw: unknown, fallbackStatus = "closed"): DerivHistory
     symbol: String(record.underlying_symbol ?? record.symbol ?? getState().lastProposalSymbol),
     duration,
     duration_unit,
+    growth_rate,
+    tick_passed,
     buy_price: buyPrice,
     current_value: Number.isFinite(currentValue) ? currentValue : buyPrice + profit,
     payout: Number(record.payout ?? 0),

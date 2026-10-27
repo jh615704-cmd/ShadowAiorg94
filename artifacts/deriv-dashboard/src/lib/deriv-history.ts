@@ -8,6 +8,8 @@ export type DerivHistoryRow = {
   barrier: number | null;
   duration: number | null;
   duration_unit: string | null;
+  growth_rate?: number | null;
+  tick_passed?: number | null;
   buy_price: number;
   current_value: number;
   payout: number;

@@ -1082,6 +1082,7 @@ export default function XTraderPage() {
     : [];
   const cashGrabVisibleSessionRows = cashGrabSessionRows.filter((trade) => !cashGrabHiddenHistoryIds.has(trade.contract_id));
   const moneyBankSignals = (status.data?.market_signals ?? []) as MoneyBankMarketSignal[];
+  const moneyBankSelectedSignal = moneyBankSignals.find((signal) => signal.symbol === moneyBankSymbol);
   const fastSessionPnl = realizedProfit(edgeSessionRows);
   const cashGrabHistorySessionPnl = cashGrabSessionRows.length
     ? realizedProfit(cashGrabSessionRows)
@@ -5217,7 +5218,8 @@ export default function XTraderPage() {
           }}
           accountBalance={currentAccountBalance}
           currency={currentAccount?.currency ?? "USD"}
-          quote={status.data?.last_tick?.quote}
+          quote={moneyBankSelectedSignal?.quote}
+          marketSignal={moneyBankSelectedSignal}
           growthRate={moneyBankGrowthRate}
           onGrowthRateChange={setMoneyBankGrowthRate}
           takeProfitTicks={moneyBankTakeProfitTicks}

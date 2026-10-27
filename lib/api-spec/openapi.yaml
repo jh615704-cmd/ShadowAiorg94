@@ -2042,6 +2042,13 @@ components:
           type: [integer, "null"]
         duration_unit:
           type: [string, "null"]
+        growth_rate:
+          type: [number, "null"]
+          description: Accumulator growth rate as a decimal, such as 0.03 for 3%.
+        tick_passed:
+          type: [integer, "null"]
+          minimum: 0
+          description: Deriv-reported number of Accumulator ticks passed since entry.
         buy_price:
           type: number
         current_value:

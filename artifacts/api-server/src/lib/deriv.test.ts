@@ -791,6 +791,8 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
         symbol: "R_75",
          duration: 1,
          duration_unit: "t",
+        growth_rate: null,
+        tick_passed: null,
         buy_price: 2.25,
          current_value: 2.25,
         payout: 4.5,

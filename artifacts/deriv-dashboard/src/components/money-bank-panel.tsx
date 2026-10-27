@@ -6,6 +6,8 @@ import {
   type MoneyBankLadderLevel,
   type MoneyBankStrategy,
 } from "../lib/money-bank-math";
+import { MoneyBankMarketChart } from "./money-bank-market-chart";
+import { MoneyBankKnockoutHistory } from "./money-bank-knockout-history";
 import DerivHistory, { type DerivHistoryRow } from "./deriv-history";
 import "./money-bank-panel.css";
 
@@ -29,6 +31,9 @@ export type MoneyBankMarketSignal = {
   symbol: string;
   sample_count: number;
   quote?: number | null;
+  recent_quotes?: number[];
+  tick_sequence?: number;
+  tick_epoch?: number;
   rise_percentage?: number;
   fall_percentage?: number;
 };
@@ -69,6 +74,7 @@ type MoneyBankPanelProps = {
   accountBalance?: number;
   currency?: string;
   quote?: number | null;
+  marketSignal?: MoneyBankMarketSignal;
   growthRate: number;
   onGrowthRateChange: (value: number) => void;
   takeProfitTicks: number;
@@ -117,6 +123,7 @@ export function MoneyBankPanel({
   accountBalance,
   currency = "USD",
   quote,
+  marketSignal,
   growthRate,
   onGrowthRateChange,
   takeProfitTicks,
@@ -250,6 +257,12 @@ export function MoneyBankPanel({
       </header>
 
       <div className="money-bank-body">
+        <MoneyBankMarketChart
+          marketName={selectedMarket}
+          connected={isConnected}
+          quote={quote}
+          quotes={marketSignal?.recent_quotes ?? []}
+        />
         <div className="money-bank-main">
           <section className="money-bank-card money-bank-market-card">
             <div className="money-bank-card-head">
@@ -275,7 +288,6 @@ export function MoneyBankPanel({
             </label>
             <div className="money-bank-market-meta">
               <span><i /> {isConnected ? "Live market available" : "Connect Deriv to stream quotes"}</span>
-              {quote != null && <strong>{quote.toFixed(2)}</strong>}
             </div>
             <div className="money-bank-toggle-list money-bank-market-toggle">
               <label>
@@ -464,6 +476,14 @@ export function MoneyBankPanel({
             </div>
           </section>
 
+          <MoneyBankKnockoutHistory
+            rows={visibleTrades}
+            symbol={symbol}
+            growthRate={growthRate}
+            stake={selectedStake}
+            currency={currency}
+            connected={isConnected}
+          />
         </aside>
       </div>
 
