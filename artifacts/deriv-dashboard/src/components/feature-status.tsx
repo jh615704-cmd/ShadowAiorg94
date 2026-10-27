@@ -31,12 +31,7 @@ export function FeatureStatusText({
   }
 
   if (isAdmin) {
-    return (
-      <>
-        <span className="xt-admin-feature-status">{featureModeLabel(control.mode)}</span>
-        {control.notice ? ` · ${control.notice}` : ""}
-      </>
-    );
+    return <>{control.notice || fallback}</>;
   }
 
   const countdownTarget = countdownAt ? Date.parse(String(countdownAt)) : null;

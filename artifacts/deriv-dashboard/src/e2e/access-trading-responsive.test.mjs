@@ -290,7 +290,7 @@ test("restricted homepage feature cards and switches glow red without enabling c
   }
 });
 
-test("administrators see selected feature statuses in red text without a red card glow", async () => {
+test("administrators do not see status labels or red card glows", async () => {
   const state = createState(adminSession());
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {
@@ -311,7 +311,11 @@ test("administrators see selected feature statuses in red text without a red car
       assert.equal((await saveResponse).ok(), true);
     }
 
+    const settingsResponse = page.waitForResponse((response) =>
+      response.url().includes("/api/access/feature-settings") && response.request().method() === "GET",
+    );
     await page.goto(`${baseUrl}/app`);
+    assert.equal((await settingsResponse).ok(), true);
     const expectedStatuses = [
       [".xt-feature-card-matches", "Restricted — admin access only"],
       [".xt-feature-card-clock-work", "Coming soon"],
@@ -319,15 +323,12 @@ test("administrators see selected feature statuses in red text without a red car
     ];
     for (const [cardSelector, statusText] of expectedStatuses) {
       const card = page.locator(cardSelector);
-      const status = card.locator(".xt-admin-feature-status");
-      await status.getByText(statusText, { exact: true }).waitFor();
+      await card.waitFor({ state: "visible" });
+      assert.equal(await card.locator(".xt-admin-feature-status").count(), 0);
+      assert.equal(await card.getByText(statusText, { exact: true }).count(), 0);
       assert.equal(await card.evaluate((element) => element.classList.contains("xt-feature-card-restricted")), false);
-      const appearance = await status.evaluate((element) => ({
-        color: getComputedStyle(element).color,
-        cardShadow: getComputedStyle(element.closest(".xt-feature-card")).boxShadow,
-      }));
-      assert.equal(appearance.color, "rgb(255, 115, 127)");
-      assert.doesNotMatch(appearance.cardShadow, /255,\s*77,\s*93/, "Admin status text must not glow the full card red.");
+      const cardShadow = await card.evaluate((element) => getComputedStyle(element).boxShadow);
+      assert.doesNotMatch(cardShadow, /255,\s*77,\s*93/, "Admin feature cards must not glow red.");
     }
     assert.deepEqual(state.unhandledApis, []);
     assert.deepEqual(pageErrors, []);
