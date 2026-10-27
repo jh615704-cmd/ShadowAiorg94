@@ -75,6 +75,7 @@ type MoneyBankPanelProps = {
   currency?: string;
   quote?: number | null;
   marketSignal?: MoneyBankMarketSignal;
+  onRefreshHistory?: () => void;
   growthRate: number;
   onGrowthRateChange: (value: number) => void;
   takeProfitTicks: number;
@@ -124,6 +125,7 @@ export function MoneyBankPanel({
   currency = "USD",
   quote,
   marketSignal,
+  onRefreshHistory,
   growthRate,
   onGrowthRateChange,
   takeProfitTicks,
@@ -274,6 +276,7 @@ export function MoneyBankPanel({
           quote={quote}
           quotes={marketSignal?.recent_quotes ?? []}
           tickSequence={marketSignal?.tick_sequence}
+          onRefreshHistory={onRefreshHistory}
         />
         <div className="money-bank-main">
           <section className="money-bank-card money-bank-market-card">

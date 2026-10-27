@@ -105,7 +105,7 @@ mock.module("drizzle-orm", {
 mock.module("../lib/access-keys", {
   namedExports: {
     AccessSessionRevokedError: MockAccessSessionRevokedError,
-    TRADING_ACCESS_FEATURES: ["edge", "digit-flip", "trade-x", "bulk-trader", "matches-analysis", "clock-work", "cash-grab", "money-bank", "jdy-ai-3", "auto-trader", "auto-trader-2"],
+    TRADING_ACCESS_FEATURES: ["edge", "digit-flip", "trade-x", "bulk-trader", "clock-work", "cash-grab", "money-bank", "jdy-ai-3", "auto-trader", "auto-trader-2"],
     findSessionByToken: async () => null,
     featureList: (features: string[] | null | undefined) => features ?? ["edge"],
     hashSecret: (value: string) => value,

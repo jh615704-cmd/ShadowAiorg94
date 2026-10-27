@@ -59,6 +59,17 @@ import {
   chooseTradeXScannerCandidate,
   type AiScannerMarketSignal,
 } from "../lib/ai-market-scanner";
+import {
+  collectFreshMatchesMarketTicks,
+  chooseBestMatchesMarket,
+  chooseQualifiedMatchesDigits,
+  reconcileUnconfirmedMatchesOrders,
+  MATCHES_HISTORY_LIMIT,
+  rankSettledMatchOutcomes,
+  summarizeSettledMatchOutcomes,
+  type MatchesAttemptedOrder,
+  type MatchesDigitStat as ObservedMatchesDigitStat,
+} from "../lib/matches-analysis";
 import TradeXPanel, {
   type TradeXDigitDistribution,
   type TradeXDuration,
@@ -99,11 +110,11 @@ import CashGrabPanel, {
 } from "../components/cash-grab-panel";
 import ClockWorkPanel from "../components/clock-work-panel";
 import type { ClockWorkPanelProps } from "../components/clock-work-panel";
-import MatchesAnalysisPanel, {
-  type MatchesAiDigits,
-  type MatchesDuration,
-  type MatchesMarketOption,
-  type MatchesMarketType,
+import type {
+  MatchesAiDigits,
+  MatchesDuration,
+  MatchesMarketOption,
+  MatchesMarketType,
 } from "../components/matches-analysis-panel";
 import DerivHistory from "../components/deriv-history";
 import { getAccountBalance } from "../lib/account-balance";
@@ -134,17 +145,6 @@ import {
   shouldShowFeatureHistoryWhenStopped,
   type DerivHistoryFeature,
 } from "../lib/deriv-history";
-import {
-  collectFreshMatchesMarketTicks,
-  chooseBestMatchesMarket,
-  chooseQualifiedMatchesDigits,
-  reconcileUnconfirmedMatchesOrders,
-  MATCHES_HISTORY_LIMIT,
-  rankSettledMatchOutcomes,
-  summarizeSettledMatchOutcomes,
-  type MatchesAttemptedOrder,
-  type MatchesDigitStat as ObservedMatchesDigitStat,
-} from "../lib/matches-analysis";
 import {
   acquireTradeXActionLock,
   buildTradeXOrderData,
@@ -267,27 +267,6 @@ const clockWorkGuidePages = [
   { title: "History and risk", body: "Clock Work History shows contracts submitted by this feature, with actual settled profit, result, win rate, and recorded stake. Open contracts remain unsettled until Deriv reports a final result.", points: ["Clearing hides Clock Work rows from this dashboard only; it does not delete Deriv's account history.", "Paired trades and four-trade batches can lose money.", "No sequence can guarantee a final winning contract or recovery."] },
 ] as const;
 
-const matchesAnalysisGuidePages = [
-  { title: "Welcome to Matches Analysis", body: "Matches Analysis displays recent final-digit frequencies for the selected market and lets you place Digit Match contracts. Its observed rankings are descriptive, not guarantees or reliable predictions of the next tick.", points: ["Use a demo account while learning.", "Only one trading feature can be active at a time.", "A Digit Match contract can lose its full stake."] },
-  { title: "Connect and choose an account", body: "Connect Deriv and check the active account before turning on Matches Analysis. Real-account trades remain subject to workspace permission, account balance, and Deriv's limits.", points: ["The selected account receives the trades.", "Account changes stop new automatic entries.", "Use demo trading to learn the controls."] },
-  { title: "Choose a market family", body: "Choose Volatility for a volatility index or Jumps for a Jump index. The market list changes to show instruments in that family.", points: ["Every index has its own tick stream.", "Changing the market starts a fresh local sample.", "Past ticks do not determine the next result."] },
-  { title: "Select a market", body: "The selected symbol supplies the live quotes and final digits shown by the radar and frequency list.", points: ["Wait for the selected market to connect.", "The server checks the symbol again before a buy.", "The same market is used for every contract in an AI batch."] },
-  { title: "Read the live tick count", body: "The counter reports fresh ticks collected since the last rescan or market change.", points: ["A new scan starts at zero.", "The sample contains up to the most recent 120 collected digits.", "The AI runner waits for at least 20 fresh ticks."] },
-  { title: "Rescan the market", body: "Rescan clears Matches' local digit sample and resets its tick counter. It does not change Deriv history or any open contract.", points: ["Use Rescan after changing how you want to inspect the data.", "The next live ticks begin the new sample.", "A rescan does not improve or guarantee an outcome."] },
-  { title: "The digit radar", body: "The radar places digits 0 through 9 around a circle. In A · Auto mode, the red rings mark digits selected from qualified settled results; in manual mode, your chosen digits use a different marker.", points: ["Radar size reflects the number of times each digit appeared in this sample.", "The red ring means a market-selected signal, not a manual selection.", "The display is historical context, not a probability guarantee."] },
-  { title: "The spider-net plot", body: "The connected radar shape compares the observed counts for digits 0 through 9 in the current sample.", points: ["A farther point means more observations in this sample.", "The plot changes as new ticks arrive.", "A larger historical count does not ensure a future match."] },
-  { title: "Top three observed digits", body: "The top three list ranks digits by their frequency in the current fresh sample. Recent frequency is not a dependable forecast of the next digit.", points: ["Counts and percentages use only the current sample.", "Ties use the most recently observed digit as a display tie-breaker.", "The list can change as ticks arrive."] },
-  { title: "Choose Auto or manual digits", body: "A · Auto selects qualified digits from settled Matches results. Turn Auto off to choose one or more digits yourself; the runner uses those selections for each entry.", points: ["One, two, or three auto digits can be chosen per batch.", "Manual digit selections remain visible on the radar.", "The expiry digit decides the contract result."] },
-  { title: "What Digit Match means", body: "A Digit Match contract wins only when the final digit at expiry equals the selected barrier.", points: ["A different final digit loses the stake.", "The contract's displayed payout is set by Deriv.", "Observed frequency does not change the contract's rules."] },
-  { title: "Choose duration", body: "Select 1, 2, 3, 4, or 5 ticks. Duration is sent with each order and is checked by the server.", points: ["Short duration settles sooner but can change quickly.", "The duration does not make a digit more likely.", "Open contracts block the next automatic batch until settlement."] },
-  { title: "Set the stake", body: "Enter the amount to risk per selected digit. The minimum is 0.35; the connected account balance and Deriv's own rules still apply.", points: ["For a batch, the amount is applied to each selected digit.", "The server checks total batch stake against the balance.", "There is no promise that every entered amount will be accepted by Deriv."] },
-  { title: "Set limits and start", body: "Set a Loss Limit and Profit Target before starting. Matches Analysis continues after each settled entry until a limit is reached, the user stops it, or a required safety check pauses it.", points: ["A value of zero disables that limit.", "Limits are checked against settled session profit and loss.", "Limits do not close an open contract early."] },
-  { title: "AI Auto market selection", body: "AI Auto compares settled Digit Match results across available Volatility and Jump markets. It can change the selected market only between contracts and waits for fresh ticks after a market change.", points: ["The selector uses this account's settled results for the chosen duration.", "If no market has enough settled evidence, it keeps the current selection.", "Past results do not predict future outcomes."] },
-  { title: "Start and stop safely", body: "The Start Matches Analysis button becomes Stop while the runner is active. Stopping prevents future entries; a buy already sent cannot be cancelled by the page.", points: ["Open contracts can continue to settle after stopping.", "If a buy acknowledgement is uncertain, check Deriv history before retrying.", "A connection or permission safety hold can pause the runner."] },
-  { title: "Matches trading history", body: "Matches history shows only contract IDs acknowledged by the Matches feature for the selected account, using the same history display as Trade X.", points: ["Other features' contracts are excluded.", "History is sourced from Deriv and can update after settlement.", "Clearing the local display does not delete Deriv account records."] },
-  { title: "Risk and responsible use", body: "No frequency ranking or automated rule can promise accuracy, profit, or rare losses. Random digit outcomes can differ from the recent sample.", points: ["Never stake money you cannot afford to lose.", "Set an amount and stop when it reaches your own limit.", "Review results on a demo account before considering real funds."] },
-] as const;
-
 const digitFlipGuidePages = [
   { title: "Welcome to DigitFlip", body: "DigitFlip trades Even or Odd contracts using a live parity sample. Estimates describe recent ticks and never guarantee the next contract result.", points: ["Start with a demo account.", "Only one of DigitFlip, Trade X, and EDGE can run at once.", "Auto Candidates reviews the strongest market every 10 seconds after settlement."] },
   { title: "Choose a market and parity", body: "DigitFlip starts with an automatically selected market, then lets you choose Volatility or Jump markets manually. Even and Odd have distinct selected states.", points: ["The quote and last digit are live telemetry.", "Recent percentages come from the selected market sample.", "The market selector does not predict the next digit."] },
@@ -401,19 +380,19 @@ const errorMessage = (error: unknown) => {
   return getUserFacingErrorMessage(error, "Request failed");
 };
 
+type MartingaleSettlementWatch = {
+  knownIds: Set<string>;
+  processedIds: Set<string>;
+  amount: number;
+  expectedSettlements: number;
+};
+
 type PendingMatchesReconciliation = {
   id: string;
   accountId: string;
   baselineContractIds: string[];
   attemptedOrders: MatchesAttemptedOrder[];
   startedAtMs: number;
-};
-
-type MartingaleSettlementWatch = {
-  knownIds: Set<string>;
-  processedIds: Set<string>;
-  amount: number;
-  expectedSettlements: number;
 };
 
 type DigitFlipSettlementWatch = {
@@ -446,14 +425,14 @@ export default function XTraderPage() {
   const canUseDigitFlip = hasFeature("digit-flip") && featureIsAvailable("digit-flip");
   const canUseTradeX = hasFeature("trade-x") && featureIsAvailable("trade-x");
   const canUseBulkTrader = hasFeature("bulk-trader") && featureIsAvailable("bulk-trader");
-  const canUseMatchesAnalysis = hasFeature("matches-analysis") && featureIsAvailable("matches-analysis");
+  const canUseMatchesAnalysis = false;
   const canUseClockWork = hasFeature("clock-work") && featureIsAvailable("clock-work");
   const canUseCashGrab = hasFeature("cash-grab") && featureIsAvailable("cash-grab");
   const canUseMoneyBank = hasFeature("money-bank") && featureIsAvailable("money-bank");
   const canUseAutoTrader = hasFeature("auto-trader") && featureIsAvailable("auto-trader");
   const canUseAutoTrader2 = hasFeature("auto-trader-2") && featureIsAvailable("auto-trader-2");
   const canUseSettings = hasFeature("settings") && featureIsAvailable("settings");
-  const canUseDeriv = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseMatchesAnalysis || canUseClockWork || canUseCashGrab || canUseMoneyBank || canUseAutoTrader || canUseAutoTrader2;
+  const canUseDeriv = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseClockWork || canUseCashGrab || canUseMoneyBank || canUseAutoTrader || canUseAutoTrader2;
   const canViewHistory = canUseDeriv || (hasFeature("history") && featureIsAvailable("history"));
   const tokenStatus = useGetDerivTokenStatus({ query: { enabled: canUseDeriv, retry: false, queryKey: getGetDerivTokenStatusQueryKey() } });
   const connectedToken = Boolean(tokenStatus.data?.has_token);
@@ -636,7 +615,7 @@ export default function XTraderPage() {
   const [guideOpen, setGuideOpen] = useState(false);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [guidePage, setGuidePage] = useState(0);
-  const [guideMode, setGuideMode] = useState<"edge" | "trade-x" | "digit-flip" | "bulk-trader" | "money-bank" | "cash-grab" | "matches-analysis" | "clock-work">("edge");
+  const [guideMode, setGuideMode] = useState<"edge" | "trade-x" | "digit-flip" | "bulk-trader" | "money-bank" | "cash-grab" | "clock-work">("edge");
   const [clearHistoryArmed, setClearHistoryArmed] = useState(false);
   const [historyFading, setHistoryFading] = useState(false);
   const [tradeXHistoryClearArmed, setTradeXHistoryClearArmed] = useState(false);
@@ -741,8 +720,8 @@ export default function XTraderPage() {
     accountId: string | null;
     ids: string[];
   }>({ accountId: null, ids: [] });
-  const matchesSessionKnownIdsRef = useRef<Set<string> | null>(null);
   const historyFeatureOwnersRef = useRef(new Map<string, DerivHistoryFeature>());
+  const matchesSessionKnownIdsRef = useRef<Set<string> | null>(null);
   const matchesAiRunningRef = useRef(false);
   const matchesActionLockRef = useRef(false);
   const matchesAutomationAttemptTickRef = useRef(-1);
@@ -1234,7 +1213,6 @@ export default function XTraderPage() {
     bulkSessionKnownIdsRef.current = null;
     cashGrabSessionKnownIdsRef.current = null;
     moneyBankSessionKnownIdsRef.current = null;
-    matchesSessionKnownIdsRef.current = null;
     historyFeatureOwnersRef.current.clear();
     edgeClaimedHistoryIdsRef.current.clear();
     tradeXClaimedHistoryIdsRef.current.clear();
@@ -1242,7 +1220,6 @@ export default function XTraderPage() {
     bulkClaimedHistoryIdsRef.current.clear();
     cashGrabClaimedHistoryIdsRef.current.clear();
     clockWorkClaimedHistoryIdsRef.current.clear();
-    matchesClaimedHistoryIdsRef.current.clear();
     moneyBankClaimedHistoryIdsRef.current.clear();
     const accountId = currentAccount?.id ?? null;
     const savedMoneyBankContractIds = readMoneyBankHistoryClaims(getMoneyBankHistoryStorage(), accountId);
@@ -1255,17 +1232,12 @@ export default function XTraderPage() {
     );
     setMoneyBankHistoryClaims({ accountId, ids: savedMoneyBankContractIds });
     setDigitFlipPendingHistoryIds(new Set());
-    setMatchesPendingHistoryIds(new Set());
     setEdgeHiddenHistoryIds(new Set());
     setTradeXHiddenHistoryIds(new Set());
     setDigitFlipHiddenHistoryIds(new Set());
     setBulkTraderHiddenHistoryIds(new Set());
     setCashGrabHiddenHistoryIds(new Set());
     setClockWorkHiddenHistoryIds(new Set());
-    setMatchesHiddenHistoryIds(new Set());
-    matchesAiRunningRef.current = false;
-    setMatchesAiEnabled(false);
-    setMatchesAnalysisEnabled(false);
     setEdgeAccountBalance(currentAccountBalance == null ? "" : currentAccountBalance.toFixed(2));
     setDigitFlipAccountBalance(currentAccountBalance == null ? "" : currentAccountBalance.toFixed(2));
   }, [currentAccount?.id]);
@@ -1273,10 +1245,6 @@ export default function XTraderPage() {
   useEffect(() => {
     setDigitFlipPendingHistoryIds((current) => {
       const next = removeSettledHistoryAcknowledgements(current, digitFlipAllRows);
-      return next.size === current.size ? current : next;
-    });
-    setMatchesPendingHistoryIds((current) => {
-      const next = removeSettledHistoryAcknowledgements(current, matchesAllRows);
       return next.size === current.size ? current : next;
     });
   }, [rows]);
@@ -1520,22 +1488,6 @@ export default function XTraderPage() {
       if (digit % 2 === 0) setDigitFlipEvenCount((current) => current + 1);
     }
   }, [digitFlipEnabled, status.data?.last_tick?.epoch, status.data?.last_digit, status.data?.last_tick?.symbol, tradeXEnabled, tradeXSymbol]);
-
-  useEffect(() => {
-    if (!matchesAnalysisEnabled) return;
-    const marketSignal = status.data?.market_signals.find((signal) => signal.symbol === matchesSymbol);
-    if (!marketSignal) return;
-    const sample = collectFreshMatchesMarketTicks(marketSignal, matchesSampleCursorRef.current);
-    matchesSampleCursorRef.current = sample.cursor;
-    if (sample.reset) {
-      setMatchesObservedDigits([]);
-      setMatchesTickCount(0);
-      return;
-    }
-    if (!sample.freshDigits.length) return;
-    setMatchesObservedDigits((current) => [...current, ...sample.freshDigits].slice(-MATCHES_HISTORY_LIMIT));
-    setMatchesTickCount((current) => current + sample.freshDigits.length);
-  }, [matchesAnalysisEnabled, matchesSymbol, status.data?.market_signals]);
 
   useEffect(() => {
     digitFlipAssaultRef.current = digitFlipAssault;
@@ -4562,11 +4514,9 @@ export default function XTraderPage() {
           ? moneyBankGuidePages
           : guideMode === "cash-grab"
             ? cashGrabGuidePages
-            : guideMode === "matches-analysis"
-              ? matchesAnalysisGuidePages
             : guideMode === "clock-work"
               ? clockWorkGuidePages
-        : guidePages;
+              : guidePages;
   const canUseGuideFeature = guideMode === "trade-x"
     ? canUseTradeX
     : guideMode === "digit-flip"
@@ -4577,8 +4527,6 @@ export default function XTraderPage() {
           ? canUseMoneyBank
           : guideMode === "cash-grab"
             ? canUseCashGrab
-            : guideMode === "matches-analysis"
-              ? canUseMatchesAnalysis
             : guideMode === "clock-work"
               ? canUseClockWork
               : canUseEdge;
@@ -4810,20 +4758,6 @@ export default function XTraderPage() {
           </div>
         )}
       <h2 className="xt-trading-strategies-heading">Trading Strategies</h2>
-
-      <section className={`xt-feature-card xt-feature-card-matches ${!canUseMatchesAnalysis ? "xt-feature-card-restricted" : ""}`} id="matches-analysis-feature">
-        <div><Activity size={18} /><span><b>Matches Analysis</b><small><FeatureStatusText control={featureControl("matches-analysis")} isAdmin={isAdmin} fallback={canUseMatchesAnalysis ? "Matches Tool" : "Restricted — admin access only"} /></small></span></div>
-        <div className="xt-feature-actions">
-          {!canUseMatchesAnalysis && <span className="xt-feature-locked">RESTRICTED</span>}
-          <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("matches-analysis"); setGuidePage(0); setGuideOpen(true); }}>
-            <BookOpen size={14} />Guide
-          </button>
-          <label className="xt-switch">
-            <input type="checkbox" checked={matchesAnalysisEnabled} onChange={(event) => toggleMatchesAnalysis(event.target.checked)} aria-label="Toggle Matches Analysis" disabled={!canUseMatchesAnalysis || !isConnected} />
-            <span />
-          </label>
-        </div>
-      </section>
 
       <section className={`xt-feature-card xt-feature-card-clock-work ${!canUseClockWork ? "xt-feature-card-restricted" : ""}`} id="clock-work-feature">
         <div><Clock3 size={18} /><span><b>Clock Work</b><small><FeatureStatusText control={featureControl("clock-work")} isAdmin={isAdmin} fallback={canUseClockWork ? "Hybrid Analysis" : "Restricted — admin access only"} /></small></span></div>
@@ -5261,6 +5195,7 @@ export default function XTraderPage() {
           currency={currentAccount?.currency ?? "USD"}
           quote={moneyBankSelectedSignal?.quote}
           marketSignal={moneyBankSelectedSignal}
+          onRefreshHistory={() => void history.refetch()}
           growthRate={moneyBankGrowthRate}
           onGrowthRateChange={setMoneyBankGrowthRate}
           takeProfitTicks={moneyBankTakeProfitTicks}
@@ -5375,82 +5310,6 @@ export default function XTraderPage() {
           onMoneyStop={stopCashGrab}
           onClearHistory={() => void clearCashGrabHistory()}
         />
-      )}
-
-      {matchesAnalysisEnabled && canUseMatchesAnalysis && (
-        <section className="xt-bottom-feature">
-          <MatchesAnalysisPanel
-            marketType={matchesMarketType}
-            markets={matchesMarkets}
-            symbol={matchesSymbol}
-            onMarketTypeChange={setMatchesMarketType}
-            onSymbolChange={changeMatchesSymbol}
-            digitHistory={matchesObservedDigits}
-            tickCount={matchesTickCount}
-            marketSelectedDigits={matchesMarketSelectedDigits}
-            selectedDigits={matchesSelectedDigits}
-            onSelectedDigitsChange={(digits) => setMatchesSelectedDigits(digits.slice(-3))}
-            duration={matchesDuration}
-            onDurationChange={setMatchesDuration}
-            stake={matchesStake}
-            onStakeChange={setMatchesStake}
-            aiDigits={matchesAiDigits}
-            aiDigitsConfirmed={matchesAiDigitsConfirmed}
-            onAiDigitsChange={selectMatchesAiDigits}
-            autoMarketSelection={matchesAiAutoMarket}
-            onAutoMarketSelectionChange={toggleMatchesAiAutoMarket}
-            autoDigitMode={matchesAutoMode}
-            onAutoDigitModeChange={setMatchesAutoMode}
-            lossLimit={matchesLossLimit}
-            onLossLimitChange={setMatchesLossLimit}
-            profitTarget={matchesProfitTarget}
-            onProfitTargetChange={setMatchesProfitTarget}
-            sessionPnl={matchesSessionPnl}
-            currency={currentAccount?.currency ?? "USD"}
-            isRunning={matchesAiEnabled}
-            isPlacing={matchesBuyMutation.isPending}
-            disabled={!isConnected || !currentAccount || !canUseMatchesAnalysis}
-            tradeSlotBlocked={tradeSlotBlocked}
-            statusMessage={matchesStatusMessage}
-            reconciliationMessage={matchesPendingReconciliation
-              ? matchesPendingReconciliation.accountId === currentAccount?.id
-                ? isConnected
-                  ? "Checking fresh Deriv history and open contracts. Matches will continue only after every attempted order is confirmed and settled."
-                  : "Reconnect the same Deriv account to continue checking the uncertain order."
-                : "An uncertain Matches order belongs to another Deriv account. Switch back to that account to complete reconciliation."
-              : undefined}
-            onStartMatches={() => toggleMatchesAi(true)}
-            onStopMatches={() => toggleMatchesAi(false)}
-            onRescan={() => {
-              resetMatchesSample();
-              setMatchesStatusMessage("Rescan started. Waiting for fresh ticks.");
-            }}
-            onOpenGuide={() => {
-              setGuideMode("matches-analysis");
-              setGuidePage(0);
-              setGuideOpen(true);
-            }}
-          />
-        </section>
-      )}
-
-      {canUseMatchesAnalysis && canViewHistory && !clockWorkEnabled && shouldShowFeatureHistoryWhenStopped(
-        matchesAnalysisEnabled,
-        matchesOwnedRows,
-        matchesPendingHistoryIds,
-      ) && (
-        <section className="xt-bottom-feature">
-          <DerivHistory
-            title="Matches Analysis History"
-            strategy="Matches Tool"
-            rows={matchesRows}
-            sessionRows={matchesVisibleSessionRows}
-            currency={currentAccount?.currency}
-            clearArmed={matchesHistoryClearArmed}
-            fading={historyFading}
-            onClear={clearMatchesHistory}
-          />
-        </section>
       )}
 
       {clockWorkEnabled && canUseClockWork && (
@@ -5591,12 +5450,12 @@ export default function XTraderPage() {
         <div className="xt-guide-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setGuideOpen(false); }}>
           <section className="xt-guide" role="dialog" aria-modal="true" aria-labelledby="xt-guide-title">
             <header className="xt-guide-header">
-              <div><BookOpen size={18} /><span><b>{guideMode === "trade-x" ? "Trade X Guide" : guideMode === "digit-flip" ? "DigitFlip Guide" : guideMode === "bulk-trader" ? "Bulk Trader Guide" : guideMode === "money-bank" ? "Money Bank Guide" : guideMode === "cash-grab" ? "Cash Grab Guide" : guideMode === "matches-analysis" ? "Matches Analysis Guide" : guideMode === "clock-work" ? "Clock Work Guide" : "EDGE Guide"}</b><small>Page {guidePage + 1} of {activeGuidePages.length}</small></span></div>
+              <div><BookOpen size={18} /><span><b>{guideMode === "trade-x" ? "Trade X Guide" : guideMode === "digit-flip" ? "DigitFlip Guide" : guideMode === "bulk-trader" ? "Bulk Trader Guide" : guideMode === "money-bank" ? "Money Bank Guide" : guideMode === "cash-grab" ? "Cash Grab Guide" : guideMode === "clock-work" ? "Clock Work Guide" : "EDGE Guide"}</b><small>Page {guidePage + 1} of {activeGuidePages.length}</small></span></div>
               <button type="button" aria-label="Close guide" onClick={() => setGuideOpen(false)}><X size={17} /></button>
             </header>
             <div className="xt-guide-progress"><span style={{ width: `${((guidePage + 1) / activeGuidePages.length) * 100}%` }} /></div>
             <article className="xt-guide-page">
-               <small className="xt-guide-kicker">{guideMode === "trade-x" ? "TRADE X FIELD GUIDE" : guideMode === "digit-flip" ? "DIGITFLIP FIELD GUIDE" : guideMode === "bulk-trader" ? "BULK TRADER FIELD GUIDE" : guideMode === "money-bank" ? "MONEY BANK FIELD GUIDE" : guideMode === "cash-grab" ? "CASH GRAB FIELD GUIDE" : guideMode === "matches-analysis" ? "MATCHES ANALYSIS FIELD GUIDE" : guideMode === "clock-work" ? "CLOCK WORK FIELD GUIDE" : "EDGE FIELD GUIDE"}</small>
+               <small className="xt-guide-kicker">{guideMode === "trade-x" ? "TRADE X FIELD GUIDE" : guideMode === "digit-flip" ? "DIGITFLIP FIELD GUIDE" : guideMode === "bulk-trader" ? "BULK TRADER FIELD GUIDE" : guideMode === "money-bank" ? "MONEY BANK FIELD GUIDE" : guideMode === "cash-grab" ? "CASH GRAB FIELD GUIDE" : guideMode === "clock-work" ? "CLOCK WORK FIELD GUIDE" : "EDGE FIELD GUIDE"}</small>
               <h2 id="xt-guide-title">{activeGuidePages[guidePage].title}</h2>
               <p>{activeGuidePages[guidePage].body}</p>
               <ul>{activeGuidePages[guidePage].points.map((point) => <li key={point}>{point}</li>)}</ul>
@@ -5608,7 +5467,7 @@ export default function XTraderPage() {
                 <button type="button" className="xt-guide-start" onClick={() => {
                   setGuideOpen(false);
                   if (!canUseGuideFeature) return;
-                  guideMode === "trade-x" ? toggleTradeX(true) : guideMode === "digit-flip" ? toggleDigitFlip(true) : guideMode === "bulk-trader" ? toggleBulkTrader(true) : guideMode === "money-bank" ? toggleMoneyBank(true) : guideMode === "cash-grab" ? toggleCashGrab(true) : guideMode === "matches-analysis" ? toggleMatchesAnalysis(true) : guideMode === "clock-work" ? toggleClockWork(true) : toggleXTrader(true);
+                  guideMode === "trade-x" ? toggleTradeX(true) : guideMode === "digit-flip" ? toggleDigitFlip(true) : guideMode === "bulk-trader" ? toggleBulkTrader(true) : guideMode === "money-bank" ? toggleMoneyBank(true) : guideMode === "cash-grab" ? toggleCashGrab(true) : guideMode === "clock-work" ? toggleClockWork(true) : toggleXTrader(true);
                 }}>{canUseGuideFeature ? "Let's start trading" : "Close guide"}</button>
               ) : (
                 <button type="button" className="xt-guide-nav next" onClick={() => setGuidePage((page) => Math.min(activeGuidePages.length - 1, page + 1))}>Next<ChevronRight size={15} /></button>

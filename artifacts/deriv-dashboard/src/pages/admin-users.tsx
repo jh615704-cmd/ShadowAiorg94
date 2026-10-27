@@ -74,7 +74,9 @@ const featureDescriptions: Partial<Record<AccessFeatureValue, string>> = {
 };
 
 const featureOptions = Object.values(AccessFeature)
-  .filter((value): value is Exclude<AccessFeatureValue, "admin"> => value !== "admin")
+  .filter((value): value is Exclude<AccessFeatureValue, "admin" | "matches-analysis"> =>
+    value !== "admin" && value !== "matches-analysis",
+  )
   .map((value) => {
     const label = featureLabels[value] ?? value.split("-").map((part) => part[0]?.toUpperCase() + part.slice(1)).join(" ");
     return {

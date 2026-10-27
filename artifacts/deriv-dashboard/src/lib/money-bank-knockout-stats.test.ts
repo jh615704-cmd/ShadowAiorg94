@@ -20,12 +20,14 @@ test("Money Bank stats use actual Deriv outcomes and tick_passed by market and g
   assert.equal(onePercent.longestTicks, 8);
   assert.equal(onePercent.shortestTicks, 4);
   assert.equal(onePercent.averageTicks, 6);
-  assert.deepEqual(onePercent.exitOptions.map((option) => option.ticks), [3, 7]);
-  assert.equal(onePercent.exitOptions[0]?.noKnockoutPercentage, 100);
-  assert.equal(onePercent.exitOptions[1]?.noKnockoutPercentage, 66.7);
-  assert.equal(onePercent.exitOptions[0]?.isRecommended, false);
+  assert.deepEqual(onePercent.topKnockoutTicks, [
+    { ticks: 4, count: 1, percentageOfKnockouts: 50 },
+    { ticks: 8, count: 1, percentageOfKnockouts: 50 },
+  ]);
   assert.equal(twoPercent.trackedRuns, 1);
-  assert.equal(twoPercent.exitOptions.length, 0);
+  assert.deepEqual(twoPercent.topKnockoutTicks, [
+    { ticks: 3, count: 1, percentageOfKnockouts: 100 },
+  ]);
 });
 
 test("Money Bank live tick count is separate from settled outcome statistics", () => {
@@ -39,26 +41,31 @@ test("Money Bank live tick count is separate from settled outcome statistics", (
   assert.equal(stats.knockouts, 0);
 });
 
-test("recommendations require both a 50 percent observed rate and ten outcomes", () => {
+test("top five knockout ticks are ranked by frequency with stable tie ordering", () => {
   const rows = [
-    ...Array.from({ length: 5 }, (_, index) => ({
+    ...Array.from({ length: 3 }, () => ({
       symbol: "1HZ30V",
       growth_rate: 0.04,
-      tick_passed: index + 4,
+      tick_passed: 7,
       status: "lost",
     })),
-    ...Array.from({ length: 5 }, (_, index) => ({
+    ...[2, 4, 5, 6, 8, 9].map((tick_passed) => ({
       symbol: "1HZ30V",
       growth_rate: 0.04,
-      tick_passed: index + 8,
-      status: "won",
+      tick_passed,
+      status: "lost",
     })),
+    { symbol: "1HZ30V", growth_rate: 0.04, tick_passed: 10, status: "won" },
   ];
 
   const [stats] = summarizeMoneyBankKnockoutStats(rows, "1HZ30V", [4]);
 
   assert.equal(stats.trackedRuns, 10);
-  assert.equal(stats.exitOptions.length, 2);
-  assert.equal(stats.exitOptions.every((option) => option.noKnockoutPercentage >= 50), true);
-  assert.equal(stats.exitOptions.every((option) => option.isRecommended), true);
+  assert.deepEqual(stats.topKnockoutTicks, [
+    { ticks: 7, count: 3, percentageOfKnockouts: 33.3 },
+    { ticks: 2, count: 1, percentageOfKnockouts: 11.1 },
+    { ticks: 4, count: 1, percentageOfKnockouts: 11.1 },
+    { ticks: 5, count: 1, percentageOfKnockouts: 11.1 },
+    { ticks: 6, count: 1, percentageOfKnockouts: 11.1 },
+  ]);
 });

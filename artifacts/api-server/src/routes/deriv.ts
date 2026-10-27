@@ -16,8 +16,6 @@ import {
   QuoteClockWorkContractsResponse,
   BuyClockWorkContractsBody,
   BuyClockWorkContractsResponse,
-  BuyMatchesContractsBody,
-  BuyMatchesContractsResponse,
   SelectDerivAccountBody,
   SelectDerivAccountResponse,
   SelectDerivSymbolBody,
@@ -42,7 +40,6 @@ import {
   dualBuyContracts,
   quoteClockWorkContracts,
   buyClockWorkContracts,
-  buyMatchesContracts,
   selectAccount,
   selectSymbol,
   testConnection,
@@ -704,55 +701,6 @@ router.post("/deriv/clock-work/buy", requireAccessFeature("clock-work"), async (
       : message.includes("still settling") || message.includes("checking open contracts") || message.includes("safety timeout")
       ? 409
       : message.includes("stake") || message.includes("market") || message.includes("barrier") || message.includes("five-tick") || message.includes("supports") || message.includes("contract keys")
-      ? 400
-      : message.includes("did not return a proposal") || message.includes("WebSocket is not ready")
-      ? 503
-      : 502;
-    return res.status(status).json({
-      error: message,
-      diagnostic_source: tradeErrorSourceForRoute(error, status),
-      trade_outcome: tradeOutcomeForRouteError(error, status),
-    });
-  }
-});
-
-router.post("/deriv/matches/buy", requireAccessFeature("matches-analysis"), async (req, res) => {
-  const parsed = BuyMatchesContractsBody.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Invalid Matches buy request" });
-
-  try {
-    const assertAuthorized = () => assertAccessSessionActive(res.locals.accessSessionId, res.locals.accessKeyId);
-    const result = BuyMatchesContractsResponse.parse(await withCredential(
-      res.locals.userId,
-      async () => {
-        await assertAuthorized();
-        return buyMatchesContracts(parsed.data, assertAuthorized);
-      },
-      true,
-    ));
-    return res.status(202).json(result);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Matches buy request failed";
-    req.log.error({ err: error }, "Matches buy request failed");
-    if (isDerivBuyRateLimitError(error)) {
-      return res.status(429).json({
-        error: "Deriv temporarily limited new buys. Check account history before sending another Matches batch.",
-        code: "DERIV_BUY_RATE_LIMITED",
-        diagnostic_source: "deriv",
-        trade_outcome: tradeOutcomeForRouteError(error, 429),
-      });
-    }
-    const status = isCapacityError(error)
-      ? 503
-      : isCredentialError(error)
-      ? credentialHttpStatus(error)
-      : error instanceof AccessSessionRevokedError
-      ? 403
-      : message.includes("disabled")
-      ? 403
-      : message.includes("still settling") || message.includes("checking open contracts") || message.includes("safety timeout")
-      ? 409
-      : message.includes("Matches") || message.includes("stake") || message.includes("market") || message.includes("digit") || message.includes("tick")
       ? 400
       : message.includes("did not return a proposal") || message.includes("WebSocket is not ready")
       ? 503

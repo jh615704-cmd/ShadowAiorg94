@@ -123,7 +123,7 @@ export class AdminIntelligenceRegistry {
       });
 
     const featureStatuses = ACCESS_FEATURES
-      .filter((feature): feature is Exclude<AccessFeature, "admin"> => feature !== "admin")
+      .filter((feature) => feature !== "admin")
       .map((feature) => {
         const openFindings = findings.filter((finding) => finding.feature === feature).length;
         return {

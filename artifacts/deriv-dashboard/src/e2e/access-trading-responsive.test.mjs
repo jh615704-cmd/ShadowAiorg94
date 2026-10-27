@@ -25,6 +25,7 @@ const viewports = [
   { name: "phone", width: 390, height: 844 },
   { name: "tablet", width: 768, height: 1024 },
   { name: "laptop", width: 1440, height: 900 },
+  { name: "4K", width: 3840, height: 2160 },
 ];
 const bulkViewports = [
   ...viewports,
@@ -36,7 +37,6 @@ const fixtureFeatureIds = [
   "trade-x",
   "bulk-trader",
   "clock-work",
-  "matches-analysis",
   "cash-grab",
   "money-bank",
   "auto-trader",
@@ -297,7 +297,6 @@ test("administrators do not see status labels or red card glows", async () => {
     await page.goto(`${baseUrl}/admin`);
     await page.getByRole("heading", { name: "Create a new key" }).waitFor();
     const statusChanges = [
-      ["Matches Analysis", "restricted"],
       ["Clock Work", "coming_soon"],
       ["Cash Grab", "under_construction"],
     ];
@@ -317,7 +316,6 @@ test("administrators do not see status labels or red card glows", async () => {
     await page.goto(`${baseUrl}/app`);
     assert.equal((await settingsResponse).ok(), true);
     const expectedStatuses = [
-      [".xt-feature-card-matches", "Restricted — admin access only"],
       [".xt-feature-card-clock-work", "Coming soon"],
       [".xt-feature-card-cash-grab", "Under construction"],
     ];
@@ -454,104 +452,21 @@ test("DigitFlip history stays visible after switching the feature off", async ()
   }
 });
 
-test("Matches stops after the current buy and keeps its history available while settling", async () => {
+test("retired Matches Analysis is not shown or available to trade", async () => {
   const state = createState(userSession(["matches-analysis"]));
   state.hasToken = true;
-  state.allowFixtureTrades = true;
-  state.history = Array.from({ length: 5 }, (_, index) => ({
-    account_id: account.id,
-    contract_id: `fixture-settled-match-${index}`,
-    contract_type: "DIGITMATCH",
-    symbol: "R_75",
-    account_type: "demo",
-    currency: "USD",
-    barrier: 4,
-    duration: 1,
-    duration_unit: "t",
-    buy_price: 0.35,
-    current_value: 0.7,
-    payout: 0.7,
-    profit: 0.35,
-    status: "won",
-    buy_time: 1_700_000_000 + index,
-    sell_time: 1_700_000_001 + index,
-  }));
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {
     await page.goto(`${baseUrl}/app`);
-    const matchesToggle = page.getByRole("checkbox", { name: "Toggle Matches Analysis" });
-    const matchesSwitch = page.locator(".xt-feature-card-matches .xt-switch");
-    await matchesToggle.waitFor();
-    await matchesSwitch.click();
-    await page.getByTestId("matches-analysis-panel").waitFor();
-    await page.getByTestId("select-matches-market").selectOption("R_50");
-    await page.waitForFunction(() => Number(document.querySelector('[data-testid="value-matches-sample-count"]')?.textContent ?? 0) >= 5, undefined, { timeout: 10_000 });
-    await page.getByTestId("select-matches-market").selectOption("R_75");
-    await page.waitForFunction(() => Number(document.querySelector('[data-testid="value-matches-sample-count"]')?.textContent ?? 0) >= 20, undefined, { timeout: 15_000 });
-    assert.equal(
-      state.apiCalls.filter(({ path }) => path === "/api/deriv/select-symbol").length,
-      0,
-      "Matches market selection must not change the shared market used by other features.",
-    );
-
-    await page.getByTestId("button-matches-ai-digits-1").click();
-    const firstBuy = page.waitForRequest((request) => request.url().includes("/api/deriv/matches/buy"), { timeout: 8_000 });
-    await page.getByTestId("button-matches-start").click();
-    const request = await firstBuy;
-    const { contracts } = request.postDataJSON();
-    assert.ok(contracts.length > 0);
-    assert.ok(contracts.every(({ key }) => /^[a-f0-9]{32}$/i.test(key)), "Matches order keys must fit the server's 32-character limit.");
-    await page.getByTestId("button-matches-stop").click();
-    await page.getByTestId("status-matches-message").getByText(/Automatic Matches entries are stopped/).waitFor();
-
-    const history = page.getByRole("region", { name: "Matches Analysis History Deriv history" });
-    await history.locator(".deriv-history-row").waitFor({ timeout: 10_000 });
-    await page.waitForTimeout(1_000);
-    assert.equal(state.tradeRequests.filter(({ path }) => path === "/api/deriv/matches/buy").length, 1, "Stopping must prevent another automatic Matches batch.");
-
-    await matchesSwitch.click();
-    await page.getByTestId("matches-analysis-panel").waitFor({ state: "hidden" });
-    await history.locator(".deriv-history-row").waitFor();
-    await assertWithinViewport(page, ".deriv-history", viewports[0].width, "Matches Analysis history");
-    assert.match(await history.innerText(), /US\$0\.35/);
+    assert.equal(await page.locator(".xt-feature-card-matches").count(), 0);
+    assert.equal(await page.getByRole("checkbox", { name: "Toggle Matches Analysis" }).count(), 0);
+    assert.equal(state.tradeRequests.some(({ path }) => path === "/api/deriv/matches/buy"), false);
     assert.deepEqual(state.unhandledApis, []);
     assert.deepEqual(pageErrors, []);
   } finally {
     await context.close();
   }
-}, { timeout: 45_000 });
-
-test("Clock Work hides the preceding Matches history while active without clearing it", async () => {
-  const state = createState(userSession(["matches-analysis", "clock-work"]));
-  state.hasToken = true;
-  state.allowFixtureTrades = true;
-  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
-  try {
-    await page.goto(`${baseUrl}/app`);
-    await page.locator(".xt-feature-card-matches .xt-switch").click();
-    await page.getByTestId("matches-analysis-panel").waitFor();
-    const matchesHistory = page.getByRole("region", { name: "Matches Analysis History Deriv history" });
-    const matchBuy = page.waitForRequest((request) => request.url().includes("/api/deriv/matches/buy"), { timeout: 8_000 });
-    await page.getByTestId("button-matches-digit-mode-manual").click();
-    await page.getByTestId("button-matches-start").click();
-    await matchBuy;
-    await matchesHistory.locator(".deriv-history-row").waitFor({ timeout: 10_000 });
-
-    await page.locator(".xt-feature-card-clock-work .xt-switch").click();
-    await page.getByTestId("clock-work-panel").waitFor();
-    assert.equal(await matchesHistory.isVisible(), false, "The history panel above Clock Work should be hidden while Clock Work is active.");
-    const clockWorkHistory = page.getByRole("region", { name: "Clock Work History Deriv history" });
-    await clockWorkHistory.waitFor();
-
-    await page.locator(".xt-feature-card-clock-work .xt-switch").click();
-    await page.getByTestId("clock-work-panel").waitFor({ state: "hidden" });
-    await matchesHistory.locator(".deriv-history-row").waitFor();
-    assert.deepEqual(state.unhandledApis, []);
-    assert.deepEqual(pageErrors, []);
-  } finally {
-    await context.close();
-  }
-}, { timeout: 45_000 });
+});
 
 test("clearing Auto Trader 2.0 resets run metrics and stake without deleting Deriv history", async () => {
   const state = createState(userSession(["auto-trader-2"]));
@@ -996,10 +911,36 @@ test("Auto Trader reflects Deriv tick and settlement events without polling dela
   }
 });
 
-test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports", async () => {
+test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewports", async () => {
   const state = createState(userSession(["edge", "trade-x", "auto-trader", "auto-trader-2", "money-bank"]));
   state.hasToken = true;
+  const moneyBankRows = [1, 2, 3, 4, 5].flatMap((growthRate) =>
+    [1, 1, 1, 2, 2, 3, 3, 4, 5].map((ticks, index) => ({
+      account_id: account.id,
+      contract_id: `fixture-money-bank-${growthRate}-${index}`,
+      contract_type: "ACCU",
+      symbol: "1HZ90V",
+      account_type: "demo",
+      currency: "USD",
+      growth_rate: growthRate,
+      tick_passed: ticks,
+      buy_price: 0.35,
+      current_value: 0,
+      payout: 0,
+      profit: -0.35,
+      status: "lost",
+      buy_time: 1_700_000_000 + index,
+      sell_time: 1_700_000_001 + index,
+    })),
+  );
+  state.history = moneyBankRows;
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  await context.addInitScript(({ accountId, contractIds }) => {
+    localStorage.setItem(
+      `money-bank-history-contracts:v1:${encodeURIComponent(accountId)}`,
+      JSON.stringify(contractIds),
+    );
+  }, { accountId: account.id, contractIds: moneyBankRows.map((row) => row.contract_id) });
   try {
     await page.goto(`${baseUrl}/app`);
     const strategiesHeading = page.getByRole("heading", { name: "Trading Strategies" });
@@ -1281,6 +1222,27 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
     await moneyBankToggle.waitFor();
     await page.locator(".xt-feature-card-edge2 .xt-switch").click();
     assert.equal(await moneyBankToggle.isChecked(), true);
+    await page.getByRole("heading", { name: "Possible exit ticks by growth rate" }).waitFor();
+    const exitRateRows = page.locator(".money-bank-knockout-rate-row");
+    await page.locator(".money-bank-knockout-option").first().waitFor();
+    assert.equal(await exitRateRows.count(), 5, "Money Bank should show all five growth rates.");
+    for (const row of await exitRateRows.all()) {
+      assert.equal(await row.locator(".money-bank-knockout-option").count(), 5, "Each growth rate should show its top five knockout ticks.");
+    }
+    assert.equal(await page.getByText(/Exit ticks and percentages come only from settled/).count(), 0);
+
+    const marketSelect = page.getByRole("combobox", { name: "Select a Volatility market" });
+    await marketSelect.selectOption("1HZ15V");
+    assert.equal(await page.locator(".money-bank-knockout-option").count(), 0, "Changing markets should refresh the historical ranking.");
+    await marketSelect.selectOption("1HZ90V");
+    await page.locator(".money-bank-knockout-option").first().waitFor();
+
+    const historyRefresh = page.waitForResponse((response) =>
+      response.url().includes("/api/deriv/history") && response.request().method() === "GET",
+    );
+    await page.locator(".money-bank-chart-reset").click();
+    await historyRefresh;
+
     const autoKnockoutSwitch = page.getByRole("checkbox", { name: "Toggle Money Bank Auto Knockout" });
     await autoKnockoutSwitch.waitFor();
     await page.locator(".money-bank-market-toggle label").click();
@@ -1315,7 +1277,7 @@ test("Trade X and Auto Trader controls fit phone, tablet, and laptop viewports",
   }
 });
 
-test("Bulk Trader digits match Trade X pill styling and fit phone, tablet, and laptop widths", async () => {
+test("Bulk Trader digits match Trade X pill styling and fit phone, tablet, laptop, and 4K widths", async () => {
   const state = createState(userSession(["bulk-trader"]));
   state.hasToken = true;
   const { context, page, pageErrors } = await createMockPage(state, bulkViewports[0]);
@@ -1670,36 +1632,6 @@ async function mockApiRequest(route, state, pathname, method) {
       message: "Fixture buy confirmed.",
       proposal: { id: "fixture-proposal", ask_price: order.amount, payout: order.amount * 2, spot: 100_000 },
       buy: { contract_id: buy.contract_id, buy_price: order.amount, payout: order.amount * 2 },
-    });
-    return;
-  }
-  if (pathname === "/api/deriv/matches/buy" && method === "POST" && state.allowFixtureTrades) {
-    state.tradeRequests.push({ path: pathname, method });
-    const { contracts } = request.postDataJSON();
-    if (!contracts.every(({ key }) => typeof key === "string" && key.length <= 32)) {
-      await fulfillJson(route, { error: "Invalid Matches buy request" }, 400);
-      return;
-    }
-    const completed = contracts.map((order) => {
-      const buy = fixtureBuy(state, order);
-      return {
-        key: order.key,
-        amount: order.amount,
-        contract_type: "DIGITMATCH",
-        barrier: order.barrier,
-        symbol: order.symbol,
-        proposal: { id: "fixture-proposal", ask_price: order.amount, payout: order.amount * 2, spot: 100_000 },
-        buy: { contract_id: buy.contract_id, buy_price: order.amount, payout: order.amount * 2 },
-      };
-    });
-    await new Promise((resolve) => setTimeout(resolve, 350));
-    await fulfillJson(route, {
-      ok: true,
-      message: `${completed.length} Matches contract${completed.length === 1 ? "" : "s"} sent to Deriv.`,
-      requested_count: contracts.length,
-      completed_count: completed.length,
-      contracts: completed,
-      failed: [],
     });
     return;
   }

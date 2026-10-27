@@ -11,7 +11,6 @@ export type AdminDiagnosticFeature =
   | "digit-flip"
   | "trade-x"
   | "bulk-trader"
-  | "matches-analysis"
   | "clock-work"
   | "cash-grab"
   | "money-bank"

@@ -5,11 +5,10 @@ export type MoneyBankKnockoutRow = {
   status: string;
 };
 
-export type MoneyBankExitTickOption = {
+export type MoneyBankKnockoutTickFrequency = {
   ticks: number;
-  noKnockoutPercentage: number;
-  sampleCount: number;
-  isRecommended: boolean;
+  count: number;
+  percentageOfKnockouts: number;
 };
 
 export type MoneyBankRateStats = {
@@ -21,10 +20,8 @@ export type MoneyBankRateStats = {
   averageTicks: number | null;
   shortestTicks: number | null;
   liveTicks: number | null;
-  exitOptions: MoneyBankExitTickOption[];
+  topKnockoutTicks: MoneyBankKnockoutTickFrequency[];
 };
-
-export const MONEY_BANK_MIN_RECOMMENDATION_SAMPLE = 10;
 
 function growthRatePercent(value: number | null | undefined) {
   if (value == null || !Number.isFinite(value)) return null;
@@ -33,30 +30,21 @@ function growthRatePercent(value: number | null | undefined) {
   return rounded >= 1 && rounded <= 5 ? rounded : null;
 }
 
-function percentile(values: number[], quantile: number) {
-  const sorted = [...values].sort((left, right) => left - right);
-  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * quantile) - 1));
-  return sorted[index];
-}
-
-function getCandidateExitTicks(knockoutTicks: number[]) {
-  if (knockoutTicks.length < 2) return [];
-
-  const candidates = [
-    Math.max(1, percentile(knockoutTicks, 0.25) - 1),
-    Math.max(1, percentile(knockoutTicks, 0.75) - 1),
-  ];
-  const distinct = [...new Set(candidates)].sort((left, right) => left - right);
-  if (distinct.length < 2) {
-    const observedRange = [
-      Math.max(1, Math.min(...knockoutTicks) - 1),
-      Math.max(1, Math.max(...knockoutTicks) - 1),
-    ];
-    for (const tick of observedRange) {
-      if (!distinct.includes(tick)) distinct.push(tick);
-    }
+function getTopKnockoutTicks(knockoutTicks: number[]) {
+  if (!knockoutTicks.length) return [];
+  const counts = new Map<number, number>();
+  for (const ticks of knockoutTicks) {
+    counts.set(ticks, (counts.get(ticks) ?? 0) + 1);
   }
-  return distinct.sort((left, right) => left - right).slice(0, 2);
+
+  return [...counts.entries()]
+    .map(([ticks, count]) => ({
+      ticks,
+      count,
+      percentageOfKnockouts: Number(((count / knockoutTicks.length) * 100).toFixed(1)),
+    }))
+    .sort((left, right) => right.count - left.count || left.ticks - right.ticks)
+    .slice(0, 5);
 }
 
 export function summarizeMoneyBankKnockoutStats(
@@ -92,21 +80,6 @@ export function summarizeMoneyBankKnockoutStats(
       ? Number((tickDurations.reduce((total, ticks) => total + ticks, 0) / tickDurations.length).toFixed(1))
       : null;
 
-    const exitOptions = getCandidateExitTicks(knockoutTicks).map((ticks) => {
-      const noKnockoutCount = outcomes.filter((outcome) =>
-        outcome.status === "won" || (outcome.status === "lost" && outcome.ticks > ticks),
-      ).length;
-      const noKnockoutPercentage = outcomes.length
-        ? Number(((noKnockoutCount / outcomes.length) * 100).toFixed(1))
-        : 0;
-      return {
-        ticks,
-        noKnockoutPercentage,
-        sampleCount: outcomes.length,
-        isRecommended: outcomes.length >= MONEY_BANK_MIN_RECOMMENDATION_SAMPLE && noKnockoutPercentage >= 50,
-      };
-    });
-
     return {
       growthRate,
       trackedRuns: outcomes.length,
@@ -116,7 +89,7 @@ export function summarizeMoneyBankKnockoutStats(
       averageTicks,
       shortestTicks,
       liveTicks,
-      exitOptions,
+      topKnockoutTicks: getTopKnockoutTicks(knockoutTicks),
     };
   });
 }

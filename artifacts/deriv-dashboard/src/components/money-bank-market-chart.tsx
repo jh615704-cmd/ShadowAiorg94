@@ -12,6 +12,7 @@ type Props = {
   quote?: number | null;
   quotes: readonly number[];
   tickSequence?: number;
+  onRefreshHistory?: () => void;
 };
 
 const plot = { left: 66, right: 790, top: 22, bottom: 214 };
@@ -23,6 +24,7 @@ export function MoneyBankMarketChart({
   quote,
   quotes,
   tickSequence,
+  onRefreshHistory,
 }: Props) {
   const [session, setSession] = useState(() => startMoneyBankChartSession(symbol, tickSequence));
 
@@ -58,7 +60,10 @@ export function MoneyBankMarketChart({
     : "";
   const formattedChange = `${changePercent > 0 ? "+" : ""}${changePercent.toFixed(2)}%`;
   const colorClass = trend === "falling" ? "is-falling" : trend === "rising" ? "is-rising" : "is-flat";
-  const resetChart = () => setSession(startMoneyBankChartSession(symbol, tickSequence));
+  const resetChart = () => {
+    setSession(startMoneyBankChartSession(symbol, tickSequence));
+    onRefreshHistory?.();
+  };
 
   return (
     <section className={`money-bank-market-chart ${colorClass}`} aria-label={`${marketName} Above Market price chart`}>

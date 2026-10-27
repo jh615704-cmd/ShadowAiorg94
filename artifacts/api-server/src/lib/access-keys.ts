@@ -9,16 +9,15 @@ const LEGACY_PRIMARY_ADMIN_KEY_HASH = "0d11ae258d4fd0f86e2e07606a4b835b2cdc745a7
 // An administrator max-device value of 0 means unlimited.
 export const PRIMARY_ADMIN_MAX_DEVICES = 0;
 const PRIMARY_ADMIN_LABEL = "Primary administrator";
-export const ACCESS_FEATURES = Object.values(AccessFeatureValues) as Array<
-  (typeof AccessFeatureValues)[keyof typeof AccessFeatureValues]
->;
+type AllAccessFeature = (typeof AccessFeatureValues)[keyof typeof AccessFeatureValues];
+export const ACCESS_FEATURES = (Object.values(AccessFeatureValues) as AllAccessFeature[])
+  .filter((feature): feature is Exclude<AllAccessFeature, "matches-analysis"> => feature !== "matches-analysis");
 export type AccessFeature = typeof ACCESS_FEATURES[number];
 export const TRADING_ACCESS_FEATURES = [
   "edge",
   "digit-flip",
   "trade-x",
   "bulk-trader",
-  "matches-analysis",
   "clock-work",
   "cash-grab",
   "money-bank",
@@ -248,6 +247,7 @@ export function featureList(features: string[] | null | undefined, kind: "admin"
   const normalized = Array.from(new Set((features ?? []).filter((feature): feature is AccessFeature =>
     (ACCESS_FEATURES as readonly string[]).includes(feature),
   )));
+  if (features?.length && !normalized.length) return [];
   // The primary administrator is synchronized with every current feature by
   // syncConfiguredPrimaryAdminKey. Other admin-kind keys still need their own
   // explicitly granted feature set.

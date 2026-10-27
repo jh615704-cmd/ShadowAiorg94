@@ -46,23 +46,13 @@ const autoTrader2Feature = "auto-trader-2";
 const clockWorkFeature = "clock-work";
 const matchesAnalysisFeature = "matches-analysis";
 
-describe("Auto Trader access-key feature path", () => {
-  it("accepts Matches Analysis grants and limits its buy route to that feature", async () => {
-    const create = CreateAccessKeyBody.parse({
-      label: "Matches Analysis user",
-      kind: "user",
-      max_devices: 1,
-      features: [matchesAnalysisFeature],
-    });
-    const update = UpdateAccessKeyBody.parse({ features: [matchesAnalysisFeature] });
-
-    assert.deepEqual(create.features, [matchesAnalysisFeature]);
-    assert.deepEqual(update.features, [matchesAnalysisFeature]);
-    assert.ok(ACCESS_FEATURES.includes(matchesAnalysisFeature));
-    assert.ok(TRADING_ACCESS_FEATURES.includes(matchesAnalysisFeature));
-    assert.equal((await runGuard(requireAccessFeature(matchesAnalysisFeature), [matchesAnalysisFeature])).nextCalled, true);
+describe("Trading access-key feature path", () => {
+  it("does not grant access to the retired Matches Analysis feature", async () => {
+    assert.equal((ACCESS_FEATURES as readonly string[]).includes(matchesAnalysisFeature), false);
+    assert.equal((TRADING_ACCESS_FEATURES as readonly string[]).includes(matchesAnalysisFeature), false);
+    assert.deepEqual(featureList([matchesAnalysisFeature], "user"), []);
     assert.equal(
-      (await runGuard(requireAccessFeature(matchesAnalysisFeature), ["trade-x"])).statusCode,
+      (await runGuard(requireAccessFeature(matchesAnalysisFeature), featureList([matchesAnalysisFeature], "user"))).statusCode,
       403,
     );
   });

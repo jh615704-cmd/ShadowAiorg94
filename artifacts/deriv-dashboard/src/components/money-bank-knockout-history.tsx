@@ -1,8 +1,5 @@
 import type { DerivHistoryRow } from "./deriv-history";
-import {
-  MONEY_BANK_MIN_RECOMMENDATION_SAMPLE,
-  summarizeMoneyBankKnockoutStats,
-} from "../lib/money-bank-knockout-stats";
+import { summarizeMoneyBankKnockoutStats } from "../lib/money-bank-knockout-stats";
 
 type Props = {
   rows: readonly DerivHistoryRow[];
@@ -117,33 +114,15 @@ export function MoneyBankKnockoutHistory({
                     <small>{item.trackedRuns ? `${item.knockouts} KO · ${item.trackedRuns} runs` : "No settled runs"}</small>
                   </header>
 
-                  {item.exitOptions.length ? (
+                  {item.topKnockoutTicks.length ? (
                     <div className="money-bank-knockout-options">
-                      {[0, 1].map((index) => {
-                        const option = item.exitOptions[index];
+                      {item.topKnockoutTicks.map((tick, index) => {
                         return (
-                          <div className="money-bank-knockout-option" key={index}>
-                            <small>OPTION {index + 1} · {index === 0 ? "EARLIER" : "LATER"}</small>
-                            {option ? (
-                              <>
-                                <strong>{formatTicks(option.ticks)}</strong>
-                                <b>{option.noKnockoutPercentage.toFixed(1)}%</b>
-                                <span>No-knockout rate in settled sample</span>
-                                <em className={option.isRecommended ? "meets-threshold" : ""}>
-                                  {option.noKnockoutPercentage >= 50
-                                    ? option.sampleCount >= MONEY_BANK_MIN_RECOMMENDATION_SAMPLE
-                                      ? index === 0
-                                        ? "Top historical result · sample rule met"
-                                        : "50%+ historical sample rule met"
-                                      : "50%+ · small sample"
-                                    : "Below 50% in historical sample"}
-                                </em>
-                              </>
-                            ) : (
-                              <span className="money-bank-knockout-unavailable">
-                                More distinct Deriv knockout ticks are needed.
-                              </span>
-                            )}
+                          <div className="money-bank-knockout-option" key={tick.ticks}>
+                            <small>RANK {index + 1}</small>
+                            <strong>{formatTicks(tick.ticks)}</strong>
+                            <b>{tick.percentageOfKnockouts.toFixed(1)}%</b>
+                            <span>{tick.count} of {item.knockouts} settled knockouts</span>
                           </div>
                         );
                       })}
@@ -151,7 +130,7 @@ export function MoneyBankKnockoutHistory({
                   ) : (
                     <div className="money-bank-knockout-empty">
                       {item.trackedRuns
-                        ? "No distinct knockout tick samples for this rate yet."
+                        ? "No settled knockout ticks recorded for this rate yet."
                         : `No settled ${item.growthRate}% outcomes recorded for this market yet.`}
                     </div>
                   )}
@@ -162,9 +141,6 @@ export function MoneyBankKnockoutHistory({
         </>
       )}
 
-      <p className="money-bank-knockout-note">
-        Exit ticks and percentages come only from settled win/loss outcomes for this market and growth rate. They are historical comparisons, not a forecast or guaranteed win rate. Stake changes the amount at risk, not the observed knockout timing. A 50%+ result is a sample threshold, not a promise of safety.
-      </p>
     </section>
   );
 }
