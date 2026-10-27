@@ -34,9 +34,11 @@ import { Link } from "wouter";
 import { DerivAccountSwitcher } from "@/components/deriv-account-switcher";
 import { FeatureStatusText } from "@/components/feature-status";
 import { GlobalFeatureAnnouncement } from "@/components/layout/global-feature-announcement";
+import { NotificationCenter } from "@/components/notification-center";
 import { useAccessSessionLogout } from "@/hooks/use-access-session-logout";
+import { useAccountNotifications } from "@/hooks/use-account-notifications";
 import {
-  Activity, BookOpen, Bot, ChevronDown, ChevronLeft, ChevronRight, Gauge, Link2, Loader2, LockKeyhole,
+  Activity, BookOpen, Bot, ChevronDown, ChevronLeft, ChevronRight, Gauge, Loader2, LockKeyhole,
   Clock3, LogOut, Menu, Pause, Play, Power, RefreshCw, RotateCcw, Settings, ShieldAlert, ShieldCheck, X, Zap,
 } from "lucide-react";
 import {
@@ -692,6 +694,26 @@ export default function XTraderPage() {
   currentAccountBalanceRef.current = currentAccountBalance;
   const isReal = currentAccount?.type === "real";
   const isConnected = Boolean(status.data?.connected && status.data?.authorized);
+  const currentAccountId = currentAccount?.id ?? null;
+  const currentAccountType = currentAccount?.type ?? null;
+  const currentAccountCurrency = currentAccount?.currency ?? null;
+  const accessKeyId = accessSession.data?.key_id;
+  const {
+    notifications,
+    unreadCount: unreadNotificationCount,
+    isReady: notificationsReady,
+    addNotification,
+    markNotificationRead,
+    markAllNotificationsRead,
+    clearNotifications,
+  } = useAccountNotifications(accessKeyId);
+  const previousTokenStateRef = useRef<{ accessKeyId?: string; hasToken: boolean | null }>({ hasToken: null });
+  const previousConnectionStateRef = useRef<{ accessKeyId?: string; isConnected: boolean | null }>({ isConnected: null });
+  const previousAccountRef = useRef<{ accessKeyId?: string; accountId: string | null }>({ accountId: null });
+  const statusIssueRef = useRef<string | null>(null);
+  useEffect(() => {
+    statusIssueRef.current = null;
+  }, [accessKeyId]);
   const activeContractCount = status.data?.active_contract_count ?? 0;
   const openContractsReady = status.data?.open_contracts_ready === true;
   const tradeSlotBlocked = !openContractsReady || activeContractCount > 0;
@@ -702,6 +724,98 @@ export default function XTraderPage() {
       : activeContractCount > 0
         ? `Waiting for ${activeContractCount} open Deriv contract${activeContractCount === 1 ? "" : "s"} to settle before another trade can start.`
         : null;
+
+  useEffect(() => {
+    if (!accessKeyId || !notificationsReady || !tokenStatus.isSuccess || !tokenStatus.data) return;
+    const hasToken = Boolean(tokenStatus.data.has_token);
+    const previous = previousTokenStateRef.current;
+    if (previous.accessKeyId !== accessKeyId) {
+      previousTokenStateRef.current = { accessKeyId, hasToken };
+      return;
+    }
+    if (previous.hasToken === true && !hasToken) {
+      addNotification(
+        "connection",
+        "Deriv credential removed",
+        "The saved credential was removed. Reconnect Deriv before starting new trades.",
+      );
+    }
+    previousTokenStateRef.current = { accessKeyId, hasToken };
+  }, [accessKeyId, addNotification, notificationsReady, tokenStatus.data?.has_token, tokenStatus.isSuccess]);
+
+  useEffect(() => {
+    if (!accessKeyId || !notificationsReady || !status.isSuccess) return;
+    const previous = previousConnectionStateRef.current;
+    if (previous.accessKeyId !== accessKeyId) {
+      previousConnectionStateRef.current = { accessKeyId, isConnected };
+      return;
+    }
+    if (previous.isConnected === false && isConnected) {
+      addNotification("connection", "Deriv connected", "Your Deriv connection is authorized and ready.");
+    } else if (previous.isConnected === true && !isConnected && connectedToken) {
+      addNotification(
+        "connection",
+        "Deriv connection interrupted",
+        "The live connection is no longer authorized. New trades will stay paused until it reconnects.",
+      );
+    }
+    previousConnectionStateRef.current = { accessKeyId, isConnected };
+  }, [accessKeyId, addNotification, connectedToken, isConnected, notificationsReady, status.isSuccess]);
+
+  useEffect(() => {
+    if (!accessKeyId || !notificationsReady || !status.isSuccess) return;
+    const previous = previousAccountRef.current;
+    if (previous.accessKeyId !== accessKeyId) {
+      previousAccountRef.current = { accessKeyId, accountId: currentAccountId };
+      return;
+    }
+    if (previous.accountId && currentAccountId && previous.accountId !== currentAccountId && currentAccountType) {
+      const accountType = currentAccountType === "real" ? "Real" : "Demo";
+      addNotification(
+        "account",
+        "Trading account changed",
+        `The selected account is now ${accountType}${currentAccountCurrency ? ` · ${currentAccountCurrency}` : ""}.`,
+      );
+    }
+    previousAccountRef.current = { accessKeyId, accountId: currentAccountId };
+  }, [
+    accessKeyId,
+    addNotification,
+    currentAccountCurrency,
+    currentAccountId,
+    currentAccountType,
+    notificationsReady,
+    status.isSuccess,
+  ]);
+
+  const statusUpdatesUnavailable = Boolean(
+    connectedToken && (status.isError || status.isRefetchError),
+  );
+  useEffect(() => {
+    if (!accessKeyId || !notificationsReady) return undefined;
+    if (statusUpdatesUnavailable) {
+      if (statusIssueRef.current === accessKeyId) return undefined;
+      const timeout = window.setTimeout(() => {
+        statusIssueRef.current = accessKeyId;
+        addNotification(
+          "connection",
+          "Deriv status updates paused",
+          "The dashboard has not received fresh account status. Check the connection before starting another action.",
+        );
+      }, 5_000);
+      return () => window.clearTimeout(timeout);
+    }
+    if (statusIssueRef.current === accessKeyId && status.isSuccess) {
+      statusIssueRef.current = null;
+      addNotification("connection", "Deriv status updates restored", "Fresh account status is being received again.");
+    }
+    return undefined;
+  }, [accessKeyId, addNotification, notificationsReady, status.isSuccess, statusUpdatesUnavailable]);
+
+  const handleLogout = () => {
+    clearNotifications();
+    logoutAccessSession();
+  };
   const volatilityMarkets = markets.filter(([market]) => !market.startsWith("JD"));
   const moneyBankMarkets = volatilityMarkets.filter(([market]) =>
     (MONEY_BANK_AUTO_SYMBOLS as readonly string[]).includes(market),
@@ -1458,8 +1572,14 @@ export default function XTraderPage() {
       queryClient.setQueryData(getGetDerivAccountsQueryKey(), connection.accounts);
       queryClient.setQueryData(getGetDerivStatusQueryKey(), connection.status);
       setConnectionMessage({ kind: "info", text: "Deriv connected. Your credential remains protected on the server." });
+      addNotification("connection", "Deriv connected", "Your Deriv connection is authorized and ready.");
     } catch (error) {
       setConnectionMessage({ kind: "error", text: errorMessage(error) });
+      addNotification(
+        "connection",
+        "Deriv connection failed",
+        "Deriv could not validate the credential or open the connection. Review the connection message and try again.",
+      );
     }
   };
 
@@ -4242,7 +4362,7 @@ export default function XTraderPage() {
                   className="xt-navigation-logout"
                   onClick={() => {
                     setNavigationOpen(false);
-                    logoutAccessSession();
+                    handleLogout();
                   }}
                   disabled={isLoggingOut}
                 >
@@ -4278,7 +4398,21 @@ export default function XTraderPage() {
             onAccountSelected={() => {
               void queryClient.invalidateQueries();
             }}
-            onAccountSelectError={(message) => setConnectionMessage({ kind: "error", text: message })}
+            onAccountSelectError={(message) => {
+              setConnectionMessage({ kind: "error", text: message });
+              addNotification(
+                "account",
+                "Account switch failed",
+                "Deriv could not switch accounts. Your previous account remains selected; check the connection and try again.",
+              );
+            }}
+          />
+          <NotificationCenter
+            notifications={notifications}
+            unreadCount={unreadNotificationCount}
+            onMarkRead={markNotificationRead}
+            onMarkAllRead={markAllNotificationsRead}
+            onClear={clearNotifications}
           />
         </div>
       </header>
@@ -4288,7 +4422,7 @@ export default function XTraderPage() {
         {canUseSettings && <Link href="/settings"><Settings size={15} />Settings</Link>}
         <button
           type="button"
-          onClick={logoutAccessSession}
+          onClick={handleLogout}
           disabled={isLoggingOut}
         >
           <LogOut size={15} />{isLoggingOut ? "Logging out…" : "Log out"}
