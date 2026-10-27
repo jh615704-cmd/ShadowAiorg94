@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetAccessSessionQueryKey,
@@ -561,21 +561,6 @@ export default function XTraderPage() {
   const [sessionTrades, setSessionTrades] = useState(0);
   const [analysisDigits, setAnalysisDigits] = useState<number[]>([]);
   const [analysisTickCount, setAnalysisTickCount] = useState(0);
-  const [connectionMessage, setConnectionMessage] = useState<{ kind: "info" | "error"; text: string } | null>(null);
-  const [connectionMessageFading, setConnectionMessageFading] = useState(false);
-  useEffect(() => {
-    if (!connectionMessage) {
-      setConnectionMessageFading(false);
-      return;
-    }
-    setConnectionMessageFading(false);
-    const fadeTimer = window.setTimeout(() => setConnectionMessageFading(true), 4500);
-    const removeTimer = window.setTimeout(() => setConnectionMessage(null), 5000);
-    return () => {
-      window.clearTimeout(fadeTimer);
-      window.clearTimeout(removeTimer);
-    };
-  }, [connectionMessage]);
   const [nextStake, setNextStake] = useState(stake);
   const runningRef = useRef(false);
   const autoSwitchRef = useRef(autoSwitch);
@@ -703,17 +688,50 @@ export default function XTraderPage() {
     unreadCount: unreadNotificationCount,
     isReady: notificationsReady,
     addNotification,
+    upsertNotification,
     markNotificationRead,
     dismissNotification,
     markAllNotificationsRead,
     clearNotifications,
   } = useAccountNotifications(accessKeyId);
+  const addNotificationRef = useRef(addNotification);
+  addNotificationRef.current = addNotification;
+  const upsertNotificationRef = useRef(upsertNotification);
+  upsertNotificationRef.current = upsertNotification;
+  const recentConnectionErrorAtRef = useRef(new Map<string, number>());
+  const setConnectionMessage = useCallback(
+    (message: { kind: "info" | "error"; text: string } | null) => {
+      if (!message) return;
+      const text = message.text.trim().slice(0, 500);
+      if (!text) return;
+      if (message.kind === "info") {
+        if (text.startsWith("Deriv connected.")) {
+          addNotificationRef.current("connection", "Deriv connected", text);
+        } else {
+          upsertNotificationRef.current("connection", "Workspace update", text);
+        }
+        return;
+      }
+      const now = Date.now();
+      const previousAt = recentConnectionErrorAtRef.current.get(text);
+      if (previousAt !== undefined && now - previousAt < 30_000) return;
+      recentConnectionErrorAtRef.current.set(text, now);
+      if (recentConnectionErrorAtRef.current.size > 40) {
+        for (const [previousText, timestamp] of recentConnectionErrorAtRef.current) {
+          if (now - timestamp > 30_000) recentConnectionErrorAtRef.current.delete(previousText);
+        }
+      }
+      addNotificationRef.current("connection", "Workspace alert", text);
+    },
+    [],
+  );
   const previousTokenStateRef = useRef<{ accessKeyId?: string; hasToken: boolean | null }>({ hasToken: null });
   const previousConnectionStateRef = useRef<{ accessKeyId?: string; isConnected: boolean | null }>({ isConnected: null });
   const previousAccountRef = useRef<{ accessKeyId?: string; accountId: string | null }>({ accountId: null });
   const statusIssueRef = useRef<string | null>(null);
   useEffect(() => {
     statusIssueRef.current = null;
+    recentConnectionErrorAtRef.current.clear();
   }, [accessKeyId]);
   const activeContractCount = status.data?.active_contract_count ?? 0;
   const openContractsReady = status.data?.open_contracts_ready === true;
@@ -725,6 +743,35 @@ export default function XTraderPage() {
       : activeContractCount > 0
         ? `Waiting for ${activeContractCount} open Deriv contract${activeContractCount === 1 ? "" : "s"} to settle before another trade can start.`
         : null;
+  const realAccountTradingDisabled = Boolean(
+    isReal && status.data && !status.data.live_trading_enabled,
+  );
+
+  useEffect(() => {
+    if (derivCapacityError) {
+      upsertNotification(
+        "connection",
+        "Connection capacity issue",
+        derivCapacityError,
+      );
+    }
+  }, [derivCapacityError, upsertNotification]);
+
+  useEffect(() => {
+    if (tradeSlotMessage) {
+      upsertNotification("connection", "Trade entry paused", tradeSlotMessage);
+    }
+  }, [tradeSlotMessage, upsertNotification]);
+
+  useEffect(() => {
+    if (realAccountTradingDisabled) {
+      upsertNotification(
+        "connection",
+        "Real-account trading disabled",
+        "Live-account trading is turned off for this workspace. Ask an administrator to enable it.",
+      );
+    }
+  }, [realAccountTradingDisabled, upsertNotification]);
 
   useEffect(() => {
     if (!accessKeyId || !notificationsReady || !tokenStatus.isSuccess || !tokenStatus.data) return;
@@ -752,7 +799,11 @@ export default function XTraderPage() {
       return;
     }
     if (previous.isConnected === false && isConnected) {
-      addNotification("connection", "Deriv connected", "Your Deriv connection is authorized and ready.");
+      addNotification(
+        "connection",
+        "Deriv connected",
+        "Deriv connected. Your credential remains protected on the server.",
+      );
     } else if (previous.isConnected === true && !isConnected && connectedToken) {
       addNotification(
         "connection",
@@ -1573,14 +1624,8 @@ export default function XTraderPage() {
       queryClient.setQueryData(getGetDerivAccountsQueryKey(), connection.accounts);
       queryClient.setQueryData(getGetDerivStatusQueryKey(), connection.status);
       setConnectionMessage({ kind: "info", text: "Deriv connected. Your credential remains protected on the server." });
-      addNotification("connection", "Deriv connected", "Your Deriv connection is authorized and ready.");
     } catch (error) {
       setConnectionMessage({ kind: "error", text: errorMessage(error) });
-      addNotification(
-        "connection",
-        "Deriv connection failed",
-        "Deriv could not validate the credential or open the connection. Review the connection message and try again.",
-      );
     }
   };
 
@@ -4351,29 +4396,11 @@ export default function XTraderPage() {
             </button>
             {navigationOpen && (
               <nav id="xt-navigation-menu" className="xt-navigation-menu" aria-label="Main navigation">
-                <Link href="/app" onClick={() => setNavigationOpen(false)}><Gauge size={15} />Trading dashboard</Link>
-                {accessSession.data?.is_admin === true && (
-                  <Link href="/admin/users" onClick={() => setNavigationOpen(false)}><ShieldCheck size={15} />Admin panel</Link>
-                )}
-                {canUseSettings && (
-                  <Link href="/settings" onClick={() => setNavigationOpen(false)}><Settings size={15} />Settings</Link>
-                )}
-                <button
-                  type="button"
-                  className="xt-navigation-logout"
-                  onClick={() => {
-                    setNavigationOpen(false);
-                    handleLogout();
-                  }}
-                  disabled={isLoggingOut}
-                >
-                  <LogOut size={15} />Log out
-                </button>
-                <Link href="/auto-trader" className={canUseAutoTrader ? "" : "xt-navigation-link-restricted"} onClick={() => setNavigationOpen(false)}>
+                <Link href="/auto-trader" data-testid="link-auto-trader-menu" className={canUseAutoTrader ? "" : "xt-navigation-link-restricted"} onClick={() => setNavigationOpen(false)}>
                   <Bot size={15} />Auto Trader
                   {!canUseAutoTrader && <span><FeatureStatusText control={featureControl("auto-trader")} isAdmin={isAdmin} fallback="Restricted — admin access only" /></span>}
                 </Link>
-                <Link href="/auto-trader-2" className={canUseAutoTrader2 ? "" : "xt-navigation-link-restricted"} onClick={() => setNavigationOpen(false)}>
+                <Link href="/auto-trader-2" data-testid="link-auto-trader-2-menu" className={canUseAutoTrader2 ? "" : "xt-navigation-link-restricted"} onClick={() => setNavigationOpen(false)}>
                   <Bot size={15} />Auto Trader 2.0
                   {!canUseAutoTrader2 && <span><FeatureStatusText control={featureControl("auto-trader-2")} isAdmin={isAdmin} fallback="Restricted — admin access only" /></span>}
                 </Link>
@@ -4390,6 +4417,25 @@ export default function XTraderPage() {
             </div>
           </div>
         </div>
+        <div className="xt-header-status-actions">
+          <div
+            className={`xt-connection ${isConnected ? "online" : ""}`}
+            aria-label={`API Connection ${statusText}`}
+            aria-live="polite"
+            data-testid="status-api-connection"
+          >
+            <i aria-hidden="true" />
+            <span>API Connection</span>
+            <strong>{statusText}</strong>
+          </div>
+          <NotificationCenter
+            notifications={notifications}
+            unreadCount={unreadNotificationCount}
+            onMarkRead={markNotificationRead}
+            onDismiss={dismissNotification}
+            onMarkAllRead={markAllNotificationsRead}
+          />
+        </div>
         <div className="xt-header-right">
           <DerivAccountSwitcher
             variant="cockpit"
@@ -4400,44 +4446,31 @@ export default function XTraderPage() {
               void queryClient.invalidateQueries();
             }}
             onAccountSelectError={(message) => {
-              setConnectionMessage({ kind: "error", text: message });
               addNotification(
                 "account",
                 "Account switch failed",
-                "Deriv could not switch accounts. Your previous account remains selected; check the connection and try again.",
+                message || "Deriv could not switch accounts. Your previous account remains selected; check the connection and try again.",
               );
             }}
-          />
-          <NotificationCenter
-            notifications={notifications}
-            unreadCount={unreadNotificationCount}
-            onMarkRead={markNotificationRead}
-            onDismiss={dismissNotification}
-            onMarkAllRead={markAllNotificationsRead}
           />
         </div>
       </header>
 
       <nav className="xt-home-navigation" aria-label="Dashboard navigation">
-        <Link href="/app" aria-current="page"><Gauge size={15} />Trading dashboard</Link>
-        {canUseSettings && <Link href="/settings"><Settings size={15} />Settings</Link>}
+        <Link href="/app" aria-current="page" data-testid="link-trading-dashboard"><Gauge size={15} />Trading dashboard</Link>
+        {canUseSettings && <Link href="/settings" data-testid="link-settings"><Settings size={15} />Settings</Link>}
+        {accessSession.data?.is_admin === true && (
+          <Link href="/admin/users" data-testid="link-admin-panel"><ShieldCheck size={15} />Admin panel</Link>
+        )}
         <button
           type="button"
+          data-testid="button-logout"
           onClick={handleLogout}
           disabled={isLoggingOut}
         >
           <LogOut size={15} />{isLoggingOut ? "Logging out…" : "Log out"}
         </button>
       </nav>
-
-      <div className="xt-home-status-row">
-        {accessSession.data?.is_admin === true && (
-          <Link href="/admin/users" className="xt-admin-link">
-            <ShieldCheck size={14} />Admin panel
-          </Link>
-        )}
-        <div className={`xt-connection ${isConnected ? "online" : ""}`}><i />API Connection&nbsp; {statusText}</div>
-      </div>
 
       <section className="xt-connect-card" id="account-connection">
         <div className="xt-section-title"><LockKeyhole size={17} /><div><b>Brokerage API Connection</b></div></div>
@@ -4450,17 +4483,8 @@ export default function XTraderPage() {
           </form>
         ) : (
           <div className="xt-connected-row">
-           <span><i />Deriv credential connected securely</span>
             <button onClick={() => void disconnect()} disabled={deleteTokenMutation.isPending}>Disconnect</button>
           </div>
-        )}
-        {derivCapacityError && <p className="xt-inline-message error" role="alert">{derivCapacityError}</p>}
-        {connectionMessage && <p className={`xt-inline-message ${connectionMessage.kind}${connectionMessageFading ? " fading" : ""}`} role="status" aria-live="polite">{connectionMessage.text}</p>}
-        {tradeSlotMessage && <p className="xt-inline-message info" role="status" aria-live="polite">{tradeSlotMessage}</p>}
-        {isReal && status.data && !status.data.live_trading_enabled && (
-          <p className="xt-inline-message error" role="status">
-            Live-account trading is turned off for this workspace. Ask an administrator to enable it.
-          </p>
         )}
       </section>
 

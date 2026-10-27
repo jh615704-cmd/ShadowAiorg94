@@ -62,17 +62,55 @@ export function useAccountNotifications(accessKeyId?: string) {
   const addNotification = useCallback(
     (category: AccountNotificationCategory, title: string, message: string) => {
       if (!accessKeyId || loadedForAccessKeyId !== accessKeyId) return;
+      const safeTitle = title.slice(0, 120);
+      const safeMessage = message.slice(0, 500);
+      const createdAt = Date.now();
       const notification: AccountNotification = {
         id: createNotificationId(),
         category,
-        title,
-        message,
-        createdAt: Date.now(),
+        title: safeTitle,
+        message: safeMessage,
+        createdAt,
         read: false,
       };
-      setNotifications((current) =>
-        [notification, ...current].slice(0, MAX_ACCOUNT_NOTIFICATIONS),
-      );
+      setNotifications((current) => {
+        const duplicate = current.some((item) =>
+          item.category === category &&
+          item.title === safeTitle &&
+          item.message === safeMessage &&
+          createdAt - item.createdAt < 8_000,
+        );
+        return duplicate
+          ? current
+          : [notification, ...current].slice(0, MAX_ACCOUNT_NOTIFICATIONS);
+      });
+    },
+    [accessKeyId, loadedForAccessKeyId],
+  );
+
+  const upsertNotification = useCallback(
+    (category: AccountNotificationCategory, title: string, message: string) => {
+      if (!accessKeyId || loadedForAccessKeyId !== accessKeyId) return;
+      const safeTitle = title.slice(0, 120);
+      const safeMessage = message.slice(0, 500);
+      const createdAt = Date.now();
+      setNotifications((current) => {
+        const existing = current.find(
+          (item) => item.category === category && item.title === safeTitle,
+        );
+        const notification: AccountNotification = {
+          id: existing?.id ?? createNotificationId(),
+          category,
+          title: safeTitle,
+          message: safeMessage,
+          createdAt,
+          read: false,
+        };
+        return [
+          notification,
+          ...current.filter((item) => item.id !== existing?.id),
+        ].slice(0, MAX_ACCOUNT_NOTIFICATIONS);
+      });
     },
     [accessKeyId, loadedForAccessKeyId],
   );
@@ -125,6 +163,7 @@ export function useAccountNotifications(accessKeyId?: string) {
     unreadCount: isReady ? unreadCount : 0,
     isReady,
     addNotification,
+    upsertNotification,
     markNotificationRead,
     dismissNotification,
     markAllNotificationsRead,
