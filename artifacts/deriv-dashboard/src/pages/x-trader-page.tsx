@@ -36,7 +36,7 @@ import { FeatureStatusText } from "@/components/feature-status";
 import { GlobalFeatureAnnouncement } from "@/components/layout/global-feature-announcement";
 import { useAccessSessionLogout } from "@/hooks/use-access-session-logout";
 import {
-  Activity, BookOpen, Bot, ChevronDown, ChevronLeft, ChevronRight, Gauge, Link2, Loader2,
+  Activity, BookOpen, Bot, ChevronDown, ChevronLeft, ChevronRight, Gauge, Link2, Loader2, LockKeyhole,
   Clock3, LogOut, Menu, Pause, Play, Power, RefreshCw, RotateCcw, Settings, ShieldAlert, ShieldCheck, X, Zap,
 } from "lucide-react";
 import {
@@ -4263,7 +4263,7 @@ export default function XTraderPage() {
             <span aria-hidden="true">S</span>
             <div className="xt-brand-copy">
               <div className="xt-brand-heading">
-                <strong>Shadow Ai Trading</strong>
+                <strong>Shadow</strong>
                 <small>AI Trading</small>
               </div>
             </div>
@@ -4280,23 +4280,38 @@ export default function XTraderPage() {
             }}
             onAccountSelectError={(message) => setConnectionMessage({ kind: "error", text: message })}
           />
-          {accessSession.data?.is_admin === true && (
-            <Link href="/admin/users" className="xt-admin-link">
-              <ShieldCheck size={14} />Admin panel
-            </Link>
-          )}
-          <div className={`xt-connection ${isConnected ? "online" : ""}`}><i />{statusText}</div>
         </div>
       </header>
 
+      <nav className="xt-home-navigation" aria-label="Dashboard navigation">
+        <Link href="/app" aria-current="page"><Gauge size={15} />Trading dashboard</Link>
+        {canUseSettings && <Link href="/settings"><Settings size={15} />Settings</Link>}
+        <button
+          type="button"
+          onClick={logoutAccessSession}
+          disabled={isLoggingOut}
+        >
+          <LogOut size={15} />{isLoggingOut ? "Logging out…" : "Log out"}
+        </button>
+      </nav>
+
+      <div className="xt-home-status-row">
+        {accessSession.data?.is_admin === true && (
+          <Link href="/admin/users" className="xt-admin-link">
+            <ShieldCheck size={14} />Admin panel
+          </Link>
+        )}
+        <div className={`xt-connection ${isConnected ? "online" : ""}`}><i />API Connection&nbsp; {statusText}</div>
+      </div>
+
       <section className="xt-connect-card" id="account-connection">
-        <div className="xt-section-title"><Link2 size={17} /><div><b>Connect your Deriv account</b></div></div>
+        <div className="xt-section-title"><LockKeyhole size={17} /><div><b>Brokerage API Connection</b></div></div>
          {!canUseDeriv ? (
            <div className="xt-restricted-message"><ShieldAlert size={17} /><span>Restricted — admin access only. This key has not been granted a trading feature.</span></div>
          ) : !connectedToken ? (
           <form onSubmit={connectPat} className="xt-pat-form">
             <input type="password" value={pat} onChange={(event) => setPat(event.target.value)} placeholder="Paste your Deriv PAT token" autoComplete="off" />
-            <button disabled={!pat.trim() || tokenMutation.isPending}>{tokenMutation.isPending ? <Loader2 className="spin" size={16} /> : <Power size={16} />}Connect</button>
+            <button disabled={!pat.trim() || tokenMutation.isPending}>{tokenMutation.isPending ? <Loader2 className="spin" size={16} /> : <Power size={16} />}{tokenMutation.isPending ? "Connecting…" : "Active Connect"}</button>
           </form>
         ) : (
           <div className="xt-connected-row">
