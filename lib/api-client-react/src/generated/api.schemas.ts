@@ -92,7 +92,6 @@ export const AccessFeature = {
   'digit-flip': 'digit-flip',
   'trade-x': 'trade-x',
   'bulk-trader': 'bulk-trader',
-  'matches-analysis': 'matches-analysis',
   'clock-work': 'clock-work',
   'cash-grab': 'cash-grab',
   'money-bank': 'money-bank',
@@ -289,7 +288,6 @@ export const FeatureControlFeature = {
   'digit-flip': 'digit-flip',
   'trade-x': 'trade-x',
   'bulk-trader': 'bulk-trader',
-  'matches-analysis': 'matches-analysis',
   'clock-work': 'clock-work',
   'cash-grab': 'cash-grab',
   'money-bank': 'money-bank',
@@ -643,7 +641,6 @@ export const DerivBuyInputAccessFeature = {
   'digit-flip': 'digit-flip',
   'trade-x': 'trade-x',
   'bulk-trader': 'bulk-trader',
-  'matches-analysis': 'matches-analysis',
   'clock-work': 'clock-work',
   'cash-grab': 'cash-grab',
   'money-bank': 'money-bank',
@@ -708,7 +705,6 @@ export const DerivBulkBuyInputAccessFeature = {
   'digit-flip': 'digit-flip',
   'trade-x': 'trade-x',
   'bulk-trader': 'bulk-trader',
-  'matches-analysis': 'matches-analysis',
   'clock-work': 'clock-work',
   'cash-grab': 'cash-grab',
   'money-bank': 'money-bank',
@@ -885,103 +881,6 @@ export interface ClockWorkBatchBuyResponse {
   failed: ClockWorkFailedBuy[];
 }
 
-export type MatchesContractOrderDuration = typeof MatchesContractOrderDuration[keyof typeof MatchesContractOrderDuration];
-
-
-export const MatchesContractOrderDuration = {
-  NUMBER_1: 1,
-  NUMBER_2: 2,
-  NUMBER_3: 3,
-  NUMBER_4: 4,
-  NUMBER_5: 5,
-} as const;
-
-export type MatchesContractOrderDurationUnit = typeof MatchesContractOrderDurationUnit[keyof typeof MatchesContractOrderDurationUnit];
-
-
-export const MatchesContractOrderDurationUnit = {
-  t: 't',
-} as const;
-
-export type MatchesContractOrderContractType = typeof MatchesContractOrderContractType[keyof typeof MatchesContractOrderContractType];
-
-
-export const MatchesContractOrderContractType = {
-  DIGITMATCH: 'DIGITMATCH',
-} as const;
-
-export interface MatchesContractOrder {
-  /**
-     * @minLength 1
-     * @maxLength 32
-     */
-  key: string;
-  /** @minimum 0.35 */
-  amount: number;
-  duration: MatchesContractOrderDuration;
-  duration_unit: MatchesContractOrderDurationUnit;
-  contract_type: MatchesContractOrderContractType;
-  /**
-     * @minimum 0
-     * @maximum 9
-     */
-  barrier: number;
-  symbol: string;
-}
-
-export interface MatchesBatchInput {
-  /**
-     * @minItems 1
-     * @maxItems 3
-     */
-  contracts: MatchesContractOrder[];
-}
-
-export type MatchesCompletedBuyContractType = typeof MatchesCompletedBuyContractType[keyof typeof MatchesCompletedBuyContractType];
-
-
-export const MatchesCompletedBuyContractType = {
-  DIGITMATCH: 'DIGITMATCH',
-} as const;
-
-export interface MatchesCompletedBuy {
-  key: string;
-  amount: number;
-  contract_type: MatchesCompletedBuyContractType;
-  /**
-     * @minimum 0
-     * @maximum 9
-     */
-  barrier: number;
-  symbol: string;
-  proposal: DerivProposal;
-  buy: DerivBuy;
-}
-
-export type MatchesFailedBuyContractType = typeof MatchesFailedBuyContractType[keyof typeof MatchesFailedBuyContractType];
-
-
-export const MatchesFailedBuyContractType = {
-  DIGITMATCH: 'DIGITMATCH',
-} as const;
-
-export interface MatchesFailedBuy {
-  key: string;
-  contract_type: MatchesFailedBuyContractType;
-  error: string;
-  outcome: TradeBuyFailureOutcome;
-  source: DiagnosticSource;
-}
-
-export interface MatchesBatchBuyResponse {
-  ok: boolean;
-  message: string;
-  requested_count: number;
-  completed_count: number;
-  contracts: MatchesCompletedBuy[];
-  failed: MatchesFailedBuy[];
-}
-
 export type DerivDualBuyInputAccessFeature = typeof DerivDualBuyInputAccessFeature[keyof typeof DerivDualBuyInputAccessFeature];
 
 
@@ -990,7 +889,6 @@ export const DerivDualBuyInputAccessFeature = {
   'digit-flip': 'digit-flip',
   'trade-x': 'trade-x',
   'bulk-trader': 'bulk-trader',
-  'matches-analysis': 'matches-analysis',
   'clock-work': 'clock-work',
   'cash-grab': 'cash-grab',
   'money-bank': 'money-bank',
@@ -1077,13 +975,16 @@ export interface DerivHistoryItem {
   duration: number | null;
   /** @nullable */
   duration_unit: string | null;
-  /** Accumulator growth rate as a decimal, such as 0.03 for 3%. */
+  /**
+     * Accumulator growth rate as a decimal, such as 0.03 for 3%.
+     * @nullable
+     */
   growth_rate?: number | null;
   /**
-   * Deriv-reported number of Accumulator ticks passed since entry.
-   * @minimum 0
-   * @nullable
-   */
+     * Deriv-reported number of Accumulator ticks passed since entry.
+     * @minimum 0
+     * @nullable
+     */
   tick_passed?: number | null;
   buy_price: number;
   /** Current contract value from Deriv, or buy price plus floating profit when no live bid is available. */

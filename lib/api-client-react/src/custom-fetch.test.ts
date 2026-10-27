@@ -117,7 +117,7 @@ describe("customFetch transport recovery", () => {
     assert.equal(calls, 1);
   });
 
-  it("treats an interrupted Matches buy as an uncertain trade and never replays it", async () => {
+  it("treats an interrupted buy as an uncertain trade and never replays it", async () => {
     let calls = 0;
     globalThis.fetch = (async () => {
       calls += 1;
@@ -125,9 +125,9 @@ describe("customFetch transport recovery", () => {
     }) as typeof fetch;
 
     await assert.rejects(
-      customFetch("/api/deriv/matches/buy", {
+      customFetch("/api/deriv/buy", {
         method: "POST",
-        body: JSON.stringify({ contracts: [] }),
+        body: JSON.stringify({ access_feature: "bulk-trader", contracts: [] }),
       }),
       (error: unknown) => {
         assert.ok(error instanceof ApiTransportError);
@@ -177,15 +177,15 @@ describe("customFetch transport recovery", () => {
       { status: 202, headers: { "content-type": "application/json" } },
     )) as typeof fetch;
 
-    await customFetch("/api/deriv/matches/buy", {
+    await customFetch("/api/deriv/bulk-buy", {
       method: "POST",
-      body: JSON.stringify({ contracts: [] }),
+      body: JSON.stringify({ access_feature: "bulk-trader", contracts: [] }),
     });
 
     assert.deepEqual(reported, {
       code: "trade_outcome_uncertain",
       severity: "warning",
-      feature: "matches-analysis",
+      feature: "bulk-trader",
       source: "unknown",
     });
   });
@@ -206,15 +206,15 @@ describe("customFetch transport recovery", () => {
       { status: 202, headers: { "content-type": "application/json" } },
     )) as typeof fetch;
 
-    await customFetch("/api/deriv/matches/buy", {
+    await customFetch("/api/deriv/bulk-buy", {
       method: "POST",
-      body: JSON.stringify({ contracts: [] }),
+      body: JSON.stringify({ access_feature: "bulk-trader", contracts: [] }),
     });
 
     assert.deepEqual(reported, {
       code: "api_server_error",
       severity: "error",
-      feature: "matches-analysis",
+      feature: "bulk-trader",
       source: "deriv",
     });
   });
@@ -235,15 +235,15 @@ describe("customFetch transport recovery", () => {
       { status: 503, headers: { "content-type": "application/json" } },
     )) as typeof fetch;
 
-    await assert.rejects(customFetch("/api/deriv/matches/buy", {
+    await assert.rejects(customFetch("/api/deriv/bulk-buy", {
       method: "POST",
-      body: JSON.stringify({ contracts: [] }),
+      body: JSON.stringify({ access_feature: "bulk-trader", contracts: [] }),
     }));
 
     assert.deepEqual(reported, {
       code: "api_server_error",
       severity: "error",
-      feature: "matches-analysis",
+      feature: "bulk-trader",
       source: "api_server",
     });
   });

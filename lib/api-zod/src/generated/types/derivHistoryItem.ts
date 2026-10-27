@@ -20,13 +20,16 @@ export interface DerivHistoryItem {
   duration: number | null;
   /** @nullable */
   duration_unit: string | null;
-  /** Accumulator growth rate as a decimal, such as 0.03 for 3%. */
+  /**
+     * Accumulator growth rate as a decimal, such as 0.03 for 3%.
+     * @nullable
+     */
   growth_rate?: number | null;
   /**
-   * Deriv-reported number of Accumulator ticks passed since entry.
-   * @minimum 0
-   * @nullable
-   */
+     * Deriv-reported number of Accumulator ticks passed since entry.
+     * @minimum 0
+     * @nullable
+     */
   tick_passed?: number | null;
   buy_price: number;
   /** Current contract value from Deriv, or buy price plus floating profit when no live bid is available. */

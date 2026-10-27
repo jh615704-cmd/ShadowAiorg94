@@ -244,6 +244,8 @@ return {
   socket: null as WebSocket | null,
   connecting: null as Promise<boolean> | null,
   reconnectTimer: null as NodeJS.Timeout | null,
+  portfolioRetryTimer: null as NodeJS.Timeout | null,
+  portfolioRetryAttempt: 0,
   settlementFallbackTimer: null as NodeJS.Timeout | null,
   settlementFallbackContractIds: new Set<string>(),
   balanceRefreshAt: 0,
@@ -427,6 +429,7 @@ export function disposeUser(userId: string) {
   }
   runtime.sellWaiters.clear();
   if (runtime.reconnectTimer) clearTimeout(runtime.reconnectTimer);
+  if (runtime.portfolioRetryTimer) clearTimeout(runtime.portfolioRetryTimer);
   if (runtime.settlementFallbackTimer) clearTimeout(runtime.settlementFallbackTimer);
   runtime.socket?.close();
   runtimes.delete(userId);
@@ -1371,6 +1374,56 @@ function scheduleSettlementFallbackCheck(
   ownerRuntime.settlementFallbackTimer.unref();
 }
 
+function scheduleOpenContractsCheckRetry(
+  ownerId: string,
+  ownerRuntime: ReturnType<typeof createState>,
+) {
+  if (ownerRuntime.shuttingDown || runtimes.get(ownerId) !== ownerRuntime || ownerRuntime.portfolioRetryTimer) return;
+  const delayMs = Math.min(500 * (2 ** ownerRuntime.portfolioRetryAttempt), 10_000);
+  ownerRuntime.portfolioRetryAttempt = Math.min(ownerRuntime.portfolioRetryAttempt + 1, 5);
+  ownerRuntime.portfolioRetryTimer = setTimeout(() => {
+    ownerRuntime.portfolioRetryTimer = null;
+    void withUserSerialized(ownerId, async () => {
+      if (runtimes.get(ownerId) !== ownerRuntime || ownerRuntime.shuttingDown) return;
+      try {
+        await refreshOpenContracts();
+      } catch (error) {
+        logger.warn(
+          { err: error, accountId: ownerRuntime.account?.id ?? ownerRuntime.selectedAccountId },
+          "Deriv open-contract check failed; trading remains paused and another safe check will be attempted",
+        );
+      }
+    }).catch((error) => {
+      logger.warn({ err: error }, "Deriv open-contract check retry could not run");
+      scheduleOpenContractsCheckRetry(ownerId, ownerRuntime);
+    });
+  }, delayMs);
+  ownerRuntime.portfolioRetryTimer.unref();
+}
+
+function requestPortfolioSnapshot(): Promise<string[]> {
+  const runtime = getState();
+  if (runtime.socket?.readyState !== WebSocket.OPEN) {
+    return Promise.reject(new Error("Deriv WebSocket is not ready"));
+  }
+  runtime.openContractsReady = false;
+  const reqId = ++runtime.portfolioSequence;
+  return new Promise<string[]>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      runtime.portfolioWaiters.delete(reqId);
+      if (!runtime.portfolioWaiters.size) runtime.openContractsReady = false;
+      reject(new Error("Deriv did not confirm the current open-contract portfolio in time."));
+    }, 5_000);
+    runtime.portfolioWaiters.set(reqId, { resolve, reject, timer });
+    if (!send({ portfolio: 1, req_id: reqId })) {
+      clearTimeout(timer);
+      runtime.portfolioWaiters.delete(reqId);
+      if (!runtime.portfolioWaiters.size) runtime.openContractsReady = false;
+      reject(new Error("Deriv WebSocket is not ready"));
+    }
+  });
+}
+
 async function connectInternal() {
   const ownerId = userContext.getStore();
   const ownerRuntime = getState();
@@ -1409,7 +1462,13 @@ async function connectInternal() {
       logger.info({ accountId: account.id }, "Deriv WebSocket connected");
       send({ balance: 1, subscribe: 1 });
       for (const symbol of supportedSymbols) send({ ticks: symbol, subscribe: 1 });
-      send({ portfolio: 1 });
+      void requestPortfolioSnapshot().catch((error) => {
+        logger.warn(
+          { err: error, accountId: account.id },
+          "Initial Deriv open-contract check failed; trading remains paused until a later check succeeds",
+        );
+        scheduleOpenContractsCheckRetry(ownerId!, ownerRuntime);
+      });
       scheduleSettlementFallbackCheck(ownerId!, ownerRuntime);
       resolveOnce(true);
     });
@@ -1437,6 +1496,7 @@ async function connectInternal() {
         if (portfolioWaiter) {
           clearTimeout(portfolioWaiter.timer);
           getState().portfolioWaiters.delete(reqId);
+          if (!getState().portfolioWaiters.size) getState().openContractsReady = false;
           portfolioWaiter.reject(new Error(errorMessage));
         }
         const profitTableWaiter = getState().profitTableWaiters.get(reqId);
@@ -1615,11 +1675,19 @@ async function connectInternal() {
       } else if (message.msg_type === "portfolio") {
         const reqId = Number(message.req_id ?? message.echo_req?.req_id);
         const waiter = getState().portfolioWaiters.get(reqId);
-        const isVerifiedSnapshot = Boolean(waiter) || !getState().openContractsReady;
-        if (!isVerifiedSnapshot) return;
-        const contracts = Array.isArray(message.portfolio?.contracts)
-          ? message.portfolio.contracts
-          : [];
+        if (!waiter) return;
+        if (!Array.isArray(message.portfolio?.contracts)) {
+          const error = new Error("Deriv returned an invalid open-contract portfolio.");
+          if (waiter) {
+            clearTimeout(waiter.timer);
+            getState().portfolioWaiters.delete(reqId);
+            waiter.reject(error);
+          }
+          getState().openContractsReady = false;
+          logger.warn({ reqId }, "Deriv returned an invalid open-contract portfolio; keeping trading paused");
+          return;
+        }
+        const contracts = message.portfolio.contracts;
         const portfolioContractIds = new Set<string>();
         for (const contract of contracts) {
           const historyItem = normalizeHistory(contract, "open");
@@ -1659,6 +1727,11 @@ async function connectInternal() {
           }
         }
         getState().openContractsReady = true;
+        getState().portfolioRetryAttempt = 0;
+        if (getState().portfolioRetryTimer) {
+          clearTimeout(getState().portfolioRetryTimer);
+          getState().portfolioRetryTimer = null;
+        }
         if (waiter) {
           clearTimeout(waiter.timer);
           getState().portfolioWaiters.delete(reqId);
@@ -1719,21 +1792,15 @@ async function connect() {
 }
 
 async function refreshOpenContracts(): Promise<string[]> {
-  if (!await connect()) throw new Error("Deriv WebSocket is not ready");
+  const ownerId = userContext.getStore();
   const runtime = getState();
-  const reqId = ++runtime.portfolioSequence;
-  return await new Promise<string[]>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      runtime.portfolioWaiters.delete(reqId);
-      reject(new Error("Deriv did not confirm the current open-contract portfolio in time."));
-    }, 5_000);
-    runtime.portfolioWaiters.set(reqId, { resolve, reject, timer });
-    if (!send({ portfolio: 1, req_id: reqId })) {
-      clearTimeout(timer);
-      runtime.portfolioWaiters.delete(reqId);
-      reject(new Error("Deriv WebSocket is not ready"));
-    }
-  });
+  try {
+    if (!await connect()) throw new Error("Deriv WebSocket is not ready");
+    return await requestPortfolioSnapshot();
+  } catch (error) {
+    if (ownerId) scheduleOpenContractsCheckRetry(ownerId, runtime);
+    throw error;
+  }
 }
 
 export function getStatus(): DerivStatus {
@@ -2291,141 +2358,6 @@ export async function buyClockWorkContracts(
     message: ok
       ? `${completed.length} Clock Work contract${completed.length === 1 ? "" : "s"} sent to Deriv.`
       : `${completed.length} of ${contracts.length} Clock Work contracts were confirmed. Check Deriv history before retrying any unconfirmed order.`,
-    requested_count: contracts.length,
-    completed_count: completed.length,
-    contracts: completed,
-    failed,
-  };
-}
-
-export type MatchesOrder = {
-  key: string;
-  amount: number;
-  duration: 1 | 2 | 3 | 4 | 5;
-  duration_unit: "t";
-  contract_type: "DIGITMATCH";
-  barrier: number;
-  symbol: string;
-};
-
-function normalizeMatchesOrders(contracts: readonly MatchesOrder[]) {
-  if (!Array.isArray(contracts) || contracts.length < 1 || contracts.length > 3) {
-    throw new Error("Matches needs between one and three contracts.");
-  }
-  const normalized = contracts.map((contract) => ({
-    ...contract,
-    amount: roundCents(contract.amount),
-  }));
-  const keys = normalized.map((contract) => contract.key);
-  if (keys.some((key) => !key.trim()) || new Set(keys).size !== keys.length) {
-    throw new Error("Matches contract keys must be unique and non-empty.");
-  }
-  const symbols = new Set(normalized.map((contract) => contract.symbol));
-  if (symbols.size !== 1) {
-    throw new Error("All Matches contracts in one action must use the same market.");
-  }
-  for (const contract of normalized) {
-    if (!Number.isFinite(contract.amount) || contract.amount < 0.35) {
-      throw new Error("Matches stakes must be at least 0.35.");
-    }
-    if (!Number.isInteger(contract.duration) || contract.duration < 1 || contract.duration > 5 || contract.duration_unit !== "t") {
-      throw new Error("Matches supports one- through five-tick contracts only.");
-    }
-    if (contract.contract_type !== "DIGITMATCH") {
-      throw new Error("Matches supports Digit Match contracts only.");
-    }
-    if (!Number.isInteger(contract.barrier) || contract.barrier < 0 || contract.barrier > 9) {
-      throw new Error("Matches needs a selected digit from 0 to 9.");
-    }
-    validateProposalInput({
-      amount: contract.amount,
-      duration: contract.duration,
-      duration_unit: contract.duration_unit,
-      contract_type: contract.contract_type,
-      barrier: contract.barrier,
-      symbol: contract.symbol,
-    });
-  }
-  return normalized;
-}
-
-export async function buyMatchesContracts(
-  input: { contracts: readonly MatchesOrder[] },
-  assertAuthorized?: TradeAuthorizationCheck,
-) {
-  await assertAuthorized?.();
-  const contracts = normalizeMatchesOrders(input.contracts);
-  const account = getState().account;
-  if (!account) throw new Error("Select a Deriv account before buying Matches contracts.");
-  if (account.type === "real" && !liveTradingEnabled) {
-    throw new Error("Live trading is disabled on this server.");
-  }
-  const totalStake = roundCents(contracts.reduce((total, contract) => total + contract.amount, 0));
-  if (totalStake > account.balance) {
-    throw new Error("The total Matches stake exceeds the current account balance.");
-  }
-
-  const protection = await getTradingProtectionSettings();
-  for (const contract of contracts) {
-    assertTradingProtection(protection, getStatus(), {
-      contract_type: contract.contract_type,
-      barrier: contract.barrier,
-      symbol: contract.symbol,
-    });
-  }
-
-  await refreshOpenContracts();
-  assertNoActiveContract(true);
-  const proposals = await Promise.all(contracts.map(async (contract) => ({
-    contract,
-    proposal: await requestFreshProposal({
-      amount: contract.amount,
-      duration: contract.duration,
-      duration_unit: contract.duration_unit,
-      contract_type: contract.contract_type,
-      barrier: contract.barrier,
-      symbol: contract.symbol,
-    }),
-  })));
-  await assertAuthorized?.();
-  if (!await connect()) throw new Error("Deriv WebSocket is not ready");
-  await assertAuthorized?.();
-
-  // Acknowledgement failures are returned for history verification. Never
-  // retry or auto-sell an order whose acceptance is uncertain.
-  const results = await sendBatchBuysTogether(proposals, ({ contract, proposal }) => sendDirectBuyWithRateLimitRetry(proposal, {
-    amount: contract.amount,
-    duration: contract.duration,
-    duration_unit: contract.duration_unit,
-    contract_type: contract.contract_type,
-    barrier: contract.barrier,
-    symbol: contract.symbol,
-  }));
-  const completed = results.flatMap((result, index) => result.status === "fulfilled"
-    ? [{
-        key: proposals[index].contract.key,
-        amount: proposals[index].contract.amount,
-        contract_type: proposals[index].contract.contract_type,
-        barrier: proposals[index].contract.barrier,
-        symbol: proposals[index].contract.symbol,
-        proposal: proposals[index].proposal,
-        buy: result.value,
-      }]
-    : []);
-  const failed = results.flatMap((result, index) => result.status === "rejected"
-    ? [{
-        key: proposals[index].contract.key,
-        contract_type: proposals[index].contract.contract_type,
-        error: safeBuyFailureMessage(result.reason),
-        ...classifyBuyFailure(result.reason),
-      }]
-    : []);
-  const ok = failed.length === 0;
-  return {
-    ok,
-    message: ok
-      ? `${completed.length} Matches contract${completed.length === 1 ? "" : "s"} sent to Deriv.`
-      : `${completed.length} of ${contracts.length} Matches contracts were confirmed. Check Deriv history before retrying any unconfirmed order.`,
     requested_count: contracts.length,
     completed_count: completed.length,
     contracts: completed,

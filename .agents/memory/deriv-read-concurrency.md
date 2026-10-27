@@ -22,3 +22,9 @@ After Deriv acknowledges a buy, claim its returned contract IDs locally and star
 **Why:** Delayed duplicate refetches can cancel in-flight polls and create visible update bursts, while waiting for history to catch up makes an already-confirmed order feel delayed.
 
 **How to apply:** Keep the server's portfolio, balance, authorization, and settlement safeguards authoritative; make the browser responsive to the buy acknowledgement, then let one refresh and normal polling reconcile the full history row.
+
+The entry-admission portfolio snapshot is a deliberate exception to ordinary read concurrency: correlate every request, keep `openContractsReady` false until Deriv returns a valid contracts array, and retry only this safe read with bounded backoff after an error or timeout. Keep the snapshot inside the serialized per-user buy path; never interpret a malformed response as an empty portfolio or replay a buy.
+
+**Why:** The initial uncorrelated portfolio request could fail without notifying readiness, leaving every feature paused indefinitely. Treating an invalid response as an empty portfolio could instead authorize overlapping trades.
+
+**How to apply:** Correlate socket-connect and entry-admission checks with `req_id`; preserve the closed trade gate on timeout, error, malformed data, account switch, and reconnect. Retries may request portfolio state only; they must never resend an uncertain trade.

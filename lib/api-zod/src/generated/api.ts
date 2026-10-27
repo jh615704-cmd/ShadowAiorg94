@@ -76,13 +76,13 @@ export const ScanAdminIntelligenceResponse = zod.object({
   "scanned_at": zod.coerce.date(),
   "server_status": zod.enum(['healthy']),
   "features": zod.array(zod.object({
-  "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin']),
+  "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin']),
   "status": zod.enum(['clear', 'issue']),
   "open_findings": zod.number().int().min(scanAdminIntelligenceResponseFeaturesItemOpenFindingsMin)
 })),
   "findings": zod.array(zod.object({
   "id": zod.string(),
-  "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin']),
+  "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin']),
   "code": zod.enum(['client_runtime_error', 'client_unhandled_rejection', 'api_server_error', 'trade_outcome_uncertain', 'saved_state_invalid', 'storage_unavailable']),
   "severity": zod.enum(['warning', 'error']),
   "source": zod.enum(['browser_app', 'api_server', 'deriv', 'transport', 'unknown']),
@@ -121,7 +121,7 @@ export const LoginAccessKeyResponse = zod.object({
   "is_admin": zod.boolean(),
   "status": zod.enum(['active', 'paused', 'blocked', 'banned']),
   "max_devices": zod.number().int(),
-  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin'])),
+  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin'])),
   "online": zod.boolean(),
   "last_seen_at": zod.coerce.date().nullable()
 })
@@ -138,7 +138,7 @@ export const GetAccessSessionResponse = zod.object({
   "is_admin": zod.boolean(),
   "status": zod.enum(['active', 'paused', 'blocked', 'banned']),
   "max_devices": zod.number().int(),
-  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin'])),
+  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin'])),
   "online": zod.boolean(),
   "last_seen_at": zod.coerce.date().nullable()
 })
@@ -165,7 +165,7 @@ export const LogoutAccessSessionResponse = zod.object({
  * @summary Report a sanitized feature diagnostic
  */
 export const ReportAccessDiagnosticBody = zod.object({
-  "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin']),
+  "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin']),
   "code": zod.enum(['client_runtime_error', 'client_unhandled_rejection', 'api_server_error', 'trade_outcome_uncertain', 'saved_state_invalid', 'storage_unavailable']),
   "severity": zod.enum(['warning', 'error']),
   "source": zod.enum(['browser_app', 'api_server', 'deriv', 'transport', 'unknown']).optional()
@@ -219,7 +219,7 @@ export const getAdminFeatureSettingsResponseAutoTrader2PauseMessageMax = 300;
 
 export const GetAdminFeatureSettingsResponse = zod.object({
   "features": zod.array(zod.object({
-  "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history']),
+  "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history']),
   "mode": zod.enum(['available', 'restricted', 'coming_soon', 'under_construction']),
   "audience": zod.enum(['all', 'specific']),
   "user_ids": zod.array(zod.string().uuid()),
@@ -250,7 +250,7 @@ export const updateAdminFeatureSettingsBodyAutoTrader2PauseMessageMax = 300;
 
 export const UpdateAdminFeatureSettingsBody = zod.object({
   "features": zod.array(zod.object({
-  "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history']),
+  "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history']),
   "mode": zod.enum(['available', 'restricted', 'coming_soon', 'under_construction']),
   "audience": zod.enum(['all', 'specific']),
   "user_ids": zod.array(zod.string().uuid()),
@@ -276,7 +276,7 @@ export const updateAdminFeatureSettingsResponseAutoTrader2PauseMessageMax = 300;
 
 export const UpdateAdminFeatureSettingsResponse = zod.object({
   "features": zod.array(zod.object({
-  "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history']),
+  "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history']),
   "mode": zod.enum(['available', 'restricted', 'coming_soon', 'under_construction']),
   "audience": zod.enum(['all', 'specific']),
   "user_ids": zod.array(zod.string().uuid()),
@@ -303,7 +303,7 @@ export const ListAccessKeysResponseItem = zod.object({
   "is_admin": zod.boolean(),
   "status": zod.enum(['active', 'paused', 'blocked', 'banned']),
   "max_devices": zod.number().int(),
-  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin'])),
+  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin'])),
   "online": zod.boolean(),
   "last_seen_at": zod.coerce.date().nullable()
 }).and(zod.object({
@@ -331,7 +331,7 @@ export const CreateAccessKeyBody = zod.object({
   "label": zod.string().min(1).max(createAccessKeyBodyLabelMax),
   "kind": zod.enum(['admin', 'user']),
   "max_devices": zod.number().int().min(createAccessKeyBodyMaxDevicesMin).max(createAccessKeyBodyMaxDevicesMax).describe('Maximum active devices; 0 means unlimited and is allowed only for administrator keys.'),
-  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin'])).min(1)
+  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin'])).min(1)
 })
 
 export const CreateAccessKeyResponse = zod.object({
@@ -342,7 +342,7 @@ export const CreateAccessKeyResponse = zod.object({
   "is_admin": zod.boolean(),
   "status": zod.enum(['active', 'paused', 'blocked', 'banned']),
   "max_devices": zod.number().int(),
-  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin'])),
+  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin'])),
   "online": zod.boolean(),
   "last_seen_at": zod.coerce.date().nullable()
 }).and(zod.object({
@@ -366,7 +366,7 @@ export const updateAccessKeyBodyMaxDevicesMax = 50;
 export const UpdateAccessKeyBody = zod.object({
   "status": zod.enum(['active', 'paused', 'blocked', 'banned', 'deleted']).optional(),
   "max_devices": zod.number().int().min(updateAccessKeyBodyMaxDevicesMin).max(updateAccessKeyBodyMaxDevicesMax).optional().describe('Maximum active devices; 0 means unlimited and is allowed only for administrator keys.'),
-  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin'])).min(1).optional()
+  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin'])).min(1).optional()
 })
 
 export const UpdateAccessKeyResponse = zod.object({
@@ -377,7 +377,7 @@ export const UpdateAccessKeyResponse = zod.object({
   "is_admin": zod.boolean(),
   "status": zod.enum(['active', 'paused', 'blocked', 'banned']),
   "max_devices": zod.number().int(),
-  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin'])),
+  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin'])),
   "online": zod.boolean(),
   "last_seen_at": zod.coerce.date().nullable()
 }).and(zod.object({
@@ -417,7 +417,7 @@ export const ResetAccessKeyResponse = zod.object({
   "is_admin": zod.boolean(),
   "status": zod.enum(['active', 'paused', 'blocked', 'banned']),
   "max_devices": zod.number().int(),
-  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin'])),
+  "features": zod.array(zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin'])),
   "online": zod.boolean(),
   "last_seen_at": zod.coerce.date().nullable()
 }).and(zod.object({
@@ -1198,7 +1198,7 @@ export const buyDerivContractBodyGrowthRateMax = 0.05;
 
 
 export const BuyDerivContractBody = zod.object({
-  "access_feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2']),
+  "access_feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2']),
   "amount": zod.number().gt(buyDerivContractBodyAmountExclusiveMin),
   "duration": zod.number().int().min(1).max(buyDerivContractBodyDurationMax),
   "duration_unit": zod.enum(['t']),
@@ -1248,7 +1248,7 @@ export const bulkBuyDerivContractsBodyCountMax = 6;
 
 
 export const BulkBuyDerivContractsBody = zod.object({
-  "access_feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2']),
+  "access_feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2']),
   "amount": zod.number().gt(bulkBuyDerivContractsBodyAmountExclusiveMin),
   "duration": zod.number().int().min(1).max(bulkBuyDerivContractsBodyDurationMax).describe('Tick duration; CALL and PUT allow 1–10, other contract types are limited to 1–5.'),
   "duration_unit": zod.enum(['t']),
@@ -1387,73 +1387,6 @@ export const BuyClockWorkContractsResponse = zod.object({
 
 
 /**
- * Requests a fresh proposal for every selected digit before buying. Partial acknowledgements are returned explicitly; do not replay an unconfirmed buy until Deriv history is checked.
- * @summary Buy one to three exact-digit Matches contracts
- */
-export const buyMatchesContractsBodyContractsItemKeyMax = 32;
-
-export const buyMatchesContractsBodyContractsItemAmountMin = 0.35;
-
-export const buyMatchesContractsBodyContractsItemBarrierMin = 0;
-export const buyMatchesContractsBodyContractsItemBarrierMax = 9;
-
-export const buyMatchesContractsBodyContractsMax = 3;
-
-
-
-export const BuyMatchesContractsBody = zod.object({
-  "contracts": zod.array(zod.object({
-  "key": zod.string().min(1).max(buyMatchesContractsBodyContractsItemKeyMax),
-  "amount": zod.number().min(buyMatchesContractsBodyContractsItemAmountMin),
-  "duration": zod.union([zod.literal(1),zod.literal(2),zod.literal(3),zod.literal(4),zod.literal(5)]),
-  "duration_unit": zod.enum(['t']),
-  "contract_type": zod.enum(['DIGITMATCH']),
-  "barrier": zod.number().int().min(buyMatchesContractsBodyContractsItemBarrierMin).max(buyMatchesContractsBodyContractsItemBarrierMax),
-  "symbol": zod.string()
-})).min(1).max(buyMatchesContractsBodyContractsMax)
-})
-
-export const buyMatchesContractsResponseContractsItemBarrierMin = 0;
-export const buyMatchesContractsResponseContractsItemBarrierMax = 9;
-
-
-
-export const BuyMatchesContractsResponse = zod.object({
-  "ok": zod.boolean(),
-  "message": zod.string(),
-  "requested_count": zod.number().int(),
-  "completed_count": zod.number().int(),
-  "contracts": zod.array(zod.object({
-  "key": zod.string(),
-  "amount": zod.number(),
-  "contract_type": zod.enum(['DIGITMATCH']),
-  "barrier": zod.number().int().min(buyMatchesContractsResponseContractsItemBarrierMin).max(buyMatchesContractsResponseContractsItemBarrierMax),
-  "symbol": zod.string(),
-  "proposal": zod.object({
-  "id": zod.string(),
-  "ask_price": zod.number(),
-  "payout": zod.number(),
-  "spot": zod.number(),
-  "longcode": zod.string().nullish()
-}),
-  "buy": zod.object({
-  "contract_id": zod.string(),
-  "buy_price": zod.number(),
-  "payout": zod.number(),
-  "start_time": zod.number().int().nullish()
-})
-})),
-  "failed": zod.array(zod.object({
-  "key": zod.string(),
-  "contract_type": zod.enum(['DIGITMATCH']),
-  "error": zod.string(),
-  "outcome": zod.enum(['rejected', 'uncertain', 'not_sent']),
-  "source": zod.enum(['browser_app', 'api_server', 'deriv', 'transport', 'unknown'])
-}))
-})
-
-
-/**
  * @summary Close an open Deriv contract at the current sell price
  */
 
@@ -1483,7 +1416,7 @@ export const dualBuyDerivContractsBodyBarrierMax = 9;
 
 
 export const DualBuyDerivContractsBody = zod.object({
-  "access_feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'matches-analysis', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2']),
+  "access_feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2']),
   "amount": zod.number().gt(dualBuyDerivContractsBodyAmountExclusiveMin),
   "duration": zod.number().int().min(1),
   "duration_unit": zod.enum(['t']),
@@ -1524,6 +1457,10 @@ export const DualBuyDerivContractsResponse = zod.object({
 /**
  * @summary Get Deriv trade history observed for real and demo accounts
  */
+export const getDerivHistoryResponseTickPassedMin = 0;
+
+
+
 export const GetDerivHistoryResponseItem = zod.object({
   "contract_id": zod.string(),
   "account_id": zod.string(),
@@ -1534,6 +1471,8 @@ export const GetDerivHistoryResponseItem = zod.object({
   "symbol": zod.string(),
   "duration": zod.number().int().nullable(),
   "duration_unit": zod.string().nullable(),
+  "growth_rate": zod.number().nullish().describe('Accumulator growth rate as a decimal, such as 0.03 for 3%.'),
+  "tick_passed": zod.number().int().min(getDerivHistoryResponseTickPassedMin).nullish().describe('Deriv-reported number of Accumulator ticks passed since entry.'),
   "buy_price": zod.number(),
   "current_value": zod.number().describe('Current contract value from Deriv, or buy price plus floating profit when no live bid is available.'),
   "payout": zod.number(),

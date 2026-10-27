@@ -341,7 +341,7 @@ function getPathname(url: string): string {
 }
 
 function isTradeMutation(method: string, pathname: string): boolean {
-  return method === "POST" && /^\/api\/deriv\/(?:buy|bulk-buy|dual-buy|sell|clock-work\/buy|matches\/buy)$/.test(pathname);
+  return method === "POST" && /^\/api\/deriv\/(?:buy|bulk-buy|dual-buy|sell|clock-work\/buy)$/.test(pathname);
 }
 
 const diagnosticTradeFeatures = new Set([
@@ -349,7 +349,6 @@ const diagnosticTradeFeatures = new Set([
   "digit-flip",
   "trade-x",
   "bulk-trader",
-  "matches-analysis",
   "clock-work",
   "cash-grab",
   "money-bank",
@@ -360,7 +359,6 @@ const diagnosticTradeFeatures = new Set([
 
 function tradeFeatureForDiagnostic(method: string, pathname: string, body: BodyInit | null | undefined): string | undefined {
   if (!isTradeMutation(method, pathname)) return undefined;
-  if (pathname.endsWith("/matches/buy")) return "matches-analysis";
   if (pathname.endsWith("/clock-work/buy")) return "clock-work";
 
   if (typeof body === "string") {

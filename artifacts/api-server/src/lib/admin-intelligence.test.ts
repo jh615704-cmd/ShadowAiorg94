@@ -42,13 +42,13 @@ test("diagnostic aggregation exposes only safe summaries and counts", () => {
 test("diagnostics keep distinct failure sources visible without storing raw errors", () => {
   const registry = new AdminIntelligenceRegistry();
   registry.report({
-    feature: "matches-analysis",
+    feature: "bulk-trader",
     code: "trade_outcome_uncertain",
     severity: "warning",
     source: "transport",
   }, "session-1", 10_000);
   registry.report({
-    feature: "matches-analysis",
+    feature: "bulk-trader",
     code: "trade_outcome_uncertain",
     severity: "warning",
     source: "deriv",

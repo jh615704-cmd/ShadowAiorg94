@@ -452,6 +452,68 @@ test("DigitFlip history stays visible after switching the feature off", async ()
   }
 });
 
+test("all active trading panels fit phone, tablet, laptop, and 4K widths", async () => {
+  const state = createState(userSession([
+    "edge",
+    "digit-flip",
+    "trade-x",
+    "bulk-trader",
+    "cash-grab",
+    "clock-work",
+    "money-bank",
+    "auto-trader",
+    "auto-trader-2",
+  ]));
+  state.hasToken = true;
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  const screens = [
+    { feature: "edge", card: "edge", selector: ".edge-reference-layout", label: "EDGE" },
+    { feature: "digit-flip", card: "digit-flip", selector: '[data-testid="digit-flip-panel"]', label: "DigitFlip" },
+    { feature: "trade-x", card: "trade-x", selector: '[data-testid="trade-x-panel"]', label: "Trade X" },
+    { feature: "bulk-trader", card: "bulk", selector: '[data-testid="panel-bulk-trader"]', label: "Bulk Trader" },
+    { feature: "cash-grab", card: "cash-grab", selector: '[data-testid="cash-grab-panel"]', label: "Cash Grab" },
+    { feature: "clock-work", card: "clock-work", selector: '[data-testid="clock-work-panel"]', label: "Clock Work" },
+    { feature: "money-bank", card: "edge2", selector: ".money-bank-panel", label: "Money Bank" },
+  ];
+  try {
+    await page.goto(`${baseUrl}/app`);
+    await page.getByRole("heading", { name: "Trading Strategies" }).waitFor();
+
+    for (const screen of screens) {
+      const control = page.locator(`.xt-feature-card-${screen.card} .xt-switch input`);
+      await control.check();
+      assert.equal(await control.isChecked(), true, `${screen.label} should be enabled in the mock session.`);
+      const panel = page.locator(screen.selector);
+      await panel.waitFor({ state: "visible" });
+      for (const viewport of bulkViewports) {
+        await page.setViewportSize({ width: viewport.width, height: viewport.height });
+        await assertNoHorizontalOverflow(page, viewport, screen.label);
+        await assertWithinViewport(page, screen.selector, viewport.width, screen.label);
+      }
+      await page.setViewportSize({ width: viewports[0].width, height: viewports[0].height });
+    }
+
+    for (const screen of [
+      { name: "Auto Trader", path: "/auto-trader" },
+      { name: "Auto Trader 2.0", path: "/auto-trader-2" },
+    ]) {
+      await page.goto(`${baseUrl}${screen.path}`);
+      const heading = page.locator("h1");
+      await heading.waitFor({ state: "visible" });
+      assert.equal((await heading.innerText()).trim(), screen.name);
+      for (const viewport of bulkViewports) {
+        await page.setViewportSize({ width: viewport.width, height: viewport.height });
+        await assertNoHorizontalOverflow(page, viewport, screen.name);
+      }
+      await page.setViewportSize({ width: viewports[0].width, height: viewports[0].height });
+    }
+
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+});
+
 test("retired Matches Analysis is not shown or available to trade", async () => {
   const state = createState(userSession(["matches-analysis"]));
   state.hasToken = true;
@@ -1095,7 +1157,18 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
       const tapButtonLayout = await page.locator(".tx-tap-trade").evaluateAll((buttons) =>
         buttons.map((button) => {
           const rect = button.getBoundingClientRect();
-          return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height };
+          const rank = button.closest(".tx-rank-row")?.getBoundingClientRect();
+          return {
+            left: rect.left,
+            right: rect.right,
+            top: rect.top,
+            bottom: rect.bottom,
+            width: rect.width,
+            height: rect.height,
+            display: getComputedStyle(button).display,
+            visibility: getComputedStyle(button).visibility,
+            rankWidth: rank?.width ?? 0,
+          };
         }),
       );
       assert.equal(tapButtonLayout.length, 3, "Each of the three safest-digit cards should have its own trade action.");

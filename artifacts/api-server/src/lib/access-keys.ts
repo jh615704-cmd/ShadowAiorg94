@@ -9,9 +9,7 @@ const LEGACY_PRIMARY_ADMIN_KEY_HASH = "0d11ae258d4fd0f86e2e07606a4b835b2cdc745a7
 // An administrator max-device value of 0 means unlimited.
 export const PRIMARY_ADMIN_MAX_DEVICES = 0;
 const PRIMARY_ADMIN_LABEL = "Primary administrator";
-type AllAccessFeature = (typeof AccessFeatureValues)[keyof typeof AccessFeatureValues];
-export const ACCESS_FEATURES = (Object.values(AccessFeatureValues) as AllAccessFeature[])
-  .filter((feature): feature is Exclude<AllAccessFeature, "matches-analysis"> => feature !== "matches-analysis");
+export const ACCESS_FEATURES = Object.values(AccessFeatureValues);
 export type AccessFeature = typeof ACCESS_FEATURES[number];
 export const TRADING_ACCESS_FEATURES = [
   "edge",

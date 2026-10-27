@@ -14,6 +14,8 @@ type BuyBehavior = "ack" | "reject" | "disconnect" | "invalid-proposal-id";
 let buyBehavior: BuyBehavior = "ack";
 let rateLimitFailuresRemaining = 0;
 let rejectBuyResponsesRemaining = 0;
+let portfolioErrorsRemaining = 0;
+let malformedPortfolioResponsesRemaining = 0;
 let proposalNumber = 0;
 let proposalPayoutOverride: number | null = null;
 let buyPayoutOverride: number | null = null;
@@ -116,6 +118,25 @@ function emitMessage(socket: FakeWebSocket, message: SocketMessage) {
 
 function handleClientMessage(socket: FakeWebSocket, message: SocketMessage) {
   if (message.portfolio) {
+    if (portfolioErrorsRemaining > 0) {
+      portfolioErrorsRemaining -= 1;
+      emitMessage(socket, {
+        error: { code: "RateLimit", message: "portfolio check temporarily unavailable" },
+        ...(message.req_id == null ? {} : { req_id: message.req_id }),
+        echo_req: { req_id: message.req_id, portfolio: 1 },
+      });
+      return;
+    }
+    if (malformedPortfolioResponsesRemaining > 0) {
+      malformedPortfolioResponsesRemaining -= 1;
+      emitMessage(socket, {
+        msg_type: "portfolio",
+        portfolio: {},
+        ...(message.req_id == null ? {} : { req_id: message.req_id }),
+        echo_req: { req_id: message.req_id, portfolio: 1 },
+      });
+      return;
+    }
     emitMessage(socket, {
       msg_type: "portfolio",
       ...(message.req_id == null ? {} : { req_id: message.req_id }),
@@ -334,6 +355,8 @@ beforeEach(() => {
   buyBehavior = "ack";
   rateLimitFailuresRemaining = 0;
   rejectBuyResponsesRemaining = 0;
+  portfolioErrorsRemaining = 0;
+  malformedPortfolioResponsesRemaining = 0;
   proposalNumber = 0;
   proposalPayoutOverride = null;
   buyPayoutOverride = null;
@@ -435,6 +458,40 @@ describe("Deriv real-account trading capability", { concurrency: false }, () => 
 });
 
 describe("Deriv market subscriptions", { concurrency: false }, () => {
+  test("recovers from a failed portfolio check without unblocking before confirmation", async () => {
+    const userId = "portfolio-check-retry-user";
+    portfolioErrorsRemaining = 1;
+    const firstStatus = await inUser(userId, () => deriv.selectAccount("DOT123"));
+
+    assert.equal(firstStatus.open_contracts_ready, false);
+    assert.equal(
+      latestSocket().sent.filter((message) => message.portfolio === 1 && message.req_id != null).length,
+      1,
+      "the initial portfolio request must be correlated",
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    await inUser(userId, async () => {
+      assert.equal(deriv.getStatus().open_contracts_ready, true);
+      assert.ok(
+        latestSocket().sent.filter((message) => message.portfolio === 1 && message.req_id != null).length >= 2,
+        "the failed read must be retried with a fresh correlated request",
+      );
+    });
+  });
+
+  test("keeps trading paused after a malformed portfolio response until a valid snapshot arrives", async () => {
+    const userId = "portfolio-check-malformed-user";
+    malformedPortfolioResponsesRemaining = 1;
+    const firstStatus = await inUser(userId, () => deriv.selectAccount("DOT123"));
+
+    assert.equal(firstStatus.open_contracts_ready, false);
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    await inUser(userId, async () => {
+      assert.equal(deriv.getStatus().open_contracts_ready, true);
+    });
+  });
+
   test("selecting an already-subscribed market does not send a duplicate subscription", async () => {
     await withSelectedAccount("market-subscription-user", async () => {
       const socket = latestSocket();
@@ -1439,48 +1496,4 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
     assert.equal(latestSocket().sent.some((message) => message.sell), false);
   });
 
-  test("Matches buys one to three selected digits after fresh proposals without replaying or selling", async () => {
-    const contracts = [
-      { key: "digit-0", amount: 0.35, duration: 1 as const, duration_unit: "t" as const, contract_type: "DIGITMATCH" as const, barrier: 0, symbol: "R_75" },
-      { key: "digit-4", amount: 0.5, duration: 3 as const, duration_unit: "t" as const, contract_type: "DIGITMATCH" as const, barrier: 4, symbol: "R_75" },
-      { key: "digit-9", amount: 0.75, duration: 5 as const, duration_unit: "t" as const, contract_type: "DIGITMATCH" as const, barrier: 9, symbol: "R_75" },
-    ];
-    const result = await withSelectedAccount("matches-analysis-user", () => deriv.buyMatchesContracts({ contracts }));
-
-    assert.equal(result.ok, true);
-    assert.equal(result.requested_count, 3);
-    assert.equal(result.completed_count, 3);
-    assert.equal(result.failed.length, 0);
-    const proposals = latestSocket().sent.filter((message) => message.proposal);
-    assert.ok(proposals.some((message) => message.contract_type === "DIGITMATCH" && message.barrier === "0" && message.duration === 1));
-    assert.ok(proposals.some((message) => message.contract_type === "DIGITMATCH" && message.barrier === "4" && message.duration === 3));
-    assert.ok(proposals.some((message) => message.contract_type === "DIGITMATCH" && message.barrier === "9" && message.duration === 5));
-    const buys = latestSocket().sent.filter((message) => message.buy);
-    assert.equal(buys.length, 3);
-    assert.ok(buys.every((message) => message.parameters.contract_type === "DIGITMATCH"));
-    assert.deepEqual(
-      buys.map((message) => message.parameters.duration).sort(),
-      [1, 3, 5],
-      "each contract must keep its selected tick expiry",
-    );
-    assert.ok(buys.every((message) => message.parameters.duration_unit === "t"));
-    assert.equal(latestSocket().sent.some((message) => message.sell), false);
-  });
-
-  test("Matches rejects a stake below 0.35 before requesting proposals", async () => {
-    await assert.rejects(
-      withSelectedAccount("matches-analysis-min-stake-user", () => deriv.buyMatchesContracts({
-        contracts: [{
-          key: "under-minimum",
-          amount: 0.34,
-          duration: 1,
-          duration_unit: "t",
-          contract_type: "DIGITMATCH",
-          barrier: 5,
-          symbol: "R_75",
-        }],
-      })),
-      /at least 0\.35/,
-    );
-  });
 });

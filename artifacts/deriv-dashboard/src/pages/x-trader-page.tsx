@@ -6,7 +6,6 @@ import {
   getUserFacingErrorMessage,
   ApiTransportError,
   type ClockWorkContractOrder,
-  useBuyMatchesContracts,
   useQuoteClockWorkContracts,
   useBuyClockWorkContracts,
   useGetAccessSession,
@@ -59,17 +58,6 @@ import {
   chooseTradeXScannerCandidate,
   type AiScannerMarketSignal,
 } from "../lib/ai-market-scanner";
-import {
-  collectFreshMatchesMarketTicks,
-  chooseBestMatchesMarket,
-  chooseQualifiedMatchesDigits,
-  reconcileUnconfirmedMatchesOrders,
-  MATCHES_HISTORY_LIMIT,
-  rankSettledMatchOutcomes,
-  summarizeSettledMatchOutcomes,
-  type MatchesAttemptedOrder,
-  type MatchesDigitStat as ObservedMatchesDigitStat,
-} from "../lib/matches-analysis";
 import TradeXPanel, {
   type TradeXDigitDistribution,
   type TradeXDuration,
@@ -110,12 +98,6 @@ import CashGrabPanel, {
 } from "../components/cash-grab-panel";
 import ClockWorkPanel from "../components/clock-work-panel";
 import type { ClockWorkPanelProps } from "../components/clock-work-panel";
-import type {
-  MatchesAiDigits,
-  MatchesDuration,
-  MatchesMarketOption,
-  MatchesMarketType,
-} from "../components/matches-analysis-panel";
 import DerivHistory from "../components/deriv-history";
 import { getAccountBalance } from "../lib/account-balance";
 import {
@@ -167,29 +149,6 @@ const markets = [
   ["JD10", "Jump 10 Index"], ["JD25", "Jump 25 Index"], ["JD50", "Jump 50 Index"],
   ["JD75", "Jump 75 Index"], ["JD100", "Jump 100 Index"],
 ] as const;
-
-const matchesMarkets: MatchesMarketOption[] = [
-  { value: "R_10", label: "Volatility 10 Index", marketType: "volatility" },
-  { value: "R_25", label: "Volatility 25 Index", marketType: "volatility" },
-  { value: "R_50", label: "Volatility 50 Index", marketType: "volatility" },
-  { value: "R_75", label: "Volatility 75 Index", marketType: "volatility" },
-  { value: "R_100", label: "Volatility 100 Index", marketType: "volatility" },
-  { value: "R_150", label: "Volatility 150 Index", marketType: "volatility" },
-  { value: "R_250", label: "Volatility 250 Index", marketType: "volatility" },
-  { value: "1HZ10V", label: "Volatility 10 (1s)", marketType: "volatility" },
-  { value: "1HZ15V", label: "Volatility 15 (1s)", marketType: "volatility" },
-  { value: "1HZ25V", label: "Volatility 25 (1s)", marketType: "volatility" },
-  { value: "1HZ30V", label: "Volatility 30 (1s)", marketType: "volatility" },
-  { value: "1HZ50V", label: "Volatility 50 (1s)", marketType: "volatility" },
-  { value: "1HZ75V", label: "Volatility 75 (1s)", marketType: "volatility" },
-  { value: "1HZ90V", label: "Volatility 90 (1s)", marketType: "volatility" },
-  { value: "1HZ100V", label: "Volatility 100 (1s)", marketType: "volatility" },
-  { value: "JD10", label: "Jump 10 Index", marketType: "jumps" },
-  { value: "JD25", label: "Jump 25 Index", marketType: "jumps" },
-  { value: "JD50", label: "Jump 50 Index", marketType: "jumps" },
-  { value: "JD75", label: "Jump 75 Index", marketType: "jumps" },
-  { value: "JD100", label: "Jump 100 Index", marketType: "jumps" },
-];
 
 const realizedProfit = (trades: readonly { status: string; profit: number }[]) =>
   trades.reduce((sum, trade) => sum + (isDerivHistoryOpen(trade.status) ? 0 : trade.profit), 0);
@@ -387,14 +346,6 @@ type MartingaleSettlementWatch = {
   expectedSettlements: number;
 };
 
-type PendingMatchesReconciliation = {
-  id: string;
-  accountId: string;
-  baselineContractIds: string[];
-  attemptedOrders: MatchesAttemptedOrder[];
-  startedAtMs: number;
-};
-
 type DigitFlipSettlementWatch = {
   knownIds: Set<string>;
   processedIds: Set<string>;
@@ -425,7 +376,6 @@ export default function XTraderPage() {
   const canUseDigitFlip = hasFeature("digit-flip") && featureIsAvailable("digit-flip");
   const canUseTradeX = hasFeature("trade-x") && featureIsAvailable("trade-x");
   const canUseBulkTrader = hasFeature("bulk-trader") && featureIsAvailable("bulk-trader");
-  const canUseMatchesAnalysis = false;
   const canUseClockWork = hasFeature("clock-work") && featureIsAvailable("clock-work");
   const canUseCashGrab = hasFeature("cash-grab") && featureIsAvailable("cash-grab");
   const canUseMoneyBank = hasFeature("money-bank") && featureIsAvailable("money-bank");
@@ -455,7 +405,6 @@ export default function XTraderPage() {
   const cashGrabSellMutation = useSellDerivContract();
   const clockWorkQuoteMutation = useQuoteClockWorkContracts();
   const clockWorkBuyMutation = useBuyClockWorkContracts();
-  const matchesBuyMutation = useBuyMatchesContracts();
 
   const [pat, setPat] = useState("");
   const [symbol, setSymbol] = useState("R_75");
@@ -513,26 +462,6 @@ export default function XTraderPage() {
   const [bulkTraderAutoSelectBest, setBulkTraderAutoSelectBest] = useState(false);
   const [bulkTraderHiddenHistoryIds, setBulkTraderHiddenHistoryIds] = useState<Set<string>>(new Set());
   const [cashGrabEnabled, setCashGrabEnabled] = useState(false);
-  const [matchesAnalysisEnabled, setMatchesAnalysisEnabled] = useState(false);
-  const [matchesMarketType, setMatchesMarketType] = useState<MatchesMarketType>("volatility");
-  const [matchesSymbol, setMatchesSymbol] = useState("R_75");
-  const [matchesDuration, setMatchesDuration] = useState<MatchesDuration>(1);
-  const [matchesStake, setMatchesStake] = useState(0.35);
-  const [matchesSelectedDigits, setMatchesSelectedDigits] = useState<number[]>([5]);
-  const [matchesAutoMode, setMatchesAutoMode] = useState(true);
-  const [matchesAiAutoMarket, setMatchesAiAutoMarket] = useState(false);
-  const [matchesProfitTarget, setMatchesProfitTarget] = useState(0);
-  const [matchesLossLimit, setMatchesLossLimit] = useState(0);
-  const [matchesAiEnabled, setMatchesAiEnabled] = useState(false);
-  const [matchesAiDigits, setMatchesAiDigits] = useState<MatchesAiDigits>(1);
-  const [matchesAiDigitsConfirmed, setMatchesAiDigitsConfirmed] = useState(false);
-  const [matchesObservedDigits, setMatchesObservedDigits] = useState<number[]>([]);
-  const [matchesTickCount, setMatchesTickCount] = useState(0);
-  const [matchesStatusMessage, setMatchesStatusMessage] = useState("Rescan to start a fresh digit sample.");
-  const [matchesHistoryClearArmed, setMatchesHistoryClearArmed] = useState(false);
-  const [matchesHiddenHistoryIds, setMatchesHiddenHistoryIds] = useState<Set<string>>(new Set());
-  const [matchesPendingHistoryIds, setMatchesPendingHistoryIds] = useState<Set<string>>(new Set());
-  const [matchesPendingReconciliation, setMatchesPendingReconciliation] = useState<PendingMatchesReconciliation | null>(null);
   const [clockWorkEnabled, setClockWorkEnabled] = useState(false);
   const [clockWorkSymbol, setClockWorkSymbol] = useState("R_75");
   const [clockWorkBarrierMode, setClockWorkBarrierMode] = useState<"offset" | "absolute">("offset");
@@ -714,21 +643,12 @@ export default function XTraderPage() {
   const bulkClaimedHistoryIdsRef = useRef(new Set<string>());
   const cashGrabClaimedHistoryIdsRef = useRef(new Set<string>());
   const clockWorkClaimedHistoryIdsRef = useRef(new Set<string>());
-  const matchesClaimedHistoryIdsRef = useRef(new Set<string>());
   const moneyBankClaimedHistoryIdsRef = useRef(new Set<string>());
   const [moneyBankHistoryClaims, setMoneyBankHistoryClaims] = useState<{
     accountId: string | null;
     ids: string[];
   }>({ accountId: null, ids: [] });
   const historyFeatureOwnersRef = useRef(new Map<string, DerivHistoryFeature>());
-  const matchesSessionKnownIdsRef = useRef<Set<string> | null>(null);
-  const matchesAiRunningRef = useRef(false);
-  const matchesActionLockRef = useRef(false);
-  const matchesAutomationAttemptTickRef = useRef(-1);
-  const matchesPendingReconciliationRef = useRef<PendingMatchesReconciliation | null>(null);
-  const matchesTickCountRef = useRef(0);
-  matchesTickCountRef.current = matchesTickCount;
-  const matchesSampleCursorRef = useRef({ symbol: "", tickSequence: 0 });
   const clockWorkActionLockRef = useRef(false);
   const clockWorkAutoAttemptAtRef = useRef(0);
   const clockWorkAutomationRef = useRef<(() => void) | null>(null);
@@ -795,7 +715,6 @@ export default function XTraderPage() {
   const edgeAllRows = rows.filter((trade) => trade.contract_type === "DIGITOVER" || trade.contract_type === "DIGITUNDER");
   const tradeXAllRows = rows.filter((trade) => trade.contract_type === "DIGITDIFF");
   const digitFlipAllRows = rows.filter((trade) => trade.contract_type === "DIGITEVEN" || trade.contract_type === "DIGITODD");
-  const matchesAllRows = rows.filter((trade) => trade.contract_type === "DIGITMATCH");
   const bulkAllRows = rows.filter((trade) => (
     trade.contract_type === "DIGITOVER"
     || trade.contract_type === "DIGITUNDER"
@@ -821,29 +740,6 @@ export default function XTraderPage() {
   const tradeXVisibleSessionRows = tradeXSessionRows.filter((trade) => !tradeXHiddenHistoryIds.has(trade.contract_id));
   const digitFlipOwnedRows = digitFlipAllRows.filter((trade) => digitFlipClaimedHistoryIdsRef.current.has(String(trade.contract_id)));
   const digitFlipRows = digitFlipOwnedRows.filter((trade) => !digitFlipHiddenHistoryIds.has(String(trade.contract_id)));
-  const matchesSessionRows = matchesSessionKnownIdsRef.current
-    ? matchesAllRows.filter((trade) => (
-      matchesClaimedHistoryIdsRef.current.has(String(trade.contract_id))
-      && !matchesSessionKnownIdsRef.current?.has(String(trade.contract_id))
-    ))
-    : [];
-  const matchesSessionPnl = realizedProfit(matchesSessionRows);
-  const matchesVisibleSessionRows = matchesSessionRows.filter((trade) => !matchesHiddenHistoryIds.has(String(trade.contract_id)));
-  const matchesOwnedRows = matchesAllRows.filter((trade) => matchesClaimedHistoryIdsRef.current.has(String(trade.contract_id)));
-  const matchesRows = matchesOwnedRows.filter((trade) => !matchesHiddenHistoryIds.has(String(trade.contract_id)));
-  const matchesSettledOutcomeDigits = useMemo<ObservedMatchesDigitStat[]>(
-    () => summarizeSettledMatchOutcomes(
-      matchesAllRows,
-      currentAccount?.id,
-      matchesSymbol,
-      matchesDuration,
-    ),
-    [currentAccount?.id, matchesAllRows, matchesDuration, matchesSymbol],
-  );
-  const matchesMarketSelectedDigits = useMemo(
-    () => chooseQualifiedMatchesDigits(matchesSettledOutcomeDigits, matchesAiDigits),
-    [matchesAiDigits, matchesSettledOutcomeDigits],
-  );
   const bulkRows = bulkAllRows.filter((trade) => bulkClaimedHistoryIdsRef.current.has(trade.contract_id) && !bulkTraderHiddenHistoryIds.has(trade.contract_id));
   const visibleMoneyBankContractIds = new Set(
     moneyBankHistoryClaims.accountId === currentAccount?.id ? moneyBankHistoryClaims.ids : [],
@@ -2757,9 +2653,6 @@ export default function XTraderPage() {
     setClockWorkEnabled(false);
     setClockWorkAutoEnabled(false);
     setClockWorkAggressiveEnabled(false);
-    matchesAiRunningRef.current = false;
-    setMatchesAiEnabled(false);
-    setMatchesAnalysisEnabled(false);
     autoSwitchRef.current = false;
     setAutoSwitch(false);
   };
@@ -2809,9 +2702,6 @@ export default function XTraderPage() {
     setClockWorkEnabled(false);
     setClockWorkAutoEnabled(false);
     setClockWorkAggressiveEnabled(false);
-    matchesAiRunningRef.current = false;
-    setMatchesAiEnabled(false);
-    setMatchesAnalysisEnabled(false);
     void selectMarket(symbol);
   };
 
@@ -2837,9 +2727,6 @@ export default function XTraderPage() {
     setClockWorkEnabled(false);
     setClockWorkAutoEnabled(false);
     setClockWorkAggressiveEnabled(false);
-    matchesAiRunningRef.current = false;
-    setMatchesAiEnabled(false);
-    setMatchesAnalysisEnabled(false);
   };
 
   const reset = () => {
@@ -3455,9 +3342,6 @@ export default function XTraderPage() {
     setClockWorkEnabled(false);
     setClockWorkAutoEnabled(false);
     setClockWorkAggressiveEnabled(false);
-    matchesAiRunningRef.current = false;
-    setMatchesAiEnabled(false);
-    setMatchesAnalysisEnabled(false);
     runningRef.current = false;
     setRunning(false);
     autoSwitchRef.current = false;
@@ -3566,25 +3450,6 @@ export default function XTraderPage() {
     setHistoryFading(false);
   };
 
-  const clearMatchesHistory = async () => {
-    if (!matchesHistoryClearArmed) {
-      setMatchesHistoryClearArmed(true);
-      window.setTimeout(() => setMatchesHistoryClearArmed(false), 2_500);
-      return;
-    }
-    setMatchesHistoryClearArmed(false);
-    setHistoryFading(true);
-    await sleep(260);
-    setMatchesHiddenHistoryIds((current) => {
-      const next = new Set(current);
-      matchesRows
-        .filter((trade) => !isDerivHistoryOpen(trade.status))
-        .forEach((trade) => next.add(String(trade.contract_id)));
-      return next;
-    });
-    setHistoryFading(false);
-  };
-
   const toggleTradeX = (enabled: boolean) => {
     if (enabled && !isConnected) {
       setConnectionMessage({ kind: "error", text: "Connect Deriv before enabling Trade X." });
@@ -3600,9 +3465,6 @@ export default function XTraderPage() {
       setClockWorkEnabled(false);
       setClockWorkAutoEnabled(false);
       setClockWorkAggressiveEnabled(false);
-      matchesAiRunningRef.current = false;
-      setMatchesAiEnabled(false);
-      setMatchesAnalysisEnabled(false);
       digitFlipRunningRef.current = false;
       setDigitFlipRunning(false);
       stop();
@@ -3633,9 +3495,6 @@ export default function XTraderPage() {
     setTradeXEnabled(false);
     setDigitFlipEnabled(false);
     setBulkTraderEnabled(false);
-    matchesAiRunningRef.current = false;
-    setMatchesAiEnabled(false);
-    setMatchesAnalysisEnabled(false);
     runningRef.current = false;
     digitFlipRunningRef.current = false;
     setRunning(false);
@@ -3664,9 +3523,6 @@ export default function XTraderPage() {
     setClockWorkEnabled(false);
     setClockWorkAutoEnabled(false);
     setClockWorkAggressiveEnabled(false);
-    matchesAiRunningRef.current = false;
-    setMatchesAiEnabled(false);
-    setMatchesAnalysisEnabled(false);
     runningRef.current = false;
     digitFlipRunningRef.current = false;
     setRunning(false);
@@ -3675,462 +3531,6 @@ export default function XTraderPage() {
     setAutoSwitch(false);
     void selectMarket(bulkTraderSymbol);
   };
-
-  const resetMatchesSample = (symbol = matchesSymbol) => {
-    const tickSequence = status.data?.market_signals.find((signal) => signal.symbol === symbol)?.tick_sequence ?? 0;
-    matchesSampleCursorRef.current = { symbol, tickSequence };
-    setMatchesObservedDigits([]);
-    setMatchesTickCount(0);
-    matchesAutomationAttemptTickRef.current = -1;
-  };
-
-  const toggleMatchesAnalysis = (enabled: boolean) => {
-    if (enabled && !canUseMatchesAnalysis) return;
-    if (enabled && !isConnected) {
-      setConnectionMessage({ kind: "error", text: "Connect Deriv before enabling Matches Analysis." });
-      return;
-    }
-    setMatchesAnalysisEnabled(enabled);
-    if (!enabled) {
-      matchesAiRunningRef.current = false;
-      setMatchesAiEnabled(false);
-      setMatchesStatusMessage("Matches Analysis is off. Open contracts can continue to settle.");
-      return;
-    }
-
-    deactivateMoneyBank();
-    deactivateCashGrab();
-    stop();
-    setXTraderEnabled(false);
-    setTradeXEnabled(false);
-    setDigitFlipEnabled(false);
-    setBulkTraderEnabled(false);
-    setClockWorkEnabled(false);
-    setClockWorkAutoEnabled(false);
-    setClockWorkAggressiveEnabled(false);
-    runningRef.current = false;
-    digitFlipRunningRef.current = false;
-    setRunning(false);
-    setDigitFlipRunning(false);
-    autoSwitchRef.current = false;
-    setAutoSwitch(false);
-    matchesAiRunningRef.current = false;
-    setMatchesAiEnabled(false);
-    setClockWorkAutoStatus("Clock Work automation is stopped. Open contracts can continue to settle.");
-    matchesSessionKnownIdsRef.current = new Set(
-      rows.filter((trade) => trade.contract_type === "DIGITMATCH").map((trade) => String(trade.contract_id)),
-    );
-    resetMatchesSample();
-    setMatchesStatusMessage("Collecting fresh ticks for this Matches market.");
-  };
-
-  const toggleMatchesAi = (
-    enabled: boolean,
-    stoppedMessage = "Matches Analysis is stopped. Automatic Matches entries are stopped. Open contracts can continue to settle.",
-  ) => {
-    const pendingReconciliation = matchesPendingReconciliationRef.current;
-    if (enabled && pendingReconciliation) {
-      setMatchesStatusMessage(pendingReconciliation.accountId === currentAccount?.id
-        ? "Matches is waiting for Deriv history to safely reconcile the previous order."
-        : "A Matches order is still pending reconciliation on another Deriv account.");
-      return;
-    }
-    if (enabled && matchesAutoMode && !matchesAiDigitsConfirmed) {
-      setMatchesStatusMessage("Choose 1, 2, or 3 top digits before enabling automatic Matches entries.");
-      return;
-    }
-    if (enabled && (!matchesAnalysisEnabled || !canUseMatchesAnalysis || !isConnected || !currentAccount)) {
-      setMatchesStatusMessage("Enable Matches Analysis and connect a Deriv account before starting automatic entries.");
-      return;
-    }
-    if (enabled && tradeSlotBlocked) {
-      setMatchesStatusMessage(tradeSlotMessage ?? "Wait for the active contract to settle before starting.");
-      return;
-    }
-    if (enabled && !matchesAutoMode && !matchesSelectedDigits.length) {
-      setMatchesStatusMessage("Select at least one digit before starting Matches Analysis.");
-      return;
-    }
-    if (enabled) {
-      matchesSessionKnownIdsRef.current = new Set(
-        rows.filter((trade) => trade.contract_type === "DIGITMATCH").map((trade) => String(trade.contract_id)),
-      );
-      matchesAutomationAttemptTickRef.current = matchesTickCount;
-    }
-    matchesAiRunningRef.current = enabled;
-    setMatchesAiEnabled(enabled);
-    setMatchesStatusMessage(enabled
-      ? matchesAutoMode
-        ? "Matches Analysis is running. Waiting for fresh ticks and qualified settled digit results."
-        : "Matches Analysis is running with your selected digits. It will wait for fresh ticks and each contract to settle."
-      : stoppedMessage);
-  };
-
-  const selectMatchesAiDigits = (value: MatchesAiDigits) => {
-    setMatchesAiDigits(value);
-    setMatchesAiDigitsConfirmed(true);
-  };
-
-  const toggleMatchesAiAutoMarket = (enabled: boolean) => {
-    setMatchesAiAutoMarket(enabled);
-    if (enabled) {
-      setMatchesStatusMessage(tradeSlotBlocked
-        ? "AI Auto is on and will compare markets after the active contract settles."
-        : "AI Auto is comparing settled results across Volatility and Jump markets.");
-      return;
-    }
-    setMatchesStatusMessage("AI Auto market selection is off. The selected market will stay fixed.");
-  };
-
-  const changeMatchesSymbol = (nextSymbol: string) => {
-    if (tradeSlotBlocked || matchesActionLockRef.current || matchesPendingReconciliationRef.current) {
-      setMatchesStatusMessage(matchesPendingReconciliationRef.current
-        ? "The market stays fixed until the uncertain order is reconciled."
-        : "The market stays fixed while a contract is open. It can change for the next entry after settlement.");
-      return;
-    }
-    setMatchesAiAutoMarket(false);
-    const nextMarket = matchesMarkets.find((market) => market.value === nextSymbol);
-    setMatchesSymbol(nextSymbol);
-    if (nextMarket) setMatchesMarketType(nextMarket.marketType);
-    resetMatchesSample(nextSymbol);
-    setMatchesStatusMessage("Matches market changed. Collecting fresh ticks without changing other features' selected market.");
-  };
-
-  const startMatchesReconciliation = (
-    attemptedOrders: MatchesAttemptedOrder[],
-    baselineContractIds: ReadonlySet<string>,
-    startedAtMs: number,
-  ) => {
-    if (!currentAccount) return;
-    const pending: PendingMatchesReconciliation = {
-      id: crypto.randomUUID().replace(/-/g, ""),
-      accountId: currentAccount.id,
-      baselineContractIds: Array.from(baselineContractIds),
-      attemptedOrders,
-      startedAtMs,
-    };
-    matchesPendingReconciliationRef.current = pending;
-    setMatchesPendingReconciliation(pending);
-    setMatchesStatusMessage("Deriv has not confirmed every Matches order. New entries are paused while account history is checked.");
-  };
-
-  const deferMatchesAfterDefiniteFailure = (message: string) => {
-    matchesAutomationAttemptTickRef.current = Math.max(
-      matchesAutomationAttemptTickRef.current,
-      matchesTickCountRef.current + 2,
-    );
-    setMatchesStatusMessage(`${message} No uncertain order remains. Matches will continue after two fresh ticks.`);
-  };
-
-  const executeMatchesOrders = async (digits: readonly number[], automated: boolean) => {
-    if (matchesActionLockRef.current || matchesBuyMutation.isPending) return false;
-    if (automated && (!matchesAnalysisEnabled || !matchesAiEnabled || !matchesAiRunningRef.current)) return false;
-    if (matchesPendingReconciliationRef.current) {
-      setMatchesStatusMessage("Matches is waiting for the previous order to be safely reconciled.");
-      return false;
-    }
-    if (!matchesAnalysisEnabled || !canUseMatchesAnalysis || !isConnected || !currentAccount) {
-      setMatchesStatusMessage("Enable Matches Analysis and connect a Deriv account before trading.");
-      return false;
-    }
-    if (isReal && !status.data?.live_trading_enabled) {
-      setMatchesStatusMessage("Live-account trading is disabled for this workspace.");
-      if (automated) toggleMatchesAi(false);
-      return false;
-    }
-    if (tradeSlotBlocked) {
-      setMatchesStatusMessage(tradeSlotMessage ?? "Waiting for open contracts to settle.");
-      return false;
-    }
-    const stopReason = sessionStopReason(
-      matchesSessionPnl,
-      matchesProfitTarget > 0 ? matchesProfitTarget : Number.POSITIVE_INFINITY,
-      matchesLossLimit > 0 ? matchesLossLimit : Number.POSITIVE_INFINITY,
-    );
-    if (automated && stopReason) {
-      toggleMatchesAi(false, `${stopReason === "take-profit" ? "Profit target" : "Loss limit"} reached. Matches Analysis is stopped.`);
-      return false;
-    }
-    const selectedDigits = Array.from(new Set(digits))
-      .filter((digit) => Number.isInteger(digit) && digit >= 0 && digit <= 9)
-      .slice(0, 3);
-    if (!selectedDigits.length || (automated && matchesAutoMode && selectedDigits.length !== matchesAiDigits)) {
-      setMatchesStatusMessage("Waiting for enough settled Digit Match outcomes to qualify the selected top-digit count.");
-      return false;
-    }
-
-    const contracts = selectedDigits.map((digit) => ({
-      // The Matches API limits contract keys to 32 characters. A standard
-      // UUID contains 36 characters, so remove its four separators.
-      key: crypto.randomUUID().replace(/-/g, ""),
-      amount: matchesStake,
-      duration: matchesDuration,
-      duration_unit: "t" as const,
-      contract_type: "DIGITMATCH" as const,
-      barrier: digit,
-      symbol: matchesSymbol,
-    }));
-    const attemptedAtMs = Date.now();
-    const baselineContractIds = new Set(matchesAllRows.map((trade) => String(trade.contract_id)));
-    matchesActionLockRef.current = true;
-    if (automated) matchesAutomationAttemptTickRef.current = matchesTickCount;
-    setMatchesStatusMessage(automated ? "Sending the Matches proposal and buy request." : "Sending the Matches trade.");
-    try {
-      const result = await matchesBuyMutation.mutateAsync({ data: { contracts } });
-      const confirmedContractIds = result.contracts
-        .map((entry) => entry.buy.contract_id)
-        .filter((contractId) => contractId != null && String(contractId).length > 0)
-        .map(String);
-      claimFeatureRows(
-        "matches-analysis",
-        matchesClaimedHistoryIdsRef.current,
-        confirmedContractIds,
-      );
-      setMatchesPendingHistoryIds((current) => new Set([...current, ...confirmedContractIds]));
-      refreshTradeResults();
-      if (!result.ok) {
-        const uncertainKeys = new Set(result.failed
-          .filter((failure) => failure.outcome !== "rejected" && failure.outcome !== "not_sent")
-          .map((failure) => failure.key));
-        if (uncertainKeys.size || (result.failed.length === 0 && !result.ok)) {
-          const uncertainOrders = contracts
-            .filter((contract) => uncertainKeys.has(contract.key))
-            .map(({ amount, duration, symbol, barrier }) => ({ amount, duration, symbol, barrier }));
-          startMatchesReconciliation(
-            uncertainOrders.length ? uncertainOrders : contracts.map(({ amount, duration, symbol, barrier }) => ({ amount, duration, symbol, barrier })),
-            baselineContractIds,
-            attemptedAtMs,
-          );
-          return false;
-        }
-        deferMatchesAfterDefiniteFailure(result.message);
-      } else {
-        setMatchesStatusMessage(automated && !matchesAiRunningRef.current
-          ? `${result.message} Automatic entries remain stopped. Open contracts can continue to settle.`
-          : result.message);
-      }
-      return result.ok;
-    } catch (error) {
-      const message = errorMessage(error);
-      const status = error && typeof error === "object" && "status" in error
-        ? Number((error as { status?: unknown }).status)
-        : NaN;
-      const errorData = error && typeof error === "object" && "data" in error
-        ? (error as { data?: { trade_outcome?: unknown } }).data
-        : undefined;
-      const tradeOutcome = errorData?.trade_outcome;
-      if (tradeOutcome === "not_sent" || tradeOutcome === "rejected") {
-        if (status !== 401 && status !== 403) deferMatchesAfterDefiniteFailure(message);
-        else toggleMatchesAi(false, `${message} Automatic entries are stopped until access is restored.`);
-        return false;
-      }
-      if (status >= 500 || status === 429 || !Number.isFinite(status) || tradeOutcome === "uncertain") {
-        startMatchesReconciliation(
-          contracts.map(({ amount, duration, symbol, barrier }) => ({ amount, duration, symbol, barrier })),
-          baselineContractIds,
-          attemptedAtMs,
-        );
-        return false;
-      }
-      const stoppedMessage = status >= 400 && status < 500
-        ? `${message} Automatic entries are stopped until the request can be reviewed. Open contracts can continue to settle.`
-        : `${message} Check Deriv history before retrying an unconfirmed order. Automatic entries are stopped. Open contracts can continue to settle.`;
-      toggleMatchesAi(
-        false,
-        stoppedMessage,
-      );
-      return false;
-    } finally {
-      matchesActionLockRef.current = false;
-    }
-  };
-
-  useEffect(() => {
-    if (!matchesAiAutoMarket || !matchesAnalysisEnabled || !canUseMatchesAnalysis) return;
-    if (matchesPendingReconciliationRef.current) return;
-    if (!isConnected || !currentAccount || tradeSlotBlocked || matchesActionLockRef.current || matchesBuyMutation.isPending) return;
-
-    const marketSignal = chooseBestMatchesMarket(
-      matchesAllRows,
-      currentAccount.id,
-      matchesMarkets,
-      matchesDuration,
-      matchesSymbol,
-    );
-    if (!marketSignal || marketSignal.symbol === matchesSymbol) return;
-
-    const nextMarket = matchesMarkets.find((market) => market.value === marketSignal.symbol);
-    if (!nextMarket) return;
-    setMatchesSymbol(marketSignal.symbol);
-    setMatchesMarketType(nextMarket.marketType);
-    resetMatchesSample(marketSignal.symbol);
-    setMatchesStatusMessage(
-      `AI Auto selected ${marketSignal.symbol} from settled results (${marketSignal.rate.toFixed(1)}% across ${marketSignal.count} contract${marketSignal.count === 1 ? "" : "s"}). Waiting for fresh ticks without changing other features' selected market.`,
-    );
-  }, [
-    canUseMatchesAnalysis,
-    currentAccount,
-    isConnected,
-    matchesAiAutoMarket,
-    matchesAllRows,
-    matchesAnalysisEnabled,
-    matchesBuyMutation.isPending,
-    matchesPendingReconciliation,
-    matchesDuration,
-    matchesSymbol,
-    tradeSlotBlocked,
-  ]);
-
-  useEffect(() => {
-    if (!matchesAiEnabled || !matchesAiRunningRef.current) return;
-    const stopReason = sessionStopReason(
-      matchesSessionPnl,
-      matchesProfitTarget > 0 ? matchesProfitTarget : Number.POSITIVE_INFINITY,
-      matchesLossLimit > 0 ? matchesLossLimit : Number.POSITIVE_INFINITY,
-    );
-    if (!stopReason) return;
-    toggleMatchesAi(false, `${stopReason === "take-profit" ? "Profit target" : "Loss limit"} reached at ${matchesSessionPnl.toFixed(2)} ${currentAccount?.currency ?? "USD"}.`);
-  }, [currentAccount?.currency, matchesAiEnabled, matchesLossLimit, matchesProfitTarget, matchesSessionPnl]);
-
-  useEffect(() => {
-    const pending = matchesPendingReconciliation;
-    if (!pending || pending.accountId !== currentAccount?.id || !isConnected) return;
-
-    let disposed = false;
-    let checking = false;
-    let resolved = false;
-    let timer: number | undefined;
-
-    const reconcile = async () => {
-      if (disposed || checking) return;
-      checking = true;
-      try {
-        const historyKey = getGetDerivHistoryQueryKey();
-        const fallbackRows = queryClient.getQueryData<typeof rows>(historyKey) ?? [];
-        const [historySnapshot, statusSnapshot] = await Promise.all([
-          readCachedHistorySnapshot(() => getDerivHistory(), fallbackRows),
-          status.refetch(),
-        ]);
-        if (disposed || !historySnapshot.fresh || statusSnapshot.isError) return;
-
-        queryClient.setQueryData(historyKey, historySnapshot.rows);
-        const freshStatus = statusSnapshot.data;
-        if (
-          !freshStatus
-          || freshStatus.account?.id !== pending.accountId
-          || !freshStatus.connected
-          || !freshStatus.authorized
-          || !freshStatus.open_contracts_ready
-        ) return;
-
-        const result = reconcileUnconfirmedMatchesOrders(
-          historySnapshot.rows,
-          pending.accountId,
-          new Set(pending.baselineContractIds),
-          pending.attemptedOrders,
-          pending.startedAtMs,
-        );
-        if (
-          result.unresolvedOrderCount > 0
-          || result.matchedRows.some((trade) => isDerivHistoryOpen(trade.status))
-          || (freshStatus.active_contract_count ?? 0) > 0
-        ) return;
-
-        const reconciledIds = result.matchedRows.map((trade) => String(trade.contract_id));
-        claimFeatureRows(
-          "matches-analysis",
-          matchesClaimedHistoryIdsRef.current,
-          reconciledIds,
-        );
-        setMatchesPendingHistoryIds((current) => new Set([...current, ...reconciledIds]));
-        matchesAutomationAttemptTickRef.current = matchesTickCountRef.current;
-        resolved = true;
-        matchesPendingReconciliationRef.current = null;
-        setMatchesPendingReconciliation(null);
-        setMatchesStatusMessage(matchesAiRunningRef.current
-          ? "Deriv history confirms the previous order is settled. Matches will continue on the next fresh tick."
-          : "Deriv history confirms the previous order is settled. You can safely start Matches again.");
-      } catch {
-        // Failed reads are not evidence that the uncertain order is absent.
-      } finally {
-        checking = false;
-        if (!disposed && !resolved) timer = window.setTimeout(() => void reconcile(), 3_000);
-      }
-    };
-
-    void reconcile();
-    return () => {
-      disposed = true;
-      if (timer != null) window.clearTimeout(timer);
-    };
-  }, [
-    currentAccount?.id,
-    isConnected,
-    matchesPendingReconciliation?.id,
-    queryClient,
-    status.refetch,
-  ]);
-
-  useEffect(() => {
-    if (!matchesAnalysisEnabled || !matchesAiEnabled || !matchesAiRunningRef.current) return;
-    if (matchesPendingReconciliationRef.current) return;
-    if (!canUseMatchesAnalysis) {
-      toggleMatchesAi(false);
-      return;
-    }
-    if (!isConnected || !currentAccount) {
-      matchesAiRunningRef.current = false;
-      setMatchesAiEnabled(false);
-      matchesAutomationAttemptTickRef.current = matchesTickCount;
-      setMatchesStatusMessage("Deriv disconnected. Automatic Matches entries are stopped. Open contracts can continue to settle.");
-      return;
-    }
-    if (isReal && !status.data?.live_trading_enabled) {
-      setMatchesStatusMessage("Live-account trading is disabled for this workspace.");
-      toggleMatchesAi(false);
-      return;
-    }
-    if (tradeSlotBlocked) {
-      setMatchesStatusMessage(tradeSlotMessage ?? "Waiting for open contracts to settle.");
-      return;
-    }
-    if (matchesBuyMutation.isPending || matchesActionLockRef.current) return;
-    if (matchesTickCount <= 0) {
-      setMatchesStatusMessage("Waiting for fresh ticks from the selected market.");
-      return;
-    }
-    if (matchesAutomationAttemptTickRef.current >= matchesTickCount) return;
-    const digits = matchesAutoMode
-      ? chooseQualifiedMatchesDigits(matchesSettledOutcomeDigits, matchesAiDigits)
-      : matchesSelectedDigits;
-    if (matchesAutoMode && digits.length !== matchesAiDigits) {
-      setMatchesStatusMessage("Waiting for enough settled Digit Match results to qualify the selected auto-digit count.");
-      return;
-    }
-
-    matchesAutomationAttemptTickRef.current = matchesTickCount;
-    void executeMatchesOrders(digits, true);
-  }, [
-    canUseMatchesAnalysis,
-    currentAccount,
-    executeMatchesOrders,
-    isConnected,
-    isReal,
-    matchesAutoMode,
-    matchesAiDigits,
-    matchesAiEnabled,
-    matchesPendingReconciliation,
-    matchesAnalysisEnabled,
-    matchesBuyMutation.isPending,
-    matchesSelectedDigits,
-    matchesSymbol,
-    matchesTickCount,
-    matchesSettledOutcomeDigits,
-    status.data?.live_trading_enabled,
-    tradeSlotBlocked,
-    tradeSlotMessage,
-  ]);
 
   const executeClockWorkBatch = async (
     contracts: ClockWorkContractOrder[],
