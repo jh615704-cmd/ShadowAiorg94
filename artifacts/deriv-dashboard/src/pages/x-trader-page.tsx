@@ -704,6 +704,7 @@ export default function XTraderPage() {
     isReady: notificationsReady,
     addNotification,
     markNotificationRead,
+    dismissNotification,
     markAllNotificationsRead,
     clearNotifications,
   } = useAccountNotifications(accessKeyId);
@@ -4411,8 +4412,8 @@ export default function XTraderPage() {
             notifications={notifications}
             unreadCount={unreadNotificationCount}
             onMarkRead={markNotificationRead}
+            onDismiss={dismissNotification}
             onMarkAllRead={markAllNotificationsRead}
-            onClear={clearNotifications}
           />
         </div>
       </header>

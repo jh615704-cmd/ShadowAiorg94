@@ -3346,7 +3346,8 @@ body { overflow-x: hidden; }
 .notification-center-header strong { color: #f1f8fa; font-size: 15px; font-weight: 700; }
 .notification-center-header small { color: #9cb5c0; font-size: 11px; }
 .notification-center-close,
-.notification-center-mark-read {
+.notification-center-mark-read,
+.notification-center-dismiss {
   display: grid;
   flex: 0 0 auto;
   place-items: center;
@@ -3360,7 +3361,8 @@ body { overflow-x: hidden; }
   transition: border-color .16s ease, color .16s ease, background .16s ease;
 }
 .notification-center-close:hover,
-.notification-center-mark-read:hover {
+.notification-center-mark-read:hover,
+.notification-center-dismiss:hover {
   border-color: rgba(89, 223, 205, .55);
   color: #74efdc;
   background: rgba(47, 105, 105, .42);
@@ -3417,6 +3419,15 @@ body { overflow-x: hidden; }
   border-color: rgba(92, 204, 194, .12);
   background: linear-gradient(105deg, rgba(48, 105, 106, .17), rgba(29, 57, 68, .12));
 }
+.notification-center-list li.is-dismissing {
+  overflow: hidden;
+  pointer-events: none;
+  animation: notification-center-dismiss 260ms cubic-bezier(.2, .72, .25, 1) forwards;
+}
+@keyframes notification-center-dismiss {
+  from { max-height: 200px; padding-block: 12px; opacity: 1; transform: translateX(0); }
+  to { max-height: 0; padding-block: 0; opacity: 0; transform: translateX(12px); }
+}
 .notification-center-icon {
   display: grid;
   width: 34px;
@@ -3461,7 +3472,9 @@ body { overflow-x: hidden; }
   line-height: 1.5;
 }
 .notification-center-copy time { color: #7894a0; font-size: 9px; }
-.notification-center-mark-read { width: 30px; height: 30px; }
+.notification-center-item-actions { display: grid; gap: 5px; }
+.notification-center-mark-read,
+.notification-center-dismiss { width: 36px; height: 36px; }
 .notification-center-empty {
   display: grid;
   justify-items: center;
@@ -3500,4 +3513,5 @@ body { overflow-x: hidden; }
   .xt-home-navigation button,
   .xt-pat-form button { transition: none; }
   .xt-pat-form button:not(:disabled) { animation: none; }
+  .notification-center-list li.is-dismissing { animation-duration: 1ms; }
 }

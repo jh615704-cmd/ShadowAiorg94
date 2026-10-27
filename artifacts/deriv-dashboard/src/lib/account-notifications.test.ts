@@ -22,7 +22,10 @@ test("notification history ignores empty, malformed, and non-array storage", () 
   assert.deepEqual(parseAccountNotifications(null), []);
   assert.deepEqual(parseAccountNotifications(""), []);
   assert.deepEqual(parseAccountNotifications("{bad json"), []);
-  assert.deepEqual(parseAccountNotifications(JSON.stringify({ id: "not-a-list" })), []);
+  assert.deepEqual(
+    parseAccountNotifications(JSON.stringify({ id: "not-a-list" })),
+    [],
+  );
 });
 
 test("notification history validates fields and caps the saved list", () => {
@@ -37,10 +40,9 @@ test("notification history validates fields and caps the saved list", () => {
     { ...makeNotification(103), read: "false" },
   ];
 
-  const parsed = parseAccountNotifications(JSON.stringify([
-    ...validNotifications,
-    ...invalidNotifications,
-  ]));
+  const parsed = parseAccountNotifications(
+    JSON.stringify([...validNotifications, ...invalidNotifications]),
+  );
 
   assert.equal(parsed.length, MAX_ACCOUNT_NOTIFICATIONS);
   assert.equal(parsed[0]?.id, "notice-0");

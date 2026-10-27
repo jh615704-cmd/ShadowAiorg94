@@ -9,14 +9,21 @@ import {
 
 function readNotifications(accessKeyId: string): AccountNotification[] {
   try {
-    return parseAccountNotifications(window.sessionStorage.getItem(accountNotificationsStorageKey(accessKeyId)));
+    return parseAccountNotifications(
+      window.sessionStorage.getItem(
+        accountNotificationsStorageKey(accessKeyId),
+      ),
+    );
   } catch {
     return [];
   }
 }
 
 function createNotificationId() {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
     return crypto.randomUUID();
   }
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -24,7 +31,9 @@ function createNotificationId() {
 
 export function useAccountNotifications(accessKeyId?: string) {
   const [notifications, setNotifications] = useState<AccountNotification[]>([]);
-  const [loadedForAccessKeyId, setLoadedForAccessKeyId] = useState<string | null>(null);
+  const [loadedForAccessKeyId, setLoadedForAccessKeyId] = useState<
+    string | null
+  >(null);
   const isReady = Boolean(accessKeyId && loadedForAccessKeyId === accessKeyId);
 
   useEffect(() => {
@@ -41,53 +50,73 @@ export function useAccountNotifications(accessKeyId?: string) {
   useEffect(() => {
     if (!accessKeyId || loadedForAccessKeyId !== accessKeyId) return;
     try {
-      window.sessionStorage.setItem(accountNotificationsStorageKey(accessKeyId), JSON.stringify(notifications));
+      window.sessionStorage.setItem(
+        accountNotificationsStorageKey(accessKeyId),
+        JSON.stringify(notifications),
+      );
     } catch {
       // The notification center still works for this page if browser storage is unavailable.
     }
   }, [accessKeyId, loadedForAccessKeyId, notifications]);
 
-  const addNotification = useCallback((
-    category: AccountNotificationCategory,
-    title: string,
-    message: string,
-  ) => {
-    if (!accessKeyId || loadedForAccessKeyId !== accessKeyId) return;
-    const notification: AccountNotification = {
-      id: createNotificationId(),
-      category,
-      title,
-      message,
-      createdAt: Date.now(),
-      read: false,
-    };
-    setNotifications((current) => [notification, ...current].slice(0, MAX_ACCOUNT_NOTIFICATIONS));
-  }, [accessKeyId, loadedForAccessKeyId]);
+  const addNotification = useCallback(
+    (category: AccountNotificationCategory, title: string, message: string) => {
+      if (!accessKeyId || loadedForAccessKeyId !== accessKeyId) return;
+      const notification: AccountNotification = {
+        id: createNotificationId(),
+        category,
+        title,
+        message,
+        createdAt: Date.now(),
+        read: false,
+      };
+      setNotifications((current) =>
+        [notification, ...current].slice(0, MAX_ACCOUNT_NOTIFICATIONS),
+      );
+    },
+    [accessKeyId, loadedForAccessKeyId],
+  );
 
   const markNotificationRead = useCallback((id: string) => {
-    setNotifications((current) => current.map((notification) =>
-      notification.id === id ? { ...notification, read: true } : notification,
-    ));
+    setNotifications((current) =>
+      current.map((notification) =>
+        notification.id === id ? { ...notification, read: true } : notification,
+      ),
+    );
+  }, []);
+
+  const dismissNotification = useCallback((id: string) => {
+    setNotifications((current) =>
+      current.filter((notification) => notification.id !== id),
+    );
   }, []);
 
   const markAllNotificationsRead = useCallback(() => {
-    setNotifications((current) => current.map((notification) =>
-      notification.read ? notification : { ...notification, read: true },
-    ));
+    setNotifications((current) =>
+      current.map((notification) =>
+        notification.read ? notification : { ...notification, read: true },
+      ),
+    );
   }, []);
 
   const clearNotifications = useCallback(() => {
     setNotifications([]);
     if (!accessKeyId) return;
     try {
-      window.sessionStorage.removeItem(accountNotificationsStorageKey(accessKeyId));
+      window.sessionStorage.removeItem(
+        accountNotificationsStorageKey(accessKeyId),
+      );
     } catch {
       // Clearing the in-memory list still works if browser storage is unavailable.
     }
   }, [accessKeyId]);
 
   const unreadCount = useMemo(
-    () => notifications.reduce((count, notification) => count + Number(!notification.read), 0),
+    () =>
+      notifications.reduce(
+        (count, notification) => count + Number(!notification.read),
+        0,
+      ),
     [notifications],
   );
 
@@ -97,6 +126,7 @@ export function useAccountNotifications(accessKeyId?: string) {
     isReady,
     addNotification,
     markNotificationRead,
+    dismissNotification,
     markAllNotificationsRead,
     clearNotifications,
   };
