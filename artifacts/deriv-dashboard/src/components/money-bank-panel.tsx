@@ -159,6 +159,16 @@ export function MoneyBankPanel({
     growthRate,
     takeProfitTicks,
   });
+  const stakesByRate = Object.fromEntries(GROWTH_RATES.map((rate) => {
+    const rateLadder = calculateRecoveryLadder({
+      strategy,
+      budget,
+      manualBase,
+      growthRate: rate,
+      takeProfitTicks,
+    });
+    return [rate, rateLadder[0]?.stake ?? 0];
+  }));
   const estimatedReturn = estimateAccumulatorReturnRate(growthRate, takeProfitTicks) * 100;
   const recoveryStart = Math.max(5, Math.round(takeProfitTicks * 0.16));
   const selectedMarket = markets.find(([market]) => market === symbol)?.[1] ?? symbol;
@@ -480,7 +490,7 @@ export function MoneyBankPanel({
             rows={visibleTrades}
             symbol={symbol}
             growthRate={growthRate}
-            stake={selectedStake}
+            stakesByRate={stakesByRate}
             currency={currency}
             connected={isConnected}
           />

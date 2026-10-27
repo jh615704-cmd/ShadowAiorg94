@@ -1263,19 +1263,18 @@
 
 .money-bank-market-quote strong {
   color: var(--chart-color);
-  font-size: clamp(1.5rem, 3vw, 1.9rem);
+  font-size: clamp(1.7rem, 3.2vw, 2.15rem);
   font-variant-numeric: tabular-nums;
-  font-weight: 760;
+  font-weight: 800;
   letter-spacing: -.035em;
   line-height: 1.05;
-  text-shadow: 0 0 18px color-mix(in srgb, var(--chart-color) 20%, transparent);
 }
 
 .money-bank-market-quote span {
   color: var(--chart-color);
-  font-size: .78rem;
+  font-size: .86rem;
   font-variant-numeric: tabular-nums;
-  font-weight: 650;
+  font-weight: 750;
 }
 
 .money-bank-chart-plot {
@@ -1387,6 +1386,10 @@
 
 .money-bank-knockout-head { align-items: flex-start; }
 
+.money-bank-knockout-card .money-bank-card-head > div > small {
+  color: #f0a447;
+}
+
 .money-bank-knockout-head h3 {
   margin: 4px 0 0;
   color: #edf4fc;
@@ -1423,43 +1426,93 @@
 .money-bank-knockout-rates {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 5px;
+  gap: 6px;
   margin: 14px 0 11px;
 }
 
-.money-bank-knockout-rates button {
+.money-bank-knockout-rate-chip {
   display: grid;
   justify-items: center;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
-  padding: 7px 3px 6px;
+  padding: 8px 4px;
   border: 1px solid rgba(102, 128, 158, .2);
   border-radius: 8px;
   background: rgba(27, 40, 59, .54);
   color: #aab8c9;
-  cursor: pointer;
-  transition: border-color .16s ease, background .16s ease, color .16s ease;
 }
 
-.money-bank-knockout-rates button:hover,
-.money-bank-knockout-rates button.active {
+.money-bank-knockout-rate-chip.is-current {
   border-color: rgba(244, 162, 70, .64);
   background: rgba(87, 55, 30, .42);
   color: #ffc166;
 }
 
-.money-bank-knockout-rates button strong {
-  font-size: .78rem;
+.money-bank-knockout-rate-chip strong {
+  font-size: .8rem;
   font-variant-numeric: tabular-nums;
 }
 
-.money-bank-knockout-rates button small {
+.money-bank-knockout-rate-chip span {
+  color: #d3deeb;
+  font-size: .54rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.money-bank-knockout-rate-chip small {
   overflow: hidden;
   max-width: 100%;
   color: #91a0b4;
   font-size: .54rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.money-bank-knockout-rate-history {
+  display: grid;
+  gap: 8px;
+}
+
+.money-bank-knockout-rate-row {
+  display: grid;
+  grid-template-columns: minmax(108px, .65fr) minmax(0, 1.35fr);
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(91, 112, 140, .2);
+  border-radius: 10px;
+  background: rgba(7, 14, 26, .34);
+}
+
+.money-bank-knockout-rate-row.is-current {
+  border-color: rgba(244, 162, 70, .45);
+  background: rgba(87, 55, 30, .16);
+}
+
+.money-bank-knockout-rate-row-head {
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 4px 5px;
+}
+
+.money-bank-knockout-rate-row-head strong {
+  color: #f3b259;
+  font-size: .78rem;
+}
+
+.money-bank-knockout-rate-row-head span,
+.money-bank-knockout-rate-row-head small {
+  color: #a6b5c8;
+  font-size: .6rem;
+  line-height: 1.35;
+}
+
+.money-bank-knockout-rate-row-head small {
+  color: #7f91a8;
 }
 
 .money-bank-knockout-summary {
@@ -1532,6 +1585,7 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+  min-width: 0;
 }
 
 .money-bank-knockout-option {
@@ -1617,6 +1671,17 @@
   .money-bank-chart-foot small { flex-basis: 100%; margin-left: 0; }
   .money-bank-knockout-card { padding: 13px; }
   .money-bank-knockout-rates { gap: 4px; }
+  .money-bank-knockout-rate-chip { padding: 7px 2px; }
+  .money-bank-knockout-rate-chip span { font-size: .47rem; }
+  .money-bank-knockout-rate-chip small { font-size: .47rem; }
+  .money-bank-knockout-rate-row { grid-template-columns: 1fr; }
+  .money-bank-knockout-rate-row-head {
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 7px;
+  }
+  .money-bank-knockout-rate-row-head strong { white-space: nowrap; }
+  .money-bank-knockout-rate-row-head small { text-align: right; }
   .money-bank-knockout-summary { gap: 3px; }
   .money-bank-knockout-summary > div { padding-inline: 2px; }
   .money-bank-knockout-summary small { font-size: .43rem; }

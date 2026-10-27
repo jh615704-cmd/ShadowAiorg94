@@ -11,8 +11,7 @@ export function MoneyBankMarketChart({ marketName, connected, quote, quotes }: P
   const chartQuotes = quotes.filter(Number.isFinite).slice(-30);
   const first = chartQuotes[0];
   const latest = quote ?? chartQuotes.at(-1) ?? null;
-  const lastObserved = chartQuotes.at(-1);
-  const change = first != null && lastObserved != null ? lastObserved - first : 0;
+  const change = first != null && latest != null ? latest - first : 0;
   const changePercent = first != null && first !== 0 ? (change / first) * 100 : 0;
   const trend = chartQuotes.length < 2 || Math.abs(changePercent) < 0.0001
     ? "flat"
