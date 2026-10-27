@@ -191,13 +191,16 @@ export function getClockWorkChartZoneBand(
 }
 
 export function getClockWorkRecentMoves(quotes: readonly number[], limit = 20) {
-  const moves: Array<{ direction: "H" | "L"; quote: number }> = [];
+  const moves: Array<{ direction: "H" | "L" | "="; quote: number }> = [];
   const start = Math.max(0, quotes.length - limit - 1);
   for (let index = start + 1; index < quotes.length; index += 1) {
     const previous = quotes[index - 1];
     const current = quotes[index];
-    if (!Number.isFinite(previous) || !Number.isFinite(current) || current === previous) continue;
-    moves.push({ direction: current > previous ? "H" : "L", quote: current });
+    if (!Number.isFinite(previous) || !Number.isFinite(current)) continue;
+    moves.push({
+      direction: current > previous ? "H" : current < previous ? "L" : "=",
+      quote: current,
+    });
   }
   return moves.slice(-limit);
 }

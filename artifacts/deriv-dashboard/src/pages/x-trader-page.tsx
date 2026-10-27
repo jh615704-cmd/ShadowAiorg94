@@ -251,7 +251,7 @@ const clockWorkGuidePages = [
   { title: "All 4 Trades", body: "All 4 Trades submits H1, L1, L2, and H2 contracts in alternating Higher and Lower order, starting with the side that currently has the stronger lean.", points: ["Each leg has its own selected stake and barrier.", "All four quotes must be available before the batch is sent.", "The order sequence cannot guarantee the final settlement outcome."] },
   { title: "Auto Trading modes", body: "Choose H&L (2) for a paired batch, A to select the side with the stronger measured rate, or All (4) for four alternating contracts.", points: ["Automation also requires a minimum lean selection.", "The switch starts and stops new automatic entries.", "An open Deriv contract pauses the next entry."] },
   { title: "Minimum lean", body: "Minimum lean sets the observed percentage threshold required before an automatic batch can start.", points: ["Select one of 50%, 67%, 78%, 88%, 92%, or 95%.", "Higher thresholds can mean fewer entries.", "Passing the threshold does not make a contract certain to win."] },
-  { title: "Aggressive Auto Trading", body: "Aggressive mode uses a selected share of the current account balance and waits for five consecutive ticks in one direction before considering an entry.", points: ["Choose 5%, 15%, 25%, or 50%.", "The total planned amount is divided across the selected mode's contracts.", "The balance and minimum stake checks can pause an entry."] },
+  { title: "Aggressive Auto Trading", body: "Aggressive mode uses a selected share of the current account balance and waits for two consecutive ticks in one direction before considering an entry.", points: ["Choose 5%, 15%, 25%, or 50%.", "The total planned amount is divided across the selected mode's contracts.", "The balance and minimum stake checks can pause an entry."] },
   { title: "History and risk", body: "Clock Work History shows contracts submitted by this feature, with actual settled profit, result, win rate, and recorded stake. Open contracts remain unsettled until Deriv reports a final result.", points: ["Clearing hides Clock Work rows from this dashboard only; it does not delete Deriv's account history.", "Paired trades and four-trade batches can lose money.", "No sequence can guarantee a final winning contract or recovery."] },
 ] as const;
 
@@ -906,7 +906,7 @@ export default function XTraderPage() {
       : clockWorkBarrierReference + (clockWorkHalfBarrier ? clockWorkLowerBarrier / 2 : clockWorkLowerBarrier),
   );
   const clockWorkRecentMoves = getClockWorkRecentMoves(clockWorkQuoteHistory);
-  const clockWorkPushProgress = getClockWorkPushProgress(clockWorkQuoteHistory, 5);
+  const clockWorkPushProgress = getClockWorkPushProgress(clockWorkQuoteHistory, 2);
   const clockWorkPushDirection = clockWorkPushProgress.direction;
   const clockWorkTickEpoch = clockWorkTickIsFreshForMarket ? clockWorkLatestTick?.epoch ?? null : null;
   const clockWorkQuoteUpdatedAt = clockWorkTickEpoch == null ? "" : new Date(Number(clockWorkTickEpoch) * 1000).toISOString();
@@ -932,7 +932,7 @@ export default function XTraderPage() {
     amount: number,
   ): ClockWorkContractOrder => {
     const offset = contractType === "HIGHER" ? clockWorkHigherBarrier : clockWorkLowerBarrier;
-    const barrier = formatClockWorkBarrier(clockWorkBarrierMode, clockWorkCurrentQuote, offset, clockWorkHalfBarrier) ?? "1";
+    const barrier = formatClockWorkBarrier(clockWorkBarrierMode, clockWorkBarrierReference, offset, clockWorkHalfBarrier) ?? "1";
     return {
       key,
       amount: Number(Math.max(1, amount).toFixed(2)),
@@ -946,7 +946,7 @@ export default function XTraderPage() {
   const clockWorkPairOrders = useMemo(() => [
     makeClockWorkOrder("higher", "HIGHER", clockWorkHigherStake),
     makeClockWorkOrder("lower", "LOWER", clockWorkLowerStake),
-  ], [clockWorkSymbol, clockWorkBarrierMode, clockWorkHigherBarrier, clockWorkLowerBarrier, clockWorkHalfBarrier, clockWorkCurrentQuote, clockWorkHigherStake, clockWorkLowerStake]);
+  ], [clockWorkSymbol, clockWorkBarrierMode, clockWorkHigherBarrier, clockWorkLowerBarrier, clockWorkHalfBarrier, clockWorkBarrierReference, clockWorkCurrentQuote, clockWorkHigherStake, clockWorkLowerStake]);
   const makeClockWorkFourOrders = (lead: "HIGHER" | "LOWER" | null) => {
     const sequence = getClockWorkFourSequence(lead);
     let higherIndex = 0;
@@ -962,7 +962,7 @@ export default function XTraderPage() {
   };
   const clockWorkFourOrders = useMemo(
     () => makeClockWorkFourOrders(clockWorkRates.prediction),
-    [clockWorkSymbol, clockWorkBarrierMode, clockWorkHigherBarrier, clockWorkLowerBarrier, clockWorkHalfBarrier, clockWorkCurrentQuote, clockWorkH1Stake, clockWorkH2Stake, clockWorkL1Stake, clockWorkL2Stake, clockWorkRates.prediction],
+    [clockWorkSymbol, clockWorkBarrierMode, clockWorkHigherBarrier, clockWorkLowerBarrier, clockWorkHalfBarrier, clockWorkBarrierReference, clockWorkCurrentQuote, clockWorkH1Stake, clockWorkH2Stake, clockWorkL1Stake, clockWorkL2Stake, clockWorkRates.prediction],
   );
   clockWorkQuoteOrderBuilderRef.current = () => ({
     pair: [
@@ -971,6 +971,12 @@ export default function XTraderPage() {
     ],
     allFour: makeClockWorkFourOrders("HIGHER"),
   });
+
+  useEffect(() => {
+    if (!clockWorkStatusMessage) return;
+    const timeout = window.setTimeout(() => setClockWorkStatusMessage(null), 5_000);
+    return () => window.clearTimeout(timeout);
+  }, [clockWorkStatusMessage]);
 
   useEffect(() => {
     if (!clockWorkEnabled || !canUseClockWork || !isConnected) {
@@ -1025,6 +1031,7 @@ export default function XTraderPage() {
     clockWorkHigherBarrier,
     clockWorkLowerBarrier,
     clockWorkHalfBarrier,
+    clockWorkBarrierAnchor,
     clockWorkHigherStake,
     clockWorkLowerStake,
     clockWorkH1Stake,
@@ -4153,7 +4160,10 @@ export default function XTraderPage() {
     setClockWorkStatusMessage(null);
     if (source !== "manual") setClockWorkAutoStatus("Sending the selected Clock Work orders to Deriv.");
     try {
-      const result = await clockWorkBuyMutation.mutateAsync({ data: { contracts } });
+      const orderedContracts = contracts.length > 1
+        ? [...contracts].sort((left, right) => left.amount - right.amount)
+        : contracts;
+      const result = await clockWorkBuyMutation.mutateAsync({ data: { contracts: orderedContracts } });
       for (const contract of result.contracts) {
         claimFeatureRows("clock-work", clockWorkClaimedHistoryIdsRef.current, [String(contract.buy.contract_id)]);
       }
@@ -4582,7 +4592,7 @@ export default function XTraderPage() {
     }
     const lead = aggressive ? clockWorkPushDirection : clockWorkRates.prediction;
     if (aggressive && !lead) {
-      setClockWorkAutoStatus(`Waiting for 5 consecutive ticks in one direction (${clockWorkPushProgress.consecutiveTicks}/5).`);
+      setClockWorkAutoStatus(`Waiting for 2 consecutive ticks in one direction (${clockWorkPushProgress.consecutiveTicks}/2).`);
       return;
     }
     if (clockWorkAutoMode === "auto" && !lead) {
@@ -5502,7 +5512,7 @@ export default function XTraderPage() {
               if (enabled) {
                 setClockWorkAggressiveRounds(0);
                 setClockWorkAutoEnabled(false);
-                setClockWorkAutoStatus(`Waiting for a 5-tick directional push and at least ${CLOCK_WORK_AGGRESSIVE_MIN_WIN_RATE}% observed win rate.`);
+                setClockWorkAutoStatus(`Waiting for a 2-tick directional push and at least ${CLOCK_WORK_AGGRESSIVE_MIN_WIN_RATE}% observed win rate.`);
               } else {
                 setClockWorkAutoStatus("Aggressive Auto Trading is stopped. Open contracts can continue to settle.");
               }

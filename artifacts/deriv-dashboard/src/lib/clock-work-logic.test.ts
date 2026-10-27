@@ -8,6 +8,7 @@ import {
   estimateClockWorkBarrierRates,
   getClockWorkAggressiveBudget,
   getClockWorkPushProgress,
+  getClockWorkRecentMoves,
   meetsClockWorkMinimumWinRate,
 } from "./clock-work-logic.ts";
 
@@ -124,6 +125,14 @@ test("Clock Work push progress counts consecutive directional ticks", () => {
     direction: "LOWER",
     consecutiveTicks: 3,
   });
+});
+
+test("Clock Work recent moves include flat ticks as equals", () => {
+  assert.deepEqual(getClockWorkRecentMoves([10, 11, 11, 9]), [
+    { direction: "H", quote: 11 },
+    { direction: "=", quote: 11 },
+    { direction: "L", quote: 9 },
+  ]);
 });
 
 test("Clock Work aggressive stakes stay within the selected balance percentage", () => {

@@ -1,9 +1,5 @@
 import { Activity, ChartNoAxesCombined, Clock3, Minus, Plus, Zap } from "lucide-react";
-import { useState } from "react";
-import {
-  getClockWorkChartZoneBand,
-  type ClockWorkChartZone,
-} from "../lib/clock-work-logic";
+import type { ClockWorkChartZone } from "../lib/clock-work-logic";
 import "./clock-work-panel.css";
 
 export interface ClockWorkOption {
@@ -13,7 +9,7 @@ export interface ClockWorkOption {
 }
 
 export interface ClockWorkMove {
-  direction: "H" | "L";
+  direction: "H" | "L" | "=";
   quote: number;
 }
 
@@ -122,7 +118,6 @@ function Toggle({ checked, onChange, disabled, label }: { checked: boolean; onCh
 }
 
 export default function ClockWorkPanel(props: ClockWorkPanelProps) {
-  const [chartFocusZone, setChartFocusZone] = useState<ClockWorkChartZone | null>(null);
   const {
     enabled, symbol, markets, onSymbolChange, duration, quote, quoteHistory,
     quoteUpdatedAt, tradeSlotBlocked,
@@ -159,9 +154,6 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
     `${count < 2 ? 58 : plotLeft + index * (plotRight - plotLeft) / (count - 1)},${plotBottom - (value - min) / span * (plotBottom - plotTop)}`;
   const points = chartValues.map((value, index) => point(value, index, chartValues.length)).join(" ");
   const yFor = (value: number) => plotBottom - (value - min) / span * (plotBottom - plotTop);
-  const selectedZoneBand = chartFocusZone && higherLevel != null && lowerLevel != null
-    ? getClockWorkChartZoneBand(chartFocusZone, yFor(higherLevel), yFor(lowerLevel), plotTop, plotBottom)
-    : null;
   const fmt = (value: number | null) => value == null ? "—" : value.toFixed(2);
   const fmtPercent = (value: number | null) => value == null ? "—" : `${Math.round(value)}%`;
   const chartReady = chartValues.length >= 2;
@@ -225,8 +217,8 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
     <div className="cw-content">
       <section className="cw-setup cw-surface">
         <div className="cw-setup-top">
-          <label className="cw-control"><span>MARKET</span><select value={symbol} onChange={(event) => { setChartFocusZone(null); onSymbolChange(event.target.value); }} disabled={disabled} aria-label="Market" data-testid="select-clock-market">{markets.map((market) => <option key={market.value} value={market.value}>{market.label}</option>)}</select></label>
-          <div className="cw-control"><span>DURATION</span><div className="cw-duration-choice" role="group" aria-label="Clock Work duration">
+          <label className="cw-control"><span>MARKET</span><select value={symbol} onChange={(event) => onSymbolChange(event.target.value)} disabled={disabled} aria-label="Market" data-testid="select-clock-market">{markets.map((market) => <option key={market.value} value={market.value}>{market.label}</option>)}</select></label>
+          <div className="cw-control cw-duration-control"><span>DURATION</span><div className="cw-duration-choice" role="group" aria-label="Clock Work duration">
             <button type="button" aria-pressed="true" className="selected" disabled data-testid="button-clock-duration-5">{duration} Ticks</button>
           </div></div>
         </div>
@@ -254,8 +246,14 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
         </div>
         <div className={`cw-chart-signal ${chartZone ?? "waiting"}`} aria-live="polite"><i />{chartSignal}</div>
         <div className="cw-chart-area">
-          {chartReady ? <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label={`Price chart for ${symbol} showing ${chartValues.length} recent ticks and selected barriers${chartFocusZone ? `, highlighting ${chartZoneLabel(chartFocusZone)}` : ""}`}>
-            {selectedZoneBand && <rect x={plotLeft} y={selectedZoneBand.y} width={plotRight - plotLeft} height={selectedZoneBand.height} className={`cw-zone-band zone-${chartFocusZone}`} />}
+          {chartReady ? <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label={`Price chart for ${symbol} showing ${chartValues.length} recent ticks, the current market zone, and selected barriers`}>
+            <defs>
+              <linearGradient id="clock-work-price-gradient" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="#21c99a" stopOpacity=".24" />
+                <stop offset="100%" stopColor="#21c99a" stopOpacity=".015" />
+              </linearGradient>
+            </defs>
+            <polygon points={`${points} ${plotRight},${plotBottom} ${plotLeft},${plotBottom}`} className="cw-price-fill" />
             {[0, 1, 2, 3].map((index) => {
               const y = plotTop + index * (plotBottom - plotTop) / 3;
               const value = max - index * span / 3;
@@ -264,37 +262,33 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
             <line x1={plotLeft} x2={plotLeft} y1={plotTop} y2={plotBottom} className="cw-axis-line" />
             <line x1={plotLeft} x2={plotRight} y1={plotBottom} y2={plotBottom} className="cw-axis-line" />
             {higherLevel != null && <><line x1={plotLeft} x2={plotRight} y1={yFor(higherLevel)} y2={yFor(higherLevel)} className="cw-higher-line" /><text x={plotLeft + 2} y={Math.max(8, yFor(higherLevel) - 2)} className="cw-higher-text">HIGHER {fmt(higherLevel)}</text></>}
-            {lowerLevel != null && <><line x1={plotLeft} x2={plotRight} y1={yFor(lowerLevel)} y2={yFor(lowerLevel)} className="cw-lower-line" /><text x={plotLeft + 2} y={Math.max(8, yFor(lowerLevel) - 2)} className="cw-lower-text">LOWER {fmt(lowerLevel)}</text></>}
+            {lowerLevel != null && <><line x1={plotLeft} x2={plotRight} y1={yFor(lowerLevel)} y2={yFor(lowerLevel)} className="cw-lower-line" /><text x={plotRight - 1} y={Math.max(8, yFor(lowerLevel) - 2)} textAnchor="end" className="cw-lower-text">LOWER {fmt(lowerLevel)}</text></>}
             <polyline points={points} className="cw-price-line" />
-            {chartValues.length > 0 && <circle cx={point(chartValues[chartValues.length - 1], chartValues.length - 1, chartValues.length).split(",")[0]} cy={point(chartValues[chartValues.length - 1], chartValues.length - 1, chartValues.length).split(",")[1]} r="1.4" className="cw-chart-dot" />}
+            {chartValues.length > 0 && <circle cx={point(chartValues[chartValues.length - 1], chartValues.length - 1, chartValues.length).split(",")[0]} cy={point(chartValues[chartValues.length - 1], chartValues.length - 1, chartValues.length).split(",")[1]} r="1.6" className="cw-chart-dot" />}
           </svg> : <div className="cw-chart-empty"><Activity size={17} /><b>Waiting for price history</b><span>Live ticks will draw here once at least two quotes arrive.</span></div>}
         </div>
         <div className="cw-chart-legend"><span><i className="cw-legend-price" />Price</span><span><i className="cw-legend-high" />Higher barrier</span><span><i className="cw-legend-low" />Lower barrier</span></div>
-        <div className="cw-chart-zones" role="group" aria-label="Select a price chart zone">
-          {(["higher", "between", "lower"] as const).map((zone) => <button
+        <div className="cw-chart-zones" role="status" aria-label="Market position relative to your barriers">
+          {(["higher", "between", "lower"] as const).map((zone) => <span
             key={zone}
-            type="button"
-            aria-pressed={chartFocusZone === zone}
-            aria-label={`Highlight ${chartZoneLabel(zone)} area in the price chart`}
-            className={`${chartZone === zone ? "active" : ""} ${chartFocusZone === zone ? "selected" : ""}`.trim()}
-            onClick={() => setChartFocusZone((current) => current === zone ? null : zone)}
-            data-testid={`button-clock-chart-zone-${zone}`}
-          >{chartZoneLabel(zone)}</button>)}
+            aria-current={chartZone === zone ? "true" : undefined}
+            className={chartZone === zone ? "active" : ""}
+            data-testid={`clock-chart-zone-${zone}`}
+          >{chartZoneLabel(zone)}</span>)}
         </div>
-        <small className="cw-chart-focus-note">{chartFocusZone ? `Highlighted chart zone: ${chartZoneLabel(chartFocusZone)}` : "Select a zone to highlight it in the chart."}</small>
       </section>
 
       <div className="cw-readouts">
         <div className="cw-percent cw-percent-high"><span>↑ Higher</span><b>{fmtPercent(higherPercent)}</b><small>{higherTicks} ticks</small></div>
         <div className="cw-percent cw-percent-low"><span>↓ Lower</span><b>{fmtPercent(lowerPercent)}</b><small>{lowerTicks} ticks</small></div>
       </div>
-      <section className="cw-moves cw-surface"><div className="cw-label-row"><b>Recent Moves</b></div><div className="cw-move-list">{recentMoves.length ? recentMoves.map((move, index) => <span key={`${move.direction}-${index}`} className={move.direction === "H" ? "move-high" : "move-low"} title={`${move.direction === "H" ? "Higher" : "Lower"} · ${move.quote}`}>{move.direction}</span>) : <p>No recent moves yet.</p>}</div></section>
+      <section className="cw-moves cw-surface"><div className="cw-label-row"><b>Recent Moves</b></div><div className="cw-move-list">{recentMoves.length ? recentMoves.map((move, index) => <span key={`${move.direction}-${index}`} className={move.direction === "H" ? "move-high" : move.direction === "L" ? "move-low" : "move-flat"} title={`${move.direction === "H" ? "Higher" : move.direction === "L" ? "Lower" : "Unchanged"} · ${move.quote}`}>{move.direction}</span>) : <p>No recent moves yet.</p>}</div></section>
       <section className={`cw-prediction ${prediction === "HIGHER" ? "prediction-high" : prediction === "LOWER" ? "prediction-low" : ""}`} aria-live="polite">
         <div className="cw-prediction-head"><div><span className="cw-section-kicker">OBSERVED LEAN</span><b>{prediction ?? "NOT ENOUGH DATA"}</b></div><strong>{leanStrength == null ? "—" : `${Math.round(leanStrength)}%`}<small> lean strength</small></strong></div>
         <div className="cw-lean-meter"><i style={{ width: `${Math.max(0, Math.min(100, leanStrength == null ? 0 : Math.round(leanStrength)))}%` }} /></div>
         <p>Recent price movement is descriptive, not a forecast or guarantee.</p>
       </section>
-      {statusMessage && <p className="cw-status" role="status" aria-live="polite">{statusMessage}</p>}
+      {statusMessage && <p key={statusMessage} className="cw-status" role="status" aria-live="polite">{statusMessage}</p>}
 
       <div className="cw-trade-actions">
         <button type="button" className="cw-trade-button trade-high" onClick={onPlaceHigher} disabled={actionsDisabled} data-testid="button-clock-place-higher"><b>↑ HIGHER</b><small>{quoteDetail(higherQuote, currency)}</small><span>{busy ? "Sending…" : "Place Higher"}</span></button>
@@ -326,11 +320,11 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
         </div>
         <div className="cw-balance-strip"><span>Balance <b>{money(accountBalance, currency)}</b></span><span>Using <b>{money(aggressiveUsingBalance, currency)}</b></span><span>{aggressiveStakeLabel} <b>{money(aggressiveEachSide, currency)}</b></span></div>
         <div className="cw-aggressive-status">
-          <div className="cw-auto-status"><i className={aggressiveEnabled ? "status-on" : ""} /><span>{autoStatus || (aggressiveEnabled ? "Waiting for a 5-tick push." : "Aggressive automation is off.")}</span></div>
+          <div className="cw-auto-status"><i className={aggressiveEnabled ? "status-on" : ""} /><span>{autoStatus || (aggressiveEnabled ? "Waiting for a 2-tick push." : "Aggressive automation is off.")}</span></div>
           <span className="cw-rounds">{aggressiveRounds} rounds</span>
         </div>
-        <div className="cw-push-progress" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }} role="progressbar" aria-label="Consecutive tick push progress" aria-valuemin={0} aria-valuemax={5} aria-valuenow={Math.min(5, aggressivePushProgress)}>
-          {Array.from({ length: 5 }, (_, index) => <i key={index} className={index < aggressivePushProgress ? "reached" : ""} />)}
+        <div className="cw-push-progress" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }} role="progressbar" aria-label="Consecutive tick push progress" aria-valuemin={0} aria-valuemax={2} aria-valuenow={Math.min(2, aggressivePushProgress)}>
+          {Array.from({ length: 2 }, (_, index) => <i key={index} className={index < aggressivePushProgress ? "reached" : ""} />)}
         </div>
         <p className="cw-auto-note">Aggressive entries require at least {aggressiveMinWinRate}% observed win rate for the push direction. This historical threshold does not guarantee future results.</p>
       </section>
@@ -344,7 +338,7 @@ export default function ClockWorkPanel(props: ClockWorkPanelProps) {
           <StakeInput id="cw-h2-stake" label="H2 ($)" value={h2Stake} onChange={onH2StakeChange} disabled={disabled} />
         </div>
         <button type="button" className="cw-four-action" onClick={onPlaceAllFour} disabled={actionsDisabled} data-testid="button-clock-place-all-four"><b>↑↓ ALL 4 TRADES</b><small>{quoteDetail(allFourQuote, currency)}</small><span>Total stake {money(fourTotal, currency)}</span></button>
-        <div className="cw-risk-note">Payouts shown are live quote estimates only. Contract outcomes and returns are not guaranteed.</div>
+        <div className="cw-risk-note">The highest user-set stake is listed last. Batch trades are submitted together and settle independently; this cannot guarantee covering earlier losses.</div>
       </section>
     </div>
   </section>;
