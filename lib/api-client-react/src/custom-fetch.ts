@@ -192,7 +192,7 @@ function buildErrorMessage(
   const detail = getStringField(data, "detail");
 
   if (response.status === 400 && message && /offers no return/i.test(message)) {
-    return "Deriv did not offer a return for this setup, so no contract was placed. Auto trading stopped without retrying. Change the market or contract settings and check Deriv history before taking any manual action.";
+    return "Deriv did not offer this contract for the selected duration. No contract was accepted.";
   }
 
   if (title && detail) return `${title} — ${detail}`;

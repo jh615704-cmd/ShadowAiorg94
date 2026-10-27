@@ -396,8 +396,20 @@ function AutoTraderContent() {
   const visibleContracts = todaysHistory
     .slice()
     .sort((a, b) => (b.buy_time ?? 0) - (a.buy_time ?? 0));
+  const hasOpenTodayContract = todaysHistory.some((item) => isDerivHistoryOpen(item.status));
   const winRate = settled.length > 0 ? `${((wins / settled.length) * 100).toFixed(1)}%` : "—";
   const connected = Boolean(status.data?.connected && status.data?.authorized && hasToken);
+
+  useEffect(() => {
+    if (!accountId || !hasOpenTodayContract) return;
+    const timer = window.setInterval(() => {
+      void queryClient.refetchQueries(
+        { queryKey: getGetDerivHistoryQueryKey(), type: "active" },
+        { cancelRefetch: false },
+      );
+    }, 2_000);
+    return () => window.clearInterval(timer);
+  }, [accountId, hasOpenTodayContract, queryClient]);
 
   const placeTrade = async (market: Market, digit: number, count: 1 | 3 | 6) => {
     if (batchSubmitLockRef.current || bulkBuy.isPending) {
@@ -495,6 +507,14 @@ function AutoTraderContent() {
     ]).catch((error: unknown) => {
       console.warn("Could not refresh Auto Trader data after an accepted order.", error);
     });
+    window.setTimeout(() => {
+      void queryClient.refetchQueries(
+        { queryKey: getGetDerivHistoryQueryKey(), type: "active" },
+        refetchOptions,
+      ).catch((error: unknown) => {
+        console.warn("Could not refresh Auto Trader trade status after two seconds.", error);
+      });
+    }, 2_000);
   };
 
   const renderMarket = (market: Market) => {
@@ -684,7 +704,7 @@ function AutoTraderContent() {
                         <strong>DIFFERS {trade.barrier ?? "—"} on {marketLabel}</strong>
                       </span>
                       <span className="at-history-numbers">
-                        <strong className={`at-history-profit${trade.profit > 0 ? " positive" : trade.profit < 0 ? " negative" : ""}`}>
+                        <strong className={`at-history-profit${open ? "" : trade.profit > 0 ? " positive" : trade.profit < 0 ? " negative" : ""}`}>
                           {open ? "Open" : formatSignedDerivProfit(trade.profit, trade.currency)}
                         </strong>
                         <small>{money(trade.buy_price, trade.currency)}</small>

@@ -5,6 +5,43 @@ type SharedEntryInput = {
   supportedSymbols: readonly string[];
 };
 
+export function isConfirmedUnavailableDurationRejection(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const candidate = error as { status?: unknown; message?: unknown; data?: unknown };
+  if (candidate.status !== 400) return false;
+
+  const messages = [candidate.message];
+  if (candidate.data && typeof candidate.data === "object") {
+    const data = candidate.data as Record<string, unknown>;
+    messages.push(data.message, data.error, data.error_description, data.detail);
+  }
+  return messages.some((message) =>
+    typeof message === "string"
+    && /offers?\s+no\s+return|not offered for (?:the )?(?:selected )?duration|trading is not offered|did not offer this (?:contract|setup)/i.test(message),
+  );
+}
+
+export function isConfirmedNoContractRejection(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const candidate = error as { name?: unknown; status?: unknown; data?: unknown };
+  if (candidate.name !== "ApiError" || typeof candidate.status !== "number") return false;
+  if (candidate.status < 400 || candidate.status >= 500 || candidate.status === 401 || candidate.status === 403) {
+    return false;
+  }
+  if (!candidate.data || typeof candidate.data !== "object") return false;
+  const data = candidate.data as Record<string, unknown>;
+  if (data.code === "AUTO_TRADER_2_PAUSED") return false;
+  return data.trade_outcome === "not_sent" || data.trade_outcome === "rejected";
+}
+
+export function unavailableDurationRetryMessage(feature: string): string {
+  return `Trading is not offered for this duration. No contract was accepted. ${feature} remains active and will check again.`;
+}
+
+export function confirmedNoContractRetryMessage(feature: string): string {
+  return `${feature} received a confirmed rejection. No contract was accepted. It remains active and will check again.`;
+}
+
 function validateStakeAndBalance(
   input: SharedEntryInput,
   count: number,

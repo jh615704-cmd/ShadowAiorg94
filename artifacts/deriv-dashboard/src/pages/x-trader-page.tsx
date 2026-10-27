@@ -51,6 +51,12 @@ import {
   type MarketSignal,
 } from "../lib/trading-sequence";
 import {
+  confirmedNoContractRetryMessage,
+  isConfirmedNoContractRejection,
+  isConfirmedUnavailableDurationRejection,
+  unavailableDurationRetryMessage,
+} from "../lib/trade-entry-guards";
+import {
   AI_SCANNER_MIN_SAMPLE,
   chooseBulkScannerCandidate,
   chooseCashGrabScannerCandidate,
@@ -1598,25 +1604,43 @@ export default function XTraderPage() {
   const waitForEdgeSettlement = async (contractIds: readonly string[]) => {
     if (!contractIds.length) return true;
     const expectedIds = new Set(contractIds);
-    let historySnapshot = await readHistorySnapshot();
-    if (!historySnapshot.fresh) return false;
-    let latestRows = historySnapshot.rows;
-    let sawContract = false;
-    for (let attempt = 0; attempt < 120; attempt += 1) {
-      const matching = latestRows.filter((trade) => expectedIds.has(trade.contract_id));
-      if (matching.length) sawContract = true;
-      if (sawContract && matching.every((trade) => !isDerivHistoryOpen(trade.status))) {
-        queryClient.setQueryData(getGetDerivHistoryQueryKey(), latestRows);
-        return true;
+    let attempt = 0;
+    while (runningRef.current) {
+      try {
+        const historySnapshot = await readHistorySnapshot();
+        if (historySnapshot.fresh) {
+          const matching = historySnapshot.rows.filter((trade) => expectedIds.has(trade.contract_id));
+          if (
+            matching.length === expectedIds.size
+            && matching.every((trade) => !isDerivHistoryOpen(trade.status))
+          ) {
+            queryClient.setQueryData(getGetDerivHistoryQueryKey(), historySnapshot.rows);
+            return true;
+          }
+          if (attempt % 3 === 0) {
+            setConnectionMessage({
+              kind: "info",
+              text: "EDGE remains active and is waiting for Deriv to confirm every contract has settled. No next entry will be sent yet.",
+            });
+          }
+        } else if (attempt % 3 === 0) {
+          setConnectionMessage({
+            kind: "info",
+            text: "EDGE remains active and is waiting for fresh Deriv history before another entry.",
+          });
+        }
+      } catch {
+        if (attempt % 3 === 0) {
+          setConnectionMessage({
+            kind: "info",
+            text: "EDGE remains active and will check Deriv history again before another entry.",
+          });
+        }
       }
-      // Allow the history stream time to publish the buy acknowledgement. The
-      // next EDGE entry must never race that update, even for a one-tick trade.
-      await sleep(500);
-      historySnapshot = await readHistorySnapshot();
-      if (!historySnapshot.fresh) return false;
-      latestRows = historySnapshot.rows;
+      attempt += 1;
+      await sleep(1_000);
     }
-    throw new Error("EDGE stopped because the previous trade did not settle in time.");
+    return false;
   };
 
   const waitForEdgeSniperConfirmation = async () => {
@@ -1690,6 +1714,9 @@ export default function XTraderPage() {
     // immediately preceding contract is still open.
     let historySnapshot = await readHistorySnapshot();
     let latestRows = historySnapshot.rows;
+    if (!historySnapshot.fresh) {
+      throw new Error("EDGE is waiting for fresh Deriv history before another entry.");
+    }
     for (let attempt = 0; historySnapshot.fresh && latestRows.some((trade) => isDerivHistoryOpen(trade.status)) && attempt < 20; attempt += 1) {
       await sleep(500);
       historySnapshot = await readHistorySnapshot();
@@ -1733,15 +1760,7 @@ export default function XTraderPage() {
     refreshTradeResults();
     setConnectionMessage(null);
     setSessionTrades((value) => value + 1);
-    if (!await waitForEdgeSettlement(result.buys.map((buy) => buy.contract_id))) {
-      runningRef.current = false;
-      setRunning(false);
-      setConnectionMessage({
-        kind: "info",
-        text: "Deriv accepted the EDGE trade. Trade history is temporarily unavailable, so automatic entries are paused; Deriv still checks settlement before another trade.",
-      });
-      return;
-    }
+    if (!await waitForEdgeSettlement(result.buys.map((buy) => buy.contract_id))) return;
     } finally {
       edgeActionLockRef.current = false;
       edgeSettlementLockRef.current = false;
@@ -1768,6 +1787,9 @@ export default function XTraderPage() {
     if (entryError) throw new Error(entryError);
     let historySnapshot = await readHistorySnapshot();
     let latestRows = historySnapshot.rows;
+    if (!historySnapshot.fresh) {
+      throw new Error("EDGE is waiting for fresh Deriv history before another dual entry.");
+    }
     for (let attempt = 0; historySnapshot.fresh && latestRows.some((trade) => isDerivHistoryOpen(trade.status)) && attempt < 20; attempt += 1) {
       await sleep(500);
       historySnapshot = await readHistorySnapshot();
@@ -1799,15 +1821,7 @@ export default function XTraderPage() {
     refreshTradeResults();
     setConnectionMessage(null);
     setSessionTrades((value) => value + 2);
-    if (!await waitForEdgeSettlement(result.buys.map((buy) => buy.contract_id))) {
-      runningRef.current = false;
-      setRunning(false);
-      setConnectionMessage({
-        kind: "info",
-        text: "Deriv accepted the EDGE dual trade. Trade history is temporarily unavailable, so automatic entries are paused; Deriv still checks settlement before another trade.",
-      });
-      return;
-    }
+    if (!await waitForEdgeSettlement(result.buys.map((buy) => buy.contract_id))) return;
     } finally {
       edgeActionLockRef.current = false;
       edgeSettlementLockRef.current = false;
@@ -1850,6 +1864,22 @@ export default function XTraderPage() {
         // the source of truth for how long the contract runs.
         if (runningRef.current) await sleep(50);
       } catch (error) {
+        if (isConfirmedUnavailableDurationRejection(error)) {
+          setConnectionMessage({
+            kind: "info",
+            text: unavailableDurationRetryMessage("EDGE"),
+          });
+          await sleep(2_000);
+          continue;
+        }
+        if (isConfirmedNoContractRejection(error)) {
+          setConnectionMessage({
+            kind: "info",
+            text: confirmedNoContractRetryMessage("EDGE"),
+          });
+          await sleep(2_000);
+          continue;
+        }
         const message = errorMessage(error);
         if (message.includes("still settling")) {
           setConnectionMessage({
@@ -1857,6 +1887,17 @@ export default function XTraderPage() {
             text: "Deriv is still settling the previous contract. EDGE will retry after the server confirms it is safe to continue.",
           });
           await sleep(500);
+          continue;
+        }
+        if (
+          (error instanceof ApiTransportError && !error.tradeOutcomeUncertain)
+          || /balance|fresh deriv history|no trade was sent|could not select/i.test(message)
+        ) {
+          setConnectionMessage({
+            kind: "info",
+            text: `EDGE remains active and is waiting to retry safely: ${message}`,
+          });
+          await sleep(1_500);
           continue;
         }
         runningRef.current = false;
@@ -1899,9 +1940,24 @@ export default function XTraderPage() {
   const executeMoneyBankTrade = async () => {
     const config = moneyBankConfigRef.current;
     if (!config || !moneyBankRunningRef.current || moneyBankActionLockRef.current) return;
+    if (!isConnected) {
+      setConnectionMessage({ kind: "info", text: "Money Bank remains active and is waiting for the Deriv connection." });
+      await sleep(1_500);
+      return;
+    }
+    if (currentAccountBalance == null || currentAccountBalance <= 0) {
+      setConnectionMessage({ kind: "info", text: "Money Bank remains active and is waiting for the account balance to refresh." });
+      await sleep(1_500);
+      return;
+    }
 
     let historySnapshot = await readHistorySnapshot();
     let latestRows = historySnapshot.rows;
+    if (!historySnapshot.fresh) {
+      setConnectionMessage({ kind: "info", text: "Money Bank remains active and is waiting for fresh Deriv history before another entry." });
+      await sleep(1_500);
+      return;
+    }
     const openContractId = moneyBankOpenContractIdRef.current;
     for (let attempt = 0; historySnapshot.fresh && attempt < 240; attempt += 1) {
       const stillOpen = openContractId
@@ -1984,15 +2040,14 @@ export default function XTraderPage() {
       // The Money Bank gate evaluates the market selected in the form.
       const decision = await scanJdyMoneyBank(currentConfig, tradeSymbol);
       if (!decision?.safe) {
-        moneyBankRunningRef.current = false;
-        setMoneyBankRunning(false);
         setMoneyBankJdyState("not-good");
         setConnectionMessage({
           kind: "info",
           text: decision
-            ? `Shadows cancelled this trade: not a good trade, with an estimated ${decision.estimatedLossStreak}-loss streak risk.`
-            : "Shadows cancelled this trade because it could not confirm a safe setup.",
+            ? `Shadows is waiting on the selected setup after estimating a ${decision.estimatedLossStreak}-loss streak risk. Money Bank remains active and will check again.`
+            : "Shadows could not confirm the selected setup. Money Bank remains active and will check again.",
         });
+        await sleep(2_000);
         return;
       }
       setMoneyBankJdyState("safe");
@@ -2060,6 +2115,22 @@ export default function XTraderPage() {
         await sleep(250);
       } catch (error) {
         const message = errorMessage(error);
+        if (isConfirmedUnavailableDurationRejection(error)) {
+          setConnectionMessage({
+            kind: "info",
+            text: unavailableDurationRetryMessage("Money Bank"),
+          });
+          await sleep(2_000);
+          continue;
+        }
+        if (isConfirmedNoContractRejection(error)) {
+          setConnectionMessage({
+            kind: "info",
+            text: confirmedNoContractRetryMessage("Money Bank"),
+          });
+          await sleep(2_000);
+          continue;
+        }
         if (message.includes("still settling")) {
           setConnectionMessage({
             kind: "info",
@@ -2069,12 +2140,31 @@ export default function XTraderPage() {
           continue;
         }
         if (message.includes("reached the Auto Budget limit") || message.includes("reached its Auto Budget limit")) {
+          setConnectionMessage({
+            kind: "info",
+            text: `${message} Money Bank remains active but will not exceed the selected budget. Press Stop to change the budget.`,
+          });
+          await sleep(2_000);
+          continue;
+        }
+        if (message.includes("session Profit target") || message.includes("session Loss limit")) {
           stopMoneyBank();
           setConnectionMessage({ kind: "info", text: message });
           return;
         }
         if (message.includes("Buy cooldown active")) {
           await sleep(1000);
+          continue;
+        }
+        if (
+          (error instanceof ApiTransportError && !error.tradeOutcomeUncertain)
+          || /balance|account balance|fresh deriv history|deriv connection/i.test(message)
+        ) {
+          setConnectionMessage({
+            kind: "info",
+            text: `Money Bank remains active and is waiting to retry safely: ${message}`,
+          });
+          await sleep(1_500);
           continue;
         }
         stopMoneyBank();
@@ -2339,8 +2429,18 @@ export default function XTraderPage() {
   const executeCashGrabTrade = async () => {
     let config = cashGrabConfigRef.current;
     if (!config || !cashGrabRunningRef.current || cashGrabActionLockRef.current) return;
+    if (!isConnected) {
+      setConnectionMessage({ kind: "info", text: "Cash Grab remains active and is waiting for the Deriv connection." });
+      await sleep(1_500);
+      return;
+    }
     let historySnapshot = await readHistorySnapshot();
     let latestRows = historySnapshot.rows;
+    if (!historySnapshot.fresh) {
+      setConnectionMessage({ kind: "info", text: "Cash Grab remains active and is waiting for fresh Deriv history before another entry." });
+      await sleep(1_500);
+      return;
+    }
     if (historySnapshot.fresh) applyCashGrabSettlements(reconcileCashGrabSession(latestRows));
     const hasOpenCashGrabContract = () =>
       cashGrabOpenContractIdsRef.current.size > 0
@@ -2360,6 +2460,7 @@ export default function XTraderPage() {
     if (!cashGrabRunningRef.current) return;
     if (hasOpenCashGrabContract()) {
       setConnectionMessage({ kind: "info", text: "Cash Grab is still waiting for the current Rise/Fall contract to settle. No next contract will open until it is cleared." });
+      await sleep(1_000);
       return;
     }
 
@@ -2388,9 +2489,8 @@ export default function XTraderPage() {
     if (!cashGrabRunningRef.current) return;
     const amount = Number(cashGrabCurrentStakeRef.current.toFixed(2));
     if (currentAccountBalance == null || amount > currentAccountBalance) {
-      setConnectionMessage({ kind: "error", text: "Cash Grab stopped because the selected stake exceeds the connected balance." });
-      cashGrabRunningRef.current = false;
-      setCashGrabRunning(false);
+      setConnectionMessage({ kind: "info", text: "Cash Grab remains active and is waiting for enough available balance for the selected stake." });
+      await sleep(1_500);
       return;
     }
     if (config.autoDirection) {
@@ -2448,19 +2548,38 @@ export default function XTraderPage() {
     } catch (error) {
       if (contractConfirmed) {
         setConnectionMessage({
-          kind: "error",
-          text: `Cash Grab contract was confirmed by Deriv, but its settlement history could not be refreshed: ${errorMessage(error)}. Cash Grab is paused to prevent overlapping trades.`,
+          kind: cashGrabOpenContractIdsRef.current.size > 0 ? "info" : "error",
+          text: cashGrabOpenContractIdsRef.current.size > 0
+            ? `Deriv accepted the Cash Grab contract, but history is temporarily unavailable. Cash Grab remains active and will wait for settlement confirmation before another entry.`
+            : `Deriv returned a trade acknowledgement without a contract ID. Cash Grab needs a history review before it can safely continue.`,
         });
+        if (cashGrabOpenContractIdsRef.current.size > 0) {
+          await sleep(1_000);
+          return;
+        }
       } else if (error instanceof ApiTransportError && error.tradeOutcomeUncertain) {
         setConnectionMessage({
           kind: "error",
           text: `Cash Grab trade status is unconfirmed. ${errorMessage(error)} Cash Grab is paused; confirm there is no open Rise/Fall contract in Deriv before restarting.`,
         });
+      } else if (isConfirmedUnavailableDurationRejection(error)) {
+        setConnectionMessage({
+          kind: "info",
+          text: unavailableDurationRetryMessage("Cash Grab"),
+        });
+        await sleep(2_000);
+        return;
+      } else if (isConfirmedNoContractRejection(error)) {
+        setConnectionMessage({
+          kind: "info",
+          text: confirmedNoContractRetryMessage("Cash Grab"),
+        });
+        await sleep(2_000);
+        return;
       } else {
         setConnectionMessage({ kind: "error", text: `Cash Grab could not place the contract: ${errorMessage(error)}` });
       }
-      // A failed request must not be retried automatically in the now-unlimited
-      // run. Stop and close any contract that was already acknowledged.
+      // Keep the existing safety hold for outcomes that cannot be confirmed.
       stopCashGrab();
     } finally {
       cashGrabActionLockRef.current = false;
@@ -2490,9 +2609,11 @@ export default function XTraderPage() {
         }
       } catch (error) {
         if (cashGrabRunIdRef.current !== runId) return;
-        cashGrabRunningRef.current = false;
-        setCashGrabRunning(false);
-        setConnectionMessage({ kind: "error", text: errorMessage(error) });
+        setConnectionMessage({
+          kind: "info",
+          text: `Cash Grab remains active and is waiting to retry safely: ${errorMessage(error)}`,
+        });
+        await sleep(1_500);
       }
     }
   };
@@ -3165,7 +3286,12 @@ export default function XTraderPage() {
   };
 
   const executeDigitFlip = async () => {
-    if (digitFlipActionLockRef.current || !isConnected) return false;
+    if (digitFlipActionLockRef.current) return false;
+    if (!isConnected) {
+      setConnectionMessage({ kind: "info", text: "DigitFlip remains active and is waiting for the Deriv connection." });
+      await sleep(1_000);
+      return false;
+    }
     if (tradeSlotBlocked) {
       setConnectionMessage({ kind: "info", text: tradeSlotMessage ?? "Deriv has not confirmed that the previous contract settled. No new trade was sent." });
       return false;
@@ -3176,7 +3302,8 @@ export default function XTraderPage() {
     }
     const declaredAccountBalance = currentAccountBalance ?? 0;
     if (!Number.isFinite(declaredAccountBalance) || declaredAccountBalance <= 0) {
-      setConnectionMessage({ kind: "error", text: "DigitFlip is paused until the account balance is entered." });
+      setConnectionMessage({ kind: "info", text: "DigitFlip remains active and is waiting for the account balance to refresh." });
+      await sleep(1_000);
       return false;
     }
     // History is a display/settlement feed, not a prerequisite for a buy.
@@ -3211,7 +3338,8 @@ export default function XTraderPage() {
       ? digitFlipNextStakeRef.current
       : config.stake;
     if (amount > declaredAccountBalance || (currentAccountBalance != null && amount > currentAccountBalance)) {
-      setConnectionMessage({ kind: "error", text: "The DigitFlip stake is higher than the available balance." });
+      setConnectionMessage({ kind: "info", text: "DigitFlip remains active and is waiting for enough balance for the selected stake." });
+      await sleep(1_000);
       return false;
     }
     digitFlipActionLockRef.current = true;
@@ -3239,7 +3367,28 @@ export default function XTraderPage() {
       void refreshTradeResults();
       return true;
     } catch (error) {
-      setConnectionMessage({ kind: "error", text: errorMessage(error) });
+      if (isConfirmedUnavailableDurationRejection(error)) {
+        setConnectionMessage({
+          kind: "info",
+          text: unavailableDurationRetryMessage("DigitFlip"),
+        });
+        await sleep(2_000);
+      } else if (isConfirmedNoContractRejection(error)) {
+        setConnectionMessage({
+          kind: "info",
+          text: confirmedNoContractRetryMessage("DigitFlip"),
+        });
+        await sleep(2_000);
+      } else if (error instanceof ApiTransportError && error.tradeOutcomeUncertain) {
+        digitFlipRunningRef.current = false;
+        setDigitFlipRunning(false);
+        setConnectionMessage({
+          kind: "error",
+          text: `${error.message} DigitFlip is paused and will not retry until the account history is checked.`,
+        });
+      } else {
+        setConnectionMessage({ kind: "error", text: errorMessage(error) });
+      }
       return false;
     } finally {
       digitFlipActionLockRef.current = false;
@@ -3577,7 +3726,9 @@ export default function XTraderPage() {
     } catch (error) {
       const message = errorMessage(error);
       setClockWorkStatusMessage(message);
-      if (source !== "manual") {
+      if (source !== "manual" && isConfirmedUnavailableDurationRejection(error)) {
+        setClockWorkAutoStatus(unavailableDurationRetryMessage("Clock Work"));
+      } else if (source !== "manual") {
         setClockWorkAutoEnabled(false);
         setClockWorkAggressiveEnabled(false);
         setClockWorkAutoStatus(`Automation paused: ${message}`);

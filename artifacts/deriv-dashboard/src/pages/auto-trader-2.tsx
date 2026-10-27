@@ -42,6 +42,10 @@ import {
   type AutoTrader2SavedSession,
 } from "@/lib/auto-trader-2-session";
 import {
+  isConfirmedUnavailableDurationRejection,
+  unavailableDurationRetryMessage,
+} from "@/lib/trade-entry-guards";
+import {
   chooseAutoTrader2Candidate,
   chooseAutoTrader2ManualCandidate,
   getAutoTrader2OppositeType,
@@ -805,10 +809,19 @@ function AutoTrader2Content() {
           ? error.data as Record<string, unknown>
           : null;
         const errorCode = typeof errorData?.code === "string" ? errorData.code : "";
-        const confirmedRejection = error instanceof ApiError
-          && error.status < 500
-          && error.status !== 403;
-        if (errorCode === "AUTO_TRADER_2_PAUSED" || errorCode === "DERIV_BUY_RATE_LIMITED" || confirmedRejection) {
+        if (errorCode === "AUTO_TRADER_2_PAUSED") {
+          runRef.current.pendingContractType = null;
+          runRef.current.pendingStake = null;
+          persistRunState("completed", config);
+          finishLoop(generation, {
+            tone: "info",
+            text: "Auto Trader 2.0 is paused by an administrator. No new order was sent.",
+          });
+          setDecision("Paused by administrator · waiting for access to be restored.");
+          return;
+        }
+        const confirmedUnavailableDuration = isConfirmedUnavailableDurationRejection(error);
+        if (errorCode === "DERIV_BUY_RATE_LIMITED" || confirmedUnavailableDuration) {
           runRef.current.pendingContractType = null;
           runRef.current.pendingStake = null;
           if (!persistRunState("ready", config)) {
@@ -818,8 +831,10 @@ function AutoTrader2Content() {
             });
             return;
           }
-          const retryText = error instanceof Error
-            ? `${error.message} No contract was accepted. Auto Trader 2.0 remains active and will check again.`
+          const retryText = confirmedUnavailableDuration
+            ? unavailableDurationRetryMessage("Auto Trader 2.0")
+            : error instanceof Error
+              ? `${error.message} Auto Trader 2.0 remains active and will check again.`
             : "Deriv rejected the order. Auto Trader 2.0 remains active and will check again.";
           setMessage({ tone: "info", text: retryText });
           setDecision("Waiting briefly after a confirmed rejection. Auto Trader 2.0 remains active.");

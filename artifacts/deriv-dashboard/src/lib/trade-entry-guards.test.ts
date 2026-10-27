@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  confirmedNoContractRetryMessage,
+  isConfirmedNoContractRejection,
+  isConfirmedUnavailableDurationRejection,
+  unavailableDurationRetryMessage,
   validateAutoTraderBatch,
   validateBulkTraderEntry,
   validateEdgeEntry,
@@ -8,6 +12,65 @@ import {
 } from "./trade-entry-guards.ts";
 
 const symbols = ["R_10", "JD10"];
+
+test("only an explicit unavailable-duration 400 is safe for automatic retry", () => {
+  assert.equal(isConfirmedUnavailableDurationRejection({
+    status: 400,
+    message: "Deriv did not offer this contract for the selected duration.",
+    data: { error: "This contract offers no return." },
+  }), true);
+  assert.equal(isConfirmedUnavailableDurationRejection({
+    status: 500,
+    message: "Trading is not offered for this duration.",
+  }), false);
+  assert.equal(isConfirmedUnavailableDurationRejection({
+    status: 400,
+    message: "The trade could not be confirmed.",
+    data: { error: "Account history is temporarily unavailable." },
+  }), false);
+  assert.equal(isConfirmedUnavailableDurationRejection(new Error("Trading is not offered for this duration.")), false);
+  assert.equal(
+    unavailableDurationRetryMessage("Auto Trader 2.0"),
+    "Trading is not offered for this duration. No contract was accepted. Auto Trader 2.0 remains active and will check again.",
+  );
+});
+
+test("only explicit API rejections with no accepted contract are safe to retry", () => {
+  assert.equal(isConfirmedNoContractRejection({
+    name: "ApiError",
+    status: 400,
+    data: { trade_outcome: "not_sent" },
+  }), true);
+  assert.equal(isConfirmedNoContractRejection({
+    name: "ApiError",
+    status: 429,
+    data: { trade_outcome: "rejected" },
+  }), true);
+  assert.equal(isConfirmedNoContractRejection({
+    name: "ApiError",
+    status: 409,
+    data: { trade_outcome: "uncertain" },
+  }), false);
+  assert.equal(isConfirmedNoContractRejection({
+    name: "ApiError",
+    status: 403,
+    data: { trade_outcome: "not_sent" },
+  }), false);
+  assert.equal(isConfirmedNoContractRejection({
+    name: "ApiError",
+    status: 409,
+    data: { code: "AUTO_TRADER_2_PAUSED", trade_outcome: "not_sent" },
+  }), false);
+  assert.equal(isConfirmedNoContractRejection({
+    name: "ResponseParseError",
+    status: 400,
+    data: { trade_outcome: "not_sent" },
+  }), false);
+  assert.equal(
+    confirmedNoContractRetryMessage("EDGE"),
+    "EDGE received a confirmed rejection. No contract was accepted. It remains active and will check again.",
+  );
+});
 
 test("Auto Trader accepts only valid 3x or 6x Digit Differs batches within balance", () => {
   assert.equal(validateAutoTraderBatch({

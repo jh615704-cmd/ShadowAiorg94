@@ -15,6 +15,12 @@ Auto Trader 2 continues after each settled contract until the user presses Stop,
 
 **How to apply:** Keep settlement waiting abortable and event-driven, remove arbitrary run caps, evaluate realized P/L before each next entry, and do not mark confirmed rejections as completed sessions. Never resend an order whose Deriv outcome is uncertain; keep necessary account, connection, and order-review safety holds.
 
+When Deriv explicitly rejects a contract as unavailable for the selected duration and confirms that no contract was accepted, keep the automated feature active and check again with clear status copy. In Auto Trader history, keep an open contract visually neutral; show green or red only after Deriv confirms settlement and supplies the realized result.
+
+**Why:** The user asked that unavailable-duration rejections not stop trading automation and that Auto Trader show a clear win/loss result after an open trade updates.
+
+**How to apply:** Retry only explicit, confirmed no-contract rejections. Preserve pauses for uncertain outcomes, unsettled contracts, and connection or access failures; derive wins and losses from settled Deriv history, not a provisional open label or floating P/L.
+
 For Rise/Fall and Even/Odd, manual A · Auto is exclusive of the manual-side buttons and selects the eligible side with the highest full-precision observed expiry win rate. Display rounding must not affect selection. If AI 2 is enabled, apply its evidence filter first, then rank qualifying Auto candidates by observed win rate; preserve the required opposite-side rule after an AI 2 loss.
 
 **Why:** The user clarified that Auto must not appear selected alongside a manual side and must choose the best observed win-rate side for either contract family.
