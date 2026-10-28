@@ -552,7 +552,6 @@ export default function XTraderPage() {
   const [edgeMinWinRate, setEdgeMinWinRate] = useState(90);
   const [tradeXTradesSent, setTradeXTradesSent] = useState(0);
   const [tradeXSubmitting, setTradeXSubmitting] = useState(false);
-  const [tradeXMessage, setTradeXMessage] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [navigationOpen, setNavigationOpen] = useState(false);
@@ -3179,6 +3178,10 @@ export default function XTraderPage() {
       aiScannerActionLockRef.current = false;
     }
   };
+  const notifyTradeX = (message: string) => {
+    addNotification("connection", "Trade X", message);
+  };
+
   const executeTradeX = async (
     count = 1,
     durationOverride = tradeXDuration,
@@ -3186,19 +3189,19 @@ export default function XTraderPage() {
     symbolOverride?: string,
   ) => {
     if (!tradeXEnabled) {
-      setTradeXMessage("Enable Trade X before sending a contract.");
+      notifyTradeX("Enable Trade X before sending a contract.");
       return false;
     }
     if (tradeXActionLockRef.current) {
-      setTradeXMessage("Trade X is already sending. Wait for the current request to finish.");
+      notifyTradeX("Trade X is already sending. Wait for the current request to finish.");
       return false;
     }
     if (anyContractBuyPending) {
-      setTradeXMessage("Another trade request is still being sent. Wait for its confirmation before placing a Trade X contract.");
+      notifyTradeX("Another trade request is still being sent. Wait for its confirmation before placing a Trade X contract.");
       return false;
     }
     if (tradeSlotBlocked) {
-      setTradeXMessage(tradeSlotMessage ?? "Deriv has not confirmed that the previous contract settled. No new trade was sent.");
+      notifyTradeX(tradeSlotMessage ?? "Deriv has not confirmed that the previous contract settled. No new trade was sent.");
       return false;
     }
     const config = tradeXConfigRef.current;
@@ -3208,11 +3211,11 @@ export default function XTraderPage() {
         ? config.selectedDigit
         : digitForTick(durationOverride, config.rankedDigits, config.selectedDigit));
     if (!isConnected) {
-      setTradeXMessage("Connect Deriv before sending a Trade X contract.");
+      notifyTradeX("Connect Deriv before sending a Trade X contract.");
       return false;
     }
     if (!isTradingCalendarOpen()) {
-      setTradeXMessage("Trade X is outside its configured trading calendar.");
+      notifyTradeX("Trade X is outside its configured trading calendar.");
       return false;
     }
     const symbol = symbolOverride ?? config.symbol;
@@ -3221,7 +3224,7 @@ export default function XTraderPage() {
       .map((market) => market.value);
     const lockResult = acquireTradeXActionLock(tradeXActionLockRef, anyContractBuyPending);
     if (lockResult !== "acquired") {
-      setTradeXMessage(lockResult === "already-sending"
+      notifyTradeX(lockResult === "already-sending"
         ? "Trade X is already sending. Wait for the current request to finish."
         : "Another trade request is still being sent. Wait for its confirmation before placing a Trade X contract.");
       return false;
@@ -3232,21 +3235,21 @@ export default function XTraderPage() {
       const freshStatus = await status.refetch();
       const freshData = freshStatus.data;
       if (freshStatus.isError || !freshData) {
-        setTradeXMessage("Deriv status could not be refreshed. No Trade X contract was sent.");
+        notifyTradeX("Deriv status could not be refreshed. No Trade X contract was sent.");
         return false;
       }
       if (!freshData.open_contracts_ready) {
-        setTradeXMessage("Deriv has not confirmed that open contracts are clear. No Trade X contract was sent.");
+        notifyTradeX("Deriv has not confirmed that open contracts are clear. No Trade X contract was sent.");
         return false;
       }
       if ((freshData.active_contract_count ?? 0) > 0) {
         const activeCount = freshData.active_contract_count ?? 0;
-        setTradeXMessage(`Waiting for ${activeCount} open Deriv contract${activeCount === 1 ? "" : "s"} to settle. No Trade X contract was sent.`);
+        notifyTradeX(`Waiting for ${activeCount} open Deriv contract${activeCount === 1 ? "" : "s"} to settle. No Trade X contract was sent.`);
         return false;
       }
       const freshBalance = getAccountBalance(freshData.account);
       if (freshBalance == null) {
-        setTradeXMessage("Trade X is paused until the selected account balance is refreshed.");
+        notifyTradeX("Trade X is paused until the selected account balance is refreshed.");
         return false;
       }
       const orderError = validateTradeXEntry({
@@ -3259,7 +3262,7 @@ export default function XTraderPage() {
         count,
       });
       if (orderError) {
-        setTradeXMessage(orderError);
+        notifyTradeX(orderError);
         return false;
       }
       buyRequestStarted = true;
@@ -3275,17 +3278,17 @@ export default function XTraderPage() {
         claimFeatureRows("trade-x", tradeXClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
       }
       if (!result.ok || result.buys.length !== count) {
-        setTradeXMessage(result.message || `Deriv confirmed ${result.buys.length} of ${count} Trade X contracts. Check account history before resubmitting.`);
+        notifyTradeX(result.message || `Deriv confirmed ${result.buys.length} of ${count} Trade X contracts. Check account history before resubmitting.`);
         refreshTradeResults();
         return false;
       }
       setTradeXTradesSent((value) => value + result.buys.length);
-      setTradeXMessage(`Deriv confirmed ${result.buys.length} Trade X contract${result.buys.length === 1 ? "" : "s"}. Waiting for settlement.`);
+      notifyTradeX(`Deriv confirmed ${result.buys.length} Trade X contract${result.buys.length === 1 ? "" : "s"}. Waiting for settlement.`);
       setConnectionMessage(null);
       refreshTradeResults();
       return true;
     } catch (error) {
-      setTradeXMessage(buyRequestStarted
+      notifyTradeX(buyRequestStarted
         ? `${errorMessage(error)} Check Deriv account history before retrying in case the contract was accepted.`
         : `${errorMessage(error)} No Trade X contract was sent because the fresh safety check did not complete.`);
       return false;
@@ -3888,7 +3891,7 @@ export default function XTraderPage() {
       void selectMarket(tradeXSymbol);
       return;
     }
-    setTradeXMessage("Trade X paused.");
+    notifyTradeX("Trade X paused.");
   };
 
   const toggleClockWork = (enabled: boolean) => {
@@ -5004,7 +5007,6 @@ export default function XTraderPage() {
             onAiScan={runTradeXAiScanner}
             onRefreshAnalysis={refreshAnalysis}
           />
-          {tradeXMessage && <p className="tx-parent-message" role="status">{tradeXMessage}</p>}
           {canViewHistory && <DerivHistory title="Trade X History" strategy="Trade X Strategy" rows={tradeXRows} sessionRows={tradeXVisibleSessionRows} currency={currentAccount?.currency} clearArmed={tradeXHistoryClearArmed} fading={historyFading} onClear={clearTradeXHistory} />}
         </section>
       )}
