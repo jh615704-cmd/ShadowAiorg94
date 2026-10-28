@@ -7,6 +7,14 @@ import {
   type BestEdgeSignal,
   type MarketSignal,
 } from "../lib/trading-sequence";
+import {
+  EDGE_WIPEOUT_MIN_SAMPLE_COUNT,
+  clampEdgeMultiplier,
+  estimateEdgeWipeout,
+  getEdgeHistoricalSampleCount,
+  getEdgeObservedContractOdds,
+  getEdgeObservedOdds,
+} from "../lib/edge-risk";
 import DerivHistory, { type DerivHistoryRow } from "./deriv-history";
 import "./edge-reference-panel.css";
 
@@ -23,7 +31,7 @@ type EdgeReferencePanelProps = {
   symbol: string;
   markets: readonly (readonly [string, string])[];
   onSymbolChange: (value: string) => void;
-  currentAccount?: { currency?: string; balance?: number } | null;
+  currentAccount?: { id?: string; currency?: string; balance?: number } | null;
   direction: EdgeDirection;
   onDirectionChange: (value: EdgeDirection) => void;
   barrier: number;
@@ -189,6 +197,55 @@ export default function EdgeReferencePanel({
       ? "waiting"
       : `${payoutPercent.toFixed(1)}%`;
   const currency = currentAccount?.currency ?? "USD";
+  const selectedSide = direction === "DIGITOVER" ? "Over" : "Under";
+  const wipeoutEstimate = estimateEdgeWipeout({
+    balance: currentAccount?.balance,
+    baseStake: stake,
+    currentStake: nextStake,
+    strategy,
+    multiplier: martingale,
+    takeProfit,
+    stopLoss,
+    sessionPnl,
+  });
+  const selectedOdds = getEdgeObservedOdds({
+    marketSignals,
+    symbol,
+    digit: barrier,
+    direction,
+  });
+  const historicalOddsFilter = {
+    trades: recentTrades,
+    accountId: currentAccount?.id,
+    symbol,
+    digit: barrier,
+    direction,
+    duration,
+  };
+  const historicalOdds = getEdgeObservedContractOdds(historicalOddsFilter);
+  const historicalSampleCount =
+    getEdgeHistoricalSampleCount(historicalOddsFilter);
+  const selectedSampleCount =
+    marketSignals.find((signal) => signal.symbol === symbol)?.sample_count ?? 0;
+
+  const wipeoutMessage =
+    wipeoutEstimate.limit === "profit-target-reached"
+      ? "The profit threshold is already reached; EDGE should not send another contract."
+      : wipeoutEstimate.limit === "session-loss-limit-reached"
+        ? "The session loss threshold is already reached; EDGE should not send another contract."
+        : wipeoutEstimate.limit === "balance-unavailable"
+          ? "Sync a positive account balance to calculate the loss limit."
+          : wipeoutEstimate.limit === "invalid-input"
+            ? "Set a valid stake, multiplier, and session threshold to calculate the loss limit."
+            : wipeoutEstimate.limit === "calculation-cap"
+              ? `At least ${wipeoutEstimate.losses?.toLocaleString()} consecutive losses in this estimate.`
+              : wipeoutEstimate.limit === "both-limits"
+                ? `${wipeoutEstimate.losses} consecutive losses could reach both the account and session loss limits.`
+                : wipeoutEstimate.limit === "session-loss-limit"
+                  ? `${wipeoutEstimate.losses} consecutive losses could reach the session loss limit.`
+                  : wipeoutEstimate.losses === 0
+                    ? "The current stake exceeds the available balance; EDGE will not send it."
+                    : `${wipeoutEstimate.losses} consecutive losses could leave too little balance for the next stake.`;
 
   return (
     <section className="edge-reference-layout">
@@ -452,7 +509,9 @@ export default function EdgeReferencePanel({
               step=".1"
               value={martingale}
               onChange={(event) =>
-                onMartingaleChange(Number(event.target.value))
+                onMartingaleChange(
+                  clampEdgeMultiplier(Number(event.target.value)),
+                )
               }
               disabled={running || strategy === "flat"}
             />
@@ -478,7 +537,7 @@ export default function EdgeReferencePanel({
               }
               disabled={running}
             />
-            <b>USD</b>
+            <b>{currency}</b>
           </div>
         </label>
         <label>
@@ -496,32 +555,79 @@ export default function EdgeReferencePanel({
               }
               disabled={running}
             />
-            <b>USD</b>
+            <b>{currency}</b>
           </div>
         </label>
-        <p className="edge-ref-callout danger">
-          <b>Wipeout radar</b> — <b>22</b> losses in a row would exhaust your
-          balance.
+        <p className="edge-ref-callout danger edge-ref-wipeout">
+          <b>Wipeout radar</b>
+          <strong>{wipeoutMessage}</strong>
+          <small>
+            Selected setup: {selectedSide} {barrier} · {duration}{" "}
+            {duration === 1 ? "tick" : "ticks"} · {strategy === "martingale" ? `Martingale ${clampEdgeMultiplier(martingale)}×` : "Flat stake"}
+          </small>
+          {selectedOdds ? (
+            <small>
+              Live tick rate: win {selectedOdds.winPercent.toFixed(1)}% · loss{" "}
+              {selectedOdds.lossPercent.toFixed(1)}% ·{" "}
+              {selectedOdds.sampleCount} live samples
+            </small>
+          ) : (
+            <small>
+              Waiting for {EDGE_WIPEOUT_MIN_SAMPLE_COUNT} live samples for{" "}
+              {symbol} digit {barrier}
+              {selectedSampleCount > 0
+                ? ` · ${selectedSampleCount} available`
+                : ""}
+              .
+            </small>
+          )}
+          {historicalOdds ? (
+            <small>
+              Settled EDGE history for this exact setup: win{" "}
+              {historicalOdds.winPercent.toFixed(1)}% · loss{" "}
+              {historicalOdds.lossPercent.toFixed(1)}% ·{" "}
+              {historicalOdds.sampleCount} contracts
+            </small>
+          ) : (
+            <small>
+              Exact setup history: {historicalSampleCount}/
+              {EDGE_WIPEOUT_MIN_SAMPLE_COUNT} settled contracts for this
+              market, side, digit, and expiry.
+            </small>
+          )}
+          <small>
+            Session P/L {sessionPnl >= 0 ? "+" : ""}
+            {sessionPnl.toFixed(2)} {currency} · profit target +
+            {takeProfit.toFixed(2)} {currency} · loss limit −
+            {stopLoss.toFixed(2)} {currency}
+          </small>
+          <small>
+            Historical rates are not predictions. Each losing contract risks
+            its full stake; the selected digit and side change observed odds,
+            while ticks set the contract expiry.
+          </small>
         </p>
       </section>
 
       <section className="edge-ref-session">
         <div>
           <span>Current Stake</span>
-          <b>${(strategy === "martingale" ? nextStake : stake).toFixed(2)}</b>
+          <b>
+            {(strategy === "martingale" ? nextStake : stake).toFixed(2)}{" "}
+            {currency}
+          </b>
         </div>
         <div>
           <span>Session P/L</span>
           <b className={sessionPnl < 0 ? "loss" : ""}>
             {sessionPnl >= 0 ? "+" : ""}
-            {sessionPnl.toFixed(2)}
+            {sessionPnl.toFixed(2)} {currency}
           </b>
         </div>
         <div>
           <span>Trades</span>
           <b>{sessionTrades}</b>
         </div>
-        <p>Runtime stop</p>
       </section>
 
       <div className="edge-ref-run-row">

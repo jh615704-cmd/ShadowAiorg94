@@ -352,17 +352,19 @@
 .edge-ref-setup select { height: 36px; padding: 0 34px 0 11px; border-radius: 9px; appearance: none; background: #263039; }
 .edge-ref-setup label:first-of-type svg { position: absolute; right: 10px; color: #e4ad34; pointer-events: none; }
 .edge-ref-callout { margin: 11px 0 0; padding: 8px 9px; border: 1px solid rgba(31, 213, 188, .75); border-radius: 8px; color: #b7d6d0; background: rgba(4, 48, 47, .55); font-size: 8px; line-height: 1.45; }
+.edge-ref-wipeout { display: grid; gap: 5px; }
+.edge-ref-wipeout > strong { color: #f1e7ce; font-size: 9px; }
+.edge-ref-wipeout > small { color: #b8c1c9; font-size: 8px; line-height: 1.5; }
 .edge-ref-callout b { color: #52e6cb; }
 .edge-ref-callout.danger { border-color: rgba(125, 126, 139, .45); color: #c7c6cd; background: rgba(57, 53, 62, .44); }
 .edge-ref-callout.danger b { color: #f2d36b; }
 
-.edge-ref-session { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 15px 16px 31px; background: #1b2a3b; }
+.edge-ref-session { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 15px 16px; background: #1b2a3b; }
 .edge-ref-session > div { display: grid; gap: 7px; min-height: 57px; padding: 10px 8px; border-radius: 9px; background: #112033; text-align: center; }
 .edge-ref-session span { color: #9ca6b2; font-size: 9px; }
 .edge-ref-session b { color: #f4f8fb; font-size: 16px; }
 .edge-ref-session > div:nth-child(2) b { color: #36d96e; }
 .edge-ref-session > div:nth-child(2) b.loss { color: #ff8e8e; }
-.edge-ref-session p { position: absolute; bottom: 12px; left: 0; width: 100%; margin: 0; color: #30d980; font-size: 10px; text-align: center; }
 
 .edge-ref-run-row { display: grid; grid-template-columns: 1fr 56px; gap: 10px; }
 .edge-ref-run { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 56px; border: 0; border-radius: 14px; color: #f5ffff; background: linear-gradient(100deg, #22c58f, #13bfb1); box-shadow: 0 7px 20px rgba(24, 197, 157, .25); cursor: pointer; font-size: 16px; font-weight: 800; }

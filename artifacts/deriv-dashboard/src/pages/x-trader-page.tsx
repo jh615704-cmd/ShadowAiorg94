@@ -1812,6 +1812,46 @@ export default function XTraderPage() {
     return false;
   };
 
+  const updateEdgeSessionPnlAndStopIfNeeded = (
+    latestRows: readonly {
+      contract_id: string;
+      contract_type: string;
+      status: string;
+      profit: number;
+    }[],
+  ) => {
+    const knownAtSessionStart = edgeSessionKnownIdsRef.current;
+    const settledSessionRows = latestRows.filter(
+      (trade) =>
+        (trade.contract_type === "DIGITOVER"
+          || trade.contract_type === "DIGITUNDER")
+        && edgeClaimedHistoryIdsRef.current.has(trade.contract_id)
+        && !knownAtSessionStart?.has(trade.contract_id)
+        && !isDerivHistoryOpen(trade.status),
+    );
+    const latestSessionPnl = realizedProfit(settledSessionRows);
+    setSessionPnl(latestSessionPnl);
+
+    const stopReason = sessionStopReason(
+      latestSessionPnl,
+      takeProfit,
+      stopLoss,
+    );
+    if (!stopReason) return false;
+
+    runningRef.current = false;
+    setRunning(false);
+    setConnectionMessage({
+      kind: "info",
+      text: `EDGE stopped at its ${
+        stopReason === "take-profit" ? "profit" : "loss"
+      } threshold (${latestSessionPnl.toFixed(2)} ${
+        currentAccount?.currency ?? "USD"
+      }). No next contract was sent.`,
+    });
+    return true;
+  };
+
   const waitForEdgeSniperConfirmation = async () => {
     const config = configRef.current;
     const side = config.direction === "DIGITOVER" ? "Over" : "Under";
@@ -1901,6 +1941,7 @@ export default function XTraderPage() {
     }
     if (historySnapshot.fresh) queryClient.setQueryData(getGetDerivHistoryQueryKey(), latestRows);
     if (!runningRef.current) return;
+    if (updateEdgeSessionPnlAndStopIfNeeded(latestRows)) return;
     const declaredAccountBalance = currentAccountBalance ?? 0;
     if (!Number.isFinite(declaredAccountBalance) || declaredAccountBalance <= 0) {
       throw new Error("Sync the connected account balance before EDGE places another trade.");
@@ -1968,6 +2009,7 @@ export default function XTraderPage() {
       throw new Error("The previous contract is still settling. EDGE stopped without sending another dual trade.");
     }
     if (!runningRef.current) return;
+    if (updateEdgeSessionPnlAndStopIfNeeded(latestRows)) return;
     const declaredAccountBalance = Number(edgeAccountBalance);
     if (!Number.isFinite(declaredAccountBalance) || declaredAccountBalance <= 0) {
       throw new Error("Sync the connected account balance before EDGE places another dual trade.");
@@ -2050,6 +2092,15 @@ export default function XTraderPage() {
           continue;
         }
         const message = errorMessage(error);
+        if (/stake exceeds.*balance|total stake exceeds.*balance/i.test(message)) {
+          runningRef.current = false;
+          setRunning(false);
+          setConnectionMessage({
+            kind: "info",
+            text: `EDGE stopped before sending another contract because the next stake exceeds the available balance. ${message}`,
+          });
+          break;
+        }
         if (message.includes("still settling")) {
           setConnectionMessage({
             kind: "info",
