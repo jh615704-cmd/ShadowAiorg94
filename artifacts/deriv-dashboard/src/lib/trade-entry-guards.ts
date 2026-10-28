@@ -51,7 +51,7 @@ function validateStakeAndBalance(
   if (!Number.isFinite(input.stake) || input.stake < minimumStake) {
     return `${feature} stake must be at least ${minimumStake.toFixed(2)}.`;
   }
-  const roundedStake = Number((Math.round((input.stake + Number.EPSILON) * 100) / 100).toFixed(2));
+  const roundedStake = roundTradeStakeToCents(input.stake);
   if (!Number.isFinite(input.balance) || (input.balance ?? 0) <= 0) {
     return `${feature} is paused until the selected account balance is available.`;
   }
@@ -62,6 +62,10 @@ function validateStakeAndBalance(
     return `${feature} market is not supported.`;
   }
   return null;
+}
+
+export function roundTradeStakeToCents(stake: number): number {
+  return Number((Math.round((stake + Number.EPSILON) * 100) / 100).toFixed(2));
 }
 
 export function validateAutoTraderBatch(input: SharedEntryInput & {

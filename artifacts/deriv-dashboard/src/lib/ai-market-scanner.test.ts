@@ -5,6 +5,8 @@ import {
   chooseCashGrabScannerCandidate,
   chooseDigitFlipScannerCandidate,
   chooseTradeXScannerCandidate,
+  digitDiffersRateFromPercentages,
+  isValidObservedPercentage,
   isValidDigitFlipParityRates,
   type AiScannerMarketSignal,
 } from "./ai-market-scanner.ts";
@@ -59,6 +61,20 @@ test("Bulk Trader picks the observed Differs rate and the valid side of edge bar
   assert.equal(differs?.barrier, 5);
   assert.equal(edgeBarrier?.contractType, "DIGITUNDER");
   assert.equal(edgeBarrier?.barrier, 9);
+});
+
+test("Bulk Trader scanner rejects invalid barriers and rates but tolerates percentage rounding", () => {
+  const candidate = chooseBulkScannerCandidate([
+    signal("R_10", 40, [{ digit: 5, over_percentage: 130, under_percentage: 10 }]),
+    signal("JD25", 40, [{ digit: 5, over_percentage: 70, under_percentage: 40 }]),
+    signal("R_75", 40, [{ digit: 5, over_percentage: 35.4, under_percentage: 64.7 }]),
+  ], ["R_10", "JD25", "R_75"], "differs", 5);
+
+  assert.equal(candidate?.symbol, "R_75");
+  assert.equal(candidate?.observedRate, 100);
+  assert.equal(chooseBulkScannerCandidate([], [], "differs", 10), null);
+  assert.equal(digitDiffersRateFromPercentages(80, 30), null);
+  assert.equal(isValidObservedPercentage(Number.NaN), false);
 });
 
 test("DigitFlip selects the strongest eligible observed parity without inventing a threshold", () => {

@@ -52,6 +52,17 @@ export type CashGrabScannerCandidate = {
   sampleCount: number;
 };
 
+export function isValidObservedPercentage(rate: number): boolean {
+  return Number.isFinite(rate) && rate >= 0 && rate <= 100;
+}
+
+export function digitDiffersRateFromPercentages(overRate: number, underRate: number): number | null {
+  if (!isValidObservedPercentage(overRate) || !isValidObservedPercentage(underRate)) return null;
+  const rate = overRate + underRate;
+  if (rate > 100.1) return null;
+  return Math.min(100, rate);
+}
+
 function eligibleSignals(
   signals: readonly AiScannerMarketSignal[],
   symbols: readonly string[],
@@ -84,6 +95,7 @@ export function chooseBulkScannerCandidate(
   prediction: number,
   minimumSample = AI_SCANNER_MIN_SAMPLE,
 ): BulkScannerCandidate | null {
+  if (!Number.isInteger(prediction) || prediction < 0 || prediction > 9) return null;
   const candidates: BulkScannerCandidate[] = [];
 
   for (const signal of eligibleSignals(signals, symbols, minimumSample)) {
@@ -91,14 +103,16 @@ export function chooseBulkScannerCandidate(
     if (!outcome) continue;
     const overRate = Number(outcome.over_percentage);
     const underRate = Number(outcome.under_percentage);
-    if (!Number.isFinite(overRate) || !Number.isFinite(underRate)) continue;
+    if (!isValidObservedPercentage(overRate) || !isValidObservedPercentage(underRate)) continue;
 
     if (type === "differs") {
+      const observedRate = digitDiffersRateFromPercentages(overRate, underRate);
+      if (observedRate == null) continue;
       candidates.push({
         symbol: signal.symbol,
         contractType: "DIGITDIFF",
         barrier: prediction,
-        observedRate: overRate + underRate,
+        observedRate,
         sampleCount: signal.sample_count,
       });
       continue;

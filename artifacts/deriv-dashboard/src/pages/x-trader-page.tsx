@@ -56,6 +56,7 @@ import {
   confirmedNoContractRetryMessage,
   isConfirmedNoContractRejection,
   isConfirmedUnavailableDurationRejection,
+  roundTradeStakeToCents,
   unavailableDurationRetryMessage,
 } from "../lib/trade-entry-guards";
 import {
@@ -64,6 +65,8 @@ import {
   chooseCashGrabScannerCandidate,
   chooseDigitFlipScannerCandidate,
   chooseTradeXScannerCandidate,
+  digitDiffersRateFromPercentages,
+  isValidObservedPercentage,
   isValidDigitFlipParityRates,
   type AiScannerMarketSignal,
 } from "../lib/ai-market-scanner";
@@ -1189,20 +1192,30 @@ export default function XTraderPage() {
     [status.data?.market_signals],
   );
   const bulkTraderMarketSignals = useMemo(
-    () => (status.data?.market_signals ?? []).map((signal) => {
+    () => (status.data?.market_signals ?? []).flatMap((signal) => {
       const selectedDigit = typeof bulkTraderPrediction === "number" ? bulkTraderPrediction : 5;
       const selectedOutcome = signal.digit_outcomes?.find((outcome) => outcome.digit === selectedDigit);
-      const differsRate = selectedOutcome
-        ? Number(selectedOutcome.over_percentage) + Number(selectedOutcome.under_percentage)
-        : 50;
+      if (
+        !Number.isInteger(signal.sample_count)
+        || signal.sample_count <= 0
+        || !Number.isInteger(selectedDigit)
+        || selectedDigit < 0
+        || selectedDigit > 9
+        || !selectedOutcome
+      ) return [];
+      const overRate = Number(selectedOutcome.over_percentage);
+      const underRate = Number(selectedOutcome.under_percentage);
+      if (!isValidObservedPercentage(overRate) || !isValidObservedPercentage(underRate)) return [];
+      const differsRate = digitDiffersRateFromPercentages(overRate, underRate);
+      if (bulkTraderType === "differs" && differsRate == null) return [];
       const observedPercentage = bulkTraderType === "over-under"
-        ? Number((selectedOutcome ? Math.max(Number(selectedOutcome.over_percentage), Number(selectedOutcome.under_percentage)) : 50).toFixed(1))
-         : Number(differsRate.toFixed(1));
-      return {
+        ? Number(Math.max(overRate, underRate).toFixed(1))
+        : Number(differsRate!.toFixed(1));
+      return [{
         symbol: signal.symbol,
         sampleCount: signal.sample_count,
         observedPercentage,
-      };
+      }];
     }),
     [bulkTraderPrediction, bulkTraderType, status.data?.market_signals],
   );
@@ -4055,8 +4068,9 @@ export default function XTraderPage() {
     }
     const barrier = barrierOverride ?? bulkTraderPrediction;
     const symbol = symbolOverride ?? bulkTraderSymbol;
+    const amount = roundTradeStakeToCents(bulkTraderStake);
     const orderError = validateBulkTraderEntry({
-      stake: bulkTraderStake,
+      stake: amount,
       balance: currentAccountBalance,
       symbol,
       supportedSymbols: tradeXSymbols.map((market) => market.value),
@@ -4076,7 +4090,7 @@ export default function XTraderPage() {
     const send = (type: BulkTraderContractType) => bulkBuyMutation.mutateAsync({
       data: {
         access_feature: "bulk-trader",
-        amount: bulkTraderStake,
+        amount,
         duration: bulkTraderDuration,
         duration_unit: "t",
         contract_type: type,
@@ -4127,7 +4141,7 @@ export default function XTraderPage() {
     if (!await selectMarket(candidate.symbol)) throw new Error("Deriv could not select the scanned market. No contracts were sent.");
     if (
       currentAccountBalanceRef.current == null
-      || bulkTraderStake * bulkTraderCount > currentAccountBalanceRef.current
+      || roundTradeStakeToCents(bulkTraderStake) * bulkTraderCount > currentAccountBalanceRef.current
     ) {
       throw new Error("The configured Bulk Trader batch exceeds the current account balance.");
     }

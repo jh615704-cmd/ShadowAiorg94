@@ -4,6 +4,7 @@ import {
   confirmedNoContractRetryMessage,
   isConfirmedNoContractRejection,
   isConfirmedUnavailableDurationRejection,
+  roundTradeStakeToCents,
   unavailableDurationRetryMessage,
   validateAutoTraderBatch,
   validateBulkTraderEntry,
@@ -136,6 +137,32 @@ test("Bulk Trader blocks unsupported six-tick digit batches and invalid Over/Und
   assert.match(String(validateBulkTraderEntry({ ...base, duration: 6, contractType: "DIGITDIFF" })), /1 to 5/);
   assert.match(String(validateBulkTraderEntry({ ...base, barrier: 9, contractType: "DIGITOVER" })), /no winning digit/);
   assert.match(String(validateBulkTraderEntry({ ...base, barrier: 0, contractType: "DIGITUNDER" })), /no winning digit/);
+});
+
+test("Bulk Trader validates and sends the same cent-rounded stake", () => {
+  const amount = roundTradeStakeToCents(0.355);
+
+  assert.equal(amount, 0.36);
+  assert.equal(validateBulkTraderEntry({
+    stake: amount,
+    balance: 2.16,
+    symbol: "R_10",
+    supportedSymbols: symbols,
+    contractType: "DIGITDIFF",
+    barrier: 5,
+    duration: 1,
+    count: 6,
+  }), null);
+  assert.match(String(validateBulkTraderEntry({
+    stake: amount,
+    balance: 2.15,
+    symbol: "R_10",
+    supportedSymbols: symbols,
+    contractType: "DIGITDIFF",
+    barrier: 5,
+    duration: 1,
+    count: 6,
+  })), /total stake exceeds/);
 });
 
 test("EDGE validates its selected side, dual barriers, duration, and full exposure", () => {
