@@ -29,6 +29,15 @@ export type ParityScannerCandidate = {
   sampleCount: number;
 };
 
+export function isValidDigitFlipParityRates(even: number, odd: number): boolean {
+  return Number.isFinite(even)
+    && even >= 0
+    && even <= 100
+    && Number.isFinite(odd)
+    && odd >= 0
+    && odd <= 100;
+}
+
 export type TradeXScannerCandidate = {
   symbol: string;
   digit: number;
@@ -123,7 +132,12 @@ export function chooseDigitFlipScannerCandidate(
   symbols: readonly string[],
   minimumSample = AI_SCANNER_MIN_SAMPLE,
 ): ParityScannerCandidate | null {
-  const candidates = eligibleSignals(signals, symbols, minimumSample).map((signal) => {
+  const candidates = eligibleSignals(signals, symbols, minimumSample)
+    .filter((signal) => isValidDigitFlipParityRates(
+      signal.digit_even_percentage,
+      signal.digit_odd_percentage,
+    ))
+    .map((signal) => {
     const parity = signal.digit_even_percentage >= signal.digit_odd_percentage
       ? "DIGITEVEN" as const
       : "DIGITODD" as const;
@@ -133,7 +147,7 @@ export function chooseDigitFlipScannerCandidate(
       observedRate: Math.max(signal.digit_even_percentage, signal.digit_odd_percentage),
       sampleCount: signal.sample_count,
     };
-  }).filter((candidate) => Number.isFinite(candidate.observedRate));
+  });
 
   return strongest(candidates);
 }

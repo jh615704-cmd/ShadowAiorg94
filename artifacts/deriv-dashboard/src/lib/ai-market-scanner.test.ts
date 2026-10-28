@@ -5,8 +5,10 @@ import {
   chooseCashGrabScannerCandidate,
   chooseDigitFlipScannerCandidate,
   chooseTradeXScannerCandidate,
+  isValidDigitFlipParityRates,
   type AiScannerMarketSignal,
 } from "./ai-market-scanner.ts";
+import { unprocessedDigitFlipSettlements } from "./digit-flip-logic.ts";
 
 function signal(
   symbol: string,
@@ -68,6 +70,44 @@ test("DigitFlip selects the strongest eligible observed parity without inventing
   assert.equal(candidate?.symbol, "R_10");
   assert.equal(candidate?.parity, "DIGITEVEN");
   assert.equal(candidate?.observedRate, 58);
+});
+
+test("DigitFlip scanner ignores malformed parity rates without adding a signal threshold", () => {
+  const candidate = chooseDigitFlipScannerCandidate([
+    signal("R_10", 40, [], 140, -40),
+    signal("JD25", 30, [], 55, Number.NaN),
+    signal("R_75", 25, [], 53, 47),
+  ], ["R_10", "JD25", "R_75"]);
+
+  assert.deepEqual(candidate, {
+    symbol: "R_75",
+    parity: "DIGITEVEN",
+    observedRate: 53,
+    sampleCount: 25,
+  });
+  assert.equal(isValidDigitFlipParityRates(0, 100), true);
+  assert.equal(isValidDigitFlipParityRates(Number.POSITIVE_INFINITY, 0), false);
+});
+
+test("DigitFlip settlement processing ignores unclaimed, open, known, and processed contracts", () => {
+  const rows = [
+    { contract_id: "owned-later", contract_type: "DIGITODD", status: "lost", buy_time: 20 },
+    { contract_id: "outside-feature", contract_type: "DIGITEVEN", status: "lost", buy_time: 10 },
+    { contract_id: "owned-open", contract_type: "DIGITEVEN", status: "open", buy_time: 5 },
+    { contract_id: "owned-known", contract_type: "DIGITEVEN", status: "won", buy_time: 6 },
+    { contract_id: "owned-processed", contract_type: "DIGITODD", status: "lost", buy_time: 7 },
+    { contract_id: "owned-earlier", contract_type: "DIGITEVEN", status: "won", buy_time: 15 },
+    { contract_id: "owned-other-contract", contract_type: "DIGITDIFF", status: "lost", buy_time: 1 },
+  ];
+
+  const settlements = unprocessedDigitFlipSettlements(
+    rows,
+    new Set(["owned-later", "owned-open", "owned-known", "owned-processed", "owned-earlier", "owned-other-contract"]),
+    new Set(["owned-known"]),
+    new Set(["owned-processed"]),
+  );
+
+  assert.deepEqual(settlements.map((trade) => trade.contract_id), ["owned-earlier", "owned-later"]);
 });
 
 test("Trade X ranks the least frequent observed digit across eligible markets", () => {

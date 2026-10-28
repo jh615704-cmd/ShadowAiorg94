@@ -64,8 +64,10 @@ import {
   chooseCashGrabScannerCandidate,
   chooseDigitFlipScannerCandidate,
   chooseTradeXScannerCandidate,
+  isValidDigitFlipParityRates,
   type AiScannerMarketSignal,
 } from "../lib/ai-market-scanner";
+import { unprocessedDigitFlipSettlements } from "../lib/digit-flip-logic";
 import TradeXPanel, {
   type TradeXDigitDistribution,
   type TradeXDuration,
@@ -358,6 +360,8 @@ type DigitFlipSettlementWatch = {
   knownIds: Set<string>;
   processedIds: Set<string>;
 };
+
+type DigitFlipSetupResult = "selected" | "no-candidate" | "market-selection-failed";
 
 type CashGrabAutoSwitchRecommendation = {
   symbol: string;
@@ -1380,9 +1384,12 @@ export default function XTraderPage() {
       if (!digitFlipRunning) setDigitFlipCurrentStake(digitFlipStake);
       return;
     }
-    const newlySettled = digitFlipSessionRows
-      .filter((trade) => !watch.knownIds.has(trade.contract_id) && !watch.processedIds.has(trade.contract_id) && !isDerivHistoryOpen(trade.status))
-      .sort((left, right) => (left.buy_time ?? 0) - (right.buy_time ?? 0));
+    const newlySettled = unprocessedDigitFlipSettlements(
+      digitFlipSessionRows,
+      digitFlipClaimedHistoryIdsRef.current,
+      watch.knownIds,
+      watch.processedIds,
+    );
     if (!newlySettled.length) return;
     let next = digitFlipNextStakeRef.current;
     for (const trade of newlySettled) {
@@ -3476,10 +3483,14 @@ export default function XTraderPage() {
   });
 
 
-  const chooseDigitFlipSetup = async (requireThreshold = false) => {
+  const chooseDigitFlipSetup = async (requireThreshold = false): Promise<DigitFlipSetupResult> => {
     const config = digitFlipConfigRef.current;
     const signals = digitFlipMarketSignalsRef.current
-      .filter((signal) => signal.sampleCount > 0)
+      .filter((signal) =>
+        Number.isFinite(signal.sampleCount)
+        && signal.sampleCount > 0
+        && isValidDigitFlipParityRates(signal.evenPercentage, signal.oddPercentage),
+      )
       .filter((signal) => config.marketType === "auto" || tradeXSymbols.find((option) => option.value === signal.symbol)?.marketType === config.marketType)
       .map((signal) => ({
         signal,
@@ -3489,21 +3500,25 @@ export default function XTraderPage() {
       .filter((candidate) => !requireThreshold || candidate.rate >= DIGIT_FLIP_SIGNAL_FLOOR)
       .sort((left, right) => right.rate - left.rate || right.signal.sampleCount - left.signal.sampleCount);
     const best = signals[0];
-    if (!best) return false;
+    if (!best) return "no-candidate";
     if (best.signal.symbol !== config.symbol) {
+      if (!await selectMarket(best.signal.symbol)) return "market-selection-failed";
       setDigitFlipSymbol(best.signal.symbol);
-      await selectMarket(best.signal.symbol);
     }
     const nextParity = (config.marketType === "auto" || digitFlipMagicRef.current) && !digitFlipAssaultRef.current
       ? best.parity
       : config.parity;
     if (nextParity !== config.parity) setDigitFlipParity(nextParity);
+    digitFlipRatesRef.current = {
+      even: best.signal.evenPercentage,
+      odd: best.signal.oddPercentage,
+    };
     digitFlipConfigRef.current = {
       ...digitFlipConfigRef.current,
       symbol: best.signal.symbol,
       parity: nextParity,
     };
-    return true;
+    return "selected";
   };
 
   useEffect(() => {
@@ -3527,14 +3542,12 @@ export default function XTraderPage() {
     if (!digitFlipAssaultRef.current) return;
     const watch = digitFlipAssaultWatchRef.current;
     if (!watch) return;
-    const newlySettled = latestRows
-      .filter((trade) =>
-        (trade.contract_type === "DIGITEVEN" || trade.contract_type === "DIGITODD")
-        && !watch.knownIds.has(trade.contract_id)
-        && !watch.processedIds.has(trade.contract_id)
-        && !isDerivHistoryOpen(trade.status),
-      )
-      .sort((left, right) => (left.buy_time ?? 0) - (right.buy_time ?? 0));
+    const newlySettled = unprocessedDigitFlipSettlements(
+      latestRows,
+      digitFlipClaimedHistoryIdsRef.current,
+      watch.knownIds,
+      watch.processedIds,
+    );
     for (const trade of newlySettled) {
       const settledParity = trade.contract_type === "DIGITEVEN" ? "DIGITEVEN" : "DIGITODD";
       watch.processedIds.add(trade.contract_id);
@@ -3591,17 +3604,20 @@ export default function XTraderPage() {
       setConnectionMessage({ kind: "info", text: `Standby is waiting for an ${DIGIT_FLIP_SIGNAL_FLOOR}% observed parity signal. Current ${selectedRate.toFixed(1)}%.` });
       return false;
     }
-    const latestFlip = latestRows.find((trade) => (trade.contract_type === "DIGITEVEN" || trade.contract_type === "DIGITODD") && !isDerivHistoryOpen(trade.status));
     const watch = digitFlipMartingaleWatchRef.current;
-    if (
-      config.stakeMode === "martingale" &&
-      latestFlip &&
-      watch &&
-      !watch.knownIds.has(latestFlip.contract_id) &&
-      !watch.processedIds.has(latestFlip.contract_id)
-    ) {
-      digitFlipNextStakeRef.current = nextStakeAfterSettlement(latestFlip.profit, digitFlipNextStakeRef.current, config.stake, config.multiplier);
-      watch.processedIds.add(latestFlip.contract_id);
+    if (config.stakeMode === "martingale" && watch) {
+      const newlySettled = unprocessedDigitFlipSettlements(
+        latestRows,
+        digitFlipClaimedHistoryIdsRef.current,
+        watch.knownIds,
+        watch.processedIds,
+      );
+      let nextStake = digitFlipNextStakeRef.current;
+      for (const trade of newlySettled) {
+        nextStake = nextStakeAfterSettlement(trade.profit, nextStake, config.stake, config.multiplier);
+        watch.processedIds.add(String(trade.contract_id));
+      }
+      digitFlipNextStakeRef.current = nextStake;
     }
     const amount = config.stakeMode === "martingale"
       ? digitFlipNextStakeRef.current
@@ -3720,9 +3736,11 @@ export default function XTraderPage() {
     while (digitFlipRunningRef.current) {
       const config = digitFlipConfigRef.current;
       if ((config.marketType === "auto" || digitFlipMagicRef.current) && Date.now() >= digitFlipNextMarketScanAtRef.current) {
-        const selected = await chooseDigitFlipSetup(digitFlipMagicRef.current);
-        if (!selected) {
-          setConnectionMessage({ kind: "info", text: `Standby is waiting for a market with an ${DIGIT_FLIP_SIGNAL_FLOOR}% observed parity signal.` });
+        const selection = await chooseDigitFlipSetup(digitFlipMagicRef.current);
+        if (selection !== "selected") {
+          setConnectionMessage(selection === "market-selection-failed"
+            ? { kind: "error", text: "DigitFlip could not switch to the scanned market. No trade was sent." }
+            : { kind: "info", text: `Standby is waiting for a market with an ${DIGIT_FLIP_SIGNAL_FLOOR}% observed parity signal.` });
           digitFlipNextMarketScanAtRef.current = Date.now() + DIGIT_FLIP_MARKET_SCAN_INTERVAL_MS;
           await waitForMarketTicks(1, () => digitFlipRunningRef.current);
           continue;
