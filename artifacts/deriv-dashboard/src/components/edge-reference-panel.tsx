@@ -112,81 +112,144 @@ export default function EdgeReferencePanel({
 }: EdgeReferencePanelProps) {
   const [marketPickerOpen, setMarketPickerOpen] = useState(false);
   const [autoSelectBest, setAutoSelectBest] = useState(false);
-  const [maxStake, setMaxStake] = useState("No limit");
   const autoSelectedSymbolRef = useRef<string | null>(null);
-  const canRunAiScanner = isConnected
-    && !running
-    && Number.isInteger(duration)
-    && duration >= 1
-    && duration <= 5
-    && Number.isFinite(stake)
-    && stake >= 0.35
-    && Number.isInteger(barrier)
-    && barrier >= 0
-    && barrier <= 9;
+  const canRunAiScanner =
+    isConnected &&
+    !running &&
+    Number.isInteger(duration) &&
+    duration >= 1 &&
+    duration <= 5 &&
+    Number.isFinite(stake) &&
+    stake >= 0.35 &&
+    Number.isInteger(barrier) &&
+    barrier >= 0 &&
+    barrier <= 9;
 
   const liveSignals = marketSignals as MarketSignal[];
   const bestSignal = useMemo(
     () => chooseBestEdgeSignal(liveSignals, EDGE_PERCENTAGE_SCAN_FLOOR),
     [liveSignals],
   );
-  const bestDirection = bestSignal?.direction === "DIGITUNDER" ? "Under" : "Over";
+  const bestDirection =
+    bestSignal?.direction === "DIGITUNDER" ? "Under" : "Over";
   const bestBarrier = bestSignal?.digit ?? barrier;
   const bestRate = bestSignal?.score ?? null;
-  const bestMarket = markets.find(([value]) => value === (bestSignal?.symbol ?? symbol))?.[1] ?? "Volatility 100 Index";
-  const marketLabel = markets.find(([value]) => value === symbol)?.[1] ?? "Volatility 100 Index";
+  const bestMarket =
+    markets.find(([value]) => value === (bestSignal?.symbol ?? symbol))?.[1] ??
+    "Volatility 100 Index";
+  const marketLabel =
+    markets.find(([value]) => value === symbol)?.[1] ?? "Volatility 100 Index";
   const rankedMarkets = useMemo(() => {
-    const signalMap = new Map(marketSignals.map((signal) => [signal.symbol, signal]));
-    return markets.map(([value, label]) => {
-      const signal = signalMap.get(value);
-      const outcomes = signal?.digit_outcomes?.filter((outcome) => outcome.digit > 0 && outcome.digit < 9) ?? [];
-      const score = signal
-        ? Math.max(...outcomes.flatMap((outcome) => [
-            Number(outcome.over_percentage),
-            Number(outcome.under_percentage),
-          ]), 0)
-        : 0;
-      return { value, label, score, sampleCount: signal?.sample_count ?? 0 };
-    }).sort((left, right) => right.score - left.score || left.label.localeCompare(right.label));
+    const signalMap = new Map(
+      marketSignals.map((signal) => [signal.symbol, signal]),
+    );
+    return markets
+      .map(([value, label]) => {
+        const signal = signalMap.get(value);
+        const outcomes =
+          signal?.digit_outcomes?.filter(
+            (outcome) => outcome.digit > 0 && outcome.digit < 9,
+          ) ?? [];
+        const score = signal
+          ? Math.max(
+              ...outcomes.flatMap((outcome) => [
+                Number(outcome.over_percentage),
+                Number(outcome.under_percentage),
+              ]),
+              0,
+            )
+          : 0;
+        return { value, label, score, sampleCount: signal?.sample_count ?? 0 };
+      })
+      .sort(
+        (left, right) =>
+          right.score - left.score || left.label.localeCompare(right.label),
+      );
   }, [marketSignals, markets]);
-  const bestRankedMarket = rankedMarkets.find((option) => option.sampleCount >= 20 && option.score > 0);
-  const bestRankedMarketRank = bestRankedMarket ? rankedMarkets.indexOf(bestRankedMarket) + 1 : null;
+  const bestRankedMarket = rankedMarkets.find(
+    (option) => option.sampleCount >= 20 && option.score > 0,
+  );
+  const bestRankedMarketRank = bestRankedMarket
+    ? rankedMarkets.indexOf(bestRankedMarket) + 1
+    : null;
   useEffect(() => {
     if (!autoSelectBest) {
       autoSelectedSymbolRef.current = null;
       return;
     }
-    if (running || !bestRankedMarket || bestRankedMarket.value === symbol) return;
+    if (running || !bestRankedMarket || bestRankedMarket.value === symbol)
+      return;
     if (autoSelectedSymbolRef.current === bestRankedMarket.value) return;
     autoSelectedSymbolRef.current = bestRankedMarket.value;
     onSymbolChange(bestRankedMarket.value);
   }, [autoSelectBest, bestRankedMarket, onSymbolChange, running, symbol]);
   const quoteText = quote == null ? "—" : formatDerivQuote(quote);
-  const payoutText = payoutPercent == null || !Number.isFinite(payoutPercent) ? "waiting" : `${payoutPercent.toFixed(1)}%`;
+  const payoutText =
+    payoutPercent == null || !Number.isFinite(payoutPercent)
+      ? "waiting"
+      : `${payoutPercent.toFixed(1)}%`;
   const currency = currentAccount?.currency ?? "USD";
 
   return (
     <section className="edge-reference-layout">
       <section className="edge-ref-card edge-ref-scanner">
         <div className="edge-ref-heading">
-          <div className="edge-ref-title"><span className="edge-ref-spark" aria-hidden="true" /><b>Barrier Scanner</b><span className="edge-ref-premium">PREMIUM</span></div>
-          <span className="edge-ref-live"><i /> LIVE</span>
+          <div className="edge-ref-title">
+            <span className="edge-ref-spark" aria-hidden="true" />
+            <b>Barrier Scanner</b>
+            <span className="edge-ref-premium">PREMIUM</span>
+          </div>
+          <span className="edge-ref-live">
+            <i /> LIVE
+          </span>
         </div>
         <div className="edge-ref-rule" />
         <div className="edge-ref-best">
-          <div className="edge-ref-best-barrier">{bestDirection} {bestBarrier}</div>
-          <div className="edge-ref-best-copy"><span>BEST OBSERVED BARRIER RIGHT NOW</span><p><strong>{bestRate == null ? "waiting" : `${bestRate.toFixed(1)}% observed`}</strong><em>·</em> payout {payoutText} <em>·</em> {bestMarket}</p></div>
+          <div className="edge-ref-best-barrier">
+            {bestDirection} {bestBarrier}
+          </div>
+          <div className="edge-ref-best-copy">
+            <span>BEST OBSERVED BARRIER RIGHT NOW</span>
+            <p>
+              <strong>
+                {bestRate == null
+                  ? "waiting"
+                  : `${bestRate.toFixed(1)}% observed`}
+              </strong>
+              <em>·</em> payout {payoutText} <em>·</em> {bestMarket}
+            </p>
+          </div>
         </div>
       </section>
 
-      <section className={`edge-ref-card edge-ref-market ${marketPickerOpen ? "open" : ""}`}>
-        <button type="button" className="edge-ref-market-trigger" onClick={() => setMarketPickerOpen((open) => !open)} aria-expanded={marketPickerOpen} disabled={!isConnected}>
+      <section
+        className={`edge-ref-card edge-ref-market ${marketPickerOpen ? "open" : ""}`}
+      >
+        <button
+          type="button"
+          className="edge-ref-market-trigger"
+          onClick={() => setMarketPickerOpen((open) => !open)}
+          aria-expanded={marketPickerOpen}
+          disabled={!isConnected}
+        >
           <span className="edge-ref-market-icon" aria-hidden="true" />
-          <span className="edge-ref-market-copy"><small>Market ({autoSelectBest ? "auto" : "manual"})</small><b>{marketLabel}</b></span>
+          <span className="edge-ref-market-copy">
+            <small>Market ({autoSelectBest ? "auto" : "manual"})</small>
+            <b>{marketLabel}</b>
+          </span>
           <ChevronDown size={18} className="edge-ref-market-chevron" />
         </button>
-        <label className={`edge-ref-auto-market${autoSelectBest ? " active" : ""}`}>
-          <span><b>Auto select best</b><small>{bestRankedMarket ? `Rank #${bestRankedMarketRank} · ${bestRankedMarket.label}` : "Waiting for 20 live samples"}</small></span>
+        <label
+          className={`edge-ref-auto-market${autoSelectBest ? " active" : ""}`}
+        >
+          <span>
+            <b>Auto select best</b>
+            <small>
+              {bestRankedMarket
+                ? `Rank #${bestRankedMarketRank} · ${bestRankedMarket.label}`
+                : "Waiting for 20 live samples"}
+            </small>
+          </span>
           <input
             type="checkbox"
             checked={autoSelectBest}
@@ -194,7 +257,11 @@ export default function EdgeReferencePanel({
               const enabled = event.target.checked;
               setAutoSelectBest(enabled);
               autoSelectedSymbolRef.current = null;
-              if (enabled && bestRankedMarket && bestRankedMarket.value !== symbol) {
+              if (
+                enabled &&
+                bestRankedMarket &&
+                bestRankedMarket.value !== symbol
+              ) {
                 autoSelectedSymbolRef.current = bestRankedMarket.value;
                 onSymbolChange(bestRankedMarket.value);
               }
@@ -203,17 +270,25 @@ export default function EdgeReferencePanel({
             aria-label="Auto select the best-ranked EDGE market"
           />
         </label>
-        <label className={`edge-sniper-toggle${sniperOverUnder ? " active" : ""}`}>
+        <label
+          className={`edge-sniper-toggle${sniperOverUnder ? " active" : ""}`}
+        >
           <span className="edge-sniper-copy">
             <b>Sniper over/under</b>
           </span>
           <span className="edge-sniper-control">
-            <span className={`edge-sniper-state${sniperOverUnder ? " working" : ""}`}>{sniperOverUnder ? "WORKING" : "OFF"}</span>
+            <span
+              className={`edge-sniper-state${sniperOverUnder ? " working" : ""}`}
+            >
+              {sniperOverUnder ? "WORKING" : "OFF"}
+            </span>
             <span className="edge-toggle">
               <input
                 type="checkbox"
                 checked={sniperOverUnder}
-                onChange={(event) => onSniperOverUnderChange(event.target.checked)}
+                onChange={(event) =>
+                  onSniperOverUnderChange(event.target.checked)
+                }
                 disabled={!isConnected || running}
                 aria-label="Sniper over/under"
               />
@@ -224,33 +299,93 @@ export default function EdgeReferencePanel({
         {marketPickerOpen && (
           <div className="edge-ref-market-menu">
             {rankedMarkets.map((option, index) => (
-              <button type="button" className={`edge-ref-market-option ${symbol === option.value ? "selected" : ""}`} key={option.value} onClick={() => { setAutoSelectBest(false); autoSelectedSymbolRef.current = null; onSymbolChange(option.value); setMarketPickerOpen(false); }} disabled={running}>
-                <span><b>{option.label}</b>{option.value === bestRankedMarket?.value && <small>BEST</small>}<em>observed {option.score ? `${option.score.toFixed(0)}%` : "waiting"} · {option.value}</em></span>
-                <strong>{option.score ? `${option.score.toFixed(1)}%` : "—"}</strong>
+              <button
+                type="button"
+                className={`edge-ref-market-option ${symbol === option.value ? "selected" : ""}`}
+                key={option.value}
+                onClick={() => {
+                  setAutoSelectBest(false);
+                  autoSelectedSymbolRef.current = null;
+                  onSymbolChange(option.value);
+                  setMarketPickerOpen(false);
+                }}
+                disabled={running}
+              >
+                <span>
+                  <b>{option.label}</b>
+                  {option.value === bestRankedMarket?.value && (
+                    <small>BEST</small>
+                  )}
+                  <em>
+                    observed{" "}
+                    {option.score ? `${option.score.toFixed(0)}%` : "waiting"} ·{" "}
+                    {option.value}
+                  </em>
+                </span>
+                <strong>
+                  {option.score ? `${option.score.toFixed(1)}%` : "—"}
+                </strong>
               </button>
             ))}
           </div>
         )}
       </section>
 
-      <section className="edge-ref-card edge-ref-quote"><strong>{quoteText}</strong><span>Last digit: <b>{lastDigit == null ? "—" : lastDigit}</b></span></section>
+      <section className="edge-ref-card edge-ref-quote">
+        <strong>{quoteText}</strong>
+        <span>
+          Last digit: <b>{lastDigit == null ? "—" : lastDigit}</b>
+        </span>
+      </section>
 
       <div className="edge-ref-direction">
-        <button className={direction === "DIGITOVER" ? "active over" : ""} onClick={() => onDirectionChange("DIGITOVER")} disabled={running}>Over</button>
-        <button className={direction === "DIGITUNDER" ? "active under" : ""} onClick={() => onDirectionChange("DIGITUNDER")} disabled={running}>Under</button>
+        <button
+          className={direction === "DIGITOVER" ? "active over" : ""}
+          onClick={() => onDirectionChange("DIGITOVER")}
+          disabled={running}
+        >
+          Over
+        </button>
+        <button
+          className={direction === "DIGITUNDER" ? "active under" : ""}
+          onClick={() => onDirectionChange("DIGITUNDER")}
+          disabled={running}
+        >
+          Under
+        </button>
       </div>
 
       <section className="edge-ref-card edge-ref-digit-card">
-        <span className="edge-ref-field-label">Last digit prediction · live market highlight</span>
-        <div className="edge-ref-digit-picker">{Array.from({ length: 10 }, (_, digit) => {
-          const isMarketDigit = lastDigit === digit;
-          return <button type="button" key={digit} className={`${barrier === digit ? "active " : ""}${isMarketDigit ? "market" : ""}`} onClick={() => onBarrierChange(digit)} disabled={running} aria-label={`Barrier digit ${digit}${isMarketDigit ? ", current market digit" : ""}`} title={isMarketDigit ? "Current market digit" : undefined}>{digit}</button>;
-        })}</div>
+        <span className="edge-ref-field-label">
+          Last digit prediction · live market highlight
+        </span>
+        <div className="edge-ref-digit-picker">
+          {Array.from({ length: 10 }, (_, digit) => {
+            const isMarketDigit = lastDigit === digit;
+            return (
+              <button
+                type="button"
+                key={digit}
+                className={`${barrier === digit ? "active " : ""}${isMarketDigit ? "market" : ""}`}
+                onClick={() => onBarrierChange(digit)}
+                disabled={running}
+                aria-label={`Barrier digit ${digit}${isMarketDigit ? ", current market digit" : ""}`}
+                title={isMarketDigit ? "Current market digit" : undefined}
+              >
+                {digit}
+              </button>
+            );
+          })}
+        </div>
       </section>
 
       <div className="edge-ref-duration-field">
         <span>Duration · ticks</span>
-        <div className="edge-ref-duration-options" role="group" aria-label="EDGE duration in ticks">
+        <div
+          className="edge-ref-duration-options"
+          role="group"
+          aria-label="EDGE duration in ticks"
+        >
           {[1, 2, 3, 4, 5].map((ticks) => (
             <button
               type="button"
@@ -265,34 +400,184 @@ export default function EdgeReferencePanel({
             </button>
           ))}
         </div>
-        <small className="edge-ref-duration-note">Tick 0 is entry; settlement is evaluated on the selected numbered update.</small>
       </div>
-      <label className="edge-ref-input-card"><span>Initial stake</span><div><input type="number" min=".35" step=".01" value={stake} onChange={(event) => onStakeChange(Math.max(.35, Number(event.target.value) || .35))} disabled={running} /><b>{currency}</b></div></label>
+      <label className="edge-ref-input-card">
+        <span>Initial stake</span>
+        <div>
+          <input
+            type="number"
+            min=".35"
+            step=".01"
+            value={stake}
+            onChange={(event) =>
+              onStakeChange(Math.max(0.35, Number(event.target.value) || 0.35))
+            }
+            disabled={running}
+          />
+          <b>{currency}</b>
+        </div>
+      </label>
       <section className="edge-ref-ai-scanner">
-        <div><b>AI SCANNER</b></div>
+        <div>
+          <b>AI SCANNER</b>
+        </div>
         <AiScannerAction onScan={onAiScan} disabled={!canRunAiScanner} />
       </section>
 
-      <section className="edge-ref-card edge-ref-setup"><h2>Strategy parameters</h2>
-        <label><span>Strategy</span><div><select value={strategy} onChange={(event) => onStrategyChange(event.target.value as EdgeStrategy)} disabled={running}><option value="martingale">Martingale</option><option value="flat">Flat stake</option></select><ChevronDown size={16} /></div></label>
-        <label><span>Stake multiplier</span><div><input type="number" min="1" max="10" step=".1" value={martingale} onChange={(event) => onMartingaleChange(Number(event.target.value))} disabled={running || strategy === "flat"} /><b>x</b></div></label>
-        <label><span>Max. stake</span><input value={maxStake} onChange={(event) => setMaxStake(event.target.value)} disabled={running} /></label>
-        <p className="edge-ref-callout"><b>Balance guard</b> — no max stake needed. Built-in 50%-of-balance protection keeps the plan resilient through <b>22+</b> losses in a row.</p>
+      <section className="edge-ref-card edge-ref-setup">
+        <h2>Strategy parameters</h2>
+        <label>
+          <span>Strategy</span>
+          <div>
+            <select
+              value={strategy}
+              onChange={(event) =>
+                onStrategyChange(event.target.value as EdgeStrategy)
+              }
+              disabled={running}
+            >
+              <option value="martingale">Martingale</option>
+              <option value="flat">Flat stake</option>
+            </select>
+            <ChevronDown size={16} />
+          </div>
+        </label>
+        <label>
+          <span>Stake multiplier</span>
+          <div>
+            <input
+              type="number"
+              min="1"
+              max="10"
+              step=".1"
+              value={martingale}
+              onChange={(event) =>
+                onMartingaleChange(Number(event.target.value))
+              }
+              disabled={running || strategy === "flat"}
+            />
+            <b>x</b>
+          </div>
+        </label>
       </section>
 
-      <section className="edge-ref-card edge-ref-risk"><h2>Risk management</h2>
-        <label><span>Profit threshold</span><div><input type="number" min=".01" step=".01" value={takeProfit} onChange={(event) => onTakeProfitChange(Math.max(.01, Number(event.target.value) || .01))} disabled={running} /><b>USD</b></div></label>
-        <label><span>Loss threshold</span><div><input type="number" min=".01" step=".01" value={stopLoss} onChange={(event) => onStopLossChange(Math.max(.01, Number(event.target.value) || .01))} disabled={running} /><b>USD</b></div></label>
-        <p className="edge-ref-callout danger"><b>Wipeout radar</b> — <b>22</b> losses in a row would exhaust your balance.</p>
+      <section className="edge-ref-card edge-ref-risk">
+        <h2>Risk management</h2>
+        <label>
+          <span>Profit threshold</span>
+          <div>
+            <input
+              type="number"
+              min=".01"
+              step=".01"
+              value={takeProfit}
+              onChange={(event) =>
+                onTakeProfitChange(
+                  Math.max(0.01, Number(event.target.value) || 0.01),
+                )
+              }
+              disabled={running}
+            />
+            <b>USD</b>
+          </div>
+        </label>
+        <label>
+          <span>Loss threshold</span>
+          <div>
+            <input
+              type="number"
+              min=".01"
+              step=".01"
+              value={stopLoss}
+              onChange={(event) =>
+                onStopLossChange(
+                  Math.max(0.01, Number(event.target.value) || 0.01),
+                )
+              }
+              disabled={running}
+            />
+            <b>USD</b>
+          </div>
+        </label>
+        <p className="edge-ref-callout danger">
+          <b>Wipeout radar</b> — <b>22</b> losses in a row would exhaust your
+          balance.
+        </p>
       </section>
 
-      <section className="edge-ref-session"><div><span>Current Stake</span><b>${(strategy === "martingale" ? nextStake : stake).toFixed(2)}</b></div><div><span>Session P/L</span><b className={sessionPnl < 0 ? "loss" : ""}>{sessionPnl >= 0 ? "+" : ""}{sessionPnl.toFixed(2)}</b></div><div><span>Trades</span><b>{sessionTrades}</b></div><p>Runtime stop</p></section>
+      <section className="edge-ref-session">
+        <div>
+          <span>Current Stake</span>
+          <b>${(strategy === "martingale" ? nextStake : stake).toFixed(2)}</b>
+        </div>
+        <div>
+          <span>Session P/L</span>
+          <b className={sessionPnl < 0 ? "loss" : ""}>
+            {sessionPnl >= 0 ? "+" : ""}
+            {sessionPnl.toFixed(2)}
+          </b>
+        </div>
+        <div>
+          <span>Trades</span>
+          <b>{sessionTrades}</b>
+        </div>
+        <p>Runtime stop</p>
+      </section>
 
-      <div className="edge-ref-run-row"><button className={`edge-ref-run ${running ? "running" : ""}`} onClick={() => void (running ? onStop() : onStart())} disabled={!isConnected || (!running && !canTrade)}>{running ? <><Pause size={16} fill="currentColor" /> Stop</> : <><Play size={15} fill="currentColor" /> Run</>}</button><button type="button" className="edge-ref-session-reset" onClick={onReset} aria-label="Reset session P/L, trades, and stake to base" title="Reset session"><span aria-hidden="true" /></button></div>
+      <div className="edge-ref-run-row">
+        <button
+          className={`edge-ref-run ${running ? "running" : ""}`}
+          onClick={() => void (running ? onStop() : onStart())}
+          disabled={!isConnected || (!running && !canTrade)}
+        >
+          {running ? (
+            <>
+              <Pause size={16} fill="currentColor" /> Stop
+            </>
+          ) : (
+            <>
+              <Play size={15} fill="currentColor" /> Run
+            </>
+          )}
+        </button>
+        <button
+          type="button"
+          className="edge-ref-session-reset"
+          onClick={onReset}
+          aria-label="Reset session P/L, trades, and stake to base"
+          title="Reset session"
+        >
+          <span aria-hidden="true" />
+        </button>
+      </div>
 
-      {canViewHistory && <DerivHistory title="EDGE History" strategy="EDGE Strategy" rows={recentTrades} sessionRows={sessionRows} currency={currentAccount?.currency} sessionPnl={sessionPnl} sessionTradeCount={sessionTrades} fading={historyFading} clearArmed={clearTradesArmed} onClear={() => void onClearHistory()} />}
+      {canViewHistory && (
+        <DerivHistory
+          title="EDGE History"
+          strategy="EDGE Strategy"
+          rows={recentTrades}
+          sessionRows={sessionRows}
+          currency={currentAccount?.currency}
+          sessionPnl={sessionPnl}
+          sessionTradeCount={sessionTrades}
+          fading={historyFading}
+          clearArmed={clearTradesArmed}
+          onClear={() => void onClearHistory()}
+        />
+      )}
 
-      <section className="edge-ref-disclaimer"><b>RISK DISCLAIMER</b><p>Deriv offers complex derivatives, such as options and contracts for difference (“CFDs”). These products may not be suitable for all clients, and trading them puts you at risk. Please make sure that you understand the following risks before trading Deriv products: a) you may lose some or all of the money you invest in the trade, b) if your trade involves currency conversion, exchange rates will affect your profit or loss.</p></section>
+      <section className="edge-ref-disclaimer">
+        <b>RISK DISCLAIMER</b>
+        <p>
+          Deriv offers complex derivatives, such as options and contracts for
+          difference (“CFDs”). These products may not be suitable for all
+          clients, and trading them puts you at risk. Please make sure that you
+          understand the following risks before trading Deriv products: a) you
+          may lose some or all of the money you invest in the trade, b) if your
+          trade involves currency conversion, exchange rates will affect your
+          profit or loss.
+        </p>
+      </section>
     </section>
   );
 }
