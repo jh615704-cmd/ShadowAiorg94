@@ -26,6 +26,15 @@ test("Trade X preserves every selected 1–5 tick duration in the Deriv order", 
   }
 });
 
+test("Trade X rounds its stake to the same cents checked against balance", () => {
+  assert.equal(buildTradeXOrderData({
+    stake: 0.355,
+    duration: 1,
+    digit: 4,
+    symbol: "R_75",
+  }).amount, 0.36);
+});
+
 test("Trade X cannot acquire a second local action or overlap another shared buy", () => {
   const lock = { current: false };
   assert.equal(acquireTradeXActionLock(lock, false), "acquired");

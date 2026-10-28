@@ -275,7 +275,7 @@ app.use(express.json());
 app.use((req, res, next) => {
   Object.assign(req, { log: { error() {}, warn() {} } });
   res.locals.userId = sessionId;
-  res.locals.accessKey = { features: ["clock-work", "edge", "auto-trader"] };
+  res.locals.accessKey = { features: ["clock-work", "edge", "trade-x", "auto-trader"] };
   next();
 });
 app.use(derivRouter);
@@ -401,6 +401,51 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
     });
     assert.equal(digitBulkResponse.status, 400);
     assert.match(String((await readJson(digitBulkResponse)).error), /duration/);
+    const tradeXDurationOffset = bulkBuyDurations.length;
+    const validTradeXResponse = await fetch(`${baseUrl}/deriv/bulk-buy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        access_feature: "trade-x",
+        amount: 0.35,
+        duration: 5,
+        duration_unit: "t",
+        contract_type: "DIGITDIFF",
+        barrier: 4,
+        symbol: "R_75",
+        count: 1,
+      }),
+    });
+    assert.equal(validTradeXResponse.status, 202);
+    assert.deepEqual(bulkBuyDurations.slice(tradeXDurationOffset), [5]);
+
+    const priorTradeXValidationInvocations = bulkBuyInvocations;
+    const invalidTradeXRequests = [
+      { amount: 1, duration: 1, contract_type: "DIGITDIFF", count: 2, error: /one contract/ },
+      { amount: 1, duration: 1, contract_type: "CALL", count: 1, error: /Digit Differs/ },
+      { amount: 0.34, duration: 1, contract_type: "DIGITDIFF", count: 1, error: /at least 0.35/ },
+      { amount: 1, duration: 6, contract_type: "DIGITDIFF", count: 1, error: /Trade X supports whole-number durations from 1 to 5 ticks/ },
+    ] as const;
+    for (const request of invalidTradeXRequests) {
+      const response = await fetch(`${baseUrl}/deriv/bulk-buy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          access_feature: "trade-x",
+          amount: request.amount,
+          duration: request.duration,
+          duration_unit: "t",
+          contract_type: request.contract_type,
+          barrier: 4,
+          symbol: "R_75",
+          count: request.count,
+        }),
+      });
+      assert.equal(response.status, 400);
+      assert.match(String((await readJson(response)).error), request.error);
+    }
+    assert.equal(bulkBuyInvocations, priorTradeXValidationInvocations, "invalid Trade X requests must not reach Deriv");
+
     const autoTraderDurationOffset = bulkBuyDurations.length;
     for (const duration of [1, 2, 3, 4, 5]) {
       const autoTraderBulkResponse = await fetch(`${baseUrl}/deriv/bulk-buy`, {
@@ -436,7 +481,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
     });
     assert.equal(outOfRangeAutoTraderResponse.status, 400);
     assert.match(String((await readJson(outOfRangeAutoTraderResponse)).error), /1 to 5 ticks/);
-    assert.deepEqual(observedPats, Array.from({ length: 12 }, () => enteredPat));
+    assert.deepEqual(observedPats, Array.from({ length: 13 }, () => enteredPat));
 
     const priorBuyInvocations = buyInvocations;
     const priorBulkBuyInvocations = bulkBuyInvocations;

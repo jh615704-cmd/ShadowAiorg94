@@ -19,7 +19,7 @@ export function buildTradeXOrderData(input: {
 }): TradeXOrderData {
   return {
     access_feature: "trade-x",
-    amount: input.stake,
+    amount: Number((Math.round((input.stake + Number.EPSILON) * 100) / 100).toFixed(2)),
     duration: input.duration,
     duration_unit: "t",
     contract_type: "DIGITDIFF",

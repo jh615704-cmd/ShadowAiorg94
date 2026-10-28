@@ -413,6 +413,11 @@ export default function XTraderPage() {
   const cashGrabSellMutation = useSellDerivContract();
   const clockWorkQuoteMutation = useQuoteClockWorkContracts();
   const clockWorkBuyMutation = useBuyClockWorkContracts();
+  const anyContractBuyPending = bulkBuyMutation.isPending
+    || dualBuyMutation.isPending
+    || digitFlipBuyMutation.isPending
+    || moneyBankBuyMutation.isPending
+    || clockWorkBuyMutation.isPending;
 
   const [pat, setPat] = useState("");
   const [symbol, setSymbol] = useState("R_75");
@@ -662,6 +667,7 @@ export default function XTraderPage() {
     rankedDigits: [] as number[],
   });
   const tradeXConfigRef = useRef({
+    marketType: tradeXMarketType,
     symbol: tradeXSymbol,
     stake: tradeXStake,
     selectedDigit: tradeXSelectedDigit,
@@ -1486,6 +1492,7 @@ export default function XTraderPage() {
 
   useEffect(() => {
     tradeXConfigRef.current = {
+      marketType: tradeXMarketType,
       symbol: tradeXSymbol,
       stake: tradeXStake,
       selectedDigit: tradeXEntryDigit,
@@ -1495,6 +1502,7 @@ export default function XTraderPage() {
       rankedDigits: tradeXRankedDigits,
     };
   }, [
+    tradeXMarketType,
     tradeXSymbol,
     tradeXStake,
     tradeXEntryDigit,
@@ -3177,11 +3185,15 @@ export default function XTraderPage() {
     digitOverride?: number,
     symbolOverride?: string,
   ) => {
+    if (!tradeXEnabled) {
+      setTradeXMessage("Enable Trade X before sending a contract.");
+      return false;
+    }
     if (tradeXActionLockRef.current) {
       setTradeXMessage("Trade X is already sending. Wait for the current request to finish.");
       return false;
     }
-    if (bulkBuyMutation.isPending) {
+    if (anyContractBuyPending) {
       setTradeXMessage("Another trade request is still being sent. Wait for its confirmation before placing a Trade X contract.");
       return false;
     }
@@ -3199,38 +3211,58 @@ export default function XTraderPage() {
       setTradeXMessage("Connect Deriv before sending a Trade X contract.");
       return false;
     }
-    if (currentAccountBalance == null) {
-      setTradeXMessage("Trade X is paused until the selected account balance is available.");
-      return false;
-    }
     if (!isTradingCalendarOpen()) {
       setTradeXMessage("Trade X is outside its configured trading calendar.");
       return false;
     }
     const symbol = symbolOverride ?? config.symbol;
-    const orderError = validateTradeXEntry({
-      stake: config.stake,
-      balance: currentAccountBalance,
-      symbol,
-      supportedSymbols: tradeXSymbols.map((market) => market.value),
-      digit: entryDigit,
-      duration: durationOverride,
-      count,
-    });
-    if (orderError) {
-      setTradeXMessage(orderError);
-      return false;
-    }
-    const lockResult = acquireTradeXActionLock(tradeXActionLockRef, bulkBuyMutation.isPending);
+    const supportedSymbols = tradeXSymbols
+      .filter((market) => market.marketType === config.marketType)
+      .map((market) => market.value);
+    const lockResult = acquireTradeXActionLock(tradeXActionLockRef, anyContractBuyPending);
     if (lockResult !== "acquired") {
       setTradeXMessage(lockResult === "already-sending"
         ? "Trade X is already sending. Wait for the current request to finish."
         : "Another trade request is still being sent. Wait for its confirmation before placing a Trade X contract.");
       return false;
     }
-    const latestRows = queryClient.getQueryData<typeof rows>(getGetDerivHistoryQueryKey()) ?? [];
     setTradeXSubmitting(true);
+    let buyRequestStarted = false;
     try {
+      const freshStatus = await status.refetch();
+      const freshData = freshStatus.data;
+      if (freshStatus.isError || !freshData) {
+        setTradeXMessage("Deriv status could not be refreshed. No Trade X contract was sent.");
+        return false;
+      }
+      if (!freshData.open_contracts_ready) {
+        setTradeXMessage("Deriv has not confirmed that open contracts are clear. No Trade X contract was sent.");
+        return false;
+      }
+      if ((freshData.active_contract_count ?? 0) > 0) {
+        const activeCount = freshData.active_contract_count ?? 0;
+        setTradeXMessage(`Waiting for ${activeCount} open Deriv contract${activeCount === 1 ? "" : "s"} to settle. No Trade X contract was sent.`);
+        return false;
+      }
+      const freshBalance = getAccountBalance(freshData.account);
+      if (freshBalance == null) {
+        setTradeXMessage("Trade X is paused until the selected account balance is refreshed.");
+        return false;
+      }
+      const orderError = validateTradeXEntry({
+        stake: config.stake,
+        balance: freshBalance,
+        symbol,
+        supportedSymbols,
+        digit: entryDigit,
+        duration: durationOverride,
+        count,
+      });
+      if (orderError) {
+        setTradeXMessage(orderError);
+        return false;
+      }
+      buyRequestStarted = true;
       const result = await bulkBuyMutation.mutateAsync({
         data: buildTradeXOrderData({
           stake: config.stake,
@@ -3253,7 +3285,9 @@ export default function XTraderPage() {
       refreshTradeResults();
       return true;
     } catch (error) {
-      setTradeXMessage(`${errorMessage(error)} Check Deriv account history before retrying in case the contract was accepted.`);
+      setTradeXMessage(buyRequestStarted
+        ? `${errorMessage(error)} Check Deriv account history before retrying in case the contract was accepted.`
+        : `${errorMessage(error)} No Trade X contract was sent because the fresh safety check did not complete.`);
       return false;
     } finally {
       releaseTradeXActionLock(tradeXActionLockRef);
@@ -4948,9 +4982,9 @@ export default function XTraderPage() {
             analysisTickCount={analysisTickCount}
             analysisUpdatedAt={lastDigit == null ? "waiting for live ticks" : `last digit ${lastDigit}`}
             lastDigit={lastDigit}
-            isPlacingTrade={tradeXSubmitting || bulkBuyMutation.isPending}
+            isPlacingTrade={tradeXSubmitting || anyContractBuyPending}
             isRefreshingAnalysis={analysisTickCount === 0 && !isConnected}
-            disabled={running || !isConnected || tradeSlotBlocked}
+            disabled={running || !isConnected || tradeSlotBlocked || tradeXSubmitting || anyContractBuyPending}
             onMarketTypeChange={setTradeXMarketType}
             onSymbolChange={(next) => { setTradeXSymbol(next); void selectMarket(next); }}
             onTradeTypeChange={() => undefined}

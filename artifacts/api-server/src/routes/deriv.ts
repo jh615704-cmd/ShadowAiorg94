@@ -537,6 +537,20 @@ router.post("/deriv/sell", async (req, res) => {
 router.post("/deriv/bulk-buy", requireTradeAccessFeature, async (req, res) => {
   const parsed = BulkBuyDerivContractsBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid bulk buy request" });
+  if (parsed.data.access_feature === "trade-x") {
+    if (parsed.data.contract_type !== "DIGITDIFF") {
+      return res.status(400).json({ error: "Trade X only accepts Digit Differs contracts." });
+    }
+    if (parsed.data.count !== 1) {
+      return res.status(400).json({ error: "Trade X sends one contract per action." });
+    }
+    if (!Number.isInteger(parsed.data.duration) || parsed.data.duration < 1 || parsed.data.duration > 5) {
+      return res.status(400).json({ error: "Trade X supports whole-number durations from 1 to 5 ticks." });
+    }
+    if (parsed.data.amount < 0.35) {
+      return res.status(400).json({ error: "Trade X stake must be at least 0.35." });
+    }
+  }
   if (
     parsed.data.access_feature === "auto-trader"
     && (!Number.isInteger(parsed.data.duration) || parsed.data.duration < 1 || parsed.data.duration > 5)

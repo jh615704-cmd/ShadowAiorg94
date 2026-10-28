@@ -117,6 +117,8 @@ test("Trade X requires one valid Digit Differs entry and rejects unsupported dur
   assert.match(String(validateTradeXEntry({ ...base, duration: 6 })), /1 to 5/);
   assert.match(String(validateTradeXEntry({ ...base, duration: 1, count: 2 })), /one Digit Differs/);
   assert.match(String(validateTradeXEntry({ ...base, stake: 0.355, balance: 0.35, duration: 1 })), /total stake exceeds/);
+  assert.equal(validateTradeXEntry({ ...base, stake: 0.355, balance: 0.36, duration: 1 }), null);
+  assert.match(String(validateTradeXEntry({ ...base, stake: Number.NaN, duration: 1 })), /stake must be at least/);
   assert.match(String(validateTradeXEntry({ ...base, symbol: "UNSUPPORTED", duration: 1 })), /market is not supported/);
 });
 

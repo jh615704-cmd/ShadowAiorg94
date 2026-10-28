@@ -1,6 +1,5 @@
 import {
   ChevronRight,
-  Gauge,
   GitCompare,
   Medal,
   Play,
@@ -224,16 +223,6 @@ export default function TradeXPanel({
 
       <div className="tx-body">
         <section className="tx-settings tx-section">
-          <div className="tx-section-heading">
-            <div>
-              <span className="tx-index">01</span>
-              <div>
-                <h3>Market setup</h3>
-                <p>Keep the instrument and contract type explicit.</p>
-              </div>
-            </div>
-            <Gauge size={18} />
-          </div>
           <div className="tx-market-layout">
             <div className="tx-field tx-field-market">
               <span className="tx-field-label">MARKET FAMILY</span>
@@ -304,7 +293,7 @@ export default function TradeXPanel({
                 <span>$</span>
                 <input
                   type="number"
-                  min="0.01"
+                  min="0.35"
                   step="0.01"
                   value={stake}
                   onChange={(event) =>
@@ -328,7 +317,7 @@ export default function TradeXPanel({
           <section className="tx-distribution tx-section">
             <div className="tx-section-heading">
               <div>
-                <span className="tx-index">02</span>
+                <span className="tx-index">01</span>
                 <div>
                   <h3>Digit Distribution &amp; Safe Entry</h3>
                 </div>
@@ -465,7 +454,7 @@ export default function TradeXPanel({
           <section className="tx-safe-panel tx-section">
             <div className="tx-section-heading tx-safe-heading">
               <div>
-                <span className="tx-index">03</span>
+                <span className="tx-index">02</span>
                 <div>
                   <h3>
                     <Target size={16} aria-hidden="true" />
