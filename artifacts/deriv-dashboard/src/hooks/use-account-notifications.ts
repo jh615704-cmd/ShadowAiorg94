@@ -74,11 +74,12 @@ export function useAccountNotifications(accessKeyId?: string) {
         read: false,
       };
       setNotifications((current) => {
-        const duplicate = current.some((item) =>
-          item.category === category &&
-          item.title === safeTitle &&
-          item.message === safeMessage &&
-          createdAt - item.createdAt < 8_000,
+        const duplicate = current.some(
+          (item) =>
+            item.category === category &&
+            item.title === safeTitle &&
+            item.message === safeMessage &&
+            createdAt - item.createdAt < 8_000,
         );
         return duplicate
           ? current

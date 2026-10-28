@@ -707,8 +707,10 @@ export default function XTraderPage() {
       if (message.kind === "info") {
         if (text.startsWith("Deriv connected.")) {
           addNotificationRef.current("connection", "Deriv connected", text);
+        } else if (/\b(waiting|still settling|checking|retry(?:ing)?|remains active)\b/i.test(text)) {
+          upsertNotificationRef.current("connection", "Workspace waiting", text);
         } else {
-          upsertNotificationRef.current("connection", "Workspace update", text);
+          addNotificationRef.current("connection", "Workspace update", text);
         }
         return;
       }

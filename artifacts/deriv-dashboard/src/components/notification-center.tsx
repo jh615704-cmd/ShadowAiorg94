@@ -138,7 +138,7 @@ export function NotificationCenter({
           id="account-notification-panel"
           className="notification-center-panel"
           role="dialog"
-          aria-label="Account and connection notifications"
+          aria-label="Account, connection, and workspace notifications"
         >
           <header className="notification-center-header">
             <div>
@@ -187,8 +187,10 @@ export function NotificationCenter({
           {notifications.length === 0 ? (
             <div className="notification-center-empty">
               <CircleAlert size={20} aria-hidden="true" />
-              <strong>No account updates yet</strong>
-              <span>Connection and account changes will appear here.</span>
+              <strong>No updates yet</strong>
+              <span>
+                Account, connection, and workspace updates will appear here.
+              </span>
             </div>
           ) : (
             <ul className="notification-center-list" aria-live="polite">
