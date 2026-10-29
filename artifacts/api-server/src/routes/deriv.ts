@@ -501,7 +501,7 @@ router.post("/deriv/buy", requireTradeAccessFeature, async (req, res) => {
         ? 403
       : message.includes("disabled") || message.includes("real account")
       ? 403
-       : message.includes("still settling") || message.includes("checking open contracts") || message.includes("safety timeout")
+       : message.includes("still settling") || message.includes("account status is being refreshed") || message.includes("safety timeout") || message.toLowerCase().includes("global trading protection")
          ? 409
       : message.includes("cooldown")
         ? 429
@@ -608,7 +608,7 @@ router.post("/deriv/bulk-buy", requireTradeAccessFeature, async (req, res) => {
         ? 403
       : message.includes("disabled") || message.includes("real account")
       ? 403
-      : message.includes("still settling") || message.includes("checking open contracts") || message.includes("safety timeout") || message.toLowerCase().includes("global trading protection")
+      : message.includes("still settling") || message.includes("account status is being refreshed") || message.includes("safety timeout") || message.toLowerCase().includes("global trading protection")
         ? 409
        : message.includes("not available") || message.includes("balance") || message.includes("confirmation") || message.includes("offers no return") || message.includes("duration")
         ? 400
@@ -655,7 +655,7 @@ router.post("/deriv/dual-buy", requireTradeAccessFeature, async (req, res) => {
         ? 403
       : message.includes("disabled") || message.includes("real account")
       ? 403
-      : message.includes("still settling") || message.includes("checking open contracts") || message.includes("safety timeout")
+      : message.includes("still settling") || message.includes("account status is being refreshed") || message.includes("safety timeout") || message.toLowerCase().includes("global trading protection")
         ? 409
        : message.includes("not available") || message.includes("balance") || message.includes("confirmation") || message.includes("offers no return")
         ? 400
@@ -723,7 +723,7 @@ router.post("/deriv/clock-work/buy", requireAccessFeature("clock-work"), async (
       ? 403
       : message.includes("disabled")
       ? 403
-      : message.includes("still settling") || message.includes("checking open contracts") || message.includes("safety timeout")
+      : message.includes("still settling") || message.includes("account status is being refreshed") || message.includes("safety timeout") || message.toLowerCase().includes("global trading protection")
       ? 409
       : message.includes("stake") || message.includes("market") || message.includes("barrier") || message.includes("five-tick") || message.includes("supports") || message.includes("contract keys")
       ? 400

@@ -53,11 +53,8 @@ import {
   type MarketSignal,
 } from "../lib/trading-sequence";
 import {
-  confirmedNoContractRetryMessage,
   isConfirmedNoContractRejection,
-  isConfirmedUnavailableDurationRejection,
   roundTradeStakeToCents,
-  unavailableDurationRetryMessage,
 } from "../lib/trade-entry-guards";
 import {
   AI_SCANNER_MIN_SAMPLE,
@@ -138,6 +135,7 @@ import {
 } from "../lib/clock-work-logic";
 import { buildCashGrabBulkBuyPayload } from "../lib/cash-grab-order";
 import { getCashGrabLimitReached } from "../lib/cash-grab-limits";
+import { getCashGrabSessionSettlements } from "../lib/cash-grab-session";
 import {
   getCashGrabEntryBlockReason,
   getCashGrabStartConfigError,
@@ -317,25 +315,25 @@ const moneyBankGuidePages = [
 ] as const;
 
 const cashGrabGuidePages = [
-  { title: "Welcome to Cash Grab Rise/Fall", body: "Cash Grab is a controlled Rise/Fall workspace. It shows the selected market, direction, stake, duration, and trade history.", points: ["Start with a demo account.", "Recent market samples are not guarantees.", "Use the guide before risking live funds."] },
+  { title: "Welcome to Cash Grab Rise/Fall", body: "Cash Grab is a Rise/Fall workspace. It shows the selected market, direction, stake, duration, and trade history.", points: ["Start with a demo account.", "Use the guide before risking live funds."] },
   { title: "Connect Deriv", body: "Connect your Deriv account with a Personal Access Token that has the permissions needed to read markets and trade.", points: ["Keep your token private.", "Check the active account and currency.", "Demo funds are the safest place to learn."] },
-  { title: "Choose an account", body: "The account selector shows the account Cash Grab will use and its latest available balance.", points: ["Review the account before every session.", "Selecting a real account routes contracts to it when server live trading is enabled.", "A server-side balance check still applies."] },
+  { title: "Choose an account", body: "The account selector shows the account Cash Grab will use and its latest available balance.", points: ["Review the account before every session.", "Selecting a real account routes contracts to it when server live trading is enabled."] },
   { title: "Rise and Fall contracts", body: "Rise and Fall are directional contracts sent to Deriv as CALL and PUT. Cash Grab only offers these two contract types.", points: ["Rise uses CALL.", "Fall uses PUT.", "The contract result is decided by Deriv at expiry."] },
   { title: "What Rise means", body: "A Rise contract compares the exit quote with the entry quote according to the selected contract duration.", points: ["Choose Rise only when it matches your plan.", "The entry quote does not promise the exit quote.", "Check the contract details before starting."] },
   { title: "What Fall means", body: "A Fall contract uses the opposite quote direction from Rise for the same market and duration.", points: ["Choose Fall only when it matches your plan.", "A falling quote can reverse before expiry.", "Review the actual settlement in history."] },
-  { title: "Choose a market", body: "Cash Grab can use supported Volatility and Jump markets. The live quote and sample belong to the selected market.", points: ["Wait for fresh data after switching.", "Auto best selects a market from observed direction rates.", "Auto selection does not predict a future result."] },
+  { title: "Choose a market", body: "Cash Grab can use supported Volatility and Jump markets. The live quote belongs to the selected market.", points: ["Wait for fresh data after switching.", "Auto best selects an eligible market.", "Review the selected market before starting."] },
   { title: "Manual and automatic markets", body: "Choose a specific market to keep the pair fixed, or select Auto best to use the strongest eligible observed rate.", points: ["Manual selection keeps your chosen pair.", "Auto best may update the pair between entries.", "Review the market shown before starting."] },
   { title: "Read the live quote", body: "The quote card displays the most recent quote for the active market. It can change before a request reaches Deriv.", points: ["A live quote is not a forecast.", "The newest displayed value may differ from the entry quote.", "Use a fresh connection before trading."] },
-  { title: "Read Rise and Fall samples", body: "The direction bar summarizes observed Rise and Fall movement in the available market sample.", points: ["Small samples can change quickly.", "A larger percentage is still not a promise.", "A safety gate can hold an entry when evidence is too limited."] },
+  { title: "Read Rise and Fall", body: "The direction bar compares current Rise and Fall movement for the selected market.", points: ["Select Rise or Fall before starting.", "A safety gate can hold an entry when its requirements are not met."] },
   { title: "Select a direction", body: "Choose Rise or Fall explicitly. Cash Grab keeps that direction for the next entry and does not silently flip it.", points: ["Confirm the selected direction.", "Changing direction while stopped does not send a trade.", "The trade request matches the visible selection."] },
-  { title: "Set the stake", body: "Stake is the base amount used for each contract. Cash Grab enforces a minimum of 0.35 and checks the connected account balance before every entry.", points: ["Use a small demo stake while learning.", "Multiply mode can increase the next stake after a loss.", "Leave a reserve instead of using the full balance."] },
-  { title: "Set duration and stake mode", body: "Rise/Fall duration can be set from one to five ticks. Tick 0 is entry; settlement is evaluated on the selected numbered tick. Choose Flat for the same stake each time, or Multiply to apply your entered multiplier after a loss.", points: ["Cash Grab waits for each contract to settle before the next entry.", "A win restores the base stake.", "A larger multiplier can increase exposure quickly."] },
-  { title: "Custom multiplier", body: "In Multiply mode, enter any positive multiplier for the next contract after a settled loss. A win returns the stake to the configured base amount.", points: ["The multiplier has no app-imposed maximum.", "The available account balance is checked before every entry.", "Multiplying does not guarantee recovery."] },
+  { title: "Set the stake", body: "Stake is the base amount used for each contract. Cash Grab enforces a minimum of 0.35.", points: ["Use a small demo stake while learning.", "Multiply mode can increase the next stake after a loss.", "Leave a reserve instead of using the full balance."] },
+  { title: "Set duration and stake mode", body: "Rise/Fall duration can be set from one to five ticks. Choose Flat for the same stake each time, or Multiply to apply your entered multiplier after a loss.", points: ["A win restores the base stake.", "A larger multiplier can increase exposure quickly."] },
+  { title: "Custom multiplier", body: "In Multiply mode, enter a positive multiplier for the next contract after a settled loss. A win returns the stake to the configured base amount.", points: ["Multiplying does not guarantee recovery."] },
   { title: "Auto-switch safety", body: "Auto-switch reviews fresh market samples on its scan schedule and changes markets only when the observed direction rate, sample, and balance checks pass.", points: ["It can change markets between entries.", "It does not alter your selected stake mode or multiplier.", "It may wait rather than send when no setup qualifies."] },
-  { title: "Run Cash Grab", body: "Start checks the connection, selected account, and available balance, then sends one Rise/Fall contract at a time until you stop it.", points: ["Review market, direction, stake, mode, and duration.", "Each request waits for the current contract to settle before the next.", "If a check or request fails, Cash Grab stops and reports the reason."] },
+  { title: "Run Cash Grab", body: "Start begins the configured Rise/Fall session.", points: ["Review market, direction, stake, mode, and duration.", "If a check or request fails, Cash Grab reports the reason."] },
   { title: "Stop Cash Grab", body: "Stop prevents Cash Grab from starting another batch and requests closure for open contracts claimed by the active session.", points: ["Wait until the stopping state finishes.", "A contract can settle while a close request is being handled.", "Already settled contracts remain in history."] },
-  { title: "Cash Grab history", body: "Cash Grab history shows the contracts sent by this feature. Open contracts are not final results, and the rows remain visible after stopping.", points: ["Check each returned contract and direction.", "Clearing dashboard rows does not delete Deriv records.", "Observed rates describe past samples only."] },
-  { title: "Final Rise/Fall checklist", body: "Before a session, confirm the selected account, market, Rise or Fall direction, stake, Flat or Multiply mode, multiplier, and one-to-ten-tick duration.", points: ["Use demo funds while testing.", "Keep the Stop control available.", "Treat all observed rates as historical context, not certainty."] },
+  { title: "Cash Grab history", body: "Cash Grab history shows the contracts sent by this feature. Open contracts are not final results, and the rows remain visible after stopping.", points: ["Check each returned contract and direction.", "Clearing dashboard rows does not delete Deriv records."] },
+  { title: "Final Rise/Fall checklist", body: "Before a session, confirm the selected account, market, Rise or Fall direction, stake, Flat or Multiply mode, multiplier, and one-to-five-tick duration.", points: ["Use demo funds while testing.", "Keep the Stop control available."] },
 ] as const;
 
 const tradeXSymbols: readonly TradeXSymbolOption[] = markets.map(([value, label]) => ({
@@ -619,6 +617,7 @@ export default function XTraderPage() {
   const cashGrabCurrentStakeRef = useRef(.35);
   const cashGrabSessionPnlRef = useRef(0);
   const cashGrabSessionKnownIdsRef = useRef<Set<string> | null>(null);
+  const cashGrabSessionContractIdsRef = useRef(new Set<string>());
   const cashGrabProcessedSettlementIdsRef = useRef(new Set<string>());
   const cashGrabConfigRef = useRef<CashGrabStartConfig | null>(null);
   const cashGrabAutoSwitchBusyRef = useRef(false);
@@ -773,7 +772,7 @@ export default function XTraderPage() {
   const tradeSlotMessage = !isConnected
     ? null
     : !openContractsReady
-      ? "Deriv is checking open contracts. New trade entries are paused until that check finishes."
+      ? "Account status is being confirmed."
       : activeContractCount > 0
         ? `Waiting for ${activeContractCount} open Deriv contract${activeContractCount === 1 ? "" : "s"} to settle before another trade can start.`
         : null;
@@ -792,10 +791,10 @@ export default function XTraderPage() {
   }, [derivCapacityError, upsertNotification]);
 
   useEffect(() => {
-    if (tradeSlotMessage) {
+    if (tradeSlotMessage && openContractsReady) {
       upsertNotification("connection", "Trade entry paused", tradeSlotMessage);
     }
-  }, [tradeSlotMessage, upsertNotification]);
+  }, [openContractsReady, tradeSlotMessage, upsertNotification]);
 
   useEffect(() => {
     if (realAccountTradingDisabled) {
@@ -1333,6 +1332,7 @@ export default function XTraderPage() {
     digitFlipSessionKnownIdsRef.current = null;
     bulkSessionKnownIdsRef.current = null;
     cashGrabSessionKnownIdsRef.current = null;
+    cashGrabSessionContractIdsRef.current.clear();
     moneyBankSessionKnownIdsRef.current = null;
     historyFeatureOwnersRef.current.clear();
     edgeClaimedHistoryIdsRef.current.clear();
@@ -2130,20 +2130,9 @@ export default function XTraderPage() {
         // the source of truth for how long the contract runs.
         if (runningRef.current) await sleep(50);
       } catch (error) {
-        if (isConfirmedUnavailableDurationRejection(error)) {
-          setConnectionMessage({
-            kind: "info",
-            text: unavailableDurationRetryMessage("EDGE"),
-          });
-          await sleep(2_000);
-          continue;
-        }
         if (isConfirmedNoContractRejection(error)) {
-          setConnectionMessage({
-            kind: "info",
-            text: confirmedNoContractRetryMessage("EDGE"),
-          });
-          await sleep(2_000);
+          setConnectionMessage(null);
+          await sleep(5_000);
           continue;
         }
         const message = errorMessage(error);
@@ -2451,20 +2440,9 @@ export default function XTraderPage() {
         await sleep(250);
       } catch (error) {
         const message = errorMessage(error);
-        if (isConfirmedUnavailableDurationRejection(error)) {
-          setConnectionMessage({
-            kind: "info",
-            text: unavailableDurationRetryMessage("Money Bank"),
-          });
-          await sleep(2_000);
-          continue;
-        }
         if (isConfirmedNoContractRejection(error)) {
-          setConnectionMessage({
-            kind: "info",
-            text: confirmedNoContractRetryMessage("Money Bank"),
-          });
-          await sleep(2_000);
+          setConnectionMessage(null);
+          await sleep(5_000);
           continue;
         }
         if (message.includes("still settling")) {
@@ -2747,13 +2725,11 @@ export default function XTraderPage() {
   };
 
   const reconcileCashGrabSession = (latestRows: typeof rows) => {
-    const knownIds = cashGrabSessionKnownIdsRef.current;
-    if (!knownIds) return [];
-    const completed = latestRows
-      .filter((trade) => cashGrabContractTypes.includes(trade.contract_type as typeof cashGrabContractTypes[number]))
-      .filter((trade) => !knownIds.has(trade.contract_id))
-      .filter((trade) => !isDerivHistoryOpen(trade.status))
-      .filter((trade) => !cashGrabProcessedSettlementIdsRef.current.has(trade.contract_id));
+    const completed = getCashGrabSessionSettlements(
+      latestRows,
+      cashGrabSessionContractIdsRef.current,
+      cashGrabProcessedSettlementIdsRef.current,
+    );
     if (!completed.length) return [];
     completed.forEach((trade) => {
       cashGrabProcessedSettlementIdsRef.current.add(trade.contract_id);
@@ -3056,7 +3032,9 @@ export default function XTraderPage() {
       contractConfirmed = true;
       setConnectionMessage(null);
       result.buys.forEach((buy) => {
-        cashGrabOpenContractIdsRef.current.add(buy.contract_id);
+        const contractId = String(buy.contract_id);
+        cashGrabSessionContractIdsRef.current.add(contractId);
+        cashGrabOpenContractIdsRef.current.add(contractId);
       });
       if (result.buys.length !== 1) {
         setConnectionMessage({ kind: "error", text: "Deriv returned an unexpected number of Cash Grab contracts. The run is stopping for review." });
@@ -3101,19 +3079,9 @@ export default function XTraderPage() {
           kind: "error",
           text: `Cash Grab trade status is unconfirmed. ${errorMessage(error)} Cash Grab is paused; confirm there is no open Rise/Fall contract in Deriv before restarting.`,
         });
-      } else if (isConfirmedUnavailableDurationRejection(error)) {
-        setConnectionMessage({
-          kind: "info",
-          text: unavailableDurationRetryMessage("Cash Grab"),
-        });
-        await sleep(2_000);
-        return;
       } else if (isConfirmedNoContractRejection(error)) {
-        setConnectionMessage({
-          kind: "info",
-          text: confirmedNoContractRetryMessage("Cash Grab"),
-        });
-        await sleep(2_000);
+        setConnectionMessage(null);
+        await sleep(5_000);
         return;
       } else {
         setConnectionMessage({ kind: "error", text: `Cash Grab could not place the contract: ${errorMessage(error)}` });
@@ -3359,6 +3327,7 @@ export default function XTraderPage() {
         .filter((trade) => cashGrabManagedContractTypes.includes(trade.contract_type as typeof cashGrabManagedContractTypes[number]))
         .map((trade) => trade.contract_id);
       cashGrabOpenContractIdsRef.current.clear();
+      cashGrabSessionContractIdsRef.current.clear();
       cashGrabSessionKnownIdsRef.current = new Set(existingIds);
       cashGrabProcessedSettlementIdsRef.current = new Set(existingIds);
       cashGrabAccountIdRef.current = startingAccountId;
@@ -4094,24 +4063,22 @@ export default function XTraderPage() {
       void refreshTradeResults();
       return true;
     } catch (error) {
-      if (isConfirmedUnavailableDurationRejection(error)) {
-        setConnectionMessage({
-          kind: "info",
-          text: unavailableDurationRetryMessage("DigitFlip"),
-        });
-        await sleep(2_000);
-      } else if (isConfirmedNoContractRejection(error)) {
-        setConnectionMessage({
-          kind: "info",
-          text: confirmedNoContractRetryMessage("DigitFlip"),
-        });
-        await sleep(2_000);
+      if (isConfirmedNoContractRejection(error)) {
+        setConnectionMessage(null);
+        await sleep(5_000);
       } else if (error instanceof ApiTransportError && error.tradeOutcomeUncertain) {
         digitFlipRunningRef.current = false;
         setDigitFlipRunning(false);
         setConnectionMessage({
           kind: "error",
           text: `${error.message} DigitFlip is paused and will not retry until the account history is checked.`,
+        });
+      } else if (/global trading protection/i.test(errorMessage(error))) {
+        digitFlipRunningRef.current = false;
+        setDigitFlipRunning(false);
+        setConnectionMessage({
+          kind: "error",
+          text: "Global trading protection is holding this setup. DigitFlip stopped before another order.",
         });
       } else {
         setConnectionMessage({ kind: "error", text: errorMessage(error) });
@@ -4455,17 +4422,18 @@ export default function XTraderPage() {
       return result.ok;
     } catch (error) {
       const message = errorMessage(error);
-      setClockWorkStatusMessage(message);
-      if (source !== "manual" && isConfirmedUnavailableDurationRejection(error)) {
-        setClockWorkAutoStatus(unavailableDurationRetryMessage("Clock Work"));
-        clockWorkAutoAttemptAtRef.current = Date.now() + 2_000;
-      } else if (source !== "manual" && isConfirmedNoContractRejection(error)) {
-        setClockWorkAutoStatus(confirmedNoContractRetryMessage("Clock Work"));
-        clockWorkAutoAttemptAtRef.current = Date.now() + 2_000;
-      } else if (source !== "manual") {
-        setClockWorkAutoEnabled(false);
-        setClockWorkAggressiveEnabled(false);
-        setClockWorkAutoStatus(`Automation paused: ${message}`);
+      if (source !== "manual" && isConfirmedNoContractRejection(error)) {
+        setConnectionMessage(null);
+        setClockWorkStatusMessage("");
+        setClockWorkAutoStatus("Automation is running.");
+        clockWorkAutoAttemptAtRef.current = Date.now() + 5_000;
+      } else {
+        setClockWorkStatusMessage(message);
+        if (source !== "manual") {
+          setClockWorkAutoEnabled(false);
+          setClockWorkAggressiveEnabled(false);
+          setClockWorkAutoStatus(`Automation paused: ${message}`);
+        }
       }
       return false;
     } finally {

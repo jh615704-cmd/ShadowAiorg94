@@ -501,7 +501,7 @@ function hasActiveContract() {
 function assertNoActiveContract(useFreshPortfolio = false) {
   const runtime = getState();
   if (!runtime.openContractsReady) {
-    throw new Error("Deriv is still checking open contracts. Wait for the portfolio check to finish before sending another trade.");
+    throw new Error("Account status is being refreshed.");
   }
   if (useFreshPortfolio) {
     if (runtime.verifiedPortfolioIds.size || runtime.pendingBuyInputs.size) {
@@ -1141,6 +1141,21 @@ export function classifyBuyFailure(error: unknown): {
     return { outcome: "not_sent", source: "transport" };
   }
   return { outcome: "uncertain", source: "unknown" };
+}
+
+async function runBeforeBuy<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    const annotated = error instanceof Error && Object.isExtensible(error)
+      ? error
+      : new Error(error instanceof Error ? error.message : "Pre-trade checks could not be completed.", { cause: error });
+    Object.assign(annotated, {
+      tradeOutcome: "not_sent" as const,
+      diagnosticSource: "api_server" as const,
+    });
+    throw annotated;
+  }
 }
 
 async function sendSell(contractId: string): Promise<SellResult> {
@@ -2019,12 +2034,6 @@ export async function buyContract(input: BuyInput, assertAuthorized?: TradeAutho
     throw new Error("The selected stake exceeds the current account balance");
   }
   validateProposalInput(normalizedInput);
-  const [protection] = await Promise.all([
-    getTradingProtectionSettings(),
-    refreshOpenContracts(),
-  ]);
-  assertTradingProtection(protection, getStatus(), normalizedInput);
-  assertNoActiveContract(true);
   const proposalInput: ProposalInput = {
     amount: normalizedInput.amount,
     duration: normalizedInput.duration,
@@ -2034,12 +2043,18 @@ export async function buyContract(input: BuyInput, assertAuthorized?: TradeAutho
     growth_rate: normalizedInput.growth_rate,
     symbol: normalizedInput.symbol,
   };
-  let proposal = await requestFreshProposal(proposalInput);
-  const connected = await connect();
-  if (!connected) {
-    throw new Error("Deriv WebSocket is not ready");
-  }
-  await assertAuthorized?.();
+  let proposal = await runBeforeBuy(async () => {
+    const [protection] = await Promise.all([
+      getTradingProtectionSettings(),
+      refreshOpenContracts(),
+    ]);
+    assertTradingProtection(protection, getStatus(), normalizedInput);
+    assertNoActiveContract(true);
+    const freshProposal = await requestFreshProposal(proposalInput);
+    if (!await connect()) throw new Error("Deriv WebSocket is not ready");
+    await assertAuthorized?.();
+    return freshProposal;
+  });
   let buy: DerivBuy;
   try {
     buy = await sendProposalBuy(proposal, normalizedInput);
@@ -2128,7 +2143,6 @@ export async function bulkBuyContracts(input: {
     throw new Error("The selected bulk stake exceeds the current account balance");
   }
   validateProposalInput({ ...input, amount });
-  assertTradingProtection(await getTradingProtectionSettings(), getStatus(), input);
 
   const proposalInput = {
     amount,
@@ -2139,19 +2153,22 @@ export async function bulkBuyContracts(input: {
     growth_rate: input.growth_rate,
     symbol: input.symbol,
   } satisfies ProposalInput;
-  await refreshOpenContracts();
-  assertNoActiveContract(true);
+  const proposals = await runBeforeBuy(async () => {
+    assertTradingProtection(await getTradingProtectionSettings(), getStatus(), input);
+    await refreshOpenContracts();
+    assertNoActiveContract(true);
 
-  // Quote the complete batch before buying anything. This prevents a
-  // partially-started batch when one contract is unavailable, and lets the
-  // buys leave the socket together instead of serializing them.
-  const proposals = await Promise.all(
-    Array.from({ length: input.count }, () => requestFreshProposal(proposalInput)),
-  );
-  await assertAuthorized?.();
-  const connected = await connect();
-  if (!connected) throw new Error("Deriv WebSocket is not ready");
-  await assertAuthorized?.();
+    // Quote the complete batch before buying anything. This prevents a
+    // partially-started batch when one contract is unavailable, and lets the
+    // buys leave the socket together instead of serializing them.
+    const freshProposals = await Promise.all(
+      Array.from({ length: input.count }, () => requestFreshProposal(proposalInput)),
+    );
+    await assertAuthorized?.();
+    if (!await connect()) throw new Error("Deriv WebSocket is not ready");
+    await assertAuthorized?.();
+    return freshProposals;
+  });
 
   // Direct parameter buys use the fresh quote as the maximum price and avoid
   // holding temporary proposal IDs until the whole batch is ready. Deriv can
@@ -2297,30 +2314,33 @@ export async function buyClockWorkContracts(
     throw new Error("The total Clock Work stake exceeds the current account balance.");
   }
 
-  const protection = await getTradingProtectionSettings();
-  for (const contract of contracts) {
-    assertTradingProtection(protection, getStatus(), {
-      contract_type: contract.contract_type,
-      symbol: contract.symbol,
-    });
-  }
+  const proposals = await runBeforeBuy(async () => {
+    const protection = await getTradingProtectionSettings();
+    for (const contract of contracts) {
+      assertTradingProtection(protection, getStatus(), {
+        contract_type: contract.contract_type,
+        symbol: contract.symbol,
+      });
+    }
 
-  await refreshOpenContracts();
-  assertNoActiveContract(true);
-  const proposals = await Promise.all(contracts.map(async (contract) => ({
-    contract,
-    proposal: await requestFreshProposal({
-      amount: contract.amount,
-      duration: contract.duration,
-      duration_unit: contract.duration_unit,
-      contract_type: contract.contract_type,
-      barrier: contract.barrier,
-      symbol: contract.symbol,
-    }),
-  })));
-  await assertAuthorized?.();
-  if (!await connect()) throw new Error("Deriv WebSocket is not ready");
-  await assertAuthorized?.();
+    await refreshOpenContracts();
+    assertNoActiveContract(true);
+    const freshProposals = await Promise.all(contracts.map(async (contract) => ({
+      contract,
+      proposal: await requestFreshProposal({
+        amount: contract.amount,
+        duration: contract.duration,
+        duration_unit: contract.duration_unit,
+        contract_type: contract.contract_type,
+        barrier: contract.barrier,
+        symbol: contract.symbol,
+      }),
+    })));
+    await assertAuthorized?.();
+    if (!await connect()) throw new Error("Deriv WebSocket is not ready");
+    await assertAuthorized?.();
+    return freshProposals;
+  });
 
   // All prices are quoted before any buy. Do not retry or auto-close a partial
   // batch: a buy acknowledgement timeout can be ambiguous, so the account
@@ -2461,37 +2481,39 @@ export async function dualBuyContracts(input: {
   if (normalizedAmount * 2 > getState().account.balance) {
     throw new Error("The selected dual stake exceeds the current account balance");
   }
-  const protection = await getTradingProtectionSettings();
-  assertTradingProtection(protection, getStatus(), { ...input, contract_type: "DIGITOVER" });
-  assertTradingProtection(protection, getStatus(), { ...input, contract_type: "DIGITUNDER" });
-  await refreshOpenContracts();
-  assertNoActiveContract(true);
+  const proposals = await runBeforeBuy(async () => {
+    const protection = await getTradingProtectionSettings();
+    assertTradingProtection(protection, getStatus(), { ...input, contract_type: "DIGITOVER" });
+    assertTradingProtection(protection, getStatus(), { ...input, contract_type: "DIGITUNDER" });
+    await refreshOpenContracts();
+    assertNoActiveContract(true);
 
-  const proposals: Array<{ proposal: DerivProposal; input: ProposalInput }> = [];
-  for (const contract_type of ["DIGITOVER", "DIGITUNDER"] as const) {
+    const freshProposals: Array<{ proposal: DerivProposal; input: ProposalInput }> = [];
+    for (const contract_type of ["DIGITOVER", "DIGITUNDER"] as const) {
+      await assertAuthorized?.();
+      const proposal = await requestFreshProposal({
+        amount: normalizedAmount,
+        duration: input.duration,
+        duration_unit: input.duration_unit,
+        contract_type,
+        barrier: input.barrier,
+        symbol: input.symbol,
+      });
+      const buyInput = {
+        amount: normalizedAmount,
+        duration: input.duration,
+        duration_unit: input.duration_unit,
+        contract_type,
+        barrier: input.barrier,
+        symbol: input.symbol,
+      } satisfies ProposalInput;
+      freshProposals.push({ proposal, input: buyInput });
+    }
     await assertAuthorized?.();
-    const proposal = await requestFreshProposal({
-       amount: normalizedAmount,
-      duration: input.duration,
-      duration_unit: input.duration_unit,
-      contract_type,
-      barrier: input.barrier,
-      symbol: input.symbol,
-    });
-    const buyInput = {
-       amount: normalizedAmount,
-      duration: input.duration,
-      duration_unit: input.duration_unit,
-      contract_type,
-      barrier: input.barrier,
-      symbol: input.symbol,
-    } satisfies ProposalInput;
-     proposals.push({ proposal, input: buyInput });
-  }
-  await assertAuthorized?.();
-  const connected = await connect();
-  if (!connected) throw new Error("Deriv WebSocket is not ready");
-  await assertAuthorized?.();
+    if (!await connect()) throw new Error("Deriv WebSocket is not ready");
+    await assertAuthorized?.();
+    return freshProposals;
+  });
    const buyResults = await sendBatchBuysTogether(
      proposals,
      ({ proposal, input: buyInput }) => sendDirectBuyWithRateLimitRetry(proposal, buyInput),

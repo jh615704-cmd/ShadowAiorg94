@@ -42,8 +42,7 @@ import {
   type AutoTrader2SavedSession,
 } from "@/lib/auto-trader-2-session";
 import {
-  isConfirmedUnavailableDurationRejection,
-  unavailableDurationRetryMessage,
+  isConfirmedNoContractRejection,
 } from "@/lib/trade-entry-guards";
 import {
   chooseAutoTrader2Candidate,
@@ -676,7 +675,7 @@ function AutoTrader2Content() {
   ) => {
     let first = true;
     let loopCandidate = firstCandidate;
-    let confirmedRejectionDelay = 1_000;
+    let confirmedRejectionDelay = 5_000;
     while (runRef.current.active && runRef.current.generation === generation) {
       let slotReady = false;
       let latestSignals: readonly AutoTrader2Signal[] = signalsRef.current;
@@ -702,7 +701,7 @@ function AutoTrader2Content() {
           // Keep the session alive, but never send a new order without a fresh open-contract confirmation.
         }
         if (!slotReady && runRef.current.active && runRef.current.generation === generation) {
-          setDecision("Waiting for Deriv to confirm there are no open contracts. No new order will be sent until it does.");
+          setDecision("Refreshing account status.");
           await delay(statusRetryDelay);
           statusRetryDelay = Math.min(statusRetryDelay * 2, 5_000);
         }
@@ -820,8 +819,7 @@ function AutoTrader2Content() {
           setDecision("Paused by administrator · waiting for access to be restored.");
           return;
         }
-        const confirmedUnavailableDuration = isConfirmedUnavailableDurationRejection(error);
-        if (errorCode === "DERIV_BUY_RATE_LIMITED" || confirmedUnavailableDuration) {
+        if (errorCode === "DERIV_BUY_RATE_LIMITED" || isConfirmedNoContractRejection(error)) {
           runRef.current.pendingContractType = null;
           runRef.current.pendingStake = null;
           if (!persistRunState("ready", config)) {
@@ -831,13 +829,8 @@ function AutoTrader2Content() {
             });
             return;
           }
-          const retryText = confirmedUnavailableDuration
-            ? unavailableDurationRetryMessage("Auto Trader 2.0")
-            : error instanceof Error
-              ? `${error.message} Auto Trader 2.0 remains active and will check again.`
-            : "Deriv rejected the order. Auto Trader 2.0 remains active and will check again.";
-          setMessage({ tone: "info", text: retryText });
-          setDecision("Waiting briefly after a confirmed rejection. Auto Trader 2.0 remains active.");
+          setMessage(null);
+          setDecision("Checking for the next eligible entry.");
           setIsPlacing(false);
           await delay(confirmedRejectionDelay);
           confirmedRejectionDelay = Math.min(confirmedRejectionDelay * 2, 30_000);
@@ -859,6 +852,7 @@ function AutoTrader2Content() {
       }
 
       if (!contractId || runRef.current.generation !== generation) return;
+      confirmedRejectionDelay = 5_000;
       if (!runRef.current.active) {
         const saved = readStoredSession();
         if (saved) {

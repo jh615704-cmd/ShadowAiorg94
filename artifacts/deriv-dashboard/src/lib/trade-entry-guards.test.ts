@@ -1,11 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  confirmedNoContractRetryMessage,
   isConfirmedNoContractRejection,
   isConfirmedUnavailableDurationRejection,
   roundTradeStakeToCents,
-  unavailableDurationRetryMessage,
   validateAutoTraderBatch,
   validateBulkTraderEntry,
   validateEdgeEntry,
@@ -30,10 +28,6 @@ test("only an explicit unavailable-duration 400 is safe for automatic retry", ()
     data: { error: "Account history is temporarily unavailable." },
   }), false);
   assert.equal(isConfirmedUnavailableDurationRejection(new Error("Trading is not offered for this duration.")), false);
-  assert.equal(
-    unavailableDurationRetryMessage("Auto Trader 2.0"),
-    "Trading is not offered for this duration. No contract was accepted. Auto Trader 2.0 remains active and will check again.",
-  );
 });
 
 test("only explicit API rejections with no accepted contract are safe to retry", () => {
@@ -54,6 +48,24 @@ test("only explicit API rejections with no accepted contract are safe to retry",
   }), false);
   assert.equal(isConfirmedNoContractRejection({
     name: "ApiError",
+    status: 502,
+    data: { trade_outcome: "not_sent" },
+  }), true);
+  assert.equal(isConfirmedNoContractRejection({
+    name: "ApiError",
+    status: 502,
+    data: { trade_outcome: "uncertain" },
+  }), false);
+  assert.equal(isConfirmedNoContractRejection({
+    name: "ApiError",
+    status: 409,
+    data: {
+      trade_outcome: "not_sent",
+      error: "Global trading protection held this entry.",
+    },
+  }), false);
+  assert.equal(isConfirmedNoContractRejection({
+    name: "ApiError",
     status: 403,
     data: { trade_outcome: "not_sent" },
   }), false);
@@ -67,10 +79,6 @@ test("only explicit API rejections with no accepted contract are safe to retry",
     status: 400,
     data: { trade_outcome: "not_sent" },
   }), false);
-  assert.equal(
-    confirmedNoContractRetryMessage("EDGE"),
-    "EDGE received a confirmed rejection. No contract was accepted. It remains active and will check again.",
-  );
 });
 
 test("Auto Trader accepts only valid 3x or 6x Digit Differs batches within balance", () => {

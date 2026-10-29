@@ -27,6 +27,7 @@
 - [Automation stop and retry policy](automation-stop-retry-policy.md) — keep runs active during recoverable waits; never replay uncertain orders or bypass account protections.
 - [Access feature registry](access-feature-registry.md) — keep runtime access, API schemas, generated clients, route guards, UI history polling, and admin controls synchronized.
 - [Cash Grab auto-switch](cash-grab-auto-switch.md) — scan live evidence every 20 seconds, keep one contract open at a time, and retain immediate stop controls.
+- [Cash Grab session accounting](cash-grab-session-accounting.md) — base session P/L and stake progression only on settled contract IDs confirmed during the active run.
 - [Trading protection test isolation](trading-protection-test-isolation.md) — API trade tests must isolate persisted admin entry shields before asserting Deriv behavior.
 - [Real-account order routing](real-account-inspection.md) — selecting a real account routes trades directly; server-side live-trading and funds checks remain authoritative.
 - [Replit multi-artifact deployment](replit-multi-artifact-deployment.md) — publishing deploys this project's artifacts together; deployment target changes apply to the whole project.

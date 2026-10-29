@@ -218,8 +218,6 @@ export default function CashGrabPanel({
             <span>Selected direction · {selectedSymbol?.value ?? symbol}</span>
             <p>
               Observed rate <strong>{liveRate.toFixed(1)}%</strong>
-              <em>·</em>
-              {selectedSignal?.sampleCount ?? 0} sampled moves
               {bestSymbol ? <><em>·</em>best pair <strong>{bestSymbol}</strong></> : null}
             </p>
           </div>
@@ -232,7 +230,7 @@ export default function CashGrabPanel({
           {autoSwitchSafestPairRecommendation && (
             <p className="df-running-note">
               <i />
-              {autoSwitchSafestPairRecommendation.symbol} · {autoSwitchSafestPairRecommendation.observedWinRate.toFixed(1)}% observed · {autoSwitchSafestPairRecommendation.sampleCount} sampled moves
+              {autoSwitchSafestPairRecommendation.symbol} · {autoSwitchSafestPairRecommendation.observedWinRate.toFixed(1)}%
             </p>
           )}
         </div>
@@ -310,7 +308,7 @@ export default function CashGrabPanel({
                   role="option"
                   aria-selected={!autoSelectBest && symbol === item.value}
                 >
-                  <span><b>{item.label}</b><em>{item.value} · {signal?.sampleCount ?? 0} moves</em></span>
+                  <span><b>{item.label}</b><em>{item.value}</em></span>
                   <strong>{rate.toFixed(1)}%</strong>
                 </button>
               );

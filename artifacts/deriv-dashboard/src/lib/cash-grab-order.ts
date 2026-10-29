@@ -1,5 +1,5 @@
 export type CashGrabDirection = "CALL" | "PUT";
-export type CashGrabDuration = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+export type CashGrabDuration = 1 | 2 | 3 | 4 | 5;
 
 export interface CashGrabBulkBuyInput {
   amount: number;
@@ -16,8 +16,8 @@ export function buildCashGrabBulkBuyPayload(input: CashGrabBulkBuyInput) {
   if (!Number.isFinite(input.amount) || input.amount < 0.35) {
     throw new RangeError("Cash Grab stake must be finite and at least 0.35.");
   }
-  if (!Number.isInteger(input.duration) || input.duration < 1 || input.duration > 10) {
-    throw new RangeError("Cash Grab duration must be a whole number from 1 to 10 ticks.");
+  if (!Number.isInteger(input.duration) || input.duration < 1 || input.duration > 5) {
+    throw new RangeError("Cash Grab duration must be a whole number from 1 to 5 ticks.");
   }
   if (input.count !== 1) {
     throw new RangeError("Cash Grab places one contract at a time.");

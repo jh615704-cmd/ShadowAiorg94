@@ -23,23 +23,24 @@ export function isConfirmedUnavailableDurationRejection(error: unknown): boolean
 
 export function isConfirmedNoContractRejection(error: unknown): boolean {
   if (typeof error !== "object" || error === null) return false;
-  const candidate = error as { name?: unknown; status?: unknown; data?: unknown };
+  const candidate = error as { name?: unknown; status?: unknown; data?: unknown; message?: unknown };
   if (candidate.name !== "ApiError" || typeof candidate.status !== "number") return false;
-  if (candidate.status < 400 || candidate.status >= 500 || candidate.status === 401 || candidate.status === 403) {
+  if (
+    candidate.status < 400
+    || candidate.status >= 600
+    || candidate.status === 401
+    || candidate.status === 403
+  ) {
     return false;
   }
   if (!candidate.data || typeof candidate.data !== "object") return false;
   const data = candidate.data as Record<string, unknown>;
   if (data.code === "AUTO_TRADER_2_PAUSED") return false;
+  const messages = [candidate.message, data.error, data.message, data.detail];
+  if (messages.some((message) => typeof message === "string" && /global trading protection/i.test(message))) {
+    return false;
+  }
   return data.trade_outcome === "not_sent" || data.trade_outcome === "rejected";
-}
-
-export function unavailableDurationRetryMessage(feature: string): string {
-  return `Trading is not offered for this duration. No contract was accepted. ${feature} remains active and will check again.`;
-}
-
-export function confirmedNoContractRetryMessage(feature: string): string {
-  return `${feature} received a confirmed rejection. No contract was accepted. It remains active and will check again.`;
 }
 
 function validateStakeAndBalance(

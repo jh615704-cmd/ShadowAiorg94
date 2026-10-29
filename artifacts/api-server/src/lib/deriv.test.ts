@@ -16,6 +16,7 @@ let rateLimitFailuresRemaining = 0;
 let rejectBuyResponsesRemaining = 0;
 let portfolioErrorsRemaining = 0;
 let malformedPortfolioResponsesRemaining = 0;
+let portfolioResponseDelayMs = 0;
 let proposalNumber = 0;
 let proposalPayoutOverride: number | null = null;
 let buyPayoutOverride: number | null = null;
@@ -137,11 +138,18 @@ function handleClientMessage(socket: FakeWebSocket, message: SocketMessage) {
       });
       return;
     }
-    emitMessage(socket, {
+    const portfolioResponse = {
       msg_type: "portfolio",
       ...(message.req_id == null ? {} : { req_id: message.req_id }),
       portfolio: { contracts: mockPortfolioContracts },
-    });
+    };
+    if (portfolioResponseDelayMs > 0) {
+      const delayMs = portfolioResponseDelayMs;
+      portfolioResponseDelayMs = 0;
+      setTimeout(() => emitMessage(socket, portfolioResponse), delayMs);
+    } else {
+      emitMessage(socket, portfolioResponse);
+    }
     return;
   }
 
@@ -357,6 +365,7 @@ beforeEach(() => {
   rejectBuyResponsesRemaining = 0;
   portfolioErrorsRemaining = 0;
   malformedPortfolioResponsesRemaining = 0;
+  portfolioResponseDelayMs = 0;
   proposalNumber = 0;
   proposalPayoutOverride = null;
   buyPayoutOverride = null;
@@ -546,6 +555,66 @@ describe("Deriv market subscriptions", { concurrency: false }, () => {
 });
 
 describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
+  test("keeps entry blocked until a delayed pre-buy portfolio check is confirmed", async () => {
+    await withSelectedAccount("portfolio-ready-refresh-user", async () => {
+      const socket = latestSocket();
+      assert.equal(deriv.getStatus().open_contracts_ready, true);
+      const portfolioRequestsBefore = socket.sent.filter((message) => message.portfolio === 1).length;
+      portfolioResponseDelayMs = 100;
+
+      const pendingBuy = deriv.buyContract({
+        amount: 1,
+        duration: 1,
+        duration_unit: "t",
+        contract_type: "DIGITEVEN",
+        symbol: "R_75",
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      assert.equal(
+        socket.sent.filter((message) => message.portfolio === 1).length,
+        portfolioRequestsBefore + 1,
+      );
+      assert.equal(
+        deriv.getStatus().open_contracts_ready,
+        false,
+        "the entry gate stays closed while the current portfolio is unconfirmed",
+      );
+      assert.equal(socket.sent.some((message) => message.proposal || message.buy), false);
+
+      const result = await pendingBuy;
+      assert.equal(result.ok, true);
+      assert.equal(deriv.getStatus().open_contracts_ready, true);
+      assert.ok(socket.sent.some((message) => message.buy));
+    });
+  });
+
+  test("marks a failed pre-buy portfolio check as not sent", async () => {
+    await withSelectedAccount("portfolio-preflight-failure-user", async () => {
+      portfolioErrorsRemaining = 1;
+      let failure: unknown;
+      try {
+        await deriv.buyContract({
+          amount: 1,
+          duration: 1,
+          duration_unit: "t",
+          contract_type: "DIGITEVEN",
+          symbol: "R_75",
+        });
+      } catch (error) {
+        failure = error;
+      }
+
+      assert.ok(failure instanceof Error);
+      assert.deepEqual(deriv.classifyBuyFailure(failure), {
+        outcome: "not_sent",
+        source: "api_server",
+      });
+      assert.equal(deriv.getStatus().open_contracts_ready, false);
+      assert.equal(latestSocket().sent.some((message) => message.proposal || message.buy), false);
+    });
+  });
+
   test("refreshes Deriv's account portfolio before buying and blocks cross-session overlap", async () => {
     mockPortfolioContracts = [{
       contract_id: "already-open",
