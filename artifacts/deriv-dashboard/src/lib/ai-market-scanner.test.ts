@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   chooseBulkScannerCandidate,
   chooseCashGrabScannerCandidate,
+  chooseCashGrabDirectionalMarket,
   chooseDigitFlipScannerCandidate,
   chooseTradeXScannerCandidate,
   digitDiffersRateFromPercentages,
@@ -161,6 +162,20 @@ test("Cash Grab ignores undersampled, equal, and invalid Rise/Fall readings", ()
   ], ["R_10", "R_25", "JD25"]);
 
   assert.equal(candidate, null);
+});
+
+test("Cash Grab auto-best requires a supported market, adequate sample, and 50% for the selected side", () => {
+  const signals = [
+    signal("R_10", 19, [], 50, 50, 99, 1),
+    signal("JD25", 40, [], 50, 50, 62, 35),
+    signal("R_25", 60, [], 50, 50, 48, 52),
+    signal("JD50", 80, [], 50, 50, 49, 51),
+    signal("JD75", 90, [], 50, 50, 49, Number.NaN),
+  ];
+
+  assert.equal(chooseCashGrabDirectionalMarket(signals, ["R_10", "JD25", "R_25", "JD50", "JD75"], "CALL"), "JD25");
+  assert.equal(chooseCashGrabDirectionalMarket(signals, ["R_10", "JD25", "R_25", "JD50", "JD75"], "PUT"), "R_25");
+  assert.equal(chooseCashGrabDirectionalMarket(signals, ["R_10"], "CALL"), null);
 });
 
 test("all scanners ignore undersampled or unsupported markets", () => {

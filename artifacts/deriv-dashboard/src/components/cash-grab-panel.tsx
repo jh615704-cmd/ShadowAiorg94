@@ -73,6 +73,8 @@ export interface CashGrabPanelProps {
     sampleCount: number;
   } | null;
   running: boolean;
+  starting?: boolean;
+  scannerBusy?: boolean;
   stopping?: boolean;
   isConnected: boolean;
   tradeSlotBlocked: boolean;
@@ -130,6 +132,8 @@ export default function CashGrabPanel({
   autoSwitchSafestPairStatus = "off",
   autoSwitchSafestPairRecommendation = null,
   running,
+  starting = false,
+  scannerBusy = false,
   stopping = false,
   isConnected,
   tradeSlotBlocked,
@@ -155,9 +159,9 @@ export default function CashGrabPanel({
   onClearHistory,
 }: CashGrabPanelProps) {
   const [marketMenuOpen, setMarketMenuOpen] = useState(false);
-  const interactionDisabled = running || isPlacingTrade;
-  const canStart = isConnected && !tradeSlotBlocked && !isPlacingTrade && !stopping;
-  const canRunScanner = isConnected && !running && !tradeSlotBlocked && !isPlacingTrade && !stopping && stake >= minimumStake;
+  const interactionDisabled = running || starting || scannerBusy || isPlacingTrade;
+  const canStart = isConnected && !starting && !scannerBusy && !tradeSlotBlocked && !isPlacingTrade && !stopping;
+  const canRunScanner = isConnected && !running && !starting && !scannerBusy && !tradeSlotBlocked && !isPlacingTrade && !stopping && stake >= minimumStake;
   const selectedSymbol = symbols.find((item) => item.value === symbol);
   const selectedSignal = marketSignals.find((item) => item.symbol === symbol);
   const liveRate = selectedSignal
@@ -239,7 +243,7 @@ export default function CashGrabPanel({
               type="checkbox"
               checked={autoSwitchSafestPair}
               onChange={(event) => onAutoSwitchSafestPairChange(event.target.checked)}
-              disabled={!isConnected || stopping}
+              disabled={!isConnected || starting || scannerBusy || stopping}
               aria-label="Auto-switch Cash Grab to guarded Rise/Fall markets"
             />
             <i />
@@ -258,7 +262,7 @@ export default function CashGrabPanel({
               type="checkbox"
               checked={autoDirection}
               onChange={(event) => onAutoDirectionChange(event.target.checked)}
-              disabled={!isConnected || stopping}
+              disabled={!isConnected || starting || scannerBusy || stopping}
               aria-label="Auto Direction for Cash Grab"
             />
             <i />
@@ -358,7 +362,6 @@ export default function CashGrabPanel({
           <span>RISE <b>{riseRate.toFixed(1)}%</b></span>
           <span>FALL <b>{fallRate.toFixed(1)}%</b></span>
         </div>
-        <p className="df-market-note">{selectedSignal?.sampleCount ?? 0} observed moves. Rates describe the sample only; they do not predict expiry.</p>
       </section>
 
       <form className="df-card df-advanced-card" onSubmit={(event) => { event.preventDefault(); submitStart(); }}>
@@ -396,7 +399,6 @@ export default function CashGrabPanel({
                 </button>
               ))}
             </div>
-            <small className="cash-grab-duration-note">Entry is Tick 0; this contract settles on its selected numbered tick.</small>
           </label>
           <label>
             <span>STAKE MODE</span>
@@ -456,7 +458,6 @@ export default function CashGrabPanel({
               data-testid="input-cash-grab-loss-limit"
             />
           </label>
-          <p>Cash Grab stops before the next entry when settled session P/L reaches either limit. Set a limit to 0 to disable it.</p>
           <output aria-live="polite">
             Settled session P/L: {sessionPnl > 0 ? "+" : ""}{sessionPnl.toFixed(2)} {currency}
           </output>
@@ -475,14 +476,13 @@ export default function CashGrabPanel({
             </button>
           ) : (
             <button type="submit" className="df-run" disabled={!canStart} data-testid="button-cash-grab-start">
-              {isPlacingTrade ? <Loader2 size={14} className="cash-grab-spin" /> : <Play size={14} fill="currentColor" />}
-              {isPlacingTrade ? "PLACING…" : "START CASH GRAB"}
+              {starting || isPlacingTrade ? <Loader2 size={14} className="cash-grab-spin" /> : <Play size={14} fill="currentColor" />}
+              {starting ? "CHECKING…" : isPlacingTrade ? "PLACING…" : "START CASH GRAB"}
             </button>
           )}
         </div>
         {!isConnected && <p className="cash-grab-status-note">Connect Deriv to place a Rise/Fall contract.</p>}
         {tradeSlotBlocked && <p className="cash-grab-status-note" role="status">New entries stay paused until Deriv confirms that all open contracts have settled.</p>}
-        <p className="cash-grab-status-note">Cash Grab runs one contract at a time until stopped. The account balance is checked before each entry.</p>
       </form>
 
       <div className="cash-grab-history df-card">

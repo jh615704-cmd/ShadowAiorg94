@@ -13,6 +13,18 @@ export function buildCashGrabBulkBuyPayload(input: CashGrabBulkBuyInput) {
   if (input.direction !== "CALL" && input.direction !== "PUT") {
     throw new Error("Cash Grab supports Rise/Fall contracts only.");
   }
+  if (!Number.isFinite(input.amount) || input.amount < 0.35) {
+    throw new RangeError("Cash Grab stake must be finite and at least 0.35.");
+  }
+  if (!Number.isInteger(input.duration) || input.duration < 1 || input.duration > 10) {
+    throw new RangeError("Cash Grab duration must be a whole number from 1 to 10 ticks.");
+  }
+  if (input.count !== 1) {
+    throw new RangeError("Cash Grab places one contract at a time.");
+  }
+  if (!input.symbol.trim()) {
+    throw new Error("Cash Grab requires a market symbol.");
+  }
 
   return {
     amount: input.amount,

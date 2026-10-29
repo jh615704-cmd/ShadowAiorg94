@@ -138,7 +138,27 @@ export function chooseBulkScannerCandidate(
     }
   }
 
-  return strongest(candidates);
+   return strongest(candidates);
+ }
+
+export function chooseCashGrabDirectionalMarket(
+  signals: readonly AiScannerMarketSignal[],
+  symbols: readonly string[],
+  direction: "CALL" | "PUT",
+  minimumSample = AI_SCANNER_MIN_SAMPLE,
+): string | null {
+  const candidates = eligibleSignals(signals, symbols, minimumSample)
+    .map((signal) => ({
+      symbol: signal.symbol,
+      observedRate: Number(direction === "CALL" ? signal.rise_percentage : signal.fall_percentage),
+      sampleCount: signal.sample_count,
+    }))
+    .filter((candidate) =>
+      Number.isInteger(candidate.sampleCount)
+      && isValidObservedPercentage(candidate.observedRate)
+      && candidate.observedRate >= 50,
+    );
+  return strongest(candidates)?.symbol ?? null;
 }
 
 export function chooseDigitFlipScannerCandidate(
@@ -197,6 +217,7 @@ export function chooseCashGrabScannerCandidate(
   for (const signal of eligibleSignals(signals, symbols, minimumSample)) {
     const riseRate = Number(signal.rise_percentage);
     const fallRate = Number(signal.fall_percentage);
+    if (!Number.isInteger(signal.sample_count)) continue;
     if (
       !Number.isFinite(riseRate)
       || !Number.isFinite(fallRate)

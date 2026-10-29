@@ -9,7 +9,7 @@ test("Cash Grab Rise maps to a Deriv CALL payload", () => {
       duration: 2,
       direction: "CALL",
       symbol: "R_75",
-      count: 2,
+      count: 1,
     }),
     {
       amount: 0.35,
@@ -17,7 +17,7 @@ test("Cash Grab Rise maps to a Deriv CALL payload", () => {
       duration_unit: "t",
       contract_type: "CALL",
       symbol: "R_75",
-      count: 2,
+      count: 1,
     },
   );
 });
@@ -66,5 +66,28 @@ test("Cash Grab rejects non-Rise/Fall contract types at runtime", () => {
   assert.throws(
     () => buildCashGrabBulkBuyPayload(invalidInput as never),
     /Cash Grab supports Rise\/Fall contracts only/,
+  );
+});
+
+test("Cash Grab rejects bulk orders and invalid stakes", () => {
+  assert.throws(
+    () => buildCashGrabBulkBuyPayload({
+      amount: 0.35,
+      duration: 1,
+      direction: "CALL",
+      symbol: "R_75",
+      count: 2,
+    }),
+    /one contract at a time/,
+  );
+  assert.throws(
+    () => buildCashGrabBulkBuyPayload({
+      amount: Number.NaN,
+      duration: 1,
+      direction: "CALL",
+      symbol: "R_75",
+      count: 1,
+    }),
+    /stake must be finite/,
   );
 });

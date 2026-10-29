@@ -63,6 +63,7 @@ import {
   AI_SCANNER_MIN_SAMPLE,
   chooseBulkScannerCandidate,
   chooseCashGrabScannerCandidate,
+  chooseCashGrabDirectionalMarket,
   chooseDigitFlipScannerCandidate,
   chooseTradeXScannerCandidate,
   digitDiffersRateFromPercentages,
@@ -137,6 +138,10 @@ import {
 } from "../lib/clock-work-logic";
 import { buildCashGrabBulkBuyPayload } from "../lib/cash-grab-order";
 import { getCashGrabLimitReached } from "../lib/cash-grab-limits";
+import {
+  getCashGrabEntryBlockReason,
+  getCashGrabStartConfigError,
+} from "../lib/cash-grab-entry-guards";
 import { readCachedHistorySnapshot } from "../lib/history-snapshot";
 import {
   claimDerivHistoryFeatureContractIds,
@@ -537,6 +542,8 @@ export default function XTraderPage() {
   const [cashGrabAutoSwitchSafestPairStatus, setCashGrabAutoSwitchSafestPairStatus] = useState<CashGrabAiStatus>("off");
   const [cashGrabAutoSwitchRecommendation, setCashGrabAutoSwitchRecommendation] = useState<CashGrabAutoSwitchRecommendation | null>(null);
   const [cashGrabRunning, setCashGrabRunning] = useState(false);
+  const [cashGrabStarting, setCashGrabStarting] = useState(false);
+  const [cashGrabScannerBusy, setCashGrabScannerBusy] = useState(false);
   const [cashGrabStopping, setCashGrabStopping] = useState(false);
   const [cashGrabClearArmed, setCashGrabClearArmed] = useState(false);
   const [cashGrabHiddenHistoryIds, setCashGrabHiddenHistoryIds] = useState<Set<string>>(new Set());
@@ -603,8 +610,11 @@ export default function XTraderPage() {
   const moneyBankOpenContractIdRef = useRef<string | null>(null);
   const moneyBankJdyScanInFlightRef = useRef(false);
   const cashGrabRunningRef = useRef(false);
+  const cashGrabStartingRef = useRef(false);
+  const cashGrabStartAttemptIdRef = useRef(0);
   const cashGrabRunIdRef = useRef(0);
   const cashGrabActionLockRef = useRef(false);
+  const cashGrabAccountIdRef = useRef<string | null>(null);
   const cashGrabOpenContractIdsRef = useRef(new Set<string>());
   const cashGrabCurrentStakeRef = useRef(.35);
   const cashGrabSessionPnlRef = useRef(0);
@@ -1133,16 +1143,11 @@ export default function XTraderPage() {
     clockWorkQuoteMutation.mutateAsync,
   ]);
   const cashGrabBestSymbol = useMemo(() => {
-    const supported = new Set<string>(cashGrabSymbols.map((item) => item.value));
-    const signals = (status.data?.market_signals ?? [])
-      .filter((signal) => supported.has(signal.symbol) && signal.sample_count >= 5)
-      .map((signal) => {
-        const observedRate = cashGrabDirection === "PUT"
-          ? signal.fall_percentage ?? 0
-          : signal.rise_percentage ?? 0;
-        return { signal, score: observedRate + Math.min(signal.sample_count, 100) / 100 };
-      });
-    return signals.sort((left, right) => right.score - left.score || right.signal.sample_count - left.signal.sample_count)[0]?.signal.symbol ?? null;
+    return chooseCashGrabDirectionalMarket(
+      (status.data?.market_signals ?? []) as AiScannerMarketSignal[],
+      cashGrabSymbols.map((item) => item.value),
+      cashGrabDirection,
+    );
   }, [cashGrabDirection, cashGrabSymbols, status.data?.market_signals]);
   const bulkSessionRows = bulkSessionKnownIdsRef.current
     ? bulkAllRows.filter((trade) => (
@@ -2624,28 +2629,87 @@ export default function XTraderPage() {
   const cashGrabContractTypes = ["CALL", "PUT"] as const;
   const cashGrabManagedContractTypes = ["DIGITEVEN", "DIGITODD", "CALL", "PUT", "DIGITDIFF", "ACCU"] as const;
 
+  const cashGrabEntryBlockMessage = (
+    reason: Exclude<ReturnType<typeof getCashGrabEntryBlockReason>, null>,
+    currency: string,
+  ) => {
+    switch (reason) {
+      case "connection-unavailable":
+        return "Cash Grab remains active and is waiting for the Deriv connection.";
+      case "account-unavailable":
+        return "Cash Grab is waiting for a selected Deriv account.";
+      case "account-unbound":
+        return "Cash Grab has no confirmed session account. Stop and start the run again.";
+      case "account-changed":
+        return "Cash Grab stopped because the selected Deriv account changed.";
+      case "market-unsupported":
+        return "Cash Grab stopped because its selected market is not supported.";
+      case "stake-invalid":
+        return "Cash Grab stopped because its next stake is invalid.";
+      case "balance-unavailable":
+        return "Cash Grab remains active and is waiting for a fresh account balance.";
+      case "insufficient-balance":
+        return "Cash Grab remains active and is waiting for enough available balance for the selected stake.";
+      case "contract-status-unavailable":
+        return "Cash Grab remains active and is waiting for Deriv to confirm the open-contract status.";
+      case "contract-open":
+        return "Cash Grab remains active and is waiting for the current contract to settle.";
+      case "take-profit-limit-reached":
+        return `Cash Grab stopped at its ${cashGrabConfigRef.current?.takeProfit.toFixed(2) ?? "configured"} ${currency} take-profit limit.`;
+      case "loss-limit-reached":
+        return `Cash Grab stopped at its ${cashGrabConfigRef.current?.lossLimit.toFixed(2) ?? "configured"} ${currency} session loss limit.`;
+      case "session-pnl-invalid":
+        return "Cash Grab stopped because its settled session P/L could not be validated.";
+    }
+  };
+
   const scanCashGrabAutoSwitch = async (
     candidateConfig?: CashGrabStartConfig,
   ): Promise<CashGrabAutoSwitchRecommendation | null> => {
-    if (!isConnected || cashGrabAutoSwitchBusyRef.current) return cashGrabAutoSwitchRecommendationRef.current;
+    if (!isConnectedRef.current || cashGrabAutoSwitchBusyRef.current) return cashGrabAutoSwitchRecommendationRef.current;
     const config = candidateConfig ?? cashGrabConfigRef.current;
-    if (!config || currentAccountBalance == null) return null;
+    if (!config) return null;
     cashGrabAutoSwitchBusyRef.current = true;
     setCashGrabAutoSwitchSafestPairStatus("watching");
     try {
       const freshStatus = await status.refetch();
-      const signals = freshStatus.data?.market_signals ?? [];
-      const balance = currentAccountBalance;
+      const freshData = freshStatus.data;
+      if (!freshStatus.isSuccess || !freshData?.connected || !freshData.authorized) {
+        setCashGrabAutoSwitchSafestPairStatus("quiet");
+        setConnectionMessage({ kind: "info", text: "Cash Grab is waiting for a fresh Deriv connection before switching markets." });
+        return null;
+      }
+      if (freshData.account?.id !== cashGrabAccountIdRef.current) {
+        setConnectionMessage({ kind: "error", text: "Cash Grab stopped because the selected Deriv account changed." });
+        stopCashGrab();
+        return null;
+      }
+      const signals = freshData.market_signals ?? [];
+      const balance = getAccountBalance(freshData.account);
+      if (balance == null) {
+        setCashGrabAutoSwitchSafestPairStatus("quiet");
+        setConnectionMessage({ kind: "info", text: "Cash Grab is waiting for a fresh account balance before switching markets." });
+        return null;
+      }
       const minimumStake = .35;
       const currentStake = Math.max(minimumStake, cashGrabCurrentStakeRef.current || config.stake);
+      if (!Number.isFinite(currentStake)) {
+        setCashGrabAutoSwitchSafestPairStatus("quiet");
+        setConnectionMessage({ kind: "info", text: "Cash Grab is waiting for a valid next stake before switching markets." });
+        return null;
+      }
       const candidates: CashGrabAutoSwitchRecommendation[] = [];
 
       for (const signal of signals) {
-        if (!cashGrabSymbols.some((item) => item.value === signal.symbol) || signal.sample_count < 5) continue;
+        if (
+          !cashGrabSymbols.some((item) => item.value === signal.symbol)
+          || !Number.isInteger(signal.sample_count)
+          || signal.sample_count < AI_SCANNER_MIN_SAMPLE
+        ) continue;
         const observedWinRate = config.direction === "PUT"
           ? signal.fall_percentage ?? 0
           : signal.rise_percentage ?? 0;
-        if (currentStake > balance || observedWinRate < 50) continue;
+        if (!isValidObservedPercentage(observedWinRate) || currentStake > balance || observedWinRate < 50) continue;
         const sampleConfidence = Math.min(signal.sample_count, 200) / 20;
         candidates.push({
           symbol: signal.symbol,
@@ -2666,7 +2730,7 @@ export default function XTraderPage() {
         setCashGrabAutoSwitchSafestPairStatus("ready");
         setConnectionMessage({
           kind: "info",
-          text: `Auto-switch selected ${recommendation.symbol} with ${recommendation.observedWinRate.toFixed(1)}% observed in ${recommendation.sampleCount} moves. Historical rates are not a forecast.`,
+          text: `Auto-switch selected ${recommendation.symbol} for the next entry.`,
         });
       } else {
         setCashGrabAutoSwitchSafestPairStatus("quiet");
@@ -2702,7 +2766,13 @@ export default function XTraderPage() {
     const config = cashGrabConfigRef.current;
     if (!completed.length || !config) return;
     const currentStake = cashGrabCurrentStakeRef.current;
-    const netSettledProfit = completed.reduce((total, trade) => total + trade.profit, 0);
+    const profits = completed.map((trade) => Number(trade.profit));
+    if (profits.some((profit) => !Number.isFinite(profit))) {
+      setConnectionMessage({ kind: "error", text: "Cash Grab stopped because a settled contract result could not be verified." });
+      stopCashGrab();
+      return;
+    }
+    const netSettledProfit = profits.reduce((total, profit) => total + profit, 0);
     cashGrabSessionPnlRef.current = Number((cashGrabSessionPnlRef.current + netSettledProfit).toFixed(2));
     setCashGrabSessionPnl(cashGrabSessionPnlRef.current);
     cashGrabCurrentStakeRef.current = netSettledProfit < 0 && config.stakeMode === "multiply"
@@ -2727,14 +2797,31 @@ export default function XTraderPage() {
 
   const confirmCashGrabDirection = async (marketSymbol: string): Promise<CashGrabDirection | null> => {
     const initial = await status.refetch();
-    const signal = initial.data?.market_signals?.find((entry) => entry.symbol === marketSymbol);
-    if (!signal || signal.sample_count < 1) {
+    if (!initial.isSuccess || !initial.data?.connected || !initial.data.authorized) {
+      setConnectionMessage({ kind: "info", text: "Auto Direction is waiting for a fresh Deriv connection. No trade was sent." });
+      return null;
+    }
+    if (initial.data.account?.id !== cashGrabAccountIdRef.current) {
+      setConnectionMessage({ kind: "error", text: "Cash Grab stopped because the selected Deriv account changed." });
+      stopCashGrab();
+      return null;
+    }
+    const signal = initial.data.market_signals?.find((entry) => entry.symbol === marketSymbol);
+    const initialRise = Number(signal?.rise_percentage);
+    const initialFall = Number(signal?.fall_percentage);
+    if (
+      !signal
+      || !Number.isInteger(signal.sample_count)
+      || signal.sample_count < AI_SCANNER_MIN_SAMPLE
+      || !isValidObservedPercentage(initialRise)
+      || !isValidObservedPercentage(initialFall)
+    ) {
       setConnectionMessage({ kind: "info", text: `Auto Direction is waiting for live Rise/Fall samples on ${marketSymbol}. No trade was sent.` });
       return null;
     }
-    const rise = Number(signal.rise_percentage);
-    const fall = Number(signal.fall_percentage);
-    if (!Number.isFinite(rise) || !Number.isFinite(fall) || rise === fall) {
+    const rise = initialRise;
+    const fall = initialFall;
+    if (rise === fall) {
       setConnectionMessage({ kind: "info", text: `Auto Direction is waiting for a clear Rise or Fall leader on ${marketSymbol}. No trade was sent.` });
       return null;
     }
@@ -2750,6 +2837,12 @@ export default function XTraderPage() {
       await sleep(300);
       if (!cashGrabRunningRef.current) return null;
       const latest = await status.refetch();
+      if (!latest.isSuccess || !latest.data?.connected || !latest.data.authorized) continue;
+      if (latest.data.account?.id !== cashGrabAccountIdRef.current) {
+        setConnectionMessage({ kind: "error", text: "Cash Grab stopped because the selected Deriv account changed." });
+        stopCashGrab();
+        return null;
+      }
       const latestSignal = latest.data?.market_signals?.find((entry) => entry.symbol === marketSymbol);
       if (!latestSignal || latestSignal.tick_sequence <= lastSequence) continue;
       freshTicks += latestSignal.tick_sequence - lastSequence;
@@ -2758,6 +2851,16 @@ export default function XTraderPage() {
 
       const latestRise = Number(latestSignal.rise_percentage);
       const latestFall = Number(latestSignal.fall_percentage);
+      if (
+        !Number.isInteger(latestSignal.sample_count)
+        ||
+        latestSignal.sample_count < AI_SCANNER_MIN_SAMPLE
+        || !isValidObservedPercentage(latestRise)
+        || !isValidObservedPercentage(latestFall)
+      ) {
+        setConnectionMessage({ kind: "info", text: `Auto Direction is waiting for valid Rise/Fall samples on ${marketSymbol}. No trade was sent.` });
+        return null;
+      }
       if (selectedDirection === "CALL" ? latestRise > latestFall : latestFall > latestRise) {
         return selectedDirection;
       }
@@ -2776,7 +2879,13 @@ export default function XTraderPage() {
   const executeCashGrabTrade = async () => {
     let config = cashGrabConfigRef.current;
     if (!config || !cashGrabRunningRef.current || cashGrabActionLockRef.current) return;
-    if (!isConnected) {
+    const configError = getCashGrabStartConfigError(config, cashGrabSymbols.map((item) => item.value));
+    if (configError) {
+      setConnectionMessage({ kind: "error", text: `Cash Grab stopped: ${configError}` });
+      stopCashGrab();
+      return;
+    }
+    if (!isConnectedRef.current) {
       setConnectionMessage({ kind: "info", text: "Cash Grab remains active and is waiting for the Deriv connection." });
       await sleep(1_500);
       return;
@@ -2821,25 +2930,52 @@ export default function XTraderPage() {
         symbol: recommendation.symbol,
         autoSelectBest: false,
       };
+      if (!await selectMarket(recommendation.symbol)) {
+        cashGrabAutoSwitchNextAtRef.current = Date.now();
+        setConnectionMessage({ kind: "info", text: "Cash Grab remains active and is waiting to select its next market." });
+        await sleep(1_500);
+        return;
+      }
       cashGrabConfigRef.current = config;
       setCashGrabSymbol(recommendation.symbol);
-      await selectMarket(recommendation.symbol);
     }
     if (!cashGrabRunningRef.current) return;
 
-    if (config.autoSelectBest && cashGrabBestSymbol && cashGrabBestSymbol !== config.symbol) {
-      config = { ...config, symbol: cashGrabBestSymbol };
-      cashGrabConfigRef.current = config;
-      setCashGrabSymbol(cashGrabBestSymbol);
-      await selectMarket(cashGrabBestSymbol);
+    if (config.autoSelectBest) {
+      const freshSelection = await status.refetch();
+      if (!freshSelection.isSuccess || !freshSelection.data?.connected || !freshSelection.data.authorized) {
+        setConnectionMessage({ kind: "info", text: "Cash Grab remains active and is waiting for fresh market data." });
+        await sleep(1_500);
+        return;
+      }
+      if (freshSelection.data.account?.id !== cashGrabAccountIdRef.current) {
+        setConnectionMessage({ kind: "error", text: "Cash Grab stopped because the selected Deriv account changed." });
+        stopCashGrab();
+        return;
+      }
+      const bestSymbol = chooseCashGrabDirectionalMarket(
+        (freshSelection.data.market_signals ?? []) as AiScannerMarketSignal[],
+        cashGrabSymbols.map((item) => item.value),
+        config.direction,
+      );
+      if (!bestSymbol) {
+        setConnectionMessage({ kind: "info", text: "Cash Grab remains active and is waiting for a supported market with enough valid samples for the selected side." });
+        await sleep(1_500);
+        return;
+      }
+      if (bestSymbol !== config.symbol) {
+        if (!await selectMarket(bestSymbol)) {
+          setConnectionMessage({ kind: "info", text: "Cash Grab remains active and is waiting to select its next market." });
+          await sleep(1_500);
+          return;
+        }
+        config = { ...config, symbol: bestSymbol };
+        cashGrabConfigRef.current = config;
+        setCashGrabSymbol(bestSymbol);
+      }
     }
     if (!cashGrabRunningRef.current) return;
     const amount = Number(cashGrabCurrentStakeRef.current.toFixed(2));
-    if (currentAccountBalance == null || amount > currentAccountBalance) {
-      setConnectionMessage({ kind: "info", text: "Cash Grab remains active and is waiting for enough available balance for the selected stake." });
-      await sleep(1_500);
-      return;
-    }
     if (config.autoDirection) {
       const selectedDirection = await confirmCashGrabDirection(config.symbol);
       if (!cashGrabRunningRef.current) return;
@@ -2853,7 +2989,57 @@ export default function XTraderPage() {
     }
     let contractConfirmed = false;
     cashGrabActionLockRef.current = true;
+    setCashGrabScannerBusy(true);
     try {
+      const freshStatus = await status.refetch().catch(() => null);
+      if (!cashGrabRunningRef.current) return;
+      if (!freshStatus?.isSuccess || !freshStatus.data) {
+        setConnectionMessage({ kind: "info", text: "Cash Grab remains active and is waiting for a fresh Deriv status check." });
+        await sleep(1_500);
+        return;
+      }
+      const freshAccount = freshStatus.data.account;
+      if (freshAccount?.type === "real" && !freshStatus.data.live_trading_enabled) {
+        setConnectionMessage({ kind: "error", text: "Cash Grab stopped because live trading is disabled for this workspace." });
+        stopCashGrab();
+        return;
+      }
+      const entryBlock = getCashGrabEntryBlockReason({
+        connectionReady: Boolean(freshStatus.data.connected && freshStatus.data.authorized),
+        selectedAccountId: freshAccount?.id ?? null,
+        sessionAccountId: cashGrabAccountIdRef.current,
+        symbol: config.symbol,
+        supportedSymbols: cashGrabSymbols.map((item) => item.value),
+        stake: amount,
+        balance: getAccountBalance(freshAccount),
+        activeContractCount: freshStatus.data.open_contracts_ready
+          && Number.isInteger(freshStatus.data.active_contract_count)
+          ? freshStatus.data.active_contract_count
+          : null,
+        sessionPnl: cashGrabSessionPnlRef.current,
+        takeProfit: config.takeProfit,
+        lossLimit: config.lossLimit,
+      });
+      if (entryBlock) {
+        const stopReasons = new Set([
+          "account-unavailable",
+          "account-unbound",
+          "account-changed",
+          "market-unsupported",
+          "stake-invalid",
+          "take-profit-limit-reached",
+          "loss-limit-reached",
+          "session-pnl-invalid",
+        ]);
+        const shouldStop = stopReasons.has(entryBlock);
+        setConnectionMessage({
+          kind: shouldStop ? "error" : "info",
+          text: cashGrabEntryBlockMessage(entryBlock, freshAccount?.currency ?? "USD"),
+        });
+        if (shouldStop) stopCashGrab();
+        else await sleep(1_500);
+        return;
+      }
       const result = await bulkBuyMutation.mutateAsync({
         data: {
           ...buildCashGrabBulkBuyPayload({
@@ -2866,11 +3052,17 @@ export default function XTraderPage() {
           access_feature: "cash-grab",
         },
       });
+      if (!result.buys.length) throw new Error("Deriv did not return a confirmed Cash Grab contract.");
       contractConfirmed = true;
       setConnectionMessage(null);
       result.buys.forEach((buy) => {
         cashGrabOpenContractIdsRef.current.add(buy.contract_id);
       });
+      if (result.buys.length !== 1) {
+        setConnectionMessage({ kind: "error", text: "Deriv returned an unexpected number of Cash Grab contracts. The run is stopping for review." });
+        stopCashGrab();
+        return;
+      }
       let afterRows = claimFeatureRows("cash-grab", cashGrabClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
       refreshTradeResults();
       let completed = reconcileCashGrabSession(afterRows);
@@ -2969,6 +3161,15 @@ export default function XTraderPage() {
     if (cashGrabClosePromiseRef.current) return cashGrabClosePromiseRef.current;
     const operation = (async () => {
       try {
+        if (cashGrabAccountIdRef.current) {
+          const accountStatus = await status.refetch().catch(() => null);
+          if (
+            !accountStatus?.isSuccess
+            || accountStatus.data?.account?.id !== cashGrabAccountIdRef.current
+          ) {
+            throw new Error("Cash Grab could not verify the account used for this run. Select that same account before managing its contracts.");
+          }
+        }
         for (let pass = 0; pass < 80; pass += 1) {
           const cachedRows = queryClient.getQueryData<typeof rows>(getGetDerivHistoryQueryKey()) ?? rows;
           const cachedOpenIds = cachedRows
@@ -2995,6 +3196,7 @@ export default function XTraderPage() {
                 continue;
               }
               cashGrabOpenContractIdsRef.current.clear();
+              cashGrabAccountIdRef.current = null;
               return;
             }
             await Promise.all(refreshedOpenIds.map(async (contractId) => {
@@ -3031,6 +3233,7 @@ export default function XTraderPage() {
           throw new Error("Cash Grab could not close every active contract. Deriv is still processing the close request.");
         }
         cashGrabOpenContractIdsRef.current.clear();
+        cashGrabAccountIdRef.current = null;
       } finally {
         setCashGrabStopping(false);
         cashGrabClosePromiseRef.current = null;
@@ -3041,6 +3244,9 @@ export default function XTraderPage() {
   };
 
   const stopCashGrab = () => {
+    cashGrabStartAttemptIdRef.current += 1;
+    cashGrabStartingRef.current = false;
+    setCashGrabStarting(false);
     cashGrabRunIdRef.current += 1;
     cashGrabRunningRef.current = false;
     cashGrabAutoSwitchNextAtRef.current = null;
@@ -3055,7 +3261,12 @@ export default function XTraderPage() {
   };
 
   const startCashGrab = async (requestedConfig?: CashGrabStartConfig) => {
-    if (cashGrabRunningRef.current) return;
+    if (
+      cashGrabRunningRef.current
+      || cashGrabStartingRef.current
+      || cashGrabActionLockRef.current
+      || bulkBuyMutation.isPending
+    ) return;
     if (cashGrabClosePromiseRef.current || cashGrabStopping) {
       setConnectionMessage({ kind: "info", text: "Cash Grab is finishing its stop sweep. Start again when the active contracts are closed." });
       return;
@@ -3068,31 +3279,112 @@ export default function XTraderPage() {
     const config: CashGrabStartConfig | null = requested
       ? { ...requested, contractFamily: "rise-fall" }
       : null;
-    if (!config || !isConnected) {
-      setConnectionMessage({ kind: "error", text: "Connect Deriv before starting Cash Grab." });
+    if (!config) {
+      setConnectionMessage({ kind: "error", text: "Set up Cash Grab before starting a run." });
       return;
     }
-    if (!currentAccount) {
-      setConnectionMessage({ kind: "error", text: "Select a Deriv account before starting Cash Grab." });
+    const configError = getCashGrabStartConfigError(config, cashGrabSymbols.map((item) => item.value));
+    if (configError) {
+      setConnectionMessage({ kind: "error", text: configError });
       return;
     }
-    const existingIds = rows
-      .filter((trade) => cashGrabManagedContractTypes.includes(trade.contract_type as typeof cashGrabManagedContractTypes[number]))
-      .map((trade) => trade.contract_id);
-    cashGrabOpenContractIdsRef.current.clear();
-    cashGrabSessionKnownIdsRef.current = new Set(existingIds);
-    cashGrabProcessedSettlementIdsRef.current = new Set(existingIds);
-    cashGrabConfigRef.current = config;
-    cashGrabCurrentStakeRef.current = Number(config.stake.toFixed(2));
-    cashGrabSessionPnlRef.current = 0;
-    setCashGrabSessionPnl(0);
-    cashGrabAutoSwitchNextAtRef.current = config.autoSwitchSafestPair ? 0 : null;
-    setCashGrabStopping(false);
-    setCashGrabAutoSwitchSafestPairStatus(config.autoSwitchSafestPair ? "watching" : "off");
-    cashGrabRunningRef.current = true;
-    setCashGrabRunning(true);
-    const runId = ++cashGrabRunIdRef.current;
-    void runCashGrabLoop(runId);
+
+    const attemptId = ++cashGrabStartAttemptIdRef.current;
+    cashGrabStartingRef.current = true;
+    setCashGrabStarting(true);
+    try {
+      const initialStatus = await status.refetch().catch(() => null);
+      if (cashGrabStartAttemptIdRef.current !== attemptId) return;
+      if (!initialStatus?.isSuccess || !initialStatus.data?.connected || !initialStatus.data.authorized) {
+        setConnectionMessage({ kind: "error", text: "Connect Deriv and wait for account status before starting Cash Grab." });
+        return;
+      }
+      const startingAccountId = initialStatus.data.account?.id ?? null;
+      if (!startingAccountId) {
+        setConnectionMessage({ kind: "error", text: "Select a Deriv account before starting Cash Grab." });
+        return;
+      }
+      if (initialStatus.data.account?.type === "real" && !initialStatus.data.live_trading_enabled) {
+        setConnectionMessage({ kind: "error", text: "Live trading is disabled for this workspace." });
+        return;
+      }
+
+      const historySnapshot = await readHistorySnapshot();
+      if (cashGrabStartAttemptIdRef.current !== attemptId) return;
+      if (!historySnapshot.fresh) {
+        setConnectionMessage({ kind: "info", text: "Cash Grab is waiting for fresh Deriv history before it starts." });
+        return;
+      }
+      if (historySnapshot.rows.some((trade) => isDerivHistoryOpen(trade.status))) {
+        setConnectionMessage({ kind: "info", text: "Cash Grab cannot start until Deriv confirms that the existing contract has settled." });
+        return;
+      }
+
+      const finalStatus = await status.refetch().catch(() => null);
+      if (cashGrabStartAttemptIdRef.current !== attemptId) return;
+      if (!finalStatus?.isSuccess || !finalStatus.data?.connected || !finalStatus.data.authorized) {
+        setConnectionMessage({ kind: "info", text: "Cash Grab is waiting for a fresh Deriv connection check before starting." });
+        return;
+      }
+      const finalAccount = finalStatus.data.account;
+      if (finalAccount?.type === "real" && !finalStatus.data.live_trading_enabled) {
+        setConnectionMessage({ kind: "error", text: "Live trading is disabled for this workspace." });
+        return;
+      }
+      const startBlock = getCashGrabEntryBlockReason({
+        connectionReady: Boolean(finalStatus.data.connected && finalStatus.data.authorized),
+        selectedAccountId: finalAccount?.id ?? null,
+        sessionAccountId: startingAccountId,
+        symbol: config.symbol,
+        supportedSymbols: cashGrabSymbols.map((item) => item.value),
+        stake: config.stake,
+        balance: getAccountBalance(finalAccount),
+        activeContractCount: finalStatus.data.open_contracts_ready
+          && Number.isInteger(finalStatus.data.active_contract_count)
+          ? finalStatus.data.active_contract_count
+          : null,
+        sessionPnl: 0,
+        takeProfit: config.takeProfit,
+        lossLimit: config.lossLimit,
+      });
+      if (startBlock) {
+        setConnectionMessage({
+          kind: "error",
+          text: cashGrabEntryBlockMessage(startBlock, finalAccount?.currency ?? "USD"),
+        });
+        return;
+      }
+
+      const existingIds = historySnapshot.rows
+        .filter((trade) => cashGrabManagedContractTypes.includes(trade.contract_type as typeof cashGrabManagedContractTypes[number]))
+        .map((trade) => trade.contract_id);
+      cashGrabOpenContractIdsRef.current.clear();
+      cashGrabSessionKnownIdsRef.current = new Set(existingIds);
+      cashGrabProcessedSettlementIdsRef.current = new Set(existingIds);
+      cashGrabAccountIdRef.current = startingAccountId;
+      cashGrabConfigRef.current = config;
+      cashGrabCurrentStakeRef.current = Number(config.stake.toFixed(2));
+      cashGrabSessionPnlRef.current = 0;
+      setCashGrabSessionPnl(0);
+      cashGrabAutoSwitchNextAtRef.current = config.autoSwitchSafestPair ? 0 : null;
+      setCashGrabStopping(false);
+      setCashGrabAutoSwitchSafestPairStatus(config.autoSwitchSafestPair ? "watching" : "off");
+      cashGrabStartingRef.current = false;
+      setCashGrabStarting(false);
+      cashGrabRunningRef.current = true;
+      setCashGrabRunning(true);
+      const runId = ++cashGrabRunIdRef.current;
+      void runCashGrabLoop(runId);
+    } catch (error) {
+      if (cashGrabStartAttemptIdRef.current === attemptId) {
+        setConnectionMessage({ kind: "error", text: `Cash Grab could not start safely: ${errorMessage(error)}` });
+      }
+    } finally {
+      if (cashGrabStartAttemptIdRef.current === attemptId) {
+        cashGrabStartingRef.current = false;
+        setCashGrabStarting(false);
+      }
+    }
   };
 
   const deactivateCashGrab = () => {
@@ -3495,44 +3787,89 @@ export default function XTraderPage() {
   });
 
   const runCashGrabAiScanner = () => withAiScannerLock(async () => {
-    if (!cashGrabEnabled || !isConnected) throw new Error("Enable Cash Grab and connect Deriv before scanning.");
-    if (cashGrabRunningRef.current || cashGrabActionLockRef.current || bulkBuyMutation.isPending) {
+    if (!cashGrabEnabled || !isConnectedRef.current) throw new Error("Enable Cash Grab and connect Deriv before scanning.");
+    if (cashGrabRunningRef.current || cashGrabStartingRef.current || cashGrabActionLockRef.current || bulkBuyMutation.isPending) {
       throw new Error("Cash Grab is already running or sending a contract.");
     }
-    if (!Number.isInteger(cashGrabDuration) || cashGrabDuration < 1 || cashGrabDuration > 5) {
-      throw new Error("Choose a Cash Grab duration from 1 to 5 ticks first.");
-    }
-    const amount = Number(cashGrabStake.toFixed(2));
-    if (!Number.isFinite(amount) || amount < 0.35) throw new Error("Set a Cash Grab stake of at least 0.35 first.");
-
-    const freshStatus = await status.refetch();
-    if (!freshStatus.data?.open_contracts_ready || (freshStatus.data.active_contract_count ?? 0) > 0) {
-      throw new Error(tradeSlotMessage ?? "Deriv has not confirmed that the previous contract settled.");
-    }
-    if (isReal && !freshStatus.data.live_trading_enabled) {
-      throw new Error("Live trading is disabled for this workspace.");
-    }
-    const balance = getAccountBalance(freshStatus.data.account) ?? currentAccountBalanceRef.current;
-    if (balance == null || amount > balance) throw new Error("The Cash Grab stake exceeds the available account balance.");
-
-    const signals = (freshStatus.data.market_signals ?? []) as AiScannerMarketSignal[];
-    const candidate = chooseCashGrabScannerCandidate(signals, cashGrabSymbols.map((market) => market.value));
-    if (!candidate) {
-      throw new Error(`Cash Grab needs at least ${AI_SCANNER_MIN_SAMPLE} valid Rise/Fall samples on a supported market.`);
-    }
-    if (!await selectMarket(candidate.symbol)) throw new Error("Deriv could not select the scanned market. No contract was sent.");
-    const historySnapshot = await readHistorySnapshot();
-    if (!historySnapshot.fresh || historySnapshot.rows.some((trade) => isDerivHistoryOpen(trade.status))) {
-      throw new Error("Cash Grab needs a fresh, settled history check before sending a scanned contract.");
-    }
-    if (cashGrabSessionKnownIdsRef.current == null) {
-      cashGrabSessionKnownIdsRef.current = new Set(historySnapshot.rows.map((trade) => trade.contract_id));
-    }
-
-    setCashGrabSymbol(candidate.symbol);
-    setCashGrabDirection(candidate.contractType);
     cashGrabActionLockRef.current = true;
     try {
+      if (!Number.isInteger(cashGrabDuration) || cashGrabDuration < 1 || cashGrabDuration > 5) {
+        throw new Error("Choose a Cash Grab duration from 1 to 5 ticks first.");
+      }
+      const amount = Number(cashGrabStake.toFixed(2));
+      if (!Number.isFinite(amount) || amount < 0.35) throw new Error("Set a Cash Grab stake of at least 0.35 first.");
+
+      const initialStatus = await status.refetch();
+      if (!initialStatus.isSuccess || !initialStatus.data?.connected || !initialStatus.data.authorized) {
+        throw new Error("Cash Grab needs a fresh connected Deriv account before scanning.");
+      }
+      const scanAccountId = initialStatus.data.account?.id ?? null;
+      if (!scanAccountId) throw new Error("Select a Deriv account before scanning Cash Grab.");
+      if (initialStatus.data.account?.type === "real" && !initialStatus.data.live_trading_enabled) {
+        throw new Error("Live trading is disabled for this workspace.");
+      }
+      if (
+        !initialStatus.data.open_contracts_ready
+        || !Number.isInteger(initialStatus.data.active_contract_count)
+        || initialStatus.data.active_contract_count !== 0
+      ) {
+        throw new Error(tradeSlotMessage ?? "Deriv has not confirmed that all existing contracts have settled.");
+      }
+      const initialBalance = getAccountBalance(initialStatus.data.account);
+      if (initialBalance == null || amount > initialBalance) {
+        throw new Error("Cash Grab is waiting for a fresh balance that can cover the selected stake.");
+      }
+
+      const signals = (initialStatus.data.market_signals ?? []) as AiScannerMarketSignal[];
+      const candidate = chooseCashGrabScannerCandidate(signals, cashGrabSymbols.map((market) => market.value));
+      if (!candidate) {
+        throw new Error(`Cash Grab needs at least ${AI_SCANNER_MIN_SAMPLE} valid Rise/Fall samples on a supported market.`);
+      }
+      if (!await selectMarket(candidate.symbol)) throw new Error("Deriv could not select the scanned market. No contract was sent.");
+      const historySnapshot = await readHistorySnapshot();
+      if (!historySnapshot.fresh || historySnapshot.rows.some((trade) => isDerivHistoryOpen(trade.status))) {
+        throw new Error("Cash Grab needs a fresh, settled history check before sending a scanned contract.");
+      }
+      if (cashGrabSessionKnownIdsRef.current == null) {
+        cashGrabSessionKnownIdsRef.current = new Set(historySnapshot.rows.map((trade) => trade.contract_id));
+      }
+      const sessionRows = historySnapshot.rows.filter((trade) =>
+        cashGrabClaimedHistoryIdsRef.current.has(trade.contract_id)
+        && !cashGrabSessionKnownIdsRef.current?.has(trade.contract_id)
+        && !isDerivHistoryOpen(trade.status),
+      );
+      const sessionPnl = realizedProfit(sessionRows);
+
+      const finalStatus = await status.refetch();
+      if (!finalStatus.isSuccess || !finalStatus.data?.connected || !finalStatus.data.authorized) {
+        throw new Error("Cash Grab needs a fresh connection check before sending a scanned contract.");
+      }
+      const finalAccount = finalStatus.data.account;
+      if (finalAccount?.type === "real" && !finalStatus.data.live_trading_enabled) {
+        throw new Error("Live trading is disabled for this workspace.");
+      }
+      const scanBlock = getCashGrabEntryBlockReason({
+        connectionReady: Boolean(finalStatus.data.connected && finalStatus.data.authorized),
+        selectedAccountId: finalAccount?.id ?? null,
+        sessionAccountId: scanAccountId,
+        symbol: candidate.symbol,
+        supportedSymbols: cashGrabSymbols.map((market) => market.value),
+        stake: amount,
+        balance: getAccountBalance(finalAccount),
+        activeContractCount: finalStatus.data.open_contracts_ready
+          && Number.isInteger(finalStatus.data.active_contract_count)
+          ? finalStatus.data.active_contract_count
+          : null,
+        sessionPnl,
+        takeProfit: cashGrabTakeProfit,
+        lossLimit: cashGrabLossLimit,
+      });
+      if (scanBlock) {
+        throw new Error(cashGrabEntryBlockMessage(scanBlock, finalAccount?.currency ?? "USD"));
+      }
+
+      setCashGrabSymbol(candidate.symbol);
+      setCashGrabDirection(candidate.contractType);
       const result = await bulkBuyMutation.mutateAsync({
         data: {
           ...buildCashGrabBulkBuyPayload({
@@ -3546,14 +3883,18 @@ export default function XTraderPage() {
         },
       });
       if (!result.buys.length) throw new Error("Deriv did not return a confirmed Cash Grab contract.");
-      setConnectionMessage(null);
       claimFeatureRows("cash-grab", cashGrabClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
       refreshTradeResults();
+      if (result.buys.length !== 1) {
+        throw new Error("Deriv returned an unexpected number of Cash Grab contracts. Review open contracts before continuing.");
+      }
+      setConnectionMessage(null);
+      const side = candidate.contractType === "CALL" ? "Rise" : "Fall";
+      return `Sent one Cash Grab ${side} contract on ${candidate.symbol} for ${cashGrabDuration} ticks at ${amount.toFixed(2)} ${finalAccount?.currency ?? "USD"}.`;
     } finally {
       cashGrabActionLockRef.current = false;
+      setCashGrabScannerBusy(false);
     }
-    const side = candidate.contractType === "CALL" ? "Rise" : "Fall";
-    return `Sent one Cash Grab ${side} contract on ${candidate.symbol} for ${cashGrabDuration} ticks at ${amount.toFixed(2)} ${currentAccount?.currency ?? "USD"}. The selected side appeared in ${candidate.observedRate.toFixed(1)}% of ${candidate.sampleCount} observed moves; that sample is not a win-rate guarantee.`;
   });
 
   const runTradeXAiScanner = () => withAiScannerLock(async () => {
@@ -5201,6 +5542,8 @@ export default function XTraderPage() {
           autoSwitchSafestPairStatus={cashGrabAutoSwitchSafestPairStatus}
           autoSwitchSafestPairRecommendation={cashGrabAutoSwitchRecommendation}
           running={cashGrabRunning}
+          starting={cashGrabStarting}
+          scannerBusy={cashGrabScannerBusy}
           stopping={cashGrabStopping}
           isConnected={isConnected}
           isPlacingTrade={bulkBuyMutation.isPending}
