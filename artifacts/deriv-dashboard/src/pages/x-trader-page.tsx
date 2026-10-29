@@ -6,7 +6,6 @@ import {
   getUserFacingErrorMessage,
   ApiTransportError,
   type ClockWorkContractOrder,
-  useQuoteClockWorkContracts,
   useBuyClockWorkContracts,
   useGetAccessSession,
   useGetAdminFeatureSettings,
@@ -113,7 +112,6 @@ import CashGrabPanel, {
   type CashGrabTrade,
 } from "../components/cash-grab-panel";
 import ClockWorkPanel from "../components/clock-work-panel";
-import type { ClockWorkPanelProps } from "../components/clock-work-panel";
 import DerivHistory from "../components/deriv-history";
 import { getAccountBalance } from "../lib/account-balance";
 import {
@@ -122,15 +120,10 @@ import {
 } from "../lib/money-bank-history-claims";
 import {
   appendClockWorkQuote,
-  CLOCK_WORK_AGGRESSIVE_MIN_WIN_RATE,
-  getClockWorkAggressiveBudget,
-  getClockWorkBarrierTickCounts,
-  estimateClockWorkBarrierRates,
-  formatClockWorkBarrier,
-  getClockWorkFourSequence,
-  getClockWorkPushProgress,
-  getClockWorkRecentMoves,
-  meetsClockWorkMinimumWinRate,
+  chooseClockWorkAiCandidate,
+  CLOCK_WORK_AI_DURATION_TICKS,
+  CLOCK_WORK_AI_MIN_SAMPLE_COUNT,
+  CLOCK_WORK_AI_MIN_WIN_RATE,
   type ClockWorkQuoteBuffer,
 } from "../lib/clock-work-logic";
 import { buildCashGrabBulkBuyPayload } from "../lib/cash-grab-order";
@@ -225,26 +218,11 @@ const tradeXGuidePages = [
 ] as const;
 
 const clockWorkGuidePages = [
-  { title: "Welcome to Clock Work", body: "Clock Work is the Hybrid Analysis workspace for five-tick Higher and Lower contracts. Its live chart, recent moves, and barrier estimates describe the selected market and do not predict or guarantee the next result.", points: ["Start on a demo account while learning.", "The feature uses the market, barriers, duration, and stakes shown on screen.", "Only one trading feature can be active at a time."] },
-  { title: "Connect and choose an account", body: "Connect a Deriv account and confirm which account is selected before enabling Clock Work. Real-account orders are still subject to the server's live-trading and balance checks.", points: ["The selected account receives the orders.", "A disconnected or unsettled account blocks new entries.", "Use demo mode to learn the controls."] },
-  { title: "Select the market", body: "Market selects the live synthetic index used for ticks, the price chart, estimates, quotes, and contracts.", points: ["Switching markets changes the live data source.", "Wait for fresh ticks and quotes after changing markets.", "Past market movement does not guarantee future movement."] },
-  { title: "Contract duration", body: "Clock Work uses a fixed five-tick duration for quotes, chart estimates, and all placed contracts.", points: ["There is no three-tick option.", "The selected market determines the tick stream.", "A short duration can still settle at a loss."] },
-  { title: "Higher and Lower stakes", body: "Higher Stake and Lower Stake set the amount for their matching manual and paired contracts. The four-trade action uses its separate H1, L1, L2, and H2 stake fields.", points: ["Each stake must be at least 1.00.", "The account balance must cover the complete batch.", "The server rechecks the balance before submitting orders."] },
-  { title: "Offset barriers", body: "Offset uses a signed distance from the contract's entry price. Higher uses a positive offset and Lower uses a negative offset.", points: ["The displayed pad values are selectable barriers.", "Changing the market can change the entry price, not the selected offset.", "Deriv receives the signed relative barrier."] },
-  { title: "Absolute barriers", body: "Absolute converts the selected distance into a price level using the current quote when a fresh proposal is requested.", points: ["The level is recalculated from the live quote before an order.", "Higher and Lower levels remain separate selections.", "A new quote can change the displayed absolute level."] },
-  { title: "Half Barrier", body: "Half Barrier cuts the selected distance in half. In Absolute mode this means halfway between the current quote and the selected level, not half of the instrument's entire price.", points: ["The chart uses the effective, halved level.", "The order request uses the same effective barrier.", "Turn it off to restore the full selected distance."] },
-  { title: "Read the barrier pads", body: "The two barrier pads select Higher and Lower independently. Their labels and the chart show the effective levels used by the current mode.", points: ["Higher and Lower may use different offsets.", "The selections are sent with their matching contract types.", "Review the values again after changing mode or market."] },
-  { title: "Price Chart", body: "The chart plots recent live quotes and overlays the selected Higher and Lower barrier levels.", points: ["The chart needs at least two live quotes.", "Price history is descriptive and does not guarantee a settlement.", "The chart follows the selected market."] },
-  { title: "Higher and Lower percentages", body: "The percentages estimate how often recent five-tick windows crossed the selected barrier levels, using the available quote sample.", points: ["Small samples can change quickly.", "The estimate is not Deriv's contract probability.", "A percentage is not a promised return."] },
-  { title: "Recent Moves", body: "Recent Moves labels each observed quote change as H for Higher or L for Lower.", points: ["Moves come from consecutive live quotes.", "Flat or unavailable ticks do not create a direction.", "A run of H or L marks is not a reliable forecast."] },
-  { title: "Prediction and lean strength", body: "Prediction shows which selected barrier has the stronger estimated hit rate in the current sample. Lean strength shows that side's measured percentage.", points: ["Not enough data leaves the prediction blank.", "The stronger side can change as quotes arrive.", "Lean strength is an observation, not certainty."] },
-  { title: "Manual Higher and Lower", body: "The green Higher and red Lower buttons each send one five-tick contract using its own selected barrier, stake, and a fresh Deriv proposal.", points: ["The quote panel shows Deriv's current payout and estimated profit.", "Quotes can change before the order is accepted.", "Check the account, market, stake, and barrier before placing."] },
-  { title: "Higher & Lower together", body: "Higher & Lower submits one Higher and one Lower contract using their respective stakes and barriers.", points: ["Both proposals are requested before any buy is sent.", "The pair can have a partial or unconfirmed result; check history.", "The last contract to settle is not guaranteed to win or cover losses."] },
-  { title: "All 4 Trades", body: "All 4 Trades submits H1, L1, L2, and H2 contracts in alternating Higher and Lower order, starting with the side that currently has the stronger lean.", points: ["Each leg has its own selected stake and barrier.", "All four quotes must be available before the batch is sent.", "The order sequence cannot guarantee the final settlement outcome."] },
-  { title: "Auto Trading modes", body: "Choose H&L (2) for a paired batch, A to select the side with the stronger measured rate, or All (4) for four alternating contracts.", points: ["Automation also requires a minimum lean selection.", "The switch starts and stops new automatic entries.", "An open Deriv contract pauses the next entry."] },
-  { title: "Minimum lean", body: "Minimum lean sets the observed percentage threshold required before an automatic batch can start.", points: ["Select one of 50%, 67%, 78%, 88%, 92%, or 95%.", "Higher thresholds can mean fewer entries.", "Passing the threshold does not make a contract certain to win."] },
-  { title: "Aggressive Auto Trading", body: "Aggressive mode uses a selected share of the current account balance and waits for two consecutive ticks in one direction before considering an entry.", points: ["Choose 5%, 15%, 25%, or 50%.", "The total planned amount is divided across the selected mode's contracts.", "The balance and minimum stake checks can pause an entry."] },
-  { title: "History and risk", body: "Clock Work History shows contracts submitted by this feature, with actual settled profit, result, win rate, and recorded stake. Open contracts remain unsettled until Deriv reports a final result.", points: ["Clearing hides Clock Work rows from this dashboard only; it does not delete Deriv's account history.", "Paired trades and four-trade batches can lose money.", "No sequence can guarantee a final winning contract or recovery."] },
+  { title: "Welcome to Clock Work", body: "Ai Clock chooses a Higher or Lower contract and its barrier from recent market outcomes. It only sends one entry when its historical signal qualifies; past outcomes do not guarantee future results.", points: ["Use a demo account while learning.", "Only one trading feature can be active at a time.", "The selected Deriv account receives any accepted order."] },
+  { title: "Connect and choose an account", body: "Connect Deriv and confirm which account is selected before enabling Clock Work. Real-account orders remain subject to the workspace's live-trading and balance checks.", points: ["A disconnected account blocks new entries.", "Open contracts must settle before Ai Clock can enter again.", "Use demo mode to learn the controls."] },
+  { title: "Choose a market and stake", body: "Select the market and one stake per entry. Clock Work uses a fixed five-tick contract duration; Ai Clock selects the contract direction and barrier.", points: ["Changing markets clears the local sample and waits for fresh ticks.", "The stake must be at least 1.00 and fit the selected account balance.", "No trade is sent while data or account checks are unavailable."] },
+  { title: "Enable and start Ai Clock", body: "Turn on the Ai Clock switch to arm the automation, then press Start Clock Work. Ai Clock reviews recent five-tick outcomes and waits until the required history and signal checks are met.", points: ["The switch alone does not start trading.", "No qualifying setup means no order.", "An open or unsettled contract pauses the next entry."] },
+  { title: "Stop and review history", body: "Stop Clock Work to prevent new entries. An order already accepted by Deriv is not canceled by Stop and must settle through Deriv.", points: ["Clock Work History shows entries and their reported results.", "Clearing history hides local rows only; it does not delete Deriv's account history.", "Check Deriv history before restarting after an uncertain order."] },
 ] as const;
 
 const digitFlipGuidePages = [
@@ -426,7 +404,6 @@ export default function XTraderPage() {
   const moneyBankBuyMutation = useBuyDerivContract();
   const moneyBankSellMutation = useSellDerivContract();
   const cashGrabSellMutation = useSellDerivContract();
-  const clockWorkQuoteMutation = useQuoteClockWorkContracts();
   const clockWorkBuyMutation = useBuyClockWorkContracts();
   const anyContractBuyPending = bulkBuyMutation.isPending
     || dualBuyMutation.isPending
@@ -493,36 +470,18 @@ export default function XTraderPage() {
   const [cashGrabEnabled, setCashGrabEnabled] = useState(false);
   const [clockWorkEnabled, setClockWorkEnabled] = useState(false);
   const [clockWorkSymbol, setClockWorkSymbol] = useState("R_75");
-  const [clockWorkBarrierMode, setClockWorkBarrierMode] = useState<"offset" | "absolute">("offset");
-  const [clockWorkHalfBarrier, setClockWorkHalfBarrier] = useState(false);
-  const [clockWorkHigherBarrier, setClockWorkHigherBarrier] = useState(.12);
-  const [clockWorkLowerBarrier, setClockWorkLowerBarrier] = useState(-.12);
-  const [clockWorkHigherStake, setClockWorkHigherStake] = useState(1);
-  const [clockWorkLowerStake, setClockWorkLowerStake] = useState(1);
-  const [clockWorkH1Stake, setClockWorkH1Stake] = useState(1);
-  const [clockWorkL1Stake, setClockWorkL1Stake] = useState(1);
-  const [clockWorkL2Stake, setClockWorkL2Stake] = useState(1);
-  const [clockWorkH2Stake, setClockWorkH2Stake] = useState(1);
-  const [clockWorkQuotes, setClockWorkQuotes] = useState<{ pair: { higher: { payout: number; ask_price: number; spot: number } | null; lower: { payout: number; ask_price: number; spot: number } | null }; allFour: { payout: number; ask_price: number; spot: number } | null }>({
-    pair: { higher: null, lower: null },
-    allFour: null,
-  });
+  const [clockWorkStake, setClockWorkStake] = useState(1);
+  const [clockWorkAiEnabled, setClockWorkAiEnabled] = useState(false);
+  const [clockWorkRunning, setClockWorkRunning] = useState(false);
   const [clockWorkQuoteBuffer, setClockWorkQuoteBuffer] = useState<ClockWorkQuoteBuffer>({
     symbol: "R_75",
     quotes: [],
     lastTickId: null,
   });
   const clockWorkMarketResetEpochRef = useRef(0);
-  const [clockWorkBarrierAnchor, setClockWorkBarrierAnchor] = useState<number | null>(null);
   const [clockWorkStatusMessage, setClockWorkStatusMessage] = useState<string | null>(null);
   const [clockWorkBusy, setClockWorkBusy] = useState(false);
-  const [clockWorkAutoMode, setClockWorkAutoMode] = useState<ClockWorkPanelProps["autoMode"]>("pair");
-  const [clockWorkMinLean, setClockWorkMinLean] = useState<number | null>(60);
-  const [clockWorkAutoEnabled, setClockWorkAutoEnabled] = useState(false);
-  const [clockWorkAggressiveEnabled, setClockWorkAggressiveEnabled] = useState(false);
-  const [clockWorkAggressivePercent, setClockWorkAggressivePercent] = useState(5);
-  const [clockWorkAggressiveRounds, setClockWorkAggressiveRounds] = useState(0);
-  const [clockWorkAutoStatus, setClockWorkAutoStatus] = useState("Select an automatic mode to begin.");
+  const [clockWorkAiStatus, setClockWorkAiStatus] = useState("Ai Clock is off.");
   const [clockWorkHistoryClearArmed, setClockWorkHistoryClearArmed] = useState(false);
   const [clockWorkHiddenHistoryIds, setClockWorkHiddenHistoryIds] = useState<Set<string>>(new Set());
   const [cashGrabDirection, setCashGrabDirection] = useState<CashGrabDirection>("CALL");
@@ -671,12 +630,8 @@ export default function XTraderPage() {
   }>({ accountId: null, ids: [] });
   const historyFeatureOwnersRef = useRef(new Map<string, DerivHistoryFeature>());
   const clockWorkActionLockRef = useRef(false);
-  const clockWorkAutoAttemptAtRef = useRef(0);
+  const clockWorkAiAttemptAtRef = useRef(0);
   const clockWorkAutomationRef = useRef<(() => void) | null>(null);
-  const clockWorkQuoteOrderBuilderRef = useRef<(() => {
-    pair: ClockWorkContractOrder[];
-    allFour: ClockWorkContractOrder[];
-  }) | null>(null);
   const configRef = useRef({
     direction,
     barrier,
@@ -981,96 +936,8 @@ export default function XTraderPage() {
     clockWorkLatestTick?.quote,
     clockWorkLatestTick?.symbol,
   ]);
-  useEffect(() => {
-    if (clockWorkBarrierAnchor == null && clockWorkCurrentQuote != null) {
-      setClockWorkBarrierAnchor(clockWorkCurrentQuote);
-    }
-  }, [clockWorkBarrierAnchor, clockWorkCurrentQuote]);
-  const clockWorkBarrierReference = clockWorkBarrierAnchor ?? clockWorkCurrentQuote;
-  const clockWorkRates = estimateClockWorkBarrierRates({
-    quotes: clockWorkQuoteHistory,
-    spot: clockWorkBarrierReference,
-    mode: clockWorkBarrierMode,
-    higherOffset: clockWorkHigherBarrier,
-    lowerOffset: clockWorkLowerBarrier,
-    halfBarrier: clockWorkHalfBarrier,
-    duration: 5,
-  });
-  const clockWorkObservedTicks = getClockWorkBarrierTickCounts(
-    clockWorkQuoteHistory,
-    clockWorkBarrierReference == null
-      ? null
-      : clockWorkBarrierReference + (clockWorkHalfBarrier ? clockWorkHigherBarrier / 2 : clockWorkHigherBarrier),
-    clockWorkBarrierReference == null
-      ? null
-      : clockWorkBarrierReference + (clockWorkHalfBarrier ? clockWorkLowerBarrier / 2 : clockWorkLowerBarrier),
-  );
-  const clockWorkRecentMoves = getClockWorkRecentMoves(clockWorkQuoteHistory);
-  const clockWorkPushProgress = getClockWorkPushProgress(clockWorkQuoteHistory, 2);
-  const clockWorkPushDirection = clockWorkPushProgress.direction;
+  const clockWorkAiCandidate = chooseClockWorkAiCandidate(clockWorkQuoteHistory);
   const clockWorkTickEpoch = clockWorkTickIsFreshForMarket ? clockWorkLatestTick?.epoch ?? null : null;
-  const clockWorkQuoteUpdatedAt = clockWorkTickEpoch == null ? "" : new Date(Number(clockWorkTickEpoch) * 1000).toISOString();
-  const clockWorkBarrierValues = [.5, .25, .12, .05];
-  const clockWorkBarrierOptions = (side: "higher" | "lower") => {
-    const selected = side === "higher" ? clockWorkHigherBarrier : clockWorkLowerBarrier;
-    return clockWorkBarrierValues.map((magnitude) => {
-      const offset = side === "higher" ? magnitude : -magnitude;
-      const effectiveOffset = clockWorkHalfBarrier ? offset / 2 : offset;
-      const absolute = clockWorkBarrierReference == null ? null : clockWorkBarrierReference + effectiveOffset;
-      return {
-        value: offset,
-        label: clockWorkBarrierMode === "offset"
-          ? `${effectiveOffset > 0 ? "+" : ""}${effectiveOffset.toFixed(2)}`
-          : absolute == null ? "—" : absolute.toFixed(2),
-        selected: selected === offset,
-      };
-    });
-  };
-  const makeClockWorkOrder = (
-    key: string,
-    contractType: "HIGHER" | "LOWER",
-    amount: number,
-  ): ClockWorkContractOrder => {
-    const offset = contractType === "HIGHER" ? clockWorkHigherBarrier : clockWorkLowerBarrier;
-    const barrier = formatClockWorkBarrier(clockWorkBarrierMode, clockWorkBarrierReference, offset, clockWorkHalfBarrier) ?? "1";
-    return {
-      key,
-      amount: Number(Math.max(1, amount).toFixed(2)),
-      duration: 5,
-      duration_unit: "t",
-      contract_type: contractType,
-      barrier,
-      symbol: clockWorkSymbol,
-    };
-  };
-  const clockWorkPairOrders = useMemo(() => [
-    makeClockWorkOrder("higher", "HIGHER", clockWorkHigherStake),
-    makeClockWorkOrder("lower", "LOWER", clockWorkLowerStake),
-  ], [clockWorkSymbol, clockWorkBarrierMode, clockWorkHigherBarrier, clockWorkLowerBarrier, clockWorkHalfBarrier, clockWorkBarrierReference, clockWorkCurrentQuote, clockWorkHigherStake, clockWorkLowerStake]);
-  const makeClockWorkFourOrders = (lead: "HIGHER" | "LOWER" | null) => {
-    const sequence = getClockWorkFourSequence(lead);
-    let higherIndex = 0;
-    let lowerIndex = 0;
-    return sequence.map((contractType) => {
-      const index = contractType === "HIGHER" ? ++higherIndex : ++lowerIndex;
-      const key = `${contractType === "HIGHER" ? "h" : "l"}${index}`;
-      const amount = contractType === "HIGHER"
-        ? index === 1 ? clockWorkH1Stake : clockWorkH2Stake
-        : index === 1 ? clockWorkL1Stake : clockWorkL2Stake;
-      return makeClockWorkOrder(key, contractType, amount);
-    });
-  };
-  const clockWorkFourOrders = useMemo(
-    () => makeClockWorkFourOrders(clockWorkRates.prediction),
-    [clockWorkSymbol, clockWorkBarrierMode, clockWorkHigherBarrier, clockWorkLowerBarrier, clockWorkHalfBarrier, clockWorkBarrierReference, clockWorkCurrentQuote, clockWorkH1Stake, clockWorkH2Stake, clockWorkL1Stake, clockWorkL2Stake, clockWorkRates.prediction],
-  );
-  clockWorkQuoteOrderBuilderRef.current = () => ({
-    pair: [
-      makeClockWorkOrder("higher", "HIGHER", clockWorkHigherStake),
-      makeClockWorkOrder("lower", "LOWER", clockWorkLowerStake),
-    ],
-    allFour: makeClockWorkFourOrders("HIGHER"),
-  });
 
   useEffect(() => {
     if (!clockWorkStatusMessage) return;
@@ -1078,68 +945,6 @@ export default function XTraderPage() {
     return () => window.clearTimeout(timeout);
   }, [clockWorkStatusMessage]);
 
-  useEffect(() => {
-    if (!clockWorkEnabled || !canUseClockWork || !isConnected) {
-      setClockWorkQuotes({ pair: { higher: null, lower: null }, allFour: null });
-      if (!clockWorkEnabled) setClockWorkStatusMessage(null);
-      return;
-    }
-    let cancelled = false;
-    const refreshQuotes = async () => {
-      const orderSets = clockWorkQuoteOrderBuilderRef.current?.();
-      if (!orderSets) return;
-      try {
-        const pairResult = await clockWorkQuoteMutation.mutateAsync({ data: { contracts: orderSets.pair } });
-        const fourResult = await clockWorkQuoteMutation.mutateAsync({ data: { contracts: orderSets.allFour } });
-        if (cancelled) return;
-        const pairByKey = new Map(pairResult.quotes.map((quote) => [quote.key, quote]));
-        const higher = pairByKey.get("higher");
-        const lower = pairByKey.get("lower");
-        const allFourTotal = fourResult.quotes.reduce(
-          (total, quote) => ({
-            payout: total.payout + quote.payout,
-            ask_price: total.ask_price + quote.ask_price,
-            spot: quote.spot,
-          }),
-          { payout: 0, ask_price: 0, spot: 0 },
-        );
-        setClockWorkQuotes({
-          pair: {
-            higher: higher ? { payout: higher.payout, ask_price: higher.ask_price, spot: higher.spot } : null,
-            lower: lower ? { payout: lower.payout, ask_price: lower.ask_price, spot: lower.spot } : null,
-          },
-          allFour: fourResult.quotes.length === 4 ? allFourTotal : null,
-        });
-      } catch (error) {
-        if (cancelled) return;
-        setClockWorkQuotes({ pair: { higher: null, lower: null }, allFour: null });
-        setClockWorkStatusMessage(`Live Clock Work quotes are unavailable: ${errorMessage(error)}`);
-      }
-    };
-    void refreshQuotes();
-    const timer = window.setInterval(() => void refreshQuotes(), 30_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [
-    clockWorkEnabled,
-    canUseClockWork,
-    isConnected,
-    clockWorkSymbol,
-    clockWorkBarrierMode,
-    clockWorkHigherBarrier,
-    clockWorkLowerBarrier,
-    clockWorkHalfBarrier,
-    clockWorkBarrierAnchor,
-    clockWorkHigherStake,
-    clockWorkLowerStake,
-    clockWorkH1Stake,
-    clockWorkL1Stake,
-    clockWorkL2Stake,
-    clockWorkH2Stake,
-    clockWorkQuoteMutation.mutateAsync,
-  ]);
   const cashGrabBestSymbol = useMemo(() => {
     return chooseCashGrabDirectionalMarket(
       (status.data?.market_signals ?? []) as AiScannerMarketSignal[],
@@ -3379,8 +3184,8 @@ export default function XTraderPage() {
     digitFlipRunningRef.current = false;
     setDigitFlipRunning(false);
     setClockWorkEnabled(false);
-    setClockWorkAutoEnabled(false);
-    setClockWorkAggressiveEnabled(false);
+    setClockWorkAiEnabled(false);
+    setClockWorkRunning(false);
     autoSwitchRef.current = false;
     setAutoSwitch(false);
   };
@@ -3428,8 +3233,8 @@ export default function XTraderPage() {
     setTradeXEnabled(false);
     setBulkTraderEnabled(false);
     setClockWorkEnabled(false);
-    setClockWorkAutoEnabled(false);
-    setClockWorkAggressiveEnabled(false);
+    setClockWorkAiEnabled(false);
+    setClockWorkRunning(false);
     void selectMarket(symbol);
   };
 
@@ -3453,8 +3258,8 @@ export default function XTraderPage() {
     setTradeXEnabled(false);
     setBulkTraderEnabled(false);
     setClockWorkEnabled(false);
-    setClockWorkAutoEnabled(false);
-    setClockWorkAggressiveEnabled(false);
+    setClockWorkAiEnabled(false);
+    setClockWorkRunning(false);
   };
 
   const reset = () => {
@@ -4184,8 +3989,8 @@ export default function XTraderPage() {
     setTradeXEnabled(false);
     setBulkTraderEnabled(false);
     setClockWorkEnabled(false);
-    setClockWorkAutoEnabled(false);
-    setClockWorkAggressiveEnabled(false);
+    setClockWorkAiEnabled(false);
+    setClockWorkRunning(false);
     runningRef.current = false;
     setRunning(false);
     autoSwitchRef.current = false;
@@ -4307,8 +4112,8 @@ export default function XTraderPage() {
       setDigitFlipEnabled(false);
       setBulkTraderEnabled(false);
       setClockWorkEnabled(false);
-      setClockWorkAutoEnabled(false);
-      setClockWorkAggressiveEnabled(false);
+      setClockWorkAiEnabled(false);
+      setClockWorkRunning(false);
       digitFlipRunningRef.current = false;
       setDigitFlipRunning(false);
       stop();
@@ -4328,9 +4133,9 @@ export default function XTraderPage() {
     }
     setClockWorkEnabled(enabled);
     if (!enabled) {
-      setClockWorkAutoEnabled(false);
-      setClockWorkAggressiveEnabled(false);
-      setClockWorkAutoStatus("Clock Work automation is stopped. Open contracts can continue to settle.");
+      setClockWorkAiEnabled(false);
+      setClockWorkRunning(false);
+      setClockWorkAiStatus("Clock Work is stopped. Open contracts can continue to settle.");
       return;
     }
     deactivateMoneyBank();
@@ -4345,10 +4150,11 @@ export default function XTraderPage() {
     setDigitFlipRunning(false);
     autoSwitchRef.current = false;
     setAutoSwitch(false);
-    setClockWorkAutoEnabled(false);
-    setClockWorkAggressiveEnabled(false);
+    setClockWorkAiEnabled(false);
+    setClockWorkRunning(false);
     setClockWorkStatusMessage(null);
-    setClockWorkAutoStatus("Select a mode and minimum lean to begin.");
+    clockWorkAiAttemptAtRef.current = 0;
+    setClockWorkAiStatus("Ai Clock is off.");
     void selectMarket(clockWorkSymbol);
   };
 
@@ -4365,8 +4171,8 @@ export default function XTraderPage() {
     setTradeXEnabled(false);
     setDigitFlipEnabled(false);
     setClockWorkEnabled(false);
-    setClockWorkAutoEnabled(false);
-    setClockWorkAggressiveEnabled(false);
+    setClockWorkAiEnabled(false);
+    setClockWorkRunning(false);
     runningRef.current = false;
     digitFlipRunningRef.current = false;
     setRunning(false);
@@ -4376,10 +4182,7 @@ export default function XTraderPage() {
     void selectMarket(bulkTraderSymbol);
   };
 
-  const executeClockWorkBatch = async (
-    contracts: ClockWorkContractOrder[],
-    source: "manual" | "auto" | "aggressive" = "manual",
-  ) => {
+  const executeClockWorkOrder = async (contract: ClockWorkContractOrder) => {
     if (!clockWorkEnabled || !canUseClockWork || !isConnected || !currentAccount) {
       setClockWorkStatusMessage("Enable Clock Work and connect a Deriv account before placing orders.");
       return false;
@@ -4396,43 +4199,34 @@ export default function XTraderPage() {
     clockWorkActionLockRef.current = true;
     setClockWorkBusy(true);
     setClockWorkStatusMessage(null);
-    if (source !== "manual") setClockWorkAutoStatus("Sending the selected Clock Work orders to Deriv.");
+    setClockWorkAiStatus("Sending the AI-selected order to Deriv.");
     try {
-      const orderedContracts = contracts.length > 1
-        ? [...contracts].sort((left, right) => left.amount - right.amount)
-        : contracts;
-      const result = await clockWorkBuyMutation.mutateAsync({ data: { contracts: orderedContracts } });
+      const result = await clockWorkBuyMutation.mutateAsync({ data: { contracts: [contract] } });
       for (const contract of result.contracts) {
         claimFeatureRows("clock-work", clockWorkClaimedHistoryIdsRef.current, [String(contract.buy.contract_id)]);
       }
       setClockWorkStatusMessage(result.message);
       refreshTradeResults();
       if (!result.ok) {
-        clockWorkAutoAttemptAtRef.current = Date.now() + (result.contracts.length > 0 ? 5_000 : 2_000);
-        setClockWorkAutoStatus(result.contracts.length > 0
-          ? `Deriv accepted ${result.contracts.length} Clock Work order${result.contracts.length === 1 ? "" : "s"} from this batch. Automation remains active and will wait for them to settle before checking again.`
-          : "Deriv accepted no Clock Work contracts from this batch. Automation remains active and will check again.");
-      } else if (source === "aggressive") {
-        setClockWorkAggressiveRounds((rounds) => rounds + 1);
-        setClockWorkAutoStatus("Aggressive cycle submitted. Waiting for all contracts to settle before another entry.");
-      } else if (source === "auto") {
-        setClockWorkAutoStatus("Orders submitted. Waiting for all contracts to settle before another entry.");
+        clockWorkAiAttemptAtRef.current = Date.now() + (result.contracts.length > 0 ? 5_000 : 2_000);
+        setClockWorkAiStatus(result.contracts.length > 0
+          ? "Order submitted. Ai Clock is waiting for it to settle."
+          : "No order was accepted. Ai Clock will check again.");
+      } else {
+        setClockWorkAiStatus("Order submitted. Waiting for settlement before checking again.");
       }
       return result.ok;
     } catch (error) {
       const message = errorMessage(error);
-      if (source !== "manual" && isConfirmedNoContractRejection(error)) {
+      if (isConfirmedNoContractRejection(error)) {
         setConnectionMessage(null);
-        setClockWorkStatusMessage("");
-        setClockWorkAutoStatus("Automation is running.");
-        clockWorkAutoAttemptAtRef.current = Date.now() + 5_000;
+        setClockWorkStatusMessage(null);
+        setClockWorkAiStatus("Deriv did not accept the order. Ai Clock will check again.");
+        clockWorkAiAttemptAtRef.current = Date.now() + 5_000;
       } else {
         setClockWorkStatusMessage(message);
-        if (source !== "manual") {
-          setClockWorkAutoEnabled(false);
-          setClockWorkAggressiveEnabled(false);
-          setClockWorkAutoStatus(`Automation paused: ${message}`);
-        }
+        setClockWorkRunning(false);
+        setClockWorkAiStatus("Ai Clock paused. Check Deriv history before starting again.");
       }
       return false;
     } finally {
@@ -4755,8 +4549,7 @@ export default function XTraderPage() {
     || cashGrabStopping
     || moneyBankRunning
     || moneyBankStarting
-    || clockWorkAutoEnabled
-    || clockWorkAggressiveEnabled;
+    || clockWorkRunning;
   const entryDigit = barrier;
   const activeGuidePages = guideMode === "trade-x"
     ? tradeXGuidePages
@@ -4796,107 +4589,72 @@ export default function XTraderPage() {
     || !isConnected
     || !currentAccount
     || (isReal && !status.data?.live_trading_enabled);
-  const clockWorkAggressiveOrderCount = clockWorkAutoMode === "all4"
-    ? 4
-    : clockWorkAutoMode === "auto" ? 1 : 2;
-  const clockWorkAggressiveBudget = getClockWorkAggressiveBudget(
-    currentAccountBalance ?? null,
-    clockWorkAggressivePercent,
-    clockWorkAggressiveOrderCount,
-  );
-  const clockWorkAggressiveUsingBalance = clockWorkAggressiveBudget?.budgetAmount ?? null;
-  const clockWorkAggressiveEachSide = clockWorkAggressiveBudget?.eachContractAmount ?? null;
-  const clockWorkAggressiveStakeLabel = clockWorkAutoMode === "pair" ? "Each side" : "Per trade";
 
   clockWorkAutomationRef.current = () => {
-    const aggressive = clockWorkAggressiveEnabled;
-    if (!clockWorkEnabled || (!clockWorkAutoEnabled && !aggressive)) return;
-    if (!clockWorkAutoMode || (!aggressive && clockWorkMinLean == null)) {
-      setClockWorkAutoStatus(aggressive
-        ? "Choose an automatic mode before Aggressive Auto Trading can run."
-        : "Choose a mode and minimum lean before automatic trading can run.");
+    if (!clockWorkEnabled || !clockWorkAiEnabled || !clockWorkRunning) return;
+    if (!canUseClockWork) {
+      setClockWorkAiEnabled(false);
+      setClockWorkRunning(false);
+      setClockWorkAiStatus("Clock Work access is unavailable. Ai Clock has stopped.");
       return;
     }
-    if (!isConnected || !currentAccount || !canUseClockWork) {
-      setClockWorkAutoStatus("Waiting for the Clock Work account connection.");
+    if (!isConnected || !currentAccount) {
+      setClockWorkAiStatus("Waiting for the Clock Work account connection.");
       return;
     }
     if (isReal && !status.data?.live_trading_enabled) {
-      setClockWorkAutoStatus("Live-account trading is disabled for this workspace.");
+      setClockWorkAiStatus("Live-account trading is disabled for this workspace.");
       return;
     }
-    if (Date.now() < clockWorkAutoAttemptAtRef.current) return;
+    if (Date.now() < clockWorkAiAttemptAtRef.current) return;
+    if (clockWorkActionLockRef.current || clockWorkBuyMutation.isPending) return;
     if (tradeSlotBlocked) {
-      setClockWorkAutoStatus(tradeSlotMessage ?? "Waiting for open contracts to settle.");
+      setClockWorkAiStatus(tradeSlotMessage ?? "Waiting for open contracts to settle.");
       return;
     }
-    if (clockWorkCurrentQuote == null || clockWorkRates.leanStrength == null) {
-      setClockWorkAutoStatus("Waiting for enough live price history to estimate a lean.");
+    if (clockWorkCurrentQuote == null || clockWorkTickEpoch == null) {
+      setClockWorkAiStatus("Waiting for fresh market data.");
       return;
     }
-    const lead = aggressive ? clockWorkPushDirection : clockWorkRates.prediction;
-    if (aggressive && !lead) {
-      setClockWorkAutoStatus(`Waiting for 2 consecutive ticks in one direction (${clockWorkPushProgress.consecutiveTicks}/2).`);
+    const quoteAgeMs = Date.now() - Number(clockWorkTickEpoch) * 1_000;
+    if (!Number.isFinite(quoteAgeMs) || quoteAgeMs < -10_000 || quoteAgeMs > 60_000) {
+      setClockWorkAiStatus("Waiting for fresh market data.");
       return;
     }
-    if (clockWorkAutoMode === "auto" && !lead) {
-      setClockWorkAutoStatus("The Higher and Lower estimates are tied; waiting for a clear lean.");
+    if (!clockWorkAiCandidate) {
+      setClockWorkAiStatus(clockWorkQuoteHistory.length < CLOCK_WORK_AI_MIN_SAMPLE_COUNT * CLOCK_WORK_AI_DURATION_TICKS + 1
+        ? "Collecting recent market history before trading."
+        : "Waiting for a qualifying setup.");
       return;
     }
-    const measuredLean = lead == null
-      ? null
-      : aggressive || clockWorkAutoMode === "auto"
-        ? lead === "HIGHER" ? clockWorkRates.higherPercent : clockWorkRates.lowerPercent
-        : clockWorkRates.leanStrength;
-    const measuredLeanWhole = measuredLean == null ? null : Math.round(measuredLean);
-    const minimumWinRate = aggressive ? CLOCK_WORK_AGGRESSIVE_MIN_WIN_RATE : clockWorkMinLean;
-    if (
-      minimumWinRate == null
-      || !meetsClockWorkMinimumWinRate(measuredLean, minimumWinRate)
-    ) {
-      setClockWorkAutoStatus(`Waiting for ${minimumWinRate ?? CLOCK_WORK_AGGRESSIVE_MIN_WIN_RATE}% observed win rate. Current measured rate: ${measuredLeanWhole == null ? "—" : `${measuredLeanWhole}%`}.`);
+    if (currentAccountBalance == null) {
+      setClockWorkAiStatus("Waiting for the selected account balance.");
+      return;
+    }
+    const amount = roundTradeStakeToCents(clockWorkStake);
+    if (amount < 1 || amount > currentAccountBalance) {
+      setClockWorkAiStatus("The stake is above the available balance. No order was sent.");
       return;
     }
 
-    let plannedOrders: ClockWorkContractOrder[];
-    if (clockWorkAutoMode === "pair") {
-      plannedOrders = aggressive && lead === "LOWER"
-        ? [...clockWorkPairOrders].reverse()
-        : [...clockWorkPairOrders];
-    } else if (clockWorkAutoMode === "auto") {
-      plannedOrders = [makeClockWorkOrder("auto", lead as "HIGHER" | "LOWER", lead === "HIGHER" ? clockWorkHigherStake : clockWorkLowerStake)];
-    } else {
-      plannedOrders = makeClockWorkFourOrders(lead);
-    }
-
-    if (aggressive) {
-      if (currentAccountBalance == null || currentAccountBalance <= 0) {
-        setClockWorkAutoStatus("Waiting for an available account balance.");
-        return;
-      }
-      const allocation = getClockWorkAggressiveBudget(
-        currentAccountBalance,
-        clockWorkAggressivePercent,
-        plannedOrders.length,
-      );
-      if (!allocation?.eligible) {
-        setClockWorkAutoStatus(`The ${clockWorkAggressivePercent}% balance budget is too small for the $1 minimum on each contract.`);
-        return;
-      }
-      plannedOrders = plannedOrders.map((order, index) => ({
-        ...order,
-        amount: allocation.stakes[index],
-      }));
-    }
-
-    clockWorkAutoAttemptAtRef.current = Date.now() + 5_000;
-    void executeClockWorkBatch(plannedOrders, aggressive ? "aggressive" : "auto");
+    const contract: ClockWorkContractOrder = {
+      key: "ai-clock",
+      amount,
+      duration: CLOCK_WORK_AI_DURATION_TICKS,
+      duration_unit: "t",
+      contract_type: clockWorkAiCandidate.direction,
+      barrier: clockWorkAiCandidate.barrier,
+      symbol: clockWorkSymbol,
+    };
+    clockWorkAiAttemptAtRef.current = Date.now() + 5_000;
+    setClockWorkAiStatus("Ai Clock found a qualifying setup and is sending one entry.");
+    void executeClockWorkOrder(contract);
   };
   useEffect(() => {
-    if (!clockWorkEnabled || (!clockWorkAutoEnabled && !clockWorkAggressiveEnabled)) return;
+    if (!clockWorkEnabled || !clockWorkAiEnabled || !clockWorkRunning) return;
     const timer = window.setInterval(() => clockWorkAutomationRef.current?.(), 1_000);
     return () => window.clearInterval(timer);
-  }, [clockWorkEnabled, clockWorkAutoEnabled, clockWorkAggressiveEnabled]);
+  }, [clockWorkEnabled, clockWorkAiEnabled, clockWorkRunning]);
 
   return (
     <main className="xt-app">
@@ -5014,7 +4772,7 @@ export default function XTraderPage() {
       <h2 className="xt-trading-strategies-heading">Trading Strategies</h2>
 
       <section className={`xt-feature-card xt-feature-card-clock-work ${!canUseClockWork ? "xt-feature-card-restricted" : ""}`} id="clock-work-feature">
-        <div><Clock3 size={18} /><span><b>Clock Work</b><small><FeatureStatusText control={featureControl("clock-work")} isAdmin={isAdmin} fallback={canUseClockWork ? "Hybrid Analysis" : "Restricted — admin access only"} /></small></span></div>
+        <div><Clock3 size={18} /><span><b>Clock Work</b><small><FeatureStatusText control={featureControl("clock-work")} isAdmin={isAdmin} fallback={canUseClockWork ? "Ai Clock · 5-tick Higher / Lower" : "Restricted — admin access only"} /></small></span></div>
         <div className="xt-feature-actions">
           {!canUseClockWork && <span className="xt-feature-locked">RESTRICTED</span>}
           <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("clock-work"); setGuidePage(0); setGuideOpen(true); }}>
@@ -5571,122 +5329,49 @@ export default function XTraderPage() {
             enabled={clockWorkEnabled}
             symbol={clockWorkSymbol}
             markets={clockWorkSymbols}
-            duration={5}
             onSymbolChange={(next) => {
               clockWorkMarketResetEpochRef.current = Math.floor(Date.now() / 1000);
               setClockWorkQuoteBuffer({ symbol: next, quotes: [], lastTickId: null });
-              setClockWorkBarrierAnchor(null);
-              setClockWorkAggressiveRounds(0);
-              clockWorkAutoAttemptAtRef.current = 0;
+              clockWorkAiAttemptAtRef.current = 0;
               setClockWorkSymbol(next);
-              setClockWorkAutoStatus(clockWorkAutoEnabled || clockWorkAggressiveEnabled
-                ? "Automation remains active and is waiting for fresh data from the selected market."
-                : "The selected market changed. Fresh live data is loading.");
+              setClockWorkAiStatus("The selected market changed. Fresh live data is loading.");
               void selectMarket(next);
             }}
-            quote={clockWorkCurrentQuote}
-            quoteHistory={clockWorkQuoteHistory}
-            quoteUpdatedAt={clockWorkQuoteUpdatedAt}
-            tradeSlotBlocked={tradeSlotBlocked}
-            barrierMode={clockWorkBarrierMode}
-            onBarrierModeChange={setClockWorkBarrierMode}
-            halfBarrier={clockWorkHalfBarrier}
-            onHalfBarrierChange={setClockWorkHalfBarrier}
-            higherBarrierLabel="↑ Higher barrier"
-            lowerBarrierLabel="↓ Lower barrier"
-            higherBarrierOffset={clockWorkHigherBarrier}
-            lowerBarrierOffset={clockWorkLowerBarrier}
-            barrierAnchor={clockWorkBarrierAnchor}
-            onResetBarrierAnchor={() => setClockWorkBarrierAnchor(clockWorkCurrentQuote)}
-            higherBarrierOptions={clockWorkBarrierOptions("higher")}
-            lowerBarrierOptions={clockWorkBarrierOptions("lower")}
-            onHigherBarrierChange={setClockWorkHigherBarrier}
-            onLowerBarrierChange={setClockWorkLowerBarrier}
-            higherStake={clockWorkHigherStake}
-            lowerStake={clockWorkLowerStake}
-            h1Stake={clockWorkH1Stake}
-            l1Stake={clockWorkL1Stake}
-            l2Stake={clockWorkL2Stake}
-            h2Stake={clockWorkH2Stake}
-            onHigherStakeChange={(value) => setClockWorkHigherStake(Math.max(1, value))}
-            onLowerStakeChange={(value) => setClockWorkLowerStake(Math.max(1, value))}
-            onH1StakeChange={(value) => setClockWorkH1Stake(Math.max(1, value))}
-            onL1StakeChange={(value) => setClockWorkL1Stake(Math.max(1, value))}
-            onL2StakeChange={(value) => setClockWorkL2Stake(Math.max(1, value))}
-            onH2StakeChange={(value) => setClockWorkH2Stake(Math.max(1, value))}
-            higherPercent={clockWorkObservedTicks.higherPercent}
-            lowerPercent={clockWorkObservedTicks.lowerPercent}
-            higherTicks={clockWorkObservedTicks.higherCount}
-            lowerTicks={clockWorkObservedTicks.lowerCount}
-            recentMoves={clockWorkRecentMoves}
-            prediction={clockWorkRates.prediction}
-            leanStrength={clockWorkRates.leanStrength}
+            stake={clockWorkStake}
+            onStakeChange={(value) => setClockWorkStake(roundTradeStakeToCents(Math.max(1, value)))}
+            aiEnabled={clockWorkAiEnabled}
+            onAiEnabledChange={(enabled) => {
+              setClockWorkAiEnabled(enabled);
+              setClockWorkStatusMessage(null);
+              if (!enabled) {
+                setClockWorkRunning(false);
+                setClockWorkAiStatus("Ai Clock is off. Open contracts can continue to settle.");
+              } else {
+                setClockWorkAiStatus("Ai Clock is ready. Start Clock Work when you want to begin.");
+              }
+            }}
+            running={clockWorkRunning}
             busy={clockWorkBusy || clockWorkBuyMutation.isPending}
             disabled={clockWorkControlsDisabled}
+            aiStatus={clockWorkAiStatus}
             statusMessage={clockWorkStatusMessage}
-            higherQuote={clockWorkQuotes.pair.higher}
-            lowerQuote={clockWorkQuotes.pair.lower}
-            allFourQuote={clockWorkQuotes.allFour}
-            onPlaceHigher={() => void executeClockWorkBatch([makeClockWorkOrder("higher", "HIGHER", clockWorkHigherStake)])}
-            onPlaceLower={() => void executeClockWorkBatch([makeClockWorkOrder("lower", "LOWER", clockWorkLowerStake)])}
-            onPlacePair={() => void executeClockWorkBatch([...clockWorkPairOrders])}
-            onPlaceAllFour={() => void executeClockWorkBatch([...clockWorkFourOrders])}
-            autoMode={clockWorkAutoMode}
-            onAutoModeChange={setClockWorkAutoMode}
-            minLean={clockWorkMinLean}
-            onMinLeanChange={(value) => {
-              setClockWorkMinLean(value);
-              if (value == null) {
-                setClockWorkAutoStatus(clockWorkAutoEnabled && !clockWorkAggressiveEnabled
-                  ? "Auto Trading remains active and is waiting for a minimum lean."
-                  : "Choose a minimum lean before Auto Trading can place another order.");
-              }
-            }}
-            autoEnabled={clockWorkAutoEnabled}
-            onAutoEnabledChange={(enabled) => {
-              if (enabled && (!clockWorkAutoMode || clockWorkMinLean == null)) {
-                setClockWorkStatusMessage("Select H&L (2), A, or All (4), then choose a minimum lean before starting Auto Trading.");
-                return;
-              }
-              setClockWorkAutoEnabled(enabled);
-              if (enabled) {
-                setClockWorkAggressiveEnabled(false);
-                setClockWorkAutoStatus("Auto Trading is active and waiting for the selected lean.");
-              } else {
-                setClockWorkAutoStatus("Auto Trading is stopped. Open contracts can continue to settle.");
-              }
-            }}
-            aggressiveEnabled={clockWorkAggressiveEnabled}
-            onAggressiveEnabledChange={(enabled) => {
-              if (enabled && !clockWorkAutoMode) {
-                setClockWorkStatusMessage("Select an automatic mode before starting Aggressive Auto Trading.");
-                return;
-              }
-              setClockWorkAggressiveEnabled(enabled);
-              if (enabled) {
-                setClockWorkAggressiveRounds(0);
-                setClockWorkAutoEnabled(false);
-                setClockWorkAutoStatus(`Waiting for a 2-tick directional push and at least ${CLOCK_WORK_AGGRESSIVE_MIN_WIN_RATE}% observed win rate.`);
-              } else {
-                setClockWorkAutoStatus("Aggressive Auto Trading is stopped. Open contracts can continue to settle.");
-              }
-            }}
-            aggressiveBalancePercent={clockWorkAggressivePercent}
-            aggressiveMinWinRate={CLOCK_WORK_AGGRESSIVE_MIN_WIN_RATE}
-            onAggressiveBalancePercentChange={setClockWorkAggressivePercent}
-            aggressivePushProgress={clockWorkPushProgress.consecutiveTicks}
-            aggressiveRounds={clockWorkAggressiveRounds}
-            aggressiveStakeLabel={clockWorkAggressiveStakeLabel}
-            accountBalance={currentAccountBalance ?? null}
             currency={currentAccount?.currency ?? "USD"}
-            aggressiveUsingBalance={clockWorkAggressiveUsingBalance}
-            aggressiveEachSide={clockWorkAggressiveEachSide}
-            autoStatus={clockWorkAutoStatus}
+            onStart={() => {
+              if (!clockWorkAiEnabled || clockWorkControlsDisabled) return;
+              clockWorkAiAttemptAtRef.current = 0;
+              setClockWorkRunning(true);
+              setClockWorkAiStatus("Ai Clock is monitoring the selected market.");
+            }}
+            onStop={() => {
+              setClockWorkRunning(false);
+              setClockWorkAiStatus("Clock Work stopped. Open contracts can continue to settle.");
+            }}
           />
           {canViewHistory && (
             <DerivHistory
               title="Clock Work History"
-              strategy="Hybrid Analysis"
+              strategy="Ai Clock"
+              summaryMode="pnl-only"
               rows={clockWorkRows}
               sessionRows={clockWorkRows}
               currency={currentAccount?.currency}

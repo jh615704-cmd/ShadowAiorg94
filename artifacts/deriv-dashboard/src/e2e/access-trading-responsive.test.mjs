@@ -497,6 +497,30 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
       assert.equal(await control.isChecked(), true, `${screen.label} should be enabled in the mock session.`);
       const panel = page.locator(screen.selector);
       await panel.waitFor({ state: "visible" });
+      if (screen.feature === "clock-work") {
+        assert.equal(await panel.locator('input[type="number"]').count(), 1, "Clock Work should have one stake input.");
+        assert.equal(await panel.getByTestId("button-clock-start").count(), 1);
+        assert.equal(await panel.getByTestId("switch-ai-clock").isChecked(), false);
+        assert.equal(await panel.getByTestId("button-clock-start").isDisabled(), true);
+
+        const visibleClockWorkText = await panel.innerText();
+        assert.doesNotMatch(
+          visibleClockWorkText,
+          /price chart|recent moves|observed lean|higher barrier|lower barrier|half barrier|aggressive auto trading|higher and lower|dual|\d+(?:\.\d+)?%/i,
+        );
+        assert.equal(await page.getByText("WIN RATE", { exact: true }).count(), 0, "Clock Work should not show a win-rate percentage.");
+
+        const aiSwitch = panel.getByTestId("switch-ai-clock");
+        const startButton = panel.getByTestId("button-clock-start");
+        await panel.locator(".cw-toggle").click();
+        assert.equal(await aiSwitch.isChecked(), true);
+        assert.equal(await startButton.isDisabled(), false);
+        await startButton.click();
+        const stopButton = panel.getByTestId("button-clock-stop");
+        await stopButton.waitFor({ state: "visible" });
+        await stopButton.click();
+        await panel.getByTestId("button-clock-start").waitFor({ state: "visible" });
+      }
       for (const viewport of bulkViewports) {
         await page.setViewportSize({ width: viewport.width, height: viewport.height });
         await assertNoHorizontalOverflow(page, viewport, screen.label);
