@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Activity, ChevronDown, Download, Info, Play, RefreshCw, ShieldCheck, Square, TrendingUp } from "lucide-react";
+import { Activity, ChevronDown, Download, Play, RefreshCw, ShieldCheck, Square, TrendingUp } from "lucide-react";
 import {
   calculateRecoveryLadder,
   estimateAccumulatorReturnRate,
@@ -7,7 +7,6 @@ import {
   type MoneyBankStrategy,
 } from "../lib/money-bank-math";
 import { MoneyBankMarketChart } from "./money-bank-market-chart";
-import { MoneyBankKnockoutHistory } from "./money-bank-knockout-history";
 import DerivHistory, { type DerivHistoryRow } from "./deriv-history";
 import "./money-bank-panel.css";
 
@@ -75,7 +74,6 @@ type MoneyBankPanelProps = {
   currency?: string;
   quote?: number | null;
   marketSignal?: MoneyBankMarketSignal;
-  onRefreshHistory?: () => void;
   growthRate: number;
   onGrowthRateChange: (value: number) => void;
   takeProfitTicks: number;
@@ -105,8 +103,8 @@ type MoneyBankPanelProps = {
   onStop: () => void;
 };
 
-const GROWTH_RATES = [1, 2, 3, 4, 5];
 export const MONEY_BANK_AUTO_SYMBOLS = ["1HZ10V", "1HZ15V", "1HZ25V", "1HZ30V", "1HZ50V", "1HZ75V", "1HZ90V", "1HZ100V"] as const;
+const GROWTH_RATES = [1, 2, 3, 4, 5];
 
 const ACCUMULATOR_MIN_STAKE = 1;
 const roundCents = (value: number) => Number((Math.round((value + Number.EPSILON) * 100) / 100).toFixed(2));
@@ -125,7 +123,6 @@ export function MoneyBankPanel({
   currency = "USD",
   quote,
   marketSignal,
-  onRefreshHistory,
   growthRate,
   onGrowthRateChange,
   takeProfitTicks,
@@ -161,16 +158,6 @@ export function MoneyBankPanel({
     growthRate,
     takeProfitTicks,
   });
-  const stakesByRate = Object.fromEntries(GROWTH_RATES.map((rate) => {
-    const rateLadder = calculateRecoveryLadder({
-      strategy,
-      budget,
-      manualBase,
-      growthRate: rate,
-      takeProfitTicks,
-    });
-    return [rate, rateLadder[0]?.stake ?? 0];
-  }));
   const estimatedReturn = estimateAccumulatorReturnRate(growthRate, takeProfitTicks) * 100;
   const recoveryStart = Math.max(5, Math.round(takeProfitTicks * 0.16));
   const selectedMarket = markets.find(([market]) => market === symbol)?.[1] ?? symbol;
@@ -276,7 +263,6 @@ export function MoneyBankPanel({
           quote={quote}
           quotes={marketSignal?.recent_quotes ?? []}
           tickSequence={marketSignal?.tick_sequence}
-          onRefreshHistory={onRefreshHistory}
         />
         <div className="money-bank-main">
           <section className="money-bank-card money-bank-market-card">
@@ -434,7 +420,6 @@ export function MoneyBankPanel({
                 <strong>{money(selectedStake, currency)}</strong>
               </div>
             </div>
-             <p className="money-bank-helper"><Info size={14} /> BASE is the first stake. Accumulator contracts require at least {money(ACCUMULATOR_MIN_STAKE, currency)}. Auto Budget caps planned stakes at the entered amount; Manual BASE is not capped by a budget. Losses can exhaust the budget, and recovery is not guaranteed.</p>
           </section>
         </div>
 
@@ -465,7 +450,6 @@ export function MoneyBankPanel({
                 </div>
               ))}
             </div>
-             <p className="money-bank-helper"><Info size={14} /> Auto Budget includes only levels affordable within its cap. A loss at the final planned level exhausts the cycle, so no further order is sent; the run remains active. A win resets to BASE unless Reinvest Profit is enabled.</p>
           </section>
 
           <section className="money-bank-card money-bank-risk-card">
@@ -491,14 +475,6 @@ export function MoneyBankPanel({
             </div>
           </section>
 
-          <MoneyBankKnockoutHistory
-            rows={recentTrades}
-            symbol={symbol}
-            growthRate={growthRate}
-            stakesByRate={stakesByRate}
-            currency={currency}
-            connected={isConnected}
-          />
         </aside>
       </div>
 

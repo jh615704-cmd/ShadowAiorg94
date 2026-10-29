@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { RefreshCw } from "lucide-react";
 import {
   advanceMoneyBankChartSession,
   startMoneyBankChartSession,
@@ -12,7 +11,6 @@ type Props = {
   quote?: number | null;
   quotes: readonly number[];
   tickSequence?: number;
-  onRefreshHistory?: () => void;
 };
 
 const plot = { left: 66, right: 790, top: 22, bottom: 214 };
@@ -24,7 +22,6 @@ export function MoneyBankMarketChart({
   quote,
   quotes,
   tickSequence,
-  onRefreshHistory,
 }: Props) {
   const [session, setSession] = useState(() => startMoneyBankChartSession(symbol, tickSequence));
 
@@ -60,10 +57,6 @@ export function MoneyBankMarketChart({
     : "";
   const formattedChange = `${changePercent > 0 ? "+" : ""}${changePercent.toFixed(2)}%`;
   const colorClass = trend === "falling" ? "is-falling" : trend === "rising" ? "is-rising" : "is-flat";
-  const resetChart = () => {
-    setSession(startMoneyBankChartSession(symbol, tickSequence));
-    onRefreshHistory?.();
-  };
 
   return (
     <section className={`money-bank-market-chart ${colorClass}`} aria-label={`${marketName} Above Market price chart`}>
@@ -71,32 +64,19 @@ export function MoneyBankMarketChart({
         <div className="money-bank-market-chart-title">
           <span className="money-bank-chart-eyebrow"><i /> ABOVE MARKET</span>
           <h3>{marketName}</h3>
-          <p>
-            {connected
-              ? `${activeSession.tickCount.toLocaleString()} ticks since reset`
-              : "Connect Deriv for live market data"}
-          </p>
+          {!connected && <p>Connect Deriv for live market data</p>}
         </div>
         <div className="money-bank-market-chart-actions">
           <div className="money-bank-market-quote">
             <strong>{latest == null ? "—" : latest.toFixed(2)}</strong>
             <span>{latest == null ? "Waiting for quote" : formattedChange}</span>
           </div>
-          <button
-            type="button"
-            className="money-bank-chart-reset"
-            onClick={resetChart}
-            title="Reset chart and tick count"
-            aria-label="Reset chart and tick count"
-          >
-            <RefreshCw size={16} aria-hidden="true" />
-          </button>
         </div>
       </div>
 
       {points.length > 0 ? (
         <div className="money-bank-chart-plot">
-          <svg viewBox="0 0 800 250" role="img" aria-label={`${marketName} recent price movement ${trend}; ${formattedChange}; ${activeSession.tickCount} ticks since reset`}>
+          <svg viewBox="0 0 800 250" role="img" aria-label={`${marketName} recent price movement ${trend}; ${formattedChange}`}>
             <defs>
               <linearGradient id="money-bank-market-fill" x1="0" x2="0" y1="0" y2="1">
                 <stop offset="0%" className="money-bank-chart-fill-start" />

@@ -1016,9 +1016,9 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
     const menuEntries = await homeMenu.locator("a, button").evaluateAll((items) =>
       items
         .map((item) => item.innerText.replace("Restricted — admin access only", "").replace(/\s+/g, " ").trim())
-        .filter((label) => ["Log out", "Auto Trader", "Auto Trader 2.0"].includes(label)),
+        .filter((label) => ["Auto Trader", "Auto Trader 2.0"].includes(label)),
     );
-    assert.deepEqual(menuEntries, ["Log out", "Auto Trader", "Auto Trader 2.0"]);
+    assert.deepEqual(menuEntries, ["Auto Trader", "Auto Trader 2.0"]);
     await page.getByRole("button", { name: "Close navigation menu" }).click();
     await page.getByRole("button", { name: "Open navigation menu" }).click();
     await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Auto Trader 2.0" }).click();
@@ -1295,26 +1295,15 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
     await moneyBankToggle.waitFor();
     await page.locator(".xt-feature-card-edge2 .xt-switch").click();
     assert.equal(await moneyBankToggle.isChecked(), true);
-    await page.getByRole("heading", { name: "Possible exit ticks by growth rate" }).waitFor();
-    const exitRateRows = page.locator(".money-bank-knockout-rate-row");
-    await page.locator(".money-bank-knockout-option").first().waitFor();
-    assert.equal(await exitRateRows.count(), 5, "Money Bank should show all five growth rates.");
-    for (const row of await exitRateRows.all()) {
-      assert.equal(await row.locator(".money-bank-knockout-option").count(), 5, "Each growth rate should show its top five knockout ticks.");
-    }
-    assert.equal(await page.getByText(/Exit ticks and percentages come only from settled/).count(), 0);
+    await page.getByRole("heading", { name: "Money Bank" }).waitFor();
+    assert.equal(await page.locator(".money-bank-knockout-card").count(), 0, "Money Bank stats should be hidden.");
+    assert.equal(await page.locator(".money-bank-chart-reset").count(), 0, "The chart refresh control should be hidden.");
+    assert.equal(await page.getByText(/ticks since reset/).count(), 0, "The chart tick counter should be hidden.");
+    assert.equal(await page.getByText(/BASE is the first stake|Auto Budget includes only levels affordable/).count(), 0, "The requested Money Bank helper copy should be hidden.");
 
     const marketSelect = page.getByRole("combobox", { name: "Select a Volatility market" });
     await marketSelect.selectOption("1HZ15V");
-    assert.equal(await page.locator(".money-bank-knockout-option").count(), 0, "Changing markets should refresh the historical ranking.");
     await marketSelect.selectOption("1HZ90V");
-    await page.locator(".money-bank-knockout-option").first().waitFor();
-
-    const historyRefresh = page.waitForResponse((response) =>
-      response.url().includes("/api/deriv/history") && response.request().method() === "GET",
-    );
-    await page.locator(".money-bank-chart-reset").click();
-    await historyRefresh;
 
     const autoKnockoutSwitch = page.getByRole("checkbox", { name: "Toggle Money Bank Auto Knockout" });
     await autoKnockoutSwitch.waitFor();

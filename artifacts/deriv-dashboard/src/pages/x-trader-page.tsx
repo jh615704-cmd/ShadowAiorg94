@@ -5059,7 +5059,6 @@ export default function XTraderPage() {
           currency={currentAccount?.currency ?? "USD"}
           quote={moneyBankSelectedSignal?.quote}
           marketSignal={moneyBankSelectedSignal}
-          onRefreshHistory={() => void history.refetch()}
           growthRate={moneyBankGrowthRate}
           onGrowthRateChange={setMoneyBankGrowthRate}
           takeProfitTicks={moneyBankTakeProfitTicks}
