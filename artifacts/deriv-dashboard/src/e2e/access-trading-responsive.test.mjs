@@ -1023,17 +1023,13 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
       (await strategiesHeading.boundingBox()).y < (await page.locator("#cash-grab-feature").boundingBox()).y,
       "Trading Strategies should appear above Cash Grab.",
     );
-    await page.getByRole("button", { name: "Open navigation menu" }).click();
-    const homeMenu = page.getByRole("navigation", { name: "Main navigation" });
-    const menuEntries = await homeMenu.locator("a, button").evaluateAll((items) =>
-      items
-        .map((item) => item.innerText.replace("Restricted — admin access only", "").replace(/\s+/g, " ").trim())
-        .filter((label) => ["Auto Trader", "Auto Trader 2.0"].includes(label)),
+    const dashboardNavigation = page.getByRole("navigation", { name: "Dashboard navigation" });
+    const navEntries = await dashboardNavigation.locator("a, button").evaluateAll((items) =>
+      items.map((item) => item.innerText.replace("Restricted — admin access only", "").replace(/\s+/g, " ").trim()),
     );
-    assert.deepEqual(menuEntries, ["Auto Trader", "Auto Trader 2.0"]);
-    await page.getByRole("button", { name: "Close navigation menu" }).click();
-    await page.getByRole("button", { name: "Open navigation menu" }).click();
-    await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Auto Trader 2.0" }).click();
+    assert.deepEqual(navEntries, ["Trading dashboard", "Auto Trader", "Auto Trader 2.0", "Log out"]);
+    assert.equal(await page.getByRole("navigation", { name: "Main navigation" }).count(), 0);
+    await dashboardNavigation.getByTestId("link-home-auto-trader-2").click();
     await page.locator(".auto-trader-2-page").waitFor();
     const autoTraderNavLink = page.getByTestId("link-nav-auto-trader");
     const autoTrader2NavLink = page.getByTestId("link-nav-auto-trader-2");
@@ -1240,8 +1236,7 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
       await page.screenshot({ path: path.join(screenshotsDir, `trade-x-${viewport.name}.png`), fullPage: true });
     }
 
-    await page.getByRole("button", { name: "Open navigation menu" }).click();
-    await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Auto Trader", exact: true }).click();
+    await page.getByRole("navigation", { name: "Dashboard navigation" }).getByTestId("link-home-auto-trader").click();
     await page.getByTestId("button-go-live").waitFor();
     await page.getByTestId("button-go-live").click();
     await page.locator(".at-market-list").waitFor();

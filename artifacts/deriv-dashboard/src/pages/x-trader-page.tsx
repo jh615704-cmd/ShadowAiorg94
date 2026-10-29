@@ -39,7 +39,7 @@ import { useAccessSessionLogout } from "@/hooks/use-access-session-logout";
 import { useAccountNotifications } from "@/hooks/use-account-notifications";
 import {
   Activity, BookOpen, Bot, ChevronDown, ChevronLeft, ChevronRight, Gauge, Loader2, LockKeyhole,
-  Clock3, LogOut, Menu, Pause, Play, Power, RefreshCw, RotateCcw, Settings, ShieldAlert, ShieldCheck, X, Zap,
+  Clock3, LogOut, Pause, Play, Power, RefreshCw, RotateCcw, Settings, ShieldAlert, ShieldCheck, X, Zap,
 } from "lucide-react";
 import {
   chooseBestDigitSignal,
@@ -572,7 +572,6 @@ export default function XTraderPage() {
   const [tradeXSubmitting, setTradeXSubmitting] = useState(false);
   const [running, setRunning] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
-  const [navigationOpen, setNavigationOpen] = useState(false);
   const [guidePage, setGuidePage] = useState(0);
   const [guideMode, setGuideMode] = useState<"edge" | "trade-x" | "digit-flip" | "bulk-trader" | "money-bank" | "cash-grab" | "clock-work">("edge");
   const [clearHistoryArmed, setClearHistoryArmed] = useState(false);
@@ -4903,30 +4902,6 @@ export default function XTraderPage() {
     <main className="xt-app">
       <header className="xt-header">
         <div className="xt-header-leading">
-          <div className="xt-menu-anchor">
-            <button
-              className="xt-menu-button"
-              type="button"
-              aria-label={navigationOpen ? "Close navigation menu" : "Open navigation menu"}
-              aria-expanded={navigationOpen}
-              aria-controls="xt-navigation-menu"
-              onClick={() => setNavigationOpen((open) => !open)}
-            >
-              {navigationOpen ? <X size={18} /> : <Menu size={18} />}
-            </button>
-            {navigationOpen && (
-              <nav id="xt-navigation-menu" className="xt-navigation-menu" aria-label="Main navigation">
-                <Link href="/auto-trader" data-testid="link-auto-trader-menu" className={canUseAutoTrader ? "" : "xt-navigation-link-restricted"} onClick={() => setNavigationOpen(false)}>
-                  <Bot size={15} />Auto Trader
-                  {!canUseAutoTrader && <span><FeatureStatusText control={featureControl("auto-trader")} isAdmin={isAdmin} fallback="Restricted — admin access only" /></span>}
-                </Link>
-                <Link href="/auto-trader-2" data-testid="link-auto-trader-2-menu" className={canUseAutoTrader2 ? "" : "xt-navigation-link-restricted"} onClick={() => setNavigationOpen(false)}>
-                  <Bot size={15} />Auto Trader 2.0
-                  {!canUseAutoTrader2 && <span><FeatureStatusText control={featureControl("auto-trader-2")} isAdmin={isAdmin} fallback="Restricted — admin access only" /></span>}
-                </Link>
-              </nav>
-            )}
-          </div>
           <div className="xt-brand">
             <span aria-hidden="true">S</span>
             <div className="xt-brand-copy">
@@ -4982,6 +4957,22 @@ export default function XTraderPage() {
         {accessSession.data?.is_admin === true && (
           <Link href="/admin/users" data-testid="link-admin-panel"><ShieldCheck size={15} />Admin panel</Link>
         )}
+        <Link
+          href="/auto-trader"
+          data-testid="link-home-auto-trader"
+          className={canUseAutoTrader ? "" : "xt-home-navigation-link-restricted"}
+        >
+          <Bot size={15} />Auto Trader
+          {!canUseAutoTrader && <span><FeatureStatusText control={featureControl("auto-trader")} isAdmin={isAdmin} fallback="Restricted — admin access only" /></span>}
+        </Link>
+        <Link
+          href="/auto-trader-2"
+          data-testid="link-home-auto-trader-2"
+          className={canUseAutoTrader2 ? "" : "xt-home-navigation-link-restricted"}
+        >
+          <Bot size={15} />Auto Trader 2.0
+          {!canUseAutoTrader2 && <span><FeatureStatusText control={featureControl("auto-trader-2")} isAdmin={isAdmin} fallback="Restricted — admin access only" /></span>}
+        </Link>
         <button
           type="button"
           data-testid="button-logout"

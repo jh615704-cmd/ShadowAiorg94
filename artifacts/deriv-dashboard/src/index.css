@@ -3139,6 +3139,16 @@ body { overflow-x: hidden; }
   background: linear-gradient(135deg, rgba(43, 99, 105, .42), rgba(25, 59, 70, .48));
 }
 .xt-home-navigation a[aria-current="page"] svg { color: #64e3d1; }
+.xt-home-navigation .xt-home-navigation-link-restricted { color: #ff9ba3; }
+.xt-home-navigation .xt-home-navigation-link-restricted > span {
+  max-width: 132px;
+  color: #ff9ba3;
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: left;
+  white-space: normal;
+}
 .xt-home-navigation a:hover,
 .xt-home-navigation button:hover:not(:disabled) {
   border-color: rgba(142, 193, 212, .2);
