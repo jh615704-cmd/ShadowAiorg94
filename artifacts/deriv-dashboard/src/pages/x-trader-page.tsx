@@ -463,6 +463,7 @@ export default function XTraderPage() {
   const [moneyBankProfitTarget, setMoneyBankProfitTarget] = useState<number | null>(null);
   const [moneyBankLossLimit, setMoneyBankLossLimit] = useState<number | null>(null);
   const [moneyBankRunning, setMoneyBankRunning] = useState(false);
+  const [moneyBankStarting, setMoneyBankStarting] = useState(false);
   const [moneyBankAutoKnockoutCountdown, setMoneyBankAutoKnockoutCountdown] = useState<number | null>(null);
   const [moneyBankClosing, setMoneyBankClosing] = useState(false);
   const [moneyBankJdyEnabled, setMoneyBankJdyEnabled] = useState(false);
@@ -590,6 +591,7 @@ export default function XTraderPage() {
   const aiScannerActionLockRef = useRef(false);
   const digitFlipRunningRef = useRef(false);
   const moneyBankRunningRef = useRef(false);
+  const moneyBankStartingRef = useRef(false);
   const moneyBankActionLockRef = useRef(false);
   const moneyBankBudgetExhaustedRef = useRef(false);
   const moneyBankClosePromiseRef = useRef<Promise<void> | null>(null);
@@ -2175,10 +2177,14 @@ export default function XTraderPage() {
   };
 
   const stopMoneyBank = () => {
+    const actionInFlight = moneyBankActionLockRef.current;
     moneyBankRunningRef.current = false;
-    moneyBankActionLockRef.current = false;
     setMoneyBankRunning(false);
     setMoneyBankAutoKnockoutCountdown(null);
+    if (actionInFlight) {
+      setMoneyBankClosing(true);
+      return;
+    }
     void closeMoneyBankContracts().catch((error) => {
       setConnectionMessage({ kind: "error", text: `Money Bank could not close every open contract: ${errorMessage(error)}` });
     });
@@ -2207,6 +2213,7 @@ export default function XTraderPage() {
     }
 
     let historySnapshot = await readHistorySnapshot();
+    if (!moneyBankRunningRef.current) return;
     let latestRows = historySnapshot.rows;
     if (!historySnapshot.fresh) {
       setConnectionMessage({ kind: "info", text: "Money Bank remains active and is waiting for fresh Deriv history before another entry." });
@@ -2214,7 +2221,7 @@ export default function XTraderPage() {
       return;
     }
     const openContractId = moneyBankOpenContractIdRef.current;
-    for (let attempt = 0; historySnapshot.fresh && attempt < 240; attempt += 1) {
+    for (let attempt = 0; moneyBankRunningRef.current && historySnapshot.fresh && attempt < 240; attempt += 1) {
       const stillOpen = openContractId
         ? latestRows.some((trade) => trade.contract_id === openContractId && isDerivHistoryOpen(trade.status))
         : latestRows.some((trade) =>
@@ -2224,7 +2231,9 @@ export default function XTraderPage() {
         );
       if (!stillOpen) break;
       await sleep(500);
+      if (!moneyBankRunningRef.current) return;
       historySnapshot = await readHistorySnapshot();
+      if (!moneyBankRunningRef.current) return;
       latestRows = historySnapshot.rows;
     }
     const unsettledPrevious = historySnapshot.fresh && (openContractId
@@ -2296,6 +2305,7 @@ export default function XTraderPage() {
     if (moneyBankJdyEnabled) {
       // The Money Bank gate evaluates the market selected in the form.
       const decision = await scanJdyMoneyBank(currentConfig, tradeSymbol);
+      if (!moneyBankRunningRef.current) return;
       if (!decision?.safe) {
         setMoneyBankJdyState("not-good");
         setConnectionMessage({
@@ -2325,6 +2335,7 @@ export default function XTraderPage() {
       await selectMarket(tradeSymbol);
     }
 
+    if (!moneyBankRunningRef.current) return;
     moneyBankActionLockRef.current = true;
     try {
       if (currentConfig.autoKnockout) {
@@ -2432,6 +2443,18 @@ export default function XTraderPage() {
   };
 
   const startMoneyBank = async (config: MoneyBankStartConfig) => {
+    if (
+      moneyBankStartingRef.current
+      || moneyBankRunningRef.current
+      || moneyBankActionLockRef.current
+      || moneyBankClosePromiseRef.current
+    ) {
+      setConnectionMessage({
+        kind: "info",
+        text: "Money Bank is already starting, placing, or closing a contract.",
+      });
+      return;
+    }
     if (!isConnected) {
       setConnectionMessage({ kind: "error", text: "Connect Deriv before starting Money Bank." });
       return;
@@ -2454,6 +2477,8 @@ export default function XTraderPage() {
       return;
     }
 
+    moneyBankStartingRef.current = true;
+    setMoneyBankStarting(true);
     try {
       const historySnapshot = await readHistorySnapshot();
       const latestRows = historySnapshot.rows;
@@ -2494,6 +2519,9 @@ export default function XTraderPage() {
       void runMoneyBankLoop();
     } catch (error) {
       setConnectionMessage({ kind: "error", text: errorMessage(error) });
+    } finally {
+      moneyBankStartingRef.current = false;
+      setMoneyBankStarting(false);
     }
   };
 
@@ -4358,6 +4386,7 @@ export default function XTraderPage() {
     || cashGrabRunning
     || cashGrabStopping
     || moneyBankRunning
+    || moneyBankStarting
     || clockWorkAutoEnabled
     || clockWorkAggressiveEnabled;
   const entryDigit = barrier;
@@ -5048,6 +5077,7 @@ export default function XTraderPage() {
           isConnected={isConnected}
           tradeSlotBlocked={tradeSlotBlocked}
           running={moneyBankRunning}
+          starting={moneyBankStarting}
           closing={moneyBankClosing}
           symbol={moneyBankSymbol}
           markets={moneyBankMarkets}

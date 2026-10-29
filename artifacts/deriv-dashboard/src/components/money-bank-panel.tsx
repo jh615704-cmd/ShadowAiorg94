@@ -67,6 +67,7 @@ type MoneyBankPanelProps = {
   isConnected: boolean;
   tradeSlotBlocked: boolean;
   running: boolean;
+  starting?: boolean;
   symbol: string;
   markets: readonly (readonly [string, string])[];
   onSymbolChange: (symbol: string) => void;
@@ -116,6 +117,7 @@ export function MoneyBankPanel({
   isConnected,
   tradeSlotBlocked,
   running,
+  starting = false,
   symbol,
   markets,
   onSymbolChange,
@@ -151,6 +153,7 @@ export function MoneyBankPanel({
   onStart,
   onStop,
 }: MoneyBankPanelProps) {
+  const controlsDisabled = running || starting;
   const ladder = calculateRecoveryLadder({
     strategy,
     budget,
@@ -174,6 +177,7 @@ export function MoneyBankPanel({
   const visibleSessionRows = sessionRows.filter((trade) => !historyHidden.has(trade.contract_id));
 
   const submitStart = () => {
+    if (starting || closing) return;
     if (running) {
       onStop();
       return;
@@ -279,7 +283,7 @@ export function MoneyBankPanel({
               <select
                 value={symbol}
                 onChange={(event) => onSymbolChange(event.target.value)}
-                disabled={running || !isConnected}
+                disabled={controlsDisabled || !isConnected}
                 aria-label="Select a Volatility market"
               >
                 {markets.map(([market, label]) => (
@@ -293,7 +297,7 @@ export function MoneyBankPanel({
             <div className="money-bank-toggle-list money-bank-market-toggle">
               <label>
                 <span><b>Auto Knockout</b>{autoKnockout && <small>{autoKnockoutCountdown == null ? "Ready" : "Countdown"}</small>}</span>
-                <input type="checkbox" checked={autoKnockout} onChange={(event) => onAutoKnockoutChange(event.target.checked)} disabled={running} aria-label="Toggle Money Bank Auto Knockout" />
+                <input type="checkbox" checked={autoKnockout} onChange={(event) => onAutoKnockoutChange(event.target.checked)} disabled={controlsDisabled} aria-label="Toggle Money Bank Auto Knockout" />
                 <i />
               </label>
             </div>
@@ -340,7 +344,7 @@ export function MoneyBankPanel({
                   type="button"
                   className={growthRate === rate ? "active" : ""}
                   onClick={() => onGrowthRateChange(rate)}
-                  disabled={running}
+                  disabled={controlsDisabled}
                 >
                   {rate}%
                 </button>
@@ -364,7 +368,7 @@ export function MoneyBankPanel({
               step="1"
               value={takeProfitTicks}
               onChange={(event) => onTakeProfitTicksChange(Number(event.target.value))}
-              disabled={running}
+              disabled={controlsDisabled}
               aria-label="Take Profit ticks"
             />
             <div className="money-bank-tick-quick" role="group" aria-label="Quick Accumulator tick targets">
@@ -374,7 +378,7 @@ export function MoneyBankPanel({
                   key={ticks}
                   className={takeProfitTicks === ticks ? "active" : ""}
                   onClick={() => onTakeProfitTicksChange(ticks)}
-                  disabled={running}
+                  disabled={controlsDisabled}
                   aria-pressed={takeProfitTicks === ticks}
                 >
                   {ticks} ticks
@@ -393,10 +397,10 @@ export function MoneyBankPanel({
               <ShieldCheck size={18} />
             </div>
             <div className="money-bank-segmented">
-              <button type="button" className={strategy === "budget" ? "active" : ""} onClick={() => onStrategyChange("budget")} disabled={running}>
+              <button type="button" className={strategy === "budget" ? "active" : ""} onClick={() => onStrategyChange("budget")} disabled={controlsDisabled}>
                 <b>Auto (Budget)</b><small>Keep the cycle inside budget</small>
               </button>
-              <button type="button" className={strategy === "manual" ? "active" : ""} onClick={() => onStrategyChange("manual")} disabled={running}>
+              <button type="button" className={strategy === "manual" ? "active" : ""} onClick={() => onStrategyChange("manual")} disabled={controlsDisabled}>
                 <b>Manual base</b><small>Choose BASE yourself</small>
               </button>
             </div>
@@ -411,7 +415,7 @@ export function MoneyBankPanel({
                     step="0.01"
                     value={strategy === "budget" ? budget : manualBase}
                      onChange={(event) => (strategy === "budget" ? onBudgetChange : onManualBaseChange)(Math.max(ACCUMULATOR_MIN_STAKE, Number(event.target.value) || ACCUMULATOR_MIN_STAKE))}
-                    disabled={running}
+                     disabled={controlsDisabled}
                   />
                 </div>
               </label>
@@ -461,14 +465,14 @@ export function MoneyBankPanel({
               <span className="money-bank-account-balance">{accountBalance != null ? money(accountBalance, currency) : "—"}</span>
             </div>
              <div className="money-bank-risk-grid">
-               <label><span>Profit Target ($)</span><div className="money-bank-input-wrap"><b>$</b><input type="number" min="0" step="1" placeholder="Optional" value={profitTarget ?? ""} onChange={(event) => onProfitTargetChange(event.target.value === "" ? null : Math.max(0, Number(event.target.value) || 0))} disabled={running} /></div></label>
-               <label><span>Loss Limit ($)</span><div className="money-bank-input-wrap"><b>$</b><input type="number" min="0" step="1" placeholder="Optional" value={lossLimit ?? ""} onChange={(event) => onLossLimitChange(event.target.value === "" ? null : Math.max(0, Number(event.target.value) || 0))} disabled={running} /></div></label>
+               <label><span>Profit Target ($)</span><div className="money-bank-input-wrap"><b>$</b><input type="number" min="0" step="1" placeholder="Optional" value={profitTarget ?? ""} onChange={(event) => onProfitTargetChange(event.target.value === "" ? null : Math.max(0, Number(event.target.value) || 0))} disabled={controlsDisabled} /></div></label>
+               <label><span>Loss Limit ($)</span><div className="money-bank-input-wrap"><b>$</b><input type="number" min="0" step="1" placeholder="Optional" value={lossLimit ?? ""} onChange={(event) => onLossLimitChange(event.target.value === "" ? null : Math.max(0, Number(event.target.value) || 0))} disabled={controlsDisabled} /></div></label>
             </div>
             <div className="money-bank-toggle-list">
-                 <label><span><b>Reinvest profit</b></span><input type="checkbox" checked={reinvestProfit} onChange={(event) => onReinvestProfitChange(event.target.checked)} disabled={running} /><i /></label>
+                 <label><span><b>Reinvest profit</b></span><input type="checkbox" checked={reinvestProfit} onChange={(event) => onReinvestProfitChange(event.target.checked)} disabled={controlsDisabled} /><i /></label>
                 {reinvestProfit && (
                   <div className="money-bank-reinvest-details">
-                    <label><span>Profit to reinvest</span><select value={reinvestPercent} onChange={(event) => onReinvestPercentChange(Number(event.target.value))} disabled={running}>{[10, 25, 45, 50, 65, 75, 85, 95, 100].map((percent) => <option key={percent} value={percent}>{percent}%</option>)}</select></label>
+                    <label><span>Profit to reinvest</span><select value={reinvestPercent} onChange={(event) => onReinvestPercentChange(Number(event.target.value))} disabled={controlsDisabled}>{[10, 25, 45, 50, 65, 75, 85, 95, 100].map((percent) => <option key={percent} value={percent}>{percent}%</option>)}</select></label>
                     <div><span><small>REINVESTED</small><b>{money(reinvestedProfit, currency)}</b></span><span><small>LEFT BACK</small><b>{money(retainedProfit, currency)}</b></span></div>
                   </div>
                 )}
@@ -479,8 +483,8 @@ export function MoneyBankPanel({
       </div>
 
       <div className="money-bank-actions">
-        <button type="button" className={`money-bank-start ${running ? "stop" : ""}`} onClick={submitStart} disabled={!isConnected || (!running && tradeSlotBlocked)}>
-          {closing ? <><RefreshCw size={15} className="money-bank-spin" /> Closing contracts…</> : running ? <><Square size={15} /> Stop Accumulator</> : <><Play size={15} /> Start Accumulator</>}
+        <button type="button" className={`money-bank-start ${running ? "stop" : ""}`} onClick={submitStart} disabled={!isConnected || starting || closing || (!running && tradeSlotBlocked)}>
+          {closing ? <><RefreshCw size={15} className="money-bank-spin" /> Closing contracts…</> : starting ? <><RefreshCw size={15} className="money-bank-spin" /> Preparing Accumulator…</> : running ? <><Square size={15} /> Stop Accumulator</> : <><Play size={15} /> Start Accumulator</>}
         </button>
       </div>
 

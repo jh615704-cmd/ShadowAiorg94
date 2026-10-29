@@ -1333,6 +1333,33 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
 
     assert.deepEqual(state.unhandledApis, [], `Unexpected API requests: ${JSON.stringify(state.unhandledApis)}`);
     assert.deepEqual(state.tradeRequests, [], "Responsive controls must be tested without submitting any trade.");
+
+    await page.getByRole("button", { name: "Start Accumulator" }).waitFor();
+    await page.locator(".money-bank-market-toggle label").click();
+    assert.equal(await autoKnockoutSwitch.isChecked(), false);
+    state.allowFixtureTrades = true;
+    state.buyResponseDelayMs = 500;
+    const pendingBuyRequest = page.waitForRequest((request) =>
+      request.url().includes("/api/deriv/buy") && request.method() === "POST",
+    );
+    await page.getByRole("button", { name: "Start Accumulator" }).click();
+    await pendingBuyRequest;
+    const sellRequest = page.waitForRequest((request) =>
+      request.url().includes("/api/deriv/sell") && request.method() === "POST",
+    );
+    const sellResponse = page.waitForResponse((response) =>
+      response.url().includes("/api/deriv/sell") && response.request().method() === "POST",
+    );
+    await page.getByRole("button", { name: "Stop Accumulator" }).click();
+    await Promise.all([sellRequest, sellResponse]);
+    await page.getByRole("button", { name: "Start Accumulator" }).waitFor();
+    assert.deepEqual(
+      state.tradeRequests.map(({ path }) => path),
+      ["/api/deriv/buy", "/api/deriv/sell"],
+      "Stop should wait for the in-flight buy acknowledgement, close its confirmed contract, and send no duplicate buy.",
+    );
+    assert.equal(state.history[0].status, "closed", "The acknowledged Money Bank contract should be closed after Stop.");
+
     assert.deepEqual(pageErrors, [], "The app should render without browser exceptions.");
   } finally {
     await context.close();
@@ -1688,6 +1715,9 @@ async function mockApiRequest(route, state, pathname, method) {
   if (pathname === "/api/deriv/buy" && method === "POST" && state.allowFixtureTrades) {
     state.tradeRequests.push({ path: pathname, method });
     const order = request.postDataJSON();
+    if (state.buyResponseDelayMs) {
+      await new Promise((resolve) => setTimeout(resolve, state.buyResponseDelayMs));
+    }
     const buy = fixtureBuy(state, order);
     await fulfillJson(route, {
       ok: true,
@@ -1695,6 +1725,25 @@ async function mockApiRequest(route, state, pathname, method) {
       proposal: { id: "fixture-proposal", ask_price: order.amount, payout: order.amount * 2, spot: 100_000 },
       buy: { contract_id: buy.contract_id, buy_price: order.amount, payout: order.amount * 2 },
     });
+    return;
+  }
+  if (pathname === "/api/deriv/sell" && method === "POST" && state.allowFixtureTrades) {
+    state.tradeRequests.push({ path: pathname, method });
+    const { contract_id } = request.postDataJSON();
+    const openTrade = (state.history ?? []).find((trade) => trade.contract_id === contract_id);
+    const soldFor = openTrade?.current_value ?? 0;
+    state.history = (state.history ?? []).map((trade) => trade.contract_id === contract_id
+      ? {
+          ...trade,
+          current_value: soldFor,
+          payout: soldFor,
+          profit: soldFor - trade.buy_price,
+          status: "closed",
+          sell_time: Math.floor(Date.now() / 1000),
+        }
+      : trade);
+    state.activeContractCount = Math.max(0, state.activeContractCount - 1);
+    await fulfillJson(route, { ok: true, contract_id, sold_for: soldFor });
     return;
   }
   if (pathname === "/api/deriv/select-symbol" && method === "POST") {

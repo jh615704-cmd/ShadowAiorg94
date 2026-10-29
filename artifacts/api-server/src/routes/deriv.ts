@@ -449,6 +449,17 @@ router.post("/deriv/buy", requireTradeAccessFeature, async (req, res) => {
   ) {
     return res.status(400).json({ error: "Cash Grab supports whole-number durations from 1 to 5 ticks." });
   }
+  if (
+    parsed.data.access_feature === "money-bank"
+    && (
+      parsed.data.contract_type !== "ACCU"
+      || !Number.isInteger(parsed.data.duration)
+      || parsed.data.duration < 5
+      || parsed.data.duration > 50
+    )
+  ) {
+    return res.status(400).json({ error: "Money Bank supports Accumulator contracts from 5 to 50 ticks." });
+  }
 
   try {
     if (parsed.data.automated === true) {
