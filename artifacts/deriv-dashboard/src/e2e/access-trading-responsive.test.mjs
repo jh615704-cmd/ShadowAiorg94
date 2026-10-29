@@ -344,7 +344,14 @@ test("global announcement reaches existing and new users, stays dismissed until 
     await admin.page.goto(`${baseUrl}/admin`);
     await admin.page.getByRole("heading", { name: "Create a new key" }).waitFor();
     const message = "Update complete. Our newest feature is now live — BFBX Premium AI.";
-    await admin.page.getByRole("checkbox", { name: /Show a global announcement/ }).check({ force: true });
+    const announcementToggle = admin.page.getByRole("checkbox", { name: /Show a global announcement/ });
+    await announcementToggle.check({ force: true });
+    assert.equal(await announcementToggle.isChecked(), true);
+    assert.equal(
+      await admin.page.locator(".admin-announcement-toggle").evaluate((element) => element.classList.contains("selected")),
+      true,
+      "The switch should visibly turn on when checked.",
+    );
     await admin.page.getByRole("textbox", { name: "Global announcement" }).fill(message);
     const save = admin.page.locator(".admin-announcement-actions").getByRole("button", { name: "Save" });
     const firstSaveResponse = admin.page.waitForResponse((response) =>
@@ -352,8 +359,13 @@ test("global announcement reaches existing and new users, stays dismissed until 
     );
     await save.click();
     const firstBroadcast = await (await firstSaveResponse).json();
+    assert.equal(firstBroadcast.global_announcement_enabled, true);
     assert.equal(firstBroadcast.global_announcement, message);
     assert.ok(firstBroadcast.global_announcement_revision, "Saving creates a distinct broadcast revision.");
+
+    const adminAnnouncement = admin.page.getByTestId("global-announcement");
+    await adminAnnouncement.waitFor();
+    assert.match(await adminAnnouncement.innerText(), /Update complete\.\s+Our newest feature is now live/);
 
     const existingUserState = createState(userSession(["edge"]));
     existingUserState.featureSettings = adminState.featureSettings;

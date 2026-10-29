@@ -639,7 +639,7 @@ export default function AdminUsersPage() {
                     <X size={14} />Cancel
                   </button>
                 </div>
-                <label className="admin-protection-toggle admin-announcement-toggle">
+                <label className={`admin-protection-toggle admin-announcement-toggle ${featureSettingsDraft.global_announcement_enabled ? "selected" : ""}`}>
                   <input type="checkbox" checked={featureSettingsDraft.global_announcement_enabled} onChange={(event) => setFeatureSettingsDraft({ ...featureSettingsDraft, global_announcement_enabled: event.target.checked })} />
                   <span className="admin-protection-switch"><i /></span>
                   <span><b>Show a global announcement</b><small>Broadcast to every user until they dismiss it. Saving again republishes it.</small></span>
