@@ -100,6 +100,11 @@ import {
   type MoneyBankJdyDecision,
   MONEY_BANK_AUTO_SYMBOLS,
 } from "../components/money-bank-panel";
+import {
+  checkMoneyBankJdySignal,
+  getMoneyBankSessionStopReason,
+  getMoneyBankStartConfigError,
+} from "../lib/money-bank-entry-guards";
 import CashGrabPanel, {
   type CashGrabAiStatus,
   type CashGrabDirection,
@@ -615,6 +620,7 @@ export default function XTraderPage() {
   const moneyBankLevelRef = useRef(0);
   const moneyBankConfigRef = useRef<MoneyBankStartConfig | null>(null);
   const moneyBankSessionPnlRef = useRef(0);
+  const moneyBankAccountIdRef = useRef<string | null>(null);
   const digitFlipActionLockRef = useRef(false);
   const digitFlipAssaultRef = useRef(false);
   const digitFlipMagicRef = useRef(false);
@@ -696,6 +702,8 @@ export default function XTraderPage() {
   const currentAccountId = currentAccount?.id ?? null;
   const currentAccountType = currentAccount?.type ?? null;
   const currentAccountCurrency = currentAccount?.currency ?? null;
+  const isConnectedRef = useRef(isConnected);
+  isConnectedRef.current = isConnected;
   const accessKeyId = accessSession.data?.key_id;
   const {
     notifications,
@@ -1231,7 +1239,7 @@ export default function XTraderPage() {
     candidateConfig?: MoneyBankStartConfig,
     candidateSymbol?: string,
   ): Promise<MoneyBankJdyDecision | null> => {
-    if (!isConnected || moneyBankJdyScanInFlightRef.current) return moneyBankJdyDecision;
+    if (!isConnectedRef.current || moneyBankJdyScanInFlightRef.current) return null;
     const config = candidateConfig ?? moneyBankConfigRef.current;
     const selectedSymbol = candidateSymbol ?? config?.symbol;
     if (!config || !selectedSymbol) return null;
@@ -1239,18 +1247,30 @@ export default function XTraderPage() {
     setMoneyBankJdyState("scanning");
     try {
       const freshStatus = await status.refetch();
-      const freshSignals = (freshStatus.data?.market_signals ?? moneyBankSignals) as MoneyBankMarketSignal[];
+      if (!freshStatus.isSuccess || !freshStatus.data?.connected || !freshStatus.data.authorized) {
+        throw new Error("Money Bank is waiting for a fresh Deriv connection status.");
+      }
+      const expectedAccountId = moneyBankAccountIdRef.current;
+      if (!expectedAccountId || freshStatus.data.account?.id !== expectedAccountId) {
+        throw new Error("Money Bank is waiting for the account selected when the run started.");
+      }
+      const freshBalance = getAccountBalance(freshStatus.data.account);
+      if (freshBalance == null || freshBalance <= 0) {
+        throw new Error("Money Bank is waiting for a fresh positive account balance.");
+      }
+      const freshSignals = (freshStatus.data.market_signals ?? []) as MoneyBankMarketSignal[];
       const evaluateSetup = (marketSymbol: string, growthRate: number, takeProfitTicks: number): MoneyBankJdyDecision => {
         const signal = freshSignals.find((entry) => entry.symbol === marketSymbol);
-        const observedBalance = signal ? Math.max(signal.rise_percentage ?? 50, signal.fall_percentage ?? 50) : 0;
+        const signalCheck = checkMoneyBankJdySignal(signal);
+        const observedBalance = signalCheck.observedBalance ?? 0;
         const stake = config.ladder[Math.min(6, moneyBankLevelRef.current)]?.stake ?? config.ladder[0]?.stake ?? 1;
-        const stakeRiskPenalty = currentAccountBalance
-          ? Math.min(15, (stake / currentAccountBalance) * 100)
+        const stakeRiskPenalty = freshBalance
+          ? Math.min(15, (stake / freshBalance) * 100)
           : 20;
         const riskPenalty = growthRate * 1.5 + takeProfitTicks * 0.12 + stakeRiskPenalty;
         const predictedWinRate = Math.max(0, Math.min(100, observedBalance - riskPenalty));
         const estimatedLossStreak = Math.max(0, Math.ceil((100 - predictedWinRate) / 10));
-        const sampleCount = signal?.sample_count ?? 0;
+        const sampleCount = signalCheck.sampleCount;
         const score = predictedWinRate + Math.min(sampleCount, 200) / 10;
         return {
           symbol: marketSymbol,
@@ -1263,7 +1283,8 @@ export default function XTraderPage() {
           stake,
           predictedWinRate,
           estimatedLossStreak,
-           safe: sampleCount >= 5 && predictedWinRate >= 45 && estimatedLossStreak <= 5,
+          safe: signalCheck.ready && predictedWinRate >= 45 && estimatedLossStreak <= 5,
+          holdReason: signalCheck.reason,
           suggestedSymbol: null,
           suggestedGrowthRate: null,
           suggestedTakeProfitTicks: null,
@@ -1282,7 +1303,7 @@ export default function XTraderPage() {
           || right.score - left.score
           || right.sampleCount - left.sampleCount,
         );
-      const suggestion = alternatives[0];
+      const suggestion = alternatives.find((candidate) => candidate.safe);
       if (!decision.safe && suggestion) {
         decision.suggestedSymbol = suggestion.symbol;
         decision.suggestedGrowthRate = suggestion.growthRate;
@@ -2179,6 +2200,7 @@ export default function XTraderPage() {
   const stopMoneyBank = () => {
     const actionInFlight = moneyBankActionLockRef.current;
     moneyBankRunningRef.current = false;
+    moneyBankAccountIdRef.current = null;
     setMoneyBankRunning(false);
     setMoneyBankAutoKnockoutCountdown(null);
     if (actionInFlight) {
@@ -2201,12 +2223,13 @@ export default function XTraderPage() {
       await sleep(2_000);
       return;
     }
-    if (!isConnected) {
+    if (!isConnectedRef.current) {
       setConnectionMessage({ kind: "info", text: "Money Bank remains active and is waiting for the Deriv connection." });
       await sleep(1_500);
       return;
     }
-    if (currentAccountBalance == null || currentAccountBalance <= 0) {
+    const accountBalance = currentAccountBalanceRef.current;
+    if (accountBalance == null || accountBalance <= 0) {
       setConnectionMessage({ kind: "info", text: "Money Bank remains active and is waiting for the account balance to refresh." });
       await sleep(1_500);
       return;
@@ -2273,6 +2296,7 @@ export default function XTraderPage() {
           const cycleBudget = config.ladder.at(-1)?.cumulative ?? 0;
           moneyBankConfigRef.current = {
             ...config,
+            manualBase: nextBase,
             ladder: calculateRecoveryLadder({
               strategy: config.strategy,
               budget: cycleBudget,
@@ -2288,12 +2312,8 @@ export default function XTraderPage() {
         recoveryCycleExhausted = moneyBankLevelRef.current + 1 >= currentLadder.length;
         if (!recoveryCycleExhausted) moneyBankLevelRef.current += 1;
       }
-      if (config.profitTarget != null && config.profitTarget > 0 && nextSessionPnl >= config.profitTarget) {
-        throw new Error("Money Bank reached the session Profit target.");
-      }
-      if (config.lossLimit != null && config.lossLimit > 0 && nextSessionPnl <= -config.lossLimit) {
-        throw new Error("Money Bank reached the session Loss limit.");
-      }
+      const stopReason = getMoneyBankSessionStopReason(nextSessionPnl, config);
+      if (stopReason) throw new Error(stopReason);
       if (recoveryCycleExhausted) {
         throw new Error("Money Bank reached the planned recovery limit; no planned recovery level remains.");
       }
@@ -2301,6 +2321,18 @@ export default function XTraderPage() {
 
     if (!moneyBankRunningRef.current) return;
     const currentConfig = moneyBankConfigRef.current ?? config;
+    const configError = getMoneyBankStartConfigError(
+      currentConfig,
+      currentAccountBalanceRef.current,
+      MONEY_BANK_AUTO_SYMBOLS,
+      false,
+    );
+    if (configError) throw new Error(configError);
+    const sessionStopReason = getMoneyBankSessionStopReason(
+      moneyBankSessionPnlRef.current,
+      currentConfig,
+    );
+    if (sessionStopReason) throw new Error(sessionStopReason);
     const tradeSymbol = currentConfig.symbol;
     if (moneyBankJdyEnabled) {
       // The Money Bank gate evaluates the market selected in the form.
@@ -2311,7 +2343,7 @@ export default function XTraderPage() {
         setConnectionMessage({
           kind: "info",
           text: decision
-            ? `Shadows is waiting on the selected setup after estimating a ${decision.estimatedLossStreak}-loss streak risk. Money Bank remains active and will check again.`
+            ? `Shadows is waiting on the selected setup: ${decision.holdReason ?? `estimated ${decision.estimatedLossStreak}-loss streak risk`}. Money Bank remains active and will check again.`
             : "Shadows could not confirm the selected setup. Money Bank remains active and will check again.",
         });
         await sleep(2_000);
@@ -2325,14 +2357,16 @@ export default function XTraderPage() {
     }
     const level = currentConfig.ladder?.[Math.min(6, moneyBankLevelRef.current)];
     if (!level) throw new Error("Money Bank reached the planned recovery limit; no planned recovery level remains.");
-    const accountBalance = currentAccountBalance ?? 0;
-    if (!accountBalance || level.stake > accountBalance) {
+    const availableBalance = currentAccountBalanceRef.current ?? 0;
+    if (!availableBalance || level.stake > availableBalance) {
       throw new Error(`Money Bank is waiting because ${level.stake.toFixed(2)} ${currentAccount?.currency ?? "USD"} exceeds the connected balance.`);
     }
 
     if (tradeSymbol !== moneyBankSymbol) {
       setMoneyBankSymbol(tradeSymbol);
-      await selectMarket(tradeSymbol);
+      if (!await selectMarket(tradeSymbol)) {
+        throw new Error("Money Bank could not confirm the selected Deriv market.");
+      }
     }
 
     if (!moneyBankRunningRef.current) return;
@@ -2348,6 +2382,35 @@ export default function XTraderPage() {
         if (!moneyBankRunningRef.current) return;
         setMoneyBankAutoKnockoutCountdown(0);
       }
+
+      const freshStatus = await status.refetch();
+      if (!moneyBankRunningRef.current) return;
+      if (!freshStatus.isSuccess || !freshStatus.data?.connected || !freshStatus.data.authorized) {
+        throw new Error("Money Bank is waiting for a fresh Deriv connection status.");
+      }
+      if (
+        !moneyBankAccountIdRef.current
+        || freshStatus.data.account?.id !== moneyBankAccountIdRef.current
+      ) {
+        throw new Error("Money Bank stopped because the selected Deriv account changed during the run.");
+      }
+      if (freshStatus.data.symbol !== tradeSymbol) {
+        throw new Error("Money Bank stopped because Deriv's selected market changed during the run.");
+      }
+      const freshBalance = getAccountBalance(freshStatus.data.account);
+      if (freshBalance == null || freshBalance <= 0) {
+        throw new Error("Money Bank is waiting for a fresh positive account balance.");
+      }
+      if (level.stake > freshBalance) {
+        throw new Error(`Money Bank is waiting because ${level.stake.toFixed(2)} ${freshStatus.data.currency || "USD"} exceeds the fresh account balance.`);
+      }
+      const freshConfigError = getMoneyBankStartConfigError(
+        currentConfig,
+        freshBalance,
+        MONEY_BANK_AUTO_SYMBOLS,
+        false,
+      );
+      if (freshConfigError) throw new Error(freshConfigError);
 
       const result = await moneyBankBuyMutation.mutateAsync({
         data: {
@@ -2455,7 +2518,7 @@ export default function XTraderPage() {
       });
       return;
     }
-    if (!isConnected) {
+    if (!isConnectedRef.current) {
       setConnectionMessage({ kind: "error", text: "Connect Deriv before starting Money Bank." });
       return;
     }
@@ -2463,17 +2526,13 @@ export default function XTraderPage() {
       setConnectionMessage({ kind: "error", text: "Select a Deriv account before starting Money Bank." });
       return;
     }
-    if (config.strategy === "budget" && !config.ladder?.length) {
-      setConnectionMessage({ kind: "error", text: "The Auto Budget must cover at least one minimum Accumulator stake." });
-      return;
-    }
-    if (!config.ladder?.[0] || config.ladder[0].stake > currentAccountBalance) {
-      setConnectionMessage({ kind: "error", text: "The calculated BASE is higher than the connected account balance." });
-      return;
-    }
-    const plannedStakeTotal = config.ladder.at(-1)?.cumulative ?? 0;
-    if (config.strategy === "budget" && plannedStakeTotal > currentAccountBalance) {
-      setConnectionMessage({ kind: "error", text: "The planned Auto Budget cycle exceeds the connected balance. Lower the budget before starting." });
+    const configError = getMoneyBankStartConfigError(
+      config,
+      currentAccountBalance,
+      MONEY_BANK_AUTO_SYMBOLS,
+    );
+    if (configError) {
+      setConnectionMessage({ kind: "error", text: configError });
       return;
     }
 
@@ -2505,6 +2564,7 @@ export default function XTraderPage() {
       moneyBankLevelRef.current = 0;
        moneyBankBudgetExhaustedRef.current = false;
       moneyBankConfigRef.current = config;
+      moneyBankAccountIdRef.current = currentAccount.id;
       moneyBankSessionPnlRef.current = 0;
       setMoneyBankSessionPnl(0);
       setMoneyBankLastSettledProfit(null);

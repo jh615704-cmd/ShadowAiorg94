@@ -19,6 +19,8 @@ export type MoneyBankStartConfig = {
   takeProfitTicks: number;
   autoKnockout: boolean;
   strategy: MoneyBankStrategy;
+  budget: number;
+  manualBase: number;
   ladder: MoneyBankLadderLevel[];
   reinvestProfit: boolean;
   reinvestPercent: number;
@@ -29,10 +31,10 @@ export type MoneyBankStartConfig = {
 export type MoneyBankMarketSignal = {
   symbol: string;
   sample_count: number;
+  tick_epoch?: number;
   quote?: number | null;
   recent_quotes?: number[];
   tick_sequence?: number;
-  tick_epoch?: number;
   rise_percentage?: number;
   fall_percentage?: number;
 };
@@ -54,6 +56,7 @@ export type MoneyBankObservedSetup = {
 
 export type MoneyBankJdyDecision = MoneyBankObservedSetup & {
   safe: boolean;
+  holdReason: string | null;
   stake: number;
   predictedWinRate: number;
   estimatedLossStreak: number;
@@ -189,6 +192,8 @@ export function MoneyBankPanel({
       takeProfitTicks,
       autoKnockout,
       strategy,
+      budget,
+      manualBase,
       ladder,
       reinvestProfit,
       reinvestPercent,
