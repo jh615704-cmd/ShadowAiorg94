@@ -44,3 +44,4 @@
 - [Auto Trader tick scope](auto-trader-tick-scope.md) — 1–5 tick responsiveness changes apply only to Auto Trader; preserve Deriv duration and market cadence.
 - [Global announcement broadcast](global-announcement-broadcast.md) — every access-key session, including the primary admin, receives each new broadcast revision.
 - [Workspace idle lock](workspace-idle-lock.md) — lock the entire trading workspace after two hours away; keep access revocation's short exit countdown separate.
+- [Vite preview cache isolation](vite-preview-cache-isolation.md) — keep isolated E2E Vite caches separate from the live dashboard server to prevent stale-chunk 504s.

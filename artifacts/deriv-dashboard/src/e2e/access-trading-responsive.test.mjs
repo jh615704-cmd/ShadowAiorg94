@@ -66,6 +66,7 @@ before(async () => {
   const { createServer } = await import("vite");
   viteServer = await createServer({
     configFile: path.join(dashboardRoot, "vite.config.ts"),
+    cacheDir: path.join(dashboardRoot, "node_modules", ".vite-e2e"),
     server: { host: "127.0.0.1", port, strictPort: true },
   });
   await viteServer.listen();
