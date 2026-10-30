@@ -135,7 +135,10 @@ import {
 import { getClockWorkRunSummary } from "../lib/clock-work-session";
 import { buildCashGrabBulkBuyPayload } from "../lib/cash-grab-order";
 import { getCashGrabLimitReached } from "../lib/cash-grab-limits";
-import { getCashGrabSessionSettlements } from "../lib/cash-grab-session";
+import {
+  getCashGrabSessionSettlements,
+  shouldSweepCashGrabContractsOnStop,
+} from "../lib/cash-grab-session";
 import {
   getCashGrabEntryBlockReason,
   getCashGrabStartConfigError,
@@ -2963,6 +2966,7 @@ export default function XTraderPage() {
       stopCashGrab();
     } finally {
       cashGrabActionLockRef.current = false;
+      setCashGrabScannerBusy(false);
     }
   };
 
@@ -3091,11 +3095,20 @@ export default function XTraderPage() {
     cashGrabRunIdRef.current += 1;
     cashGrabRunningRef.current = false;
     cashGrabAutoSwitchNextAtRef.current = null;
-    setCashGrabStopping(true);
     setCashGrabRunning(false);
     setCashGrabAutoSwitchSafestPairStatus(
       cashGrabAutoSwitchSafestPair || cashGrabConfigRef.current?.autoSwitchSafestPair ? "blocked" : "off",
     );
+    const needsCloseSweep = shouldSweepCashGrabContractsOnStop({
+      activeContractCount: cashGrabOpenContractIdsRef.current.size,
+      buyPending: cashGrabActionLockRef.current || bulkBuyMutation.isPending,
+      sweepPending: Boolean(cashGrabClosePromiseRef.current),
+    });
+    setCashGrabStopping(needsCloseSweep);
+    if (!needsCloseSweep) {
+      cashGrabAccountIdRef.current = null;
+      return;
+    }
     void closeCashGrabContracts().catch((error) => {
       setConnectionMessage({ kind: "error", text: errorMessage(error) });
     });

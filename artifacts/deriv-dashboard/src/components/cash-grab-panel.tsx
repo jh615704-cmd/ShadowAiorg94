@@ -164,7 +164,8 @@ export default function CashGrabPanel({
   onClearHistory,
 }: CashGrabPanelProps) {
   const [marketMenuOpen, setMarketMenuOpen] = useState(false);
-  const interactionDisabled = running || starting || scannerBusy || isPlacingTrade;
+  const interactionDisabled =
+    (running && !stopping) || starting || scannerBusy || isPlacingTrade;
   const canStart = isConnected && !starting && !scannerBusy && !tradeSlotBlocked && !isPlacingTrade && !stopping;
   const canRunScanner = isConnected && !running && !starting && !scannerBusy && !tradeSlotBlocked && !isPlacingTrade && !stopping && stake >= minimumStake;
   const selectedSymbol = symbols.find((item) => item.value === symbol);
@@ -246,7 +247,7 @@ export default function CashGrabPanel({
               type="checkbox"
               checked={autoSwitchSafestPair}
               onChange={(event) => onAutoSwitchSafestPairChange(event.target.checked)}
-              disabled={!isConnected || starting || scannerBusy || stopping}
+              disabled={!isConnected || starting || scannerBusy}
               aria-label="Auto-switch Cash Grab to guarded Rise/Fall markets"
             />
             <i />
@@ -265,7 +266,7 @@ export default function CashGrabPanel({
               type="checkbox"
               checked={autoDirection}
               onChange={(event) => onAutoDirectionChange(event.target.checked)}
-              disabled={!isConnected || starting || scannerBusy || stopping}
+              disabled={!isConnected || starting || scannerBusy}
               aria-label="Auto Direction for Cash Grab"
             />
             <i />

@@ -17,3 +17,14 @@ export function getCashGrabSessionSettlements<T extends Pick<
     && !processedSettlementIds.has(trade.contract_id),
   );
 }
+
+export function shouldSweepCashGrabContractsOnStop(input: {
+  activeContractCount: number;
+  buyPending: boolean;
+  sweepPending: boolean;
+}) {
+  if (!Number.isInteger(input.activeContractCount) || input.activeContractCount < 0) {
+    return true;
+  }
+  return input.activeContractCount > 0 || input.buyPending || input.sweepPending;
+}
