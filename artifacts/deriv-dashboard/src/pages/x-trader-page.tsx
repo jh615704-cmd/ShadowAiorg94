@@ -938,6 +938,9 @@ export default function XTraderPage() {
     clockWorkRunContractIdsRef.current,
   );
   const clockWorkRunPnl = clockWorkRunSummary.pnl;
+  const clockWorkRunTradeCount = clockWorkRunAccountId
+    ? clockWorkRunContractIdsRef.current.size
+    : 0;
   const clockWorkRunHasUnsettledResults = clockWorkRunSummary.hasUnsettled;
   const cashGrabSymbols = markets.map(([value, label]) => ({ value, label }));
   const clockWorkSymbols = markets.map(([value, label]) => ({ value, label }));
@@ -5524,17 +5527,20 @@ export default function XTraderPage() {
             }}
           />
           {canViewHistory && (
-            <DerivHistory
-              title="Clock Work History"
-              strategy="Ai Clock"
-              summaryMode="hidden"
-              rows={clockWorkRows}
-              sessionRows={clockWorkRows}
-              currency={currentAccount?.currency}
-              clearArmed={clockWorkHistoryClearArmed}
-              fading={historyFading}
-              onClear={clearClockWorkHistory}
-            />
+            <div className="clock-work-history-layout">
+              <DerivHistory
+                title="Clock Work History"
+                strategy="Ai Clock"
+                rows={clockWorkRows}
+                sessionRows={clockWorkRunSummary.rows}
+                currency={currentAccount?.currency}
+                sessionPnl={clockWorkRunPnl}
+                sessionTradeCount={clockWorkRunTradeCount}
+                clearArmed={clockWorkHistoryClearArmed}
+                fading={historyFading}
+                onClear={clearClockWorkHistory}
+              />
+            </div>
           )}
         </section>
       )}
