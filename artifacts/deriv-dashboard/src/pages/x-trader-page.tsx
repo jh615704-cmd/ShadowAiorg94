@@ -5072,6 +5072,9 @@ export default function XTraderPage() {
           multiplier={digitFlipMultiplier}
           takeProfit={digitFlipTakeProfit}
           stopLoss={digitFlipStopLoss}
+          sessionPnl={digitFlipSessionPnl}
+          accountBalance={currentAccountBalance}
+          currency={currentAccount?.currency ?? "USD"}
           running={digitFlipRunning}
           currentStake={digitFlipCurrentStake}
             assaultEnabled={digitFlipAssault}
@@ -5368,9 +5371,11 @@ export default function XTraderPage() {
           marketSignals={cashGrabMarketSignals}
           quote={status.data?.last_tick?.symbol === cashGrabSymbol ? status.data?.last_tick?.quote ?? null : null}
           stake={cashGrabStake}
+          currentStake={cashGrabCurrentStakeRef.current}
           duration={cashGrabDuration}
           stakeMode={cashGrabStakeMode}
           currency={currentAccount?.currency ?? "USD"}
+          accountBalance={currentAccountBalance}
           multiplier={cashGrabMultiplier}
           takeProfit={cashGrabTakeProfit}
           lossLimit={cashGrabLossLimit}

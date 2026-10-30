@@ -9,6 +9,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { formatDerivQuote } from "../lib/format-deriv-quote";
+import { getLossRunwayMessage } from "../lib/loss-runway";
 import AiScannerAction from "./ai-scanner-action";
 import DerivHistory, { type DerivHistoryRow } from "./deriv-history";
 import "./cash-grab-panel.css";
@@ -57,9 +58,11 @@ export interface CashGrabPanelProps {
   marketSignals: readonly CashGrabMarketSignal[];
   quote?: number | null;
   stake: number;
+  currentStake?: number;
   duration: CashGrabDuration;
   stakeMode: CashGrabStakeMode;
   currency?: string;
+  accountBalance: number | null | undefined;
   multiplier: number;
   takeProfit: number;
   lossLimit: number;
@@ -120,9 +123,11 @@ export default function CashGrabPanel({
   marketSignals,
   quote = null,
   stake,
+  currentStake = stake,
   duration,
   stakeMode,
   currency = "USD",
+  accountBalance,
   multiplier,
   takeProfit,
   lossLimit,
@@ -459,6 +464,18 @@ export default function CashGrabPanel({
           <output aria-live="polite">
             Settled session P/L: {sessionPnl > 0 ? "+" : ""}{sessionPnl.toFixed(2)} {currency}
           </output>
+          <p className="cash-grab-loss-runway-note">
+            {getLossRunwayMessage({
+              balance: accountBalance,
+              baseStake: stake,
+              nextStake: running ? currentStake : stake,
+              stakeMode,
+              multiplier,
+              takeProfit,
+              lossLimit,
+              sessionPnl,
+            }, currency)}
+          </p>
         </div>
 
         <div className="cash-grab-ai-scanner">

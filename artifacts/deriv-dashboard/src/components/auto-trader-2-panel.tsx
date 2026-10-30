@@ -1,4 +1,5 @@
 import { Activity, BookOpen, Loader2, Play, Square } from "lucide-react";
+import { getLossRunwayMessage } from "@/lib/loss-runway";
 import DerivHistory, { type DerivHistoryRow } from "./deriv-history";
 import "./auto-trader-2-panel.css";
 
@@ -43,6 +44,7 @@ export interface AutoTrader2PanelProps {
   aiDecision: string;
   observedSampleCount: number;
   currency: string;
+  accountBalance: number | null | undefined;
   sessionPnl: number;
   sessionTradeCount: number;
   recentTrades: DerivHistoryRow[];
@@ -107,6 +109,7 @@ export default function AutoTrader2Panel({
   aiDecision,
   observedSampleCount,
   currency,
+  accountBalance,
   sessionPnl,
   sessionTradeCount,
   recentTrades,
@@ -128,6 +131,16 @@ export default function AutoTrader2Panel({
       : aiStatus === "paused"
         ? "PAUSED"
         : "WORKING";
+  const lossRunwayMessage = getLossRunwayMessage({
+    balance: accountBalance,
+    baseStake: stake,
+    nextStake: running ? nextStake : stake,
+    stakeMode,
+    multiplier,
+    takeProfit: profitLimit,
+    lossLimit,
+    sessionPnl,
+  }, currency);
 
   return (
     <section className="at2-panel" aria-label="Auto Trader 2.0 trading panel" data-testid="auto-trader-2-panel">
@@ -398,7 +411,7 @@ export default function AutoTrader2Panel({
           <span className="at2-check-copy"><strong>AI 2 <small>OBSERVED-DATA FILTER</small></strong><small>Uses stronger evidence, switches to the paired opposite after a loss, and pauses repeated losers.</small></span>
           <b className={`at2-status-tag ${aiEnabled && aiLabel === "WORKING" ? "working" : ""}`} data-testid="at2-ai-status">{aiLabel}</b>
         </label>
-        <p className="at2-truth-note">AI 2 does not predict contract outcomes or guarantee results. Observed samples are historical context, not a promise of future performance.</p>
+        <p className="at2-truth-note" data-testid="at2-loss-runway">{lossRunwayMessage}</p>
       </section>
 
       <div className="at2-action-zone">

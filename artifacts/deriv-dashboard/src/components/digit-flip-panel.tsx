@@ -8,6 +8,7 @@ import {
   Zap,
 } from "lucide-react";
 import { formatDerivQuote } from "../lib/format-deriv-quote";
+import { getLossRunwayMessage } from "../lib/loss-runway";
 import AiScannerAction from "./ai-scanner-action";
 import "./digit-flip-panel.css";
 
@@ -45,6 +46,9 @@ export type DigitFlipPanelProps = {
   multiplier: number;
   takeProfit: number;
   stopLoss: number;
+  sessionPnl: number;
+  accountBalance: number | null | undefined;
+  currency: string;
   running: boolean;
   currentStake: number;
   assaultEnabled: boolean;
@@ -121,6 +125,9 @@ export default function DigitFlipPanel({
   multiplier,
   takeProfit,
   stopLoss,
+  sessionPnl,
+  accountBalance,
+  currency,
   running,
   currentStake,
   assaultEnabled,
@@ -537,6 +544,18 @@ export default function DigitFlipPanel({
             />
           </label>
         </div>
+        <p className="df-loss-runway-note">
+          {getLossRunwayMessage({
+            balance: accountBalance,
+            baseStake: stake,
+            nextStake: running ? currentStake : stake,
+            stakeMode,
+            multiplier,
+            takeProfit,
+            lossLimit: stopLoss,
+            sessionPnl,
+          }, currency)}
+        </p>
         <AiScannerAction
           onScan={onAiScan}
           disabled={disabled || isPlacingTrade || running || entryBlocked}

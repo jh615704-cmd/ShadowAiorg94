@@ -240,6 +240,7 @@ function AutoTrader2Content() {
 
   const account = status.data?.account ?? null;
   const accountId = account?.id ?? "";
+  const accountBalance = getAccountBalance(account);
   const sessionLoadingForAccount = !sessionLoadComplete || (Boolean(accountId) && sessionLoadedForAccount !== accountId);
   const currency = account?.currency ?? "USD";
   const connected = Boolean(status.data?.connected && status.data?.authorized && hasToken);
@@ -1391,6 +1392,7 @@ function AutoTrader2Content() {
           aiDecision={decision}
           observedSampleCount={observedSampleCount}
           currency={currency}
+          accountBalance={accountBalance}
           sessionPnl={sessionPnl}
           sessionTradeCount={sessionTradeCount}
           recentTrades={recentTrades}

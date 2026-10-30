@@ -170,6 +170,12 @@
   line-height: 1.45;
 }
 .cash-grab-limits output { color: #c0dcf7; font-weight: 700; }
+.cash-grab-limits .cash-grab-loss-runway-note {
+  padding-top: 3px;
+  color: #bdd5ee;
+  font-size: 8px;
+  line-height: 1.55;
+}
 
 .cash-grab-df-panel .df-parity-toggle {
   display: grid;
