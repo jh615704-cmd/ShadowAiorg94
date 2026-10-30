@@ -27,25 +27,6 @@
 .cw-panel input:disabled,
 .cw-panel select:disabled { cursor: not-allowed; opacity: .48; }
 
-.clock-work-history-layout {
-  width: min(100%, 760px);
-  margin: 12px auto 0;
-  padding: 0 16px;
-  display: grid;
-  gap: 12px;
-  box-sizing: border-box;
-  color: #f1f4f7;
-  font-family: "DM Sans", "Segoe UI", sans-serif;
-  letter-spacing: .005em;
-}
-.clock-work-history-layout *,
-.clock-work-history-layout *::before,
-.clock-work-history-layout *::after { box-sizing: border-box; }
-.clock-work-history-layout button:focus-visible {
-  outline: 2px solid rgba(35, 221, 195, .9);
-  outline-offset: 2px;
-}
-
 .cw-header {
   min-height: 78px;
   padding: 15px 19px;
@@ -109,7 +90,7 @@
 .cw-controls {
   padding: 13px;
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(90px, .55fr) minmax(145px, .85fr);
+  grid-template-columns: minmax(0, 1.4fr) minmax(90px, .55fr) minmax(145px, .85fr) minmax(145px, .85fr);
   align-items: end;
   gap: 12px;
   border: 1px solid var(--cw-border);
@@ -181,8 +162,7 @@
   border-radius: 11px;
   background: rgba(5, 20, 39, .69);
 }
-.cw-risk-heading,
-.cw-session-pnl {
+.cw-risk-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -190,7 +170,6 @@
 }
 .cw-risk-heading > span,
 .cw-risk-inputs label > span,
-.cw-session-pnl > span,
 .cw-ai-threshold > span {
   color: #8ba8c0;
   font: 700 8px var(--app-font-mono, monospace);
@@ -221,15 +200,6 @@
   outline: 2px solid rgba(49, 200, 237, .7);
   outline-offset: 2px;
 }
-.cw-session-pnl {
-  min-height: 34px;
-  margin-top: 10px;
-  padding-top: 9px;
-  border-top: 1px solid rgba(64, 97, 126, .24);
-}
-.cw-session-pnl strong { font-size: 11px; font-variant-numeric: tabular-nums; }
-.cw-session-pnl strong.positive { color: #69e3b0; }
-.cw-session-pnl strong.negative { color: #ff8b93; }
 .cw-ai-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .cw-ai-title { min-width: 0; display: flex; align-items: center; gap: 10px; }
 .cw-ai-icon {
@@ -337,6 +307,7 @@
   .cw-controls { grid-template-columns: minmax(0, 1fr) minmax(95px, auto); gap: 10px; padding: 10px; }
   .cw-control { grid-column: 1 / -1; }
   .cw-stake { min-width: 0; }
+  .cw-loss-multiplier { grid-column: 1 / -1; }
   .cw-run-button { min-height: 46px; }
 }
 

@@ -132,7 +132,7 @@ import {
   type ClockWorkAiMinimumWinRate,
   type ClockWorkQuoteBuffer,
 } from "../lib/clock-work-logic";
-import { getClockWorkRunSummary } from "../lib/clock-work-session";
+import { getClockWorkNextStake, getClockWorkRunSummary } from "../lib/clock-work-session";
 import { buildCashGrabBulkBuyPayload } from "../lib/cash-grab-order";
 import { getCashGrabLimitReached } from "../lib/cash-grab-limits";
 import {
@@ -230,7 +230,7 @@ const tradeXGuidePages = [
 const clockWorkGuidePages = [
   { title: "Welcome to Clock Work", body: "Ai Clock chooses a Higher or Lower contract and its barrier from recent market outcomes. It only sends one entry when its historical signal qualifies; past outcomes do not guarantee future results.", points: ["Use a demo account while learning.", "Only one trading feature can be active at a time.", "The selected Deriv account receives any accepted order."] },
   { title: "Connect and choose an account", body: "Connect Deriv and confirm which account is selected before enabling Clock Work. Real-account orders remain subject to the workspace's live-trading and balance checks.", points: ["A disconnected account blocks new entries.", "Open contracts must settle before Ai Clock can enter again.", "Use demo mode to learn the controls."] },
-  { title: "Choose a market and stake", body: "Select the market and one stake per entry. Clock Work uses a fixed five-tick contract duration; Ai Clock selects the contract direction and barrier.", points: ["Changing markets clears the local sample and waits for fresh ticks.", "The stake must be at least 1.00 and fit the selected account balance.", "No trade is sent while data or account checks are unavailable."] },
+  { title: "Choose a market and stake", body: "Select the market, base stake, and multiplier after loss. Clock Work uses a fixed five-tick contract duration; Ai Clock selects the contract direction and barrier.", points: ["A settled loss multiplies the next stake; a win resets it to the base stake.", "The base stake must be at least 1.00 and fit the selected account balance.", "No trade is sent while data or account checks are unavailable."] },
   { title: "Enable and start Ai Clock", body: "Turn on the Ai Clock switch to arm the automation, then press Start Clock Work. Ai Clock checks one complete five-tick sample and confirms a qualifying setup on a fresh tick.", points: ["The switch alone does not start trading.", "One sample is limited evidence and does not guarantee a win.", "An open or unsettled contract pauses the next entry."] },
   { title: "Stop and review history", body: "Stop Clock Work to prevent new entries. An order already accepted by Deriv is not canceled by Stop and must settle through Deriv.", points: ["Clock Work History shows entries and their reported results.", "Clearing history hides local rows only; it does not delete Deriv's account history.", "Check Deriv history before restarting after an uncertain order."] },
 ] as const;
@@ -481,6 +481,7 @@ export default function XTraderPage() {
   const [clockWorkEnabled, setClockWorkEnabled] = useState(false);
   const [clockWorkSymbol, setClockWorkSymbol] = useState("R_75");
   const [clockWorkStake, setClockWorkStake] = useState(1);
+  const [clockWorkLossMultiplier, setClockWorkLossMultiplier] = useState(2);
   const [clockWorkAiEnabled, setClockWorkAiEnabled] = useState(false);
   const [clockWorkAiMinimumWinRate, setClockWorkAiMinimumWinRate] = useState<ClockWorkAiMinimumWinRate>(CLOCK_WORK_AI_MIN_WIN_RATE);
   const [clockWorkTakeProfit, setClockWorkTakeProfit] = useState(0);
@@ -938,9 +939,9 @@ export default function XTraderPage() {
     clockWorkRunContractIdsRef.current,
   );
   const clockWorkRunPnl = clockWorkRunSummary.pnl;
-  const clockWorkRunTradeCount = clockWorkRunAccountId
-    ? clockWorkRunContractIdsRef.current.size
-    : 0;
+  const clockWorkVisibleRunRows = clockWorkRunSummary.rows.filter(
+    (trade) => !clockWorkHiddenHistoryIds.has(trade.contract_id),
+  );
   const clockWorkRunHasUnsettledResults = clockWorkRunSummary.hasUnsettled;
   const cashGrabSymbols = markets.map(([value, label]) => ({ value, label }));
   const clockWorkSymbols = markets.map(([value, label]) => ({ value, label }));
@@ -4610,7 +4611,9 @@ export default function XTraderPage() {
     await sleep(260);
     setClockWorkHiddenHistoryIds((current) => {
       const next = new Set(current);
-      clockWorkRows.forEach((trade) => next.add(trade.contract_id));
+      clockWorkRows
+        .filter((trade) => !isDerivHistoryOpen(trade.status))
+        .forEach((trade) => next.add(trade.contract_id));
       return next;
     });
     setHistoryFading(false);
@@ -4767,9 +4770,19 @@ export default function XTraderPage() {
       setClockWorkAiStatus("Waiting for the selected account balance.");
       return;
     }
-    const amount = roundTradeStakeToCents(clockWorkStake);
+    const nextStake = getClockWorkNextStake(
+      clockWorkRunSummary.rows,
+      clockWorkRunContractIdsRef.current,
+      clockWorkStake,
+      clockWorkLossMultiplier,
+    );
+    if (nextStake == null) {
+      setClockWorkAiStatus("The next stake could not be verified from settled Clock Work results. No order was sent.");
+      return;
+    }
+    const amount = roundTradeStakeToCents(nextStake);
     if (amount < 1 || amount > currentAccountBalance) {
-      setClockWorkAiStatus("The stake is above the available balance. No order was sent.");
+      setClockWorkAiStatus("The next stake is above the available balance. No order was sent.");
       return;
     }
 
@@ -5482,6 +5495,8 @@ export default function XTraderPage() {
             }}
             stake={clockWorkStake}
             onStakeChange={(value) => setClockWorkStake(roundTradeStakeToCents(Math.max(1, value)))}
+            lossMultiplier={clockWorkLossMultiplier}
+            onLossMultiplierChange={setClockWorkLossMultiplier}
             aiEnabled={clockWorkAiEnabled}
             minimumWinRate={clockWorkAiMinimumWinRate}
             onMinimumWinRateChange={(value) => {
@@ -5493,7 +5508,6 @@ export default function XTraderPage() {
             onTakeProfitChange={(value) => setClockWorkTakeProfit(roundTradeStakeToCents(Math.max(0, value)))}
             lossLimit={clockWorkLossLimit}
             onLossLimitChange={(value) => setClockWorkLossLimit(roundTradeStakeToCents(Math.max(0, value)))}
-            sessionPnl={clockWorkRunPnl}
             onAiEnabledChange={(enabled) => {
               setClockWorkAiEnabled(enabled);
               clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
@@ -5527,20 +5541,17 @@ export default function XTraderPage() {
             }}
           />
           {canViewHistory && (
-            <div className="clock-work-history-layout">
-              <DerivHistory
-                title="Clock Work History"
-                strategy="Ai Clock"
-                rows={clockWorkRows}
-                sessionRows={clockWorkRunSummary.rows}
-                currency={currentAccount?.currency}
-                sessionPnl={clockWorkRunPnl}
-                sessionTradeCount={clockWorkRunTradeCount}
-                clearArmed={clockWorkHistoryClearArmed}
-                fading={historyFading}
-                onClear={clearClockWorkHistory}
-              />
-            </div>
+            <DerivHistory
+              className="digit-flip-history"
+              title="Clock Work History"
+              strategy="Ai Clock"
+              rows={clockWorkRows}
+              sessionRows={clockWorkVisibleRunRows}
+              currency={currentAccount?.currency}
+              clearArmed={clockWorkHistoryClearArmed}
+              fading={historyFading}
+              onClear={clearClockWorkHistory}
+            />
           )}
         </section>
       )}

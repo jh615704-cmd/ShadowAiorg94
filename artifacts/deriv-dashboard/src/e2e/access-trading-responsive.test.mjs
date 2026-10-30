@@ -498,7 +498,7 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
       const panel = page.locator(screen.selector);
       await panel.waitFor({ state: "visible" });
       if (screen.feature === "clock-work") {
-        assert.equal(await panel.locator('input[type="number"]').count(), 3, "Clock Work should have one stake and two session-limit inputs.");
+        assert.equal(await panel.locator('input[type="number"]').count(), 4, "Clock Work should have stake, loss multiplier, and two session-limit inputs.");
         assert.equal(await panel.getByTestId("button-clock-start").count(), 1);
         assert.equal(await panel.getByTestId("switch-ai-clock").isChecked(), false);
         assert.equal(await panel.getByTestId("button-clock-start").isDisabled(), true);
@@ -518,7 +518,16 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
         await lossLimit.fill("2");
         assert.equal(await takeProfit.inputValue(), "5");
         assert.equal(await lossLimit.inputValue(), "2");
-        assert.match(await panel.getByTestId("clock-run-pnl").innerText(), /0\.00 USD/);
+        const lossMultiplier = panel.getByTestId("input-clock-loss-multiplier");
+        assert.equal(await lossMultiplier.inputValue(), "2");
+        await lossMultiplier.fill("1.75");
+        assert.equal(await lossMultiplier.inputValue(), "1.75");
+        assert.equal(await panel.getByTestId("clock-run-pnl").count(), 0, "Clock Work should not show a separate settled run P/L.");
+        assert.equal(
+          await page.locator('[aria-label="Clock Work History Deriv history"].digit-flip-history').count(),
+          1,
+          "Clock Work history should use the same presentation as DigitFlip.",
+        );
 
         const visibleClockWorkText = await panel.evaluate((element) => {
           const clone = element.cloneNode(true);
@@ -529,7 +538,7 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
           visibleClockWorkText,
           /price chart|recent moves|observed lean|higher barrier|lower barrier|half barrier|aggressive auto trading|higher and lower|dual|\d+(?:\.\d+)?%/i,
         );
-        assert.equal(await page.getByText("WIN RATE", { exact: true }).count(), 0, "Clock Work should not show a win-rate percentage.");
+        assert.equal(await panel.getByText("WIN RATE", { exact: true }).count(), 0, "Clock Work controls should not show a win-rate percentage.");
 
         const aiSwitch = panel.getByTestId("switch-ai-clock");
         const startButton = panel.getByTestId("button-clock-start");

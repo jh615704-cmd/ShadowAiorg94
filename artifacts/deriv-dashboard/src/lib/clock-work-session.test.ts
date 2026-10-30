@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getClockWorkRunSummary } from "./clock-work-session.ts";
+import { getClockWorkNextStake, getClockWorkRunSummary } from "./clock-work-session.ts";
 
 const row = (
   contract_id: string,
@@ -37,4 +37,57 @@ test("Clock Work run P&L is unavailable when a settled profit is invalid", () =>
   ], "account-1", new Set(["bad-run-trade"]));
 
   assert.equal(Number.isNaN(summary.pnl), true);
+});
+
+test("Clock Work multiplies after each settled loss and resets to base after a win", () => {
+  const rows = [
+    row("fourth", "account-1", "lost", -1),
+    row("third", "account-1", "won", 1),
+    row("second", "account-1", "lost", -1),
+    row("first", "account-1", "lost", -1),
+  ].map((trade) => ({
+    ...trade,
+    contract_type: "HIGHER",
+    symbol: "R_75",
+    account_type: "demo",
+    barrier: 0,
+    duration: 5,
+    duration_unit: "t",
+    buy_price: 1.25,
+    current_value: 0,
+    payout: 0,
+    currency: "USD",
+  }));
+
+  assert.equal(
+    getClockWorkNextStake(rows, new Set(["first", "second"]), 1.25, 1.5),
+    2.82,
+    "Consecutive settled losses compound the multiplier and round the next stake to cents.",
+  );
+  assert.equal(
+    getClockWorkNextStake(rows, new Set(["first", "second", "third", "fourth"]), 1.25, 1.5),
+    1.88,
+    "Two losses multiply in sequence, then a win resets the base before the next loss.",
+  );
+});
+
+test("Clock Work does not calculate the next stake from missing, open, or invalid results", () => {
+  const openTrade = {
+    ...row("open", "account-1", "open", -5),
+    contract_type: "HIGHER",
+    symbol: "R_75",
+    account_type: "demo",
+    barrier: 0,
+    duration: 5,
+    duration_unit: "t",
+    buy_price: 1,
+    current_value: 0,
+    payout: 0,
+    currency: "USD",
+  };
+
+  assert.equal(getClockWorkNextStake([], new Set(), 1, 2), 1);
+  assert.equal(getClockWorkNextStake([openTrade], new Set(["open"]), 1, 2), null);
+  assert.equal(getClockWorkNextStake([], new Set(["missing"]), 1, 2), null);
+  assert.equal(getClockWorkNextStake([], new Set(), 1, 0.5), null);
 });

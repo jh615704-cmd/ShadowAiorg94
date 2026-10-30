@@ -12,6 +12,8 @@ export interface ClockWorkPanelProps {
   onSymbolChange: (value: string) => void;
   stake: number;
   onStakeChange: (value: number) => void;
+  lossMultiplier: number;
+  onLossMultiplierChange: (value: number) => void;
   aiEnabled: boolean;
   onAiEnabledChange: (value: boolean) => void;
   minimumWinRate: ClockWorkAiMinimumWinRate;
@@ -20,7 +22,6 @@ export interface ClockWorkPanelProps {
   onTakeProfitChange: (value: number) => void;
   lossLimit: number;
   onLossLimitChange: (value: number) => void;
-  sessionPnl: number;
   running: boolean;
   busy: boolean;
   disabled: boolean;
@@ -63,6 +64,8 @@ export default function ClockWorkPanel({
   onSymbolChange,
   stake,
   onStakeChange,
+  lossMultiplier,
+  onLossMultiplierChange,
   aiEnabled,
   onAiEnabledChange,
   minimumWinRate,
@@ -71,7 +74,6 @@ export default function ClockWorkPanel({
   onTakeProfitChange,
   lossLimit,
   onLossLimitChange,
-  sessionPnl,
   running,
   busy,
   disabled,
@@ -131,6 +133,28 @@ export default function ClockWorkPanel({
               />
             </span>
           </label>
+
+          <label className="cw-stake cw-loss-multiplier" htmlFor="cw-loss-multiplier">
+            <span>MULTIPLIER AFTER LOSS</span>
+            <span className="cw-stake-input">
+              <i>×</i>
+              <input
+                id="cw-loss-multiplier"
+                type="number"
+                min="1"
+                step="any"
+                value={lossMultiplier}
+                onChange={(event) => {
+                  const value = Number(event.target.value);
+                  onLossMultiplierChange(Number.isFinite(value) ? Math.max(1, value) : 1);
+                }}
+                disabled={disabled || running || busy}
+                aria-label="Clock Work multiplier after a loss"
+                title="A settled loss multiplies the next stake; a win resets it to the base stake."
+                data-testid="input-clock-loss-multiplier"
+              />
+            </span>
+          </label>
         </div>
 
         <section className="cw-risk-card" aria-label="Clock Work profit and loss limits">
@@ -172,12 +196,6 @@ export default function ClockWorkPanel({
               />
             </label>
           </div>
-          <output className="cw-session-pnl" aria-live="polite" data-testid="clock-run-pnl">
-            <span>SETTLED P/L THIS RUN</span>
-            <strong className={sessionPnl < 0 ? "negative" : "positive"}>
-              {Number.isFinite(sessionPnl) ? `${sessionPnl > 0 ? "+" : ""}${sessionPnl.toFixed(2)} ${currency}` : "Unavailable"}
-            </strong>
-          </output>
         </section>
 
         <section className={`cw-ai-card ${aiEnabled ? "is-enabled" : ""}`}>
