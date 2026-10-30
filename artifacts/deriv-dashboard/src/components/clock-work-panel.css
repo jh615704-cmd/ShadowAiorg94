@@ -103,7 +103,7 @@
   font: 700 9px var(--app-font-mono, monospace);
   letter-spacing: .035em;
 }
-.cw-control select, .cw-stake-input, .cw-duration select {
+.cw-control select, .cw-stake-input, .cw-duration > strong {
   width: 100%;
   min-height: 38px;
   padding: 0 10px;
@@ -113,13 +113,14 @@
   background: #091d35;
   font-size: 11px;
 }
-.cw-control select, .cw-duration select { cursor: pointer; }
+.cw-control select { cursor: pointer; }
 .cw-control select option { color: #e6f3ff; background: #091d35; }
-.cw-duration select {
+.cw-duration > strong {
+  display: flex;
+  align-items: center;
   color: #c3ffeb;
   font: 700 11px var(--app-font-mono, monospace);
 }
-.cw-duration select option { color: #e6f3ff; background: #091d35; }
 .cw-duration > small {
   color: #718ba3;
   font-size: 8px;

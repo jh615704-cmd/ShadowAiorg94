@@ -2,9 +2,7 @@ import { Bot, Clock3, Pause, Play } from "lucide-react";
 import {
   CLOCK_WORK_AUTO_BEST_MARKET_VALUE,
   CLOCK_WORK_AI_MIN_WIN_RATE_OPTIONS,
-  CLOCK_WORK_DURATION_OPTIONS,
   type ClockWorkAutoBestMarket,
-  type ClockWorkDurationTicks,
   type ClockWorkAiMinimumWinRate,
 } from "../lib/clock-work-logic";
 import "./clock-work-panel.css";
@@ -14,8 +12,6 @@ export interface ClockWorkPanelProps {
   symbol: string;
   markets: { value: string; label: string }[];
   onSymbolChange: (value: string) => void;
-  duration: ClockWorkDurationTicks;
-  onDurationChange: (value: ClockWorkDurationTicks) => void;
   autoBestMode: boolean;
   autoBestSelection: ClockWorkAutoBestMarket | null;
   stake: number;
@@ -70,8 +66,6 @@ export default function ClockWorkPanel({
   symbol,
   markets,
   onSymbolChange,
-  duration,
-  onDurationChange,
   autoBestMode,
   autoBestSelection,
   stake,
@@ -104,7 +98,7 @@ export default function ClockWorkPanel({
         <div className="cw-heading">
           <span className="cw-kicker"><i /> LIVE MARKET WORKBENCH</span>
           <h2>Clock Work</h2>
-          <p>One AI-selected Higher or Lower entry · 1–5 ticks</p>
+          <p>One AI-selected Higher or Lower entry · 5-tick contracts</p>
         </div>
         <span className={`cw-live-chip ${enabled ? "is-live" : ""}`}><i />{enabled ? "LIVE" : "READY"}</span>
       </header>
@@ -129,34 +123,23 @@ export default function ClockWorkPanel({
                 <strong>{markets.find((market) => market.value === symbol)?.label ?? symbol}</strong>
                 <small>
                   {symbol} · {autoBestSelection.candidate.direction} {autoBestSelection.candidate.barrier}
-                  {" · "}{autoBestSelection.candidate.sampleCount} {duration}-tick samples
+                  {" · "}{autoBestSelection.candidate.sampleCount} five-tick samples
                 </small>
               </aside>
             )}
             {autoBestMode && !autoBestSelection && (
               <aside className="cw-market-recommendation is-pending" data-testid="clock-work-auto-best-pending">
                 <span>NO AUTO BEST MARKET YET</span>
-                <small>No market currently meets the {minimumWinRate}% threshold with 15 fresh {duration}-tick samples.</small>
+                <small>No market currently meets the {minimumWinRate}% threshold with 15 fresh five-tick samples.</small>
               </aside>
             )}
           </label>
 
-          <label className="cw-duration" htmlFor="cw-duration">
+          <div className="cw-duration" data-testid="clock-work-fixed-duration">
             <span>TRADE DURATION</span>
-            <select
-              id="cw-duration"
-              value={duration}
-              onChange={(event) => onDurationChange(Number(event.target.value) as ClockWorkDurationTicks)}
-              disabled={disabled || running || busy}
-              aria-label="Clock Work trade duration in ticks"
-              data-testid="select-clock-duration"
-            >
-              {CLOCK_WORK_DURATION_OPTIONS.map((ticks) => (
-                <option key={ticks} value={ticks}>{ticks} {ticks === 1 ? "tick" : "ticks"}</option>
-              ))}
-            </select>
-            <small>Auto Best compares this same duration.</small>
-          </label>
+            <strong>5 ticks</strong>
+            <small>Every Clock Work contract uses five ticks.</small>
+          </div>
 
           <label className="cw-stake" htmlFor="cw-stake">
             <span>STAKE PER ENTRY</span>
@@ -264,7 +247,7 @@ export default function ClockWorkPanel({
             <span>{statusMessage || aiStatus}</span>
           </div>
           <p className="cw-ai-note">
-            Manual selection uses one completed {duration}-tick sample. Auto Best needs at least 15 fresh {duration}-tick samples to choose a market. Past results do not guarantee future outcomes.
+            Manual selection uses one completed five-tick sample. Auto Best needs at least 15 fresh five-tick samples to choose a market. One fresh quote confirms each new entry after a setup qualifies. Past results do not guarantee future outcomes.
           </p>
         </section>
 

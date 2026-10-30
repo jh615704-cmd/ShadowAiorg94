@@ -2251,11 +2251,10 @@ function normalizeClockWorkOrders(contracts: readonly ClockWorkOrder[]) {
     }
     if (
       !Number.isInteger(contract.duration)
-      || contract.duration < 1
-      || contract.duration > 5
+      || contract.duration !== 5
       || contract.duration_unit !== "t"
     ) {
-      throw new Error("Clock Work supports whole-number contracts from 1 to 5 ticks.");
+      throw new Error("Clock Work contracts must use a fixed duration of 5 ticks.");
     }
     if (contract.contract_type !== "HIGHER" && contract.contract_type !== "LOWER") {
       throw new Error("Clock Work supports Higher and Lower contracts only.");

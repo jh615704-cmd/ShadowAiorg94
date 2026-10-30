@@ -7,9 +7,7 @@ export const CLOCK_WORK_AI_MIN_SAMPLE_COUNT = 1;
 export const CLOCK_WORK_AUTO_BEST_MARKET_MIN_SAMPLE_COUNT = 15;
 export const CLOCK_WORK_AUTO_BEST_MARKET_VALUE = "__clock_work_auto_best_market__";
 export const CLOCK_WORK_AI_REQUIRED_CONFIRMATIONS = 1;
-export const CLOCK_WORK_DURATION_OPTIONS = [1, 2, 3, 4, 5] as const;
-export type ClockWorkDurationTicks = typeof CLOCK_WORK_DURATION_OPTIONS[number];
-export const CLOCK_WORK_DEFAULT_DURATION_TICKS = 5;
+export const CLOCK_WORK_CONTRACT_DURATION_TICKS = 5 as const;
 export const CLOCK_WORK_AI_BARRIER_OFFSETS = [0.05, 0.12, 0.25, 0.5] as const;
 export const CLOCK_WORK_MAX_TICKS = 900;
 
@@ -37,7 +35,6 @@ export interface ClockWorkAutoBestMarket {
   symbol: string;
   candidate: ClockWorkAiCandidate;
   stabilityScore: number;
-  duration: ClockWorkDurationTicks;
 }
 
 export interface ClockWorkAiConfirmationState {
@@ -140,21 +137,28 @@ export function appendClockWorkQuote(
   };
 }
 
+export function getClockWorkQuoteHistory(
+  signals: readonly ClockWorkMarketSignal[],
+  selectedSymbol: string,
+): number[] {
+  const signal = signals.find((entry) => entry.symbol === selectedSymbol);
+  return signal?.recent_quotes.filter(Number.isFinite).slice(-CLOCK_WORK_MAX_TICKS) ?? [];
+}
+
 /**
- * Choose the best historical Higher/Lower setup for the selected expiry duration.
+ * Choose the best historical Higher/Lower setup for a fixed five-tick expiry.
  * Evaluation uses only the newest non-overlapping expiry windows; it returns
  * no candidate until the sample floor and selected entry threshold are met.
  */
 export function chooseClockWorkAiCandidate(
   inputQuotes: readonly number[],
   options: {
-    duration?: number;
     minimumWinRate?: number;
     minimumSamples?: number;
     barrierOffsets?: readonly number[];
   } = {},
 ): ClockWorkAiCandidate | null {
-  const duration = Math.floor(options.duration ?? CLOCK_WORK_DEFAULT_DURATION_TICKS);
+  const duration = CLOCK_WORK_CONTRACT_DURATION_TICKS;
   const minimumWinRate = options.minimumWinRate ?? CLOCK_WORK_AI_MIN_WIN_RATE;
   const minimumSamples = Math.floor(options.minimumSamples ?? CLOCK_WORK_AI_MIN_SAMPLE_COUNT);
   const barriers = options.barrierOffsets ?? CLOCK_WORK_AI_BARRIER_OFFSETS;
@@ -225,7 +229,6 @@ export function chooseClockWorkAutoBestMarket(
   signals: readonly ClockWorkMarketSignal[],
   eligibleSymbols: readonly string[],
   options: {
-    duration?: ClockWorkDurationTicks;
     minimumWinRate?: number;
     minimumSamples?: number;
     maxTickAgeSeconds?: number;
@@ -235,13 +238,11 @@ export function chooseClockWorkAutoBestMarket(
   const minimumSamples = Math.floor(
     options.minimumSamples ?? CLOCK_WORK_AUTO_BEST_MARKET_MIN_SAMPLE_COUNT,
   );
-  const duration = options.duration ?? CLOCK_WORK_DEFAULT_DURATION_TICKS;
   const maxTickAgeSeconds = options.maxTickAgeSeconds ?? 30;
   const nowEpoch = options.nowEpoch ?? Math.floor(Date.now() / 1000);
   if (
     minimumSamples < 1
     || !Number.isFinite(minimumSamples)
-    || !CLOCK_WORK_DURATION_OPTIONS.includes(duration)
     || !Number.isFinite(maxTickAgeSeconds)
     || maxTickAgeSeconds <= 0
     || !Number.isFinite(nowEpoch)
@@ -261,7 +262,6 @@ export function chooseClockWorkAutoBestMarket(
     if (tickAgeSeconds < -5 || tickAgeSeconds > maxTickAgeSeconds) return [];
 
     const candidate = chooseClockWorkAiCandidate(signal.recent_quotes, {
-      duration,
       minimumWinRate: options.minimumWinRate,
       minimumSamples,
     });
@@ -270,7 +270,6 @@ export function chooseClockWorkAutoBestMarket(
         symbol: signal.symbol,
         candidate,
         stabilityScore: getClockWorkStabilityScore(candidate),
-        duration,
       }]
       : [];
   });

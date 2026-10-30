@@ -527,18 +527,12 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
         const autoBestValue = await marketSelect.locator("option").first().getAttribute("value");
         assert.ok(autoBestValue);
         await marketSelect.selectOption(autoBestValue);
-        await panel.getByTestId("clock-ai-status").getByText(/Auto Best selected Volatility 75 Index \(R_75\): 97\.4% observed across 39 completed 5-tick samples/).waitFor();
+        await panel.getByTestId("clock-ai-status").getByText(/Auto Best selected Volatility 75 Index \(R_75\): 97\.4% observed across 39 completed five-tick samples/).waitFor();
         await panel.getByTestId("clock-work-auto-best-market").getByText(/Volatility 75 Index/).waitFor();
         assert.equal(await marketSelect.inputValue(), "R_75", "Auto best should select the market with the stronger sample-adjusted results.");
 
-        const durationSelect = panel.getByTestId("select-clock-duration");
-        assert.deepEqual(await durationSelect.locator("option").allTextContents(), ["1 tick", "2 ticks", "3 ticks", "4 ticks", "5 ticks"]);
-        await durationSelect.selectOption("1");
-        assert.equal(await durationSelect.inputValue(), "1");
-        await durationSelect.selectOption("2");
-        assert.equal(await durationSelect.inputValue(), "2");
-        await durationSelect.selectOption("5");
-        await panel.getByTestId("clock-work-auto-best-market").waitFor();
+        assert.equal(await panel.getByTestId("clock-work-fixed-duration").getByText("5 ticks", { exact: true }).count(), 1);
+        assert.equal(await panel.getByTestId("select-clock-duration").count(), 0, "Clock Work should not expose other contract durations.");
 
         const threshold = panel.getByTestId("select-ai-clock-rate");
         assert.equal(await threshold.inputValue(), "70");

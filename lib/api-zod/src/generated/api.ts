@@ -1295,8 +1295,6 @@ export const BulkBuyDerivContractsResponse = zod.object({
 export const quoteClockWorkContractsBodyContractsItemKeyMax = 32;
 
 
-export const quoteClockWorkContractsBodyContractsItemDurationMax = 5;
-
 export const quoteClockWorkContractsBodyContractsItemBarrierRegExp = new RegExp('^[+-]?[0-9]+([.][0-9]+)?$');
 export const quoteClockWorkContractsBodyContractsMax = 4;
 
@@ -1306,7 +1304,7 @@ export const QuoteClockWorkContractsBody = zod.object({
   "contracts": zod.array(zod.object({
   "key": zod.string().min(1).max(quoteClockWorkContractsBodyContractsItemKeyMax),
   "amount": zod.number().min(1),
-  "duration": zod.number().int().min(1).max(quoteClockWorkContractsBodyContractsItemDurationMax).describe('Clock Work contract duration in ticks; Auto Best evaluates samples using the same duration.'),
+  "duration": zod.literal(5).describe('Clock Work contracts always expire after five ticks.'),
   "duration_unit": zod.enum(['t']),
   "contract_type": zod.enum(['HIGHER', 'LOWER']),
   "barrier": zod.string().regex(quoteClockWorkContractsBodyContractsItemBarrierRegExp).describe('Signed relative barrier for Offset mode or unsigned absolute price barrier for Absolute mode.'),
@@ -1336,8 +1334,6 @@ export const QuoteClockWorkContractsResponse = zod.object({
 export const buyClockWorkContractsBodyContractsItemKeyMax = 32;
 
 
-export const buyClockWorkContractsBodyContractsItemDurationMax = 5;
-
 export const buyClockWorkContractsBodyContractsItemBarrierRegExp = new RegExp('^[+-]?[0-9]+([.][0-9]+)?$');
 export const buyClockWorkContractsBodyContractsMax = 4;
 
@@ -1347,7 +1343,7 @@ export const BuyClockWorkContractsBody = zod.object({
   "contracts": zod.array(zod.object({
   "key": zod.string().min(1).max(buyClockWorkContractsBodyContractsItemKeyMax),
   "amount": zod.number().min(1),
-  "duration": zod.number().int().min(1).max(buyClockWorkContractsBodyContractsItemDurationMax).describe('Clock Work contract duration in ticks; Auto Best evaluates samples using the same duration.'),
+  "duration": zod.literal(5).describe('Clock Work contracts always expire after five ticks.'),
   "duration_unit": zod.enum(['t']),
   "contract_type": zod.enum(['HIGHER', 'LOWER']),
   "barrier": zod.string().regex(buyClockWorkContractsBodyContractsItemBarrierRegExp).describe('Signed relative barrier for Offset mode or unsigned absolute price barrier for Absolute mode.'),
