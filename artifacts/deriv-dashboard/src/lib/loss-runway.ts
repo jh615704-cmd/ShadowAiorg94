@@ -172,7 +172,7 @@ export function getLossRunwayMessage(
 ) {
   const estimate = estimateLossRunway(input);
   if (!estimate.valid) {
-    return "Set a valid stake, multiplier, and session limits to estimate the loss runway.";
+    return "Set a valid stake, multiplier, and session limits to see the loss estimate.";
   }
 
   const targetText =
@@ -183,33 +183,17 @@ export function getLossRunwayMessage(
     input.lossLimit > 0
       ? formatMoney(input.lossLimit, currency)
       : "off";
-  const stakeText =
-    input.stakeMode === "flat"
-      ? `flat stake ${formatMoney(input.baseStake, currency)}`
-      : `${formatMoney(input.baseStake, currency)} base stake, ${formatMoney(input.nextStake, currency)} next stake, ×${input.multiplier} after a loss`;
 
   if (estimate.profitTargetReached) {
-    return `Profit target ${targetText} is already reached, so the run should stop before another entry. Current plan: ${stakeText}; loss limit ${lossLimitText}.`;
+    return `Profit target ${targetText} is already reached, so the run should stop before another entry.`;
   }
   if (estimate.lossLimitReached) {
-    return `Session loss limit ${lossLimitText} is already reached, so the run should stop before another entry. Current plan: ${stakeText}; profit target ${targetText}.`;
+    return `Session loss limit ${lossLimitText} is already reached, so the run should stop before another entry.`;
   }
 
-  const lossLimitTextEstimate =
-    estimate.lossesToSessionLossLimit === null
-      ? `session loss limit is off`
-      : `${formatLossCount(estimate.lossesToSessionLossLimit, estimate.calculationCapped)} consecutive full-stake losses could reach the ${lossLimitText} session loss limit`;
-
-  let balanceText: string;
-  if (estimate.lossesUntilBalanceBlocked === null) {
-    balanceText = "sync a positive account balance to estimate when another stake may become unaffordable";
-  } else if (estimate.lossesUntilBalanceBlocked === 0) {
-    balanceText = "the current balance does not cover the next stake";
-  } else if (estimate.balanceExhausted) {
-    balanceText = `${formatLossCount(estimate.lossesUntilBalanceBlocked, estimate.calculationCapped)} losses could exhaust the available balance`;
-  } else {
-    balanceText = `${formatLossCount(estimate.lossesUntilBalanceBlocked, estimate.calculationCapped)} losses could leave too little balance for the next stake`;
+  if (estimate.lossesToSessionLossLimit === null) {
+    return "Set a session loss limit to see the consecutive-loss estimate.";
   }
 
-  return `Current plan: ${stakeText}; loss limit ${lossLimitText}; profit target ${targetText}. If the next contracts all lose, ${lossLimitTextEstimate}; ${balanceText}. This is a risk estimate, not a win-rate prediction.`;
+  return `${formatLossCount(estimate.lossesToSessionLossLimit, estimate.calculationCapped)} consecutive full-stake losses could reach the ${lossLimitText} session loss limit.`;
 }

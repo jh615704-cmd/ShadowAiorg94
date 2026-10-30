@@ -65,6 +65,38 @@ test("includes current session P/L when estimating the remaining loss limit", ()
   assert.equal(estimate.lossesToSessionLossLimit, 5);
 });
 
+test("shows only the consecutive-loss estimate for a configured session loss limit", () => {
+  const message = getLossRunwayMessage({
+    balance: 100,
+    baseStake: 1,
+    nextStake: 1,
+    stakeMode: "flat",
+    multiplier: 2,
+    takeProfit: 0,
+    lossLimit: 10,
+    sessionPnl: 0,
+  }, "USD");
+
+  assert.equal(
+    message,
+    "10 consecutive full-stake losses could reach the $10.00 session loss limit.",
+  );
+  assert.doesNotMatch(message, /Current plan|profit target|balance|win-rate/i);
+});
+
+test("keeps the no-limit estimate concise", () => {
+  const message = getLossRunwayMessage({
+    ...defaults,
+    takeProfit: 0,
+    lossLimit: 0,
+  }, "USD");
+
+  assert.equal(
+    message,
+    "Set a session loss limit to see the consecutive-loss estimate.",
+  );
+});
+
 test("reports an already reached profit target and does not imply a win rate", () => {
   const estimate = estimateLossRunway({
     ...defaults,
