@@ -4,6 +4,8 @@ export const CLOCK_WORK_AI_MIN_WIN_RATE = 70;
 export const CLOCK_WORK_AI_MIN_WIN_RATE_OPTIONS = [55, 65, 70] as const;
 export type ClockWorkAiMinimumWinRate = typeof CLOCK_WORK_AI_MIN_WIN_RATE_OPTIONS[number];
 export const CLOCK_WORK_AI_MIN_SAMPLE_COUNT = 1;
+export const CLOCK_WORK_AUTO_BEST_MARKET_MIN_SAMPLE_COUNT = 15;
+export const CLOCK_WORK_AUTO_BEST_MARKET_VALUE = "__clock_work_auto_best_market__";
 export const CLOCK_WORK_AI_REQUIRED_CONFIRMATIONS = 1;
 export const CLOCK_WORK_AI_DURATION_TICKS = 5;
 export const CLOCK_WORK_AI_BARRIER_OFFSETS = [0.05, 0.12, 0.25, 0.5] as const;
@@ -21,6 +23,18 @@ export interface ClockWorkAiCandidate {
   barrierOffset: number;
   observedRate: number;
   sampleCount: number;
+}
+
+export interface ClockWorkMarketSignal {
+  symbol: string;
+  recent_quotes: readonly number[];
+  tick_epoch: number;
+}
+
+export interface ClockWorkAutoBestMarket {
+  symbol: string;
+  candidate: ClockWorkAiCandidate;
+  stabilityScore: number;
 }
 
 export interface ClockWorkAiConfirmationState {
@@ -187,6 +201,77 @@ export function chooseClockWorkAiCandidate(
     right.observedRate - left.observedRate
     || left.barrierOffset - right.barrierOffset
     || left.direction.localeCompare(right.direction),
+  );
+  return candidates[0] ?? null;
+}
+
+function getClockWorkStabilityScore(candidate: ClockWorkAiCandidate) {
+  const sampleCount = candidate.sampleCount;
+  const observedRate = candidate.observedRate / 100;
+  const zScore = 1.96;
+  const zSquared = zScore ** 2;
+  const denominator = 1 + zSquared / sampleCount;
+  const center = observedRate + zSquared / (2 * sampleCount);
+  const margin = zScore * Math.sqrt(
+    (observedRate * (1 - observedRate) + zSquared / (4 * sampleCount)) / sampleCount,
+  );
+  return Math.max(0, ((center - margin) / denominator) * 100);
+}
+
+export function chooseClockWorkAutoBestMarket(
+  signals: readonly ClockWorkMarketSignal[],
+  eligibleSymbols: readonly string[],
+  options: {
+    minimumWinRate?: number;
+    minimumSamples?: number;
+    maxTickAgeSeconds?: number;
+    nowEpoch?: number;
+  } = {},
+): ClockWorkAutoBestMarket | null {
+  const minimumSamples = Math.floor(
+    options.minimumSamples ?? CLOCK_WORK_AUTO_BEST_MARKET_MIN_SAMPLE_COUNT,
+  );
+  const maxTickAgeSeconds = options.maxTickAgeSeconds ?? 30;
+  const nowEpoch = options.nowEpoch ?? Math.floor(Date.now() / 1000);
+  if (
+    minimumSamples < 1
+    || !Number.isFinite(minimumSamples)
+    || !Number.isFinite(maxTickAgeSeconds)
+    || maxTickAgeSeconds <= 0
+    || !Number.isFinite(nowEpoch)
+  ) return null;
+
+  const eligible = new Set(eligibleSymbols);
+  const candidates = signals.flatMap((signal) => {
+    if (
+      !eligible.has(signal.symbol)
+      || !Array.isArray(signal.recent_quotes)
+      || !Number.isFinite(signal.tick_epoch)
+      || signal.tick_epoch <= 0
+    ) {
+      return [];
+    }
+    const tickAgeSeconds = nowEpoch - signal.tick_epoch;
+    if (tickAgeSeconds < -5 || tickAgeSeconds > maxTickAgeSeconds) return [];
+
+    const candidate = chooseClockWorkAiCandidate(signal.recent_quotes, {
+      minimumWinRate: options.minimumWinRate,
+      minimumSamples,
+    });
+    return candidate
+      ? [{
+        symbol: signal.symbol,
+        candidate,
+        stabilityScore: getClockWorkStabilityScore(candidate),
+      }]
+      : [];
+  });
+
+  candidates.sort((left, right) =>
+    right.stabilityScore - left.stabilityScore
+    || right.candidate.observedRate - left.candidate.observedRate
+    || right.candidate.sampleCount - left.candidate.sampleCount
+    || left.symbol.localeCompare(right.symbol),
   );
   return candidates[0] ?? null;
 }

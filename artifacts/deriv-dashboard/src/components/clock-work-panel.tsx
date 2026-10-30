@@ -1,5 +1,6 @@
 import { Bot, Clock3, Pause, Play } from "lucide-react";
 import {
+  CLOCK_WORK_AUTO_BEST_MARKET_VALUE,
   CLOCK_WORK_AI_MIN_WIN_RATE_OPTIONS,
   type ClockWorkAiMinimumWinRate,
 } from "../lib/clock-work-logic";
@@ -108,6 +109,7 @@ export default function ClockWorkPanel({
               disabled={disabled || running}
               data-testid="select-clock-market"
             >
+              <option value={CLOCK_WORK_AUTO_BEST_MARKET_VALUE}>Auto best market</option>
               {markets.map((market) => <option key={market.value} value={market.value}>{market.label}</option>)}
             </select>
           </label>
@@ -222,7 +224,7 @@ export default function ClockWorkPanel({
             <i aria-hidden="true" />
             <span>{statusMessage || aiStatus}</span>
           </div>
-          <p className="cw-ai-note">Ai Clock checks one completed five-tick sample before choosing a setup. One sample is limited evidence; past results do not guarantee future outcomes.</p>
+          <p className="cw-ai-note">Manual selection uses one completed five-tick sample; Auto best uses at least 15 fresh samples to choose a market. Past results do not guarantee future outcomes.</p>
         </section>
 
         <button

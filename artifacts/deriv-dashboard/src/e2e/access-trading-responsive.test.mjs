@@ -478,6 +478,19 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
     "auto-trader-2",
   ]));
   state.hasToken = true;
+  state.marketSignalOverrides = {
+    R_10: {
+      recent_quotes: clockWorkQuotesForOutcomes(Array.from({ length: 15 }, () => true)),
+      tick_epoch: Math.floor(Date.now() / 1_000),
+    },
+    R_75: {
+      recent_quotes: clockWorkQuotesForOutcomes([
+        ...Array.from({ length: 38 }, () => true),
+        false,
+      ]),
+      tick_epoch: Math.floor(Date.now() / 1_000),
+    },
+  };
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   const screens = [
     { feature: "edge", card: "edge", selector: ".edge-reference-layout", label: "EDGE" },
@@ -503,6 +516,19 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
         assert.equal(await panel.getByTestId("button-clock-start").count(), 1);
         assert.equal(await panel.getByTestId("switch-ai-clock").isChecked(), false);
         assert.equal(await panel.getByTestId("button-clock-start").isDisabled(), true);
+
+        const marketSelect = panel.getByTestId("select-clock-market");
+        assert.equal(await marketSelect.locator("option").first().textContent(), "Auto best market");
+        await marketSelect.selectOption("R_10");
+        const freshMarketEpoch = Math.floor(Date.now() / 1_000);
+        state.marketSignalOverrides.R_10.tick_epoch = freshMarketEpoch;
+        state.marketSignalOverrides.R_75.tick_epoch = freshMarketEpoch;
+        await page.waitForTimeout(600);
+        const autoBestValue = await marketSelect.locator("option").first().getAttribute("value");
+        assert.ok(autoBestValue);
+        await marketSelect.selectOption(autoBestValue);
+        await panel.getByTestId("clock-ai-status").getByText(/Auto best selected Volatility 75 Index: 97\.4% observed across 39 completed five-tick samples/).waitFor();
+        assert.equal(await marketSelect.inputValue(), "R_75", "Auto best should select the market with the stronger sample-adjusted results.");
 
         const threshold = panel.getByTestId("select-ai-clock-rate");
         assert.equal(await threshold.inputValue(), "70");
@@ -533,6 +559,7 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
         const visibleClockWorkText = await panel.evaluate((element) => {
           const clone = element.cloneNode(true);
           clone.querySelector(".cw-ai-threshold")?.remove();
+          clone.querySelector(".cw-ai-status")?.remove();
           return clone.textContent ?? "";
         });
         assert.doesNotMatch(
@@ -1555,6 +1582,7 @@ function createState(session) {
     createdKeyBody: null,
     statusVersion: 0,
     activeContractCount: 0,
+    marketSignalOverrides: {},
     featureSettings: {
       features: fixtureFeatureIds.map((feature) => ({
         feature,
@@ -1758,7 +1786,7 @@ async function mockApiRequest(route, state, pathname, method) {
   }
   if (pathname === "/api/deriv/status" && method === "GET") {
     state.statusVersion += 1;
-    await fulfillJson(route, makeDerivStatus(state.statusVersion, state.activeContractCount));
+    await fulfillJson(route, makeDerivStatus(state.statusVersion, state.activeContractCount, state.marketSignalOverrides));
     return;
   }
   if (pathname === "/api/deriv/history" && method === "GET") {
@@ -1830,7 +1858,7 @@ async function mockApiRequest(route, state, pathname, method) {
   await fulfillJson(route, { error: "Unhandled fixture API request." }, 501);
 }
 
-function makeDerivStatus(version, activeContractCount = 0) {
+function makeDerivStatus(version, activeContractCount = 0, marketSignalOverrides = {}) {
   const signals = symbols.map((symbol, index) => {
     const digit = (version + index) % 10;
     return {
@@ -1839,6 +1867,8 @@ function makeDerivStatus(version, activeContractCount = 0) {
       last_digit: digit,
       tick_sequence: version,
       recent_digits: [digit],
+      recent_quotes: [],
+      tick_epoch: 0,
       sample_count: version,
       digit_even_percentage: 50,
       digit_odd_percentage: 50,
@@ -1850,6 +1880,7 @@ function makeDerivStatus(version, activeContractCount = 0) {
         over_percentage: 50,
         under_percentage: 50,
       })),
+      ...marketSignalOverrides[symbol],
     };
   });
   return {
@@ -1862,6 +1893,18 @@ function makeDerivStatus(version, activeContractCount = 0) {
     last_tick: { symbol: "R_75", quote: 100_000 + version, epoch: 1_700_000_000 + version },
     market_signals: signals,
   };
+}
+
+function clockWorkQuotesForOutcomes(outcomes) {
+  const quotes = [100];
+  for (const wins of outcomes) {
+    const start = quotes.at(-1);
+    const expiry = start + (wins ? 1 : -1);
+    for (let tick = 1; tick <= 5; tick += 1) {
+      quotes.push(start + ((expiry - start) * tick) / 5);
+    }
+  }
+  return quotes;
 }
 
 function fixtureBuy(state, order) {

@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   appendClockWorkQuote,
+  chooseClockWorkAutoBestMarket,
   chooseClockWorkAiCandidate,
   createClockWorkAiConfirmationState,
   getClockWorkAiCandidateKey,
   getClockWorkLimitReached,
   updateClockWorkAiConfirmation,
+  CLOCK_WORK_AUTO_BEST_MARKET_MIN_SAMPLE_COUNT,
   type ClockWorkQuoteBuffer,
 } from "./clock-work-logic.ts";
 
@@ -47,6 +49,61 @@ test("Clock Work accepts the selected 55%, 65%, or 70% entry threshold", () => {
   assert.equal(chooseClockWorkAiCandidate(quotes, { minimumWinRate: 55 })?.observedRate, 65);
   assert.equal(chooseClockWorkAiCandidate(quotes, { minimumWinRate: 65 })?.observedRate, 65);
   assert.equal(chooseClockWorkAiCandidate(quotes, { minimumWinRate: 70 }), null);
+});
+
+test("Clock Work auto-best ranks fresh markets by stable five-tick evidence", () => {
+  const best = chooseClockWorkAutoBestMarket(
+    [
+      {
+        symbol: "R_10",
+        recent_quotes: historyForOutcomes(Array.from({ length: 15 }, () => true)),
+        tick_epoch: 1_000,
+      },
+      {
+        symbol: "R_75",
+        recent_quotes: historyForOutcomes([
+          ...Array.from({ length: 38 }, () => true),
+          false,
+        ]),
+        tick_epoch: 1_000,
+      },
+    ],
+    ["R_10", "R_75"],
+    { minimumWinRate: 70, nowEpoch: 1_000 },
+  );
+
+  assert.equal(CLOCK_WORK_AUTO_BEST_MARKET_MIN_SAMPLE_COUNT, 15);
+  assert.equal(best?.symbol, "R_75", "The larger, nearly-as-strong sample should outrank a perfect but shorter sample.");
+  assert.equal(best?.candidate.sampleCount, 39);
+  assert.equal(best?.candidate.observedRate, (38 / 39) * 100);
+  assert.ok((best?.stabilityScore ?? 0) > 0);
+});
+
+test("Clock Work auto-best ignores stale, unsupported, undersampled, and below-threshold markets", () => {
+  const fullHistory = historyForOutcomes(Array.from({ length: 15 }, () => true));
+  const shortHistory = historyForOutcomes(Array.from({ length: 14 }, () => true));
+  const signals = [
+    { symbol: "R_10", recent_quotes: fullHistory, tick_epoch: 969 },
+    { symbol: "JD10", recent_quotes: fullHistory, tick_epoch: 1_000 },
+    { symbol: "R_75", recent_quotes: shortHistory, tick_epoch: 1_000 },
+    {
+      symbol: "R_25",
+      recent_quotes: historyForOutcomes([
+        ...Array.from({ length: 10 }, () => true),
+        ...Array.from({ length: 5 }, () => false),
+      ]),
+      tick_epoch: 1_000,
+    },
+  ];
+
+  assert.equal(
+    chooseClockWorkAutoBestMarket(signals, ["R_10", "R_75", "R_25"], {
+      minimumWinRate: 70,
+      nowEpoch: 1_000,
+    }),
+    null,
+    "Auto-best must not fall back to old, unsupported, undersampled, or below-threshold evidence.",
+  );
 });
 
 test("Clock Work selects LOWER and sends a negative barrier when that side qualifies", () => {
