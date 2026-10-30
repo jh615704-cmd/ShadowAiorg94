@@ -2,6 +2,9 @@ import { Bot, Clock3, Pause, Play } from "lucide-react";
 import {
   CLOCK_WORK_AUTO_BEST_MARKET_VALUE,
   CLOCK_WORK_AI_MIN_WIN_RATE_OPTIONS,
+  CLOCK_WORK_DURATION_OPTIONS,
+  type ClockWorkAutoBestMarket,
+  type ClockWorkDurationTicks,
   type ClockWorkAiMinimumWinRate,
 } from "../lib/clock-work-logic";
 import "./clock-work-panel.css";
@@ -11,6 +14,10 @@ export interface ClockWorkPanelProps {
   symbol: string;
   markets: { value: string; label: string }[];
   onSymbolChange: (value: string) => void;
+  duration: ClockWorkDurationTicks;
+  onDurationChange: (value: ClockWorkDurationTicks) => void;
+  autoBestMode: boolean;
+  autoBestSelection: ClockWorkAutoBestMarket | null;
   stake: number;
   onStakeChange: (value: number) => void;
   lossMultiplier: number;
@@ -63,6 +70,10 @@ export default function ClockWorkPanel({
   symbol,
   markets,
   onSymbolChange,
+  duration,
+  onDurationChange,
+  autoBestMode,
+  autoBestSelection,
   stake,
   onStakeChange,
   lossMultiplier,
@@ -93,7 +104,7 @@ export default function ClockWorkPanel({
         <div className="cw-heading">
           <span className="cw-kicker"><i /> LIVE MARKET WORKBENCH</span>
           <h2>Clock Work</h2>
-          <p>One AI-selected Higher or Lower entry</p>
+          <p>One AI-selected Higher or Lower entry · 1–5 ticks</p>
         </div>
         <span className={`cw-live-chip ${enabled ? "is-live" : ""}`}><i />{enabled ? "LIVE" : "READY"}</span>
       </header>
@@ -112,12 +123,40 @@ export default function ClockWorkPanel({
               <option value={CLOCK_WORK_AUTO_BEST_MARKET_VALUE}>Auto best market</option>
               {markets.map((market) => <option key={market.value} value={market.value}>{market.label}</option>)}
             </select>
+            {autoBestSelection?.symbol === symbol && (
+              <aside className="cw-market-recommendation" data-testid="clock-work-auto-best-market">
+                <span>AUTO BEST SELECTED</span>
+                <strong>{markets.find((market) => market.value === symbol)?.label ?? symbol}</strong>
+                <small>
+                  {symbol} · {autoBestSelection.candidate.direction} {autoBestSelection.candidate.barrier}
+                  {" · "}{autoBestSelection.candidate.sampleCount} {duration}-tick samples
+                </small>
+              </aside>
+            )}
+            {autoBestMode && !autoBestSelection && (
+              <aside className="cw-market-recommendation is-pending" data-testid="clock-work-auto-best-pending">
+                <span>NO AUTO BEST MARKET YET</span>
+                <small>No market currently meets the {minimumWinRate}% threshold with 15 fresh {duration}-tick samples.</small>
+              </aside>
+            )}
           </label>
 
-          <div className="cw-duration" aria-label="Contract duration">
-            <span>DURATION</span>
-            <strong>5 Ticks</strong>
-          </div>
+          <label className="cw-duration" htmlFor="cw-duration">
+            <span>TRADE DURATION</span>
+            <select
+              id="cw-duration"
+              value={duration}
+              onChange={(event) => onDurationChange(Number(event.target.value) as ClockWorkDurationTicks)}
+              disabled={disabled || running || busy}
+              aria-label="Clock Work trade duration in ticks"
+              data-testid="select-clock-duration"
+            >
+              {CLOCK_WORK_DURATION_OPTIONS.map((ticks) => (
+                <option key={ticks} value={ticks}>{ticks} {ticks === 1 ? "tick" : "ticks"}</option>
+              ))}
+            </select>
+            <small>Auto Best compares this same duration.</small>
+          </label>
 
           <label className="cw-stake" htmlFor="cw-stake">
             <span>STAKE PER ENTRY</span>
@@ -224,7 +263,9 @@ export default function ClockWorkPanel({
             <i aria-hidden="true" />
             <span>{statusMessage || aiStatus}</span>
           </div>
-          <p className="cw-ai-note">Manual selection uses one completed five-tick sample; Auto best uses at least 15 fresh samples to choose a market. Past results do not guarantee future outcomes.</p>
+          <p className="cw-ai-note">
+            Manual selection uses one completed {duration}-tick sample. Auto Best needs at least 15 fresh {duration}-tick samples to choose a market. Past results do not guarantee future outcomes.
+          </p>
         </section>
 
         <button

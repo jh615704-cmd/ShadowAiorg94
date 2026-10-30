@@ -35,7 +35,6 @@ export * from './clockWorkCompletedBuy';
 export * from './clockWorkCompletedBuyContractType';
 export * from './clockWorkContractOrder';
 export * from './clockWorkContractOrderContractType';
-export * from './clockWorkContractOrderDuration';
 export * from './clockWorkContractOrderDurationUnit';
 export * from './clockWorkFailedBuy';
 export * from './clockWorkFailedBuyContractType';

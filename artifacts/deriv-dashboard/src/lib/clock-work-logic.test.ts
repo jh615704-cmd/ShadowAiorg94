@@ -9,16 +9,17 @@ import {
   getClockWorkLimitReached,
   updateClockWorkAiConfirmation,
   CLOCK_WORK_AUTO_BEST_MARKET_MIN_SAMPLE_COUNT,
+  CLOCK_WORK_DURATION_OPTIONS,
   type ClockWorkQuoteBuffer,
 } from "./clock-work-logic.ts";
 
-function historyForOutcomes(outcomes: readonly boolean[]) {
+function historyForOutcomes(outcomes: readonly boolean[], duration = 5) {
   const quotes = [100];
   for (const wins of outcomes) {
     const start = quotes[quotes.length - 1]!;
     const expiry = start + (wins ? 1 : -1);
-    for (let tick = 1; tick <= 5; tick += 1) {
-      quotes.push(start + ((expiry - start) * tick) / 5);
+    for (let tick = 1; tick <= duration; tick += 1) {
+      quotes.push(start + ((expiry - start) * tick) / duration);
     }
   }
   return quotes;
@@ -76,7 +77,26 @@ test("Clock Work auto-best ranks fresh markets by stable five-tick evidence", ()
   assert.equal(best?.symbol, "R_75", "The larger, nearly-as-strong sample should outrank a perfect but shorter sample.");
   assert.equal(best?.candidate.sampleCount, 39);
   assert.equal(best?.candidate.observedRate, (38 / 39) * 100);
+  assert.equal(best?.duration, 5);
   assert.ok((best?.stabilityScore ?? 0) > 0);
+});
+
+test("Clock Work uses the selected 1- or 2-tick duration for candidates and Auto Best", () => {
+  assert.deepEqual(CLOCK_WORK_DURATION_OPTIONS, [1, 2, 3, 4, 5]);
+
+  for (const duration of [1, 2] as const) {
+    const quotes = historyForOutcomes(Array.from({ length: 15 }, () => true), duration);
+    const candidate = chooseClockWorkAiCandidate(quotes, { duration });
+    const best = chooseClockWorkAutoBestMarket(
+      [{ symbol: "R_75", recent_quotes: quotes, tick_epoch: 1_000 }],
+      ["R_75"],
+      { duration, nowEpoch: 1_000 },
+    );
+
+    assert.equal(candidate?.sampleCount, 15);
+    assert.equal(best?.duration, duration);
+    assert.equal(best?.candidate.sampleCount, 15);
+  }
 });
 
 test("Clock Work auto-best ignores stale, unsupported, undersampled, and below-threshold markets", () => {

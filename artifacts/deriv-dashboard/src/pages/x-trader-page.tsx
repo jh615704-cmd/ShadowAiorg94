@@ -128,11 +128,13 @@ import {
   updateClockWorkAiConfirmation,
   CLOCK_WORK_AUTO_BEST_MARKET_MIN_SAMPLE_COUNT,
   CLOCK_WORK_AUTO_BEST_MARKET_VALUE,
-  CLOCK_WORK_AI_DURATION_TICKS,
+  CLOCK_WORK_DEFAULT_DURATION_TICKS,
   CLOCK_WORK_AI_MIN_SAMPLE_COUNT,
   CLOCK_WORK_AI_MIN_WIN_RATE,
   CLOCK_WORK_AI_REQUIRED_CONFIRMATIONS,
   CLOCK_WORK_MAX_TICKS,
+  type ClockWorkAutoBestMarket,
+  type ClockWorkDurationTicks,
   type ClockWorkAiMinimumWinRate,
   type ClockWorkQuoteBuffer,
 } from "../lib/clock-work-logic";
@@ -234,8 +236,8 @@ const tradeXGuidePages = [
 const clockWorkGuidePages = [
   { title: "Welcome to Clock Work", body: "Ai Clock chooses a Higher or Lower contract and its barrier from recent market outcomes. It only sends one entry when its historical signal qualifies; past outcomes do not guarantee future results.", points: ["Use a demo account while learning.", "Only one trading feature can be active at a time.", "The selected Deriv account receives any accepted order."] },
   { title: "Connect and choose an account", body: "Connect Deriv and confirm which account is selected before enabling Clock Work. Real-account orders remain subject to the workspace's live-trading and balance checks.", points: ["A disconnected account blocks new entries.", "Open contracts must settle before Ai Clock can enter again.", "Use demo mode to learn the controls."] },
-  { title: "Choose a market and stake", body: "Select a supported market or choose Auto best market to select one using fresh five-tick results. Auto best requires at least 15 completed samples and will not switch markets during a run.", points: ["Auto best ranks eligible market history by observed results and sample stability; it does not predict future outcomes.", "A settled loss multiplies the next stake; a win resets it to the base stake.", "The base stake must be at least 1.00 and fit the selected account balance."] },
-  { title: "Enable and start Ai Clock", body: "Turn on the Ai Clock switch to arm the automation, then press Start Clock Work. Ai Clock checks one complete five-tick sample and confirms a qualifying setup on a fresh tick.", points: ["The switch alone does not start trading.", "One sample is limited evidence and does not guarantee a win.", "An open or unsettled contract pauses the next entry."] },
+  { title: "Choose a market and stake", body: "Select a supported market or choose Auto best market to compare fresh results using the selected 1–5 tick duration. Auto Best requires at least 15 completed samples and will not switch markets during a run.", points: ["The selected market and its observed results are shown below the market control.", "Auto Best ranks eligible history by observed results and sample stability; it does not predict future outcomes.", "A settled loss multiplies the next stake; a win resets it to the base stake."] },
+  { title: "Enable and start Ai Clock", body: "Turn on the Ai Clock switch to arm the automation, then press Start Clock Work. Ai Clock evaluates samples using your selected duration and confirms a qualifying setup on a fresh tick.", points: ["Choose 1, 2, 3, 4, or 5 ticks for contract duration.", "The switch alone does not start trading.", "An open or unsettled contract pauses the next entry."] },
   { title: "Stop and review history", body: "Stop Clock Work to prevent new entries. An order already accepted by Deriv is not canceled by Stop and must settle through Deriv.", points: ["Clock Work History shows entries and their reported results.", "Clearing history hides local rows only; it does not delete Deriv's account history.", "Check Deriv history before restarting after an uncertain order."] },
 ] as const;
 
@@ -484,7 +486,9 @@ export default function XTraderPage() {
   const [cashGrabEnabled, setCashGrabEnabled] = useState(false);
   const [clockWorkEnabled, setClockWorkEnabled] = useState(false);
   const [clockWorkSymbol, setClockWorkSymbol] = useState("R_75");
-  const [clockWorkAutoBestSymbol, setClockWorkAutoBestSymbol] = useState<string | null>(null);
+  const [clockWorkAutoBestMode, setClockWorkAutoBestMode] = useState(false);
+  const [clockWorkAutoBestSelection, setClockWorkAutoBestSelection] = useState<ClockWorkAutoBestMarket | null>(null);
+  const [clockWorkDurationTicks, setClockWorkDurationTicks] = useState<ClockWorkDurationTicks>(CLOCK_WORK_DEFAULT_DURATION_TICKS);
   const [clockWorkStake, setClockWorkStake] = useState(1);
   const [clockWorkLossMultiplier, setClockWorkLossMultiplier] = useState(2);
   const [clockWorkAiEnabled, setClockWorkAiEnabled] = useState(false);
@@ -962,7 +966,7 @@ export default function XTraderPage() {
   const clockWorkQuoteHistory = clockWorkQuoteBuffer.symbol === clockWorkSymbol
     ? clockWorkQuoteBuffer.quotes
     : [];
-  const clockWorkAiMinimumSamples = clockWorkAutoBestSymbol === clockWorkSymbol
+  const clockWorkAiMinimumSamples = clockWorkAutoBestMode
     ? CLOCK_WORK_AUTO_BEST_MARKET_MIN_SAMPLE_COUNT
     : CLOCK_WORK_AI_MIN_SAMPLE_COUNT;
   useEffect(() => {
@@ -976,6 +980,7 @@ export default function XTraderPage() {
     clockWorkLatestTick?.symbol,
   ]);
   const clockWorkAiCandidate = chooseClockWorkAiCandidate(clockWorkQuoteHistory, {
+    duration: clockWorkDurationTicks,
     minimumWinRate: clockWorkAiMinimumWinRate,
     minimumSamples: clockWorkAiMinimumSamples,
   });
@@ -4755,6 +4760,10 @@ export default function XTraderPage() {
       setClockWorkAiStatus("Waiting for fresh market data.");
       return;
     }
+    if (clockWorkAutoBestMode && !clockWorkAutoBestSelection) {
+      setClockWorkAiStatus("Auto Best has no qualifying market at this duration yet. Select Auto Best again after more fresh market data arrives.");
+      return;
+    }
     const quoteAgeMs = Date.now() - Number(clockWorkTickEpoch) * 1_000;
     if (!Number.isFinite(quoteAgeMs) || quoteAgeMs < -10_000 || quoteAgeMs > 60_000) {
       clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
@@ -4762,12 +4771,12 @@ export default function XTraderPage() {
       return;
     }
     if (!clockWorkAiCandidate) {
-      const quotesNeeded = clockWorkAiMinimumSamples * CLOCK_WORK_AI_DURATION_TICKS + 1;
+      const quotesNeeded = clockWorkAiMinimumSamples * clockWorkDurationTicks + 1;
       setClockWorkAiStatus(clockWorkQuoteHistory.length < quotesNeeded
         ? clockWorkAiMinimumSamples > 1
-          ? `Collecting the ${clockWorkAiMinimumSamples} five-tick samples required for Auto best (${Math.min(clockWorkQuoteHistory.length, quotesNeeded)}/${quotesNeeded} quotes).`
-          : `Collecting one complete five-tick sample (${Math.min(clockWorkQuoteHistory.length, quotesNeeded)}/${quotesNeeded} quotes).`
-        : "No five-tick setup meets the selected threshold yet. Ai Clock will recheck on the next fresh quote.");
+          ? `Collecting the ${clockWorkAiMinimumSamples} ${clockWorkDurationTicks}-tick samples required for Auto Best (${Math.min(clockWorkQuoteHistory.length, quotesNeeded)}/${quotesNeeded} quotes).`
+          : `Collecting one complete ${clockWorkDurationTicks}-tick sample (${Math.min(clockWorkQuoteHistory.length, quotesNeeded)}/${quotesNeeded} quotes).`
+        : `No ${clockWorkDurationTicks}-tick setup meets the selected threshold yet. Ai Clock will recheck on the next fresh quote.`);
       return;
     }
     const confirmation = clockWorkAiConfirmationRef.current;
@@ -4775,7 +4784,7 @@ export default function XTraderPage() {
       confirmation.count < CLOCK_WORK_AI_REQUIRED_CONFIRMATIONS
       || confirmation.candidateKey !== getClockWorkAiCandidateKey(clockWorkAiCandidate)
     ) {
-      setClockWorkAiStatus("Confirming the selected five-tick setup on a fresh market quote.");
+      setClockWorkAiStatus(`Confirming the selected ${clockWorkDurationTicks}-tick setup on a fresh market quote.`);
       return;
     }
     if (currentAccountBalance == null) {
@@ -4801,7 +4810,7 @@ export default function XTraderPage() {
     const contract: ClockWorkContractOrder = {
       key: "ai-clock",
       amount,
-      duration: CLOCK_WORK_AI_DURATION_TICKS,
+      duration: clockWorkDurationTicks,
       duration_unit: "t",
       contract_type: clockWorkAiCandidate.direction,
       barrier: clockWorkAiCandidate.barrier,
@@ -4817,6 +4826,56 @@ export default function XTraderPage() {
     const timer = window.setInterval(() => clockWorkAutomationRef.current?.(), 1_000);
     return () => window.clearInterval(timer);
   }, [clockWorkEnabled, clockWorkAiEnabled, clockWorkRunning]);
+
+  const refreshClockWorkAutoBest = (
+    duration: ClockWorkDurationTicks,
+    minimumWinRate: ClockWorkAiMinimumWinRate,
+    resetWindow: boolean,
+  ) => {
+    const signals = status.data?.market_signals ?? [];
+    const bestMarket = chooseClockWorkAutoBestMarket(
+      signals,
+      clockWorkSymbols.map((market) => market.value),
+      {
+        duration,
+        minimumWinRate,
+        nowEpoch: Math.floor(Date.now() / 1_000),
+      },
+    );
+    const selectedSignal = bestMarket
+      ? signals.find((signal) => signal.symbol === bestMarket.symbol)
+      : null;
+    if (!bestMarket || !selectedSignal) {
+      setClockWorkAutoBestSelection(null);
+      setClockWorkAiStatus(
+        `No market meets the ${minimumWinRate}% threshold with at least ${CLOCK_WORK_AUTO_BEST_MARKET_MIN_SAMPLE_COUNT} fresh ${duration}-tick samples. No entry will be sent until a market qualifies.`,
+      );
+      return false;
+    }
+
+    const selectedMarketLabel = clockWorkSymbols.find(
+      (market) => market.value === bestMarket.symbol,
+    )?.label ?? bestMarket.symbol;
+    setClockWorkAutoBestSelection(bestMarket);
+    clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState();
+    clockWorkAiAttemptAtRef.current = 0;
+    if (resetWindow || bestMarket.symbol !== clockWorkSymbol) {
+      clockWorkMarketResetEpochRef.current = Math.floor(Date.now() / 1_000);
+      setClockWorkQuoteBuffer({
+        symbol: bestMarket.symbol,
+        quotes: selectedSignal.recent_quotes.filter(Number.isFinite).slice(-CLOCK_WORK_MAX_TICKS),
+        lastTickId: null,
+      });
+      setClockWorkSymbol(bestMarket.symbol);
+      void selectMarket(bestMarket.symbol).then((selected) => {
+        if (!selected) setClockWorkAiStatus(`Could not switch to ${selectedMarketLabel}. No order was sent.`);
+      });
+    }
+    setClockWorkAiStatus(
+      `Auto Best selected ${selectedMarketLabel} (${bestMarket.symbol}): ${bestMarket.candidate.observedRate.toFixed(1)}% observed across ${bestMarket.candidate.sampleCount} completed ${duration}-tick samples. Historical results are not a prediction; waiting for a fresh tick.`,
+    );
+    return true;
+  };
 
   return (
     <main className="xt-app">
@@ -4934,7 +4993,7 @@ export default function XTraderPage() {
       <h2 className="xt-trading-strategies-heading">Trading Strategies</h2>
 
       <section className={`xt-feature-card xt-feature-card-clock-work ${!canUseClockWork ? "xt-feature-card-restricted" : ""}`} id="clock-work-feature">
-        <div><Clock3 size={18} /><span><b>Clock Work</b><small><FeatureStatusText control={featureControl("clock-work")} isAdmin={isAdmin} fallback={canUseClockWork ? "Ai Clock · 5-tick Higher / Lower" : "Restricted — admin access only"} /></small></span></div>
+        <div><Clock3 size={18} /><span><b>Clock Work</b><small><FeatureStatusText control={featureControl("clock-work")} isAdmin={isAdmin} fallback={canUseClockWork ? "Ai Clock · Higher / Lower · 1–5 ticks" : "Restricted — admin access only"} /></small></span></div>
         <div className="xt-feature-actions">
           {!canUseClockWork && <span className="xt-feature-locked">RESTRICTED</span>}
           <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("clock-work"); setGuidePage(0); setGuideOpen(true); }}>
@@ -5496,50 +5555,30 @@ export default function XTraderPage() {
             enabled={clockWorkEnabled}
             symbol={clockWorkSymbol}
             markets={clockWorkSymbols}
+            duration={clockWorkDurationTicks}
+            autoBestMode={clockWorkAutoBestMode}
+            autoBestSelection={clockWorkAutoBestSelection}
+            onDurationChange={(duration) => {
+              setClockWorkDurationTicks(duration);
+              clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
+              clockWorkAiAttemptAtRef.current = 0;
+              if (clockWorkAutoBestMode) {
+                refreshClockWorkAutoBest(duration, clockWorkAiMinimumWinRate, false);
+              } else {
+                setClockWorkAutoBestSelection(null);
+                setClockWorkAiStatus(`Ai Clock is rechecking market history for a ${duration}-tick setup.`);
+              }
+            }}
             onSymbolChange={(next) => {
               setClockWorkStatusMessage(null);
               if (next === CLOCK_WORK_AUTO_BEST_MARKET_VALUE) {
-                const bestMarket = chooseClockWorkAutoBestMarket(
-                  status.data?.market_signals ?? [],
-                  clockWorkSymbols.map((market) => market.value),
-                  {
-                    minimumWinRate: clockWorkAiMinimumWinRate,
-                    nowEpoch: Math.floor(Date.now() / 1_000),
-                  },
-                );
-                const selectedSignal = bestMarket
-                  ? status.data?.market_signals.find((signal) => signal.symbol === bestMarket.symbol)
-                  : null;
-                if (!bestMarket || !selectedSignal) {
-                  setClockWorkAiStatus(
-                    `No market meets the ${clockWorkAiMinimumWinRate}% threshold with at least ${CLOCK_WORK_AUTO_BEST_MARKET_MIN_SAMPLE_COUNT} fresh five-tick samples. No market changed; wait for more live data or choose a market manually.`,
-                  );
-                  return;
-                }
-
-                const selectedMarketLabel = clockWorkSymbols.find(
-                  (market) => market.value === bestMarket.symbol,
-                )?.label ?? bestMarket.symbol;
-                clockWorkMarketResetEpochRef.current = Math.floor(Date.now() / 1000);
-                setClockWorkAutoBestSymbol(bestMarket.symbol);
-                setClockWorkQuoteBuffer({
-                  symbol: bestMarket.symbol,
-                  quotes: selectedSignal.recent_quotes.filter(Number.isFinite).slice(-CLOCK_WORK_MAX_TICKS),
-                  lastTickId: null,
-                });
-                clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState();
-                clockWorkAiAttemptAtRef.current = 0;
-                setClockWorkSymbol(bestMarket.symbol);
-                setClockWorkAiStatus(
-                  `Auto best selected ${selectedMarketLabel}: ${bestMarket.candidate.observedRate.toFixed(1)}% observed across ${bestMarket.candidate.sampleCount} completed five-tick samples. Historical results are not a prediction; waiting for a fresh tick.`,
-                );
-                void selectMarket(bestMarket.symbol).then((selected) => {
-                  if (!selected) setClockWorkAiStatus(`Could not switch to ${selectedMarketLabel}. No order was sent.`);
-                });
+                setClockWorkAutoBestMode(true);
+                refreshClockWorkAutoBest(clockWorkDurationTicks, clockWorkAiMinimumWinRate, true);
                 return;
               }
 
-              setClockWorkAutoBestSymbol(null);
+              setClockWorkAutoBestMode(false);
+              setClockWorkAutoBestSelection(null);
               clockWorkMarketResetEpochRef.current = Math.floor(Date.now() / 1000);
               setClockWorkQuoteBuffer({ symbol: next, quotes: [], lastTickId: null });
               clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState();
@@ -5557,7 +5596,11 @@ export default function XTraderPage() {
             onMinimumWinRateChange={(value) => {
               setClockWorkAiMinimumWinRate(value);
               clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
-              setClockWorkAiStatus("Ai Clock is rechecking the selected threshold.");
+              if (clockWorkAutoBestMode) {
+                refreshClockWorkAutoBest(clockWorkDurationTicks, value, false);
+              } else {
+                setClockWorkAiStatus("Ai Clock is rechecking the selected threshold.");
+              }
             }}
             takeProfit={clockWorkTakeProfit}
             onTakeProfitChange={(value) => setClockWorkTakeProfit(roundTradeStakeToCents(Math.max(0, value)))}

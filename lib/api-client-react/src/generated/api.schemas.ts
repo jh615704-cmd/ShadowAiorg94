@@ -764,13 +764,6 @@ export interface DerivBulkBuyInput {
   count: number;
 }
 
-export type ClockWorkContractOrderDuration = typeof ClockWorkContractOrderDuration[keyof typeof ClockWorkContractOrderDuration];
-
-
-export const ClockWorkContractOrderDuration = {
-  NUMBER_5: 5,
-} as const;
-
 export type ClockWorkContractOrderDurationUnit = typeof ClockWorkContractOrderDurationUnit[keyof typeof ClockWorkContractOrderDurationUnit];
 
 
@@ -794,7 +787,12 @@ export interface ClockWorkContractOrder {
   key: string;
   /** @minimum 1 */
   amount: number;
-  duration: ClockWorkContractOrderDuration;
+  /**
+     * Clock Work contract duration in ticks; Auto Best evaluates samples using the same duration.
+     * @minimum 1
+     * @maximum 5
+     */
+  duration: number;
   duration_unit: ClockWorkContractOrderDurationUnit;
   contract_type: ClockWorkContractOrderContractType;
   /**

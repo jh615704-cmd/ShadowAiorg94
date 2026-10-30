@@ -6,7 +6,6 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ClockWorkContractOrderContractType } from './clockWorkContractOrderContractType';
-import type { ClockWorkContractOrderDuration } from './clockWorkContractOrderDuration';
 import type { ClockWorkContractOrderDurationUnit } from './clockWorkContractOrderDurationUnit';
 
 export interface ClockWorkContractOrder {
@@ -17,7 +16,12 @@ export interface ClockWorkContractOrder {
   key: string;
   /** @minimum 1 */
   amount: number;
-  duration: ClockWorkContractOrderDuration;
+  /**
+     * Clock Work contract duration in ticks; Auto Best evaluates samples using the same duration.
+     * @minimum 1
+     * @maximum 5
+     */
+  duration: number;
   duration_unit: ClockWorkContractOrderDurationUnit;
   contract_type: ClockWorkContractOrderContractType;
   /**

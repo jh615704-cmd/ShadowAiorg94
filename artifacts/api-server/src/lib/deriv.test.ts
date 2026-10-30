@@ -1565,4 +1565,26 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
     assert.equal(latestSocket().sent.some((message) => message.sell), false);
   });
 
+  test("Clock Work sends selected 1- and 2-tick durations to Deriv", async () => {
+    const result = await withSelectedAccount("clock-work-short-duration-user", () => deriv.buyClockWorkContracts({
+      contracts: [1, 2].map((duration) => ({
+        key: `higher-${duration}`,
+        amount: 1,
+        duration,
+        duration_unit: "t" as const,
+        contract_type: "HIGHER" as const,
+        barrier: "+0.12",
+        symbol: "R_75",
+      })),
+    }));
+
+    const buys = latestSocket().sent.filter((message) => message.buy);
+    assert.deepEqual(
+      buys.map((message) => message.parameters.duration),
+      [1, 2],
+    );
+    assert.ok(buys.every((message) => message.parameters.duration_unit === "t"));
+    assert.equal(result.completed_count, 2);
+  });
+
 });
