@@ -156,6 +156,61 @@
   border-color: rgba(49, 200, 237, .42);
   background: linear-gradient(120deg, rgba(15, 45, 74, .72), rgba(5, 20, 39, .8));
 }
+.cw-risk-card {
+  padding: 12px;
+  border: 1px solid var(--cw-border);
+  border-radius: 11px;
+  background: rgba(5, 20, 39, .69);
+}
+.cw-risk-heading,
+.cw-session-pnl {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.cw-risk-heading > span,
+.cw-risk-inputs label > span,
+.cw-session-pnl > span,
+.cw-ai-threshold > span {
+  color: #8ba8c0;
+  font: 700 8px var(--app-font-mono, monospace);
+  letter-spacing: .07em;
+}
+.cw-risk-heading small { color: #718ba3; font-size: 9px; }
+.cw-risk-inputs {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.cw-risk-inputs label { min-width: 0; display: grid; gap: 5px; }
+.cw-risk-inputs input,
+.cw-ai-threshold select {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid rgba(66, 101, 133, .64);
+  border-radius: 7px;
+  color: #e7f5ff;
+  background: rgba(7, 26, 46, .9);
+  font-size: 11px;
+}
+.cw-risk-inputs input:focus-visible,
+.cw-ai-threshold select:focus-visible {
+  outline: 2px solid rgba(49, 200, 237, .7);
+  outline-offset: 2px;
+}
+.cw-session-pnl {
+  min-height: 34px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid rgba(64, 97, 126, .24);
+}
+.cw-session-pnl strong { font-size: 11px; font-variant-numeric: tabular-nums; }
+.cw-session-pnl strong.positive { color: #69e3b0; }
+.cw-session-pnl strong.negative { color: #ff8b93; }
 .cw-ai-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .cw-ai-title { min-width: 0; display: flex; align-items: center; gap: 10px; }
 .cw-ai-icon {
@@ -203,6 +258,15 @@
 .cw-toggle input:checked + .cw-toggle-track i { transform: translateX(16px); background: #b7ffe3; }
 .cw-toggle input:focus-visible + .cw-toggle-track { outline: 2px solid #31c8ed; outline-offset: 2px; }
 .cw-toggle-value { color: #7795af; font: 700 8px var(--app-font-mono, monospace); }
+.cw-ai-threshold {
+  margin-top: 11px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(80px, 110px);
+  align-items: center;
+  gap: 10px;
+}
+.cw-ai-threshold select { cursor: pointer; font-weight: 700; }
+.cw-ai-threshold select option { color: #e6f3ff; background: #091d35; }
 
 .cw-ai-status {
   min-height: 38px;

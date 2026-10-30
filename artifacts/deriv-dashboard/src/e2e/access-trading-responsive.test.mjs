@@ -498,12 +498,33 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
       const panel = page.locator(screen.selector);
       await panel.waitFor({ state: "visible" });
       if (screen.feature === "clock-work") {
-        assert.equal(await panel.locator('input[type="number"]').count(), 1, "Clock Work should have one stake input.");
+        assert.equal(await panel.locator('input[type="number"]').count(), 3, "Clock Work should have one stake and two session-limit inputs.");
         assert.equal(await panel.getByTestId("button-clock-start").count(), 1);
         assert.equal(await panel.getByTestId("switch-ai-clock").isChecked(), false);
         assert.equal(await panel.getByTestId("button-clock-start").isDisabled(), true);
 
-        const visibleClockWorkText = await panel.innerText();
+        const threshold = panel.getByTestId("select-ai-clock-rate");
+        assert.equal(await threshold.inputValue(), "70");
+        assert.deepEqual(await threshold.locator("option").allTextContents(), ["55%", "65%", "70%"]);
+        for (const rate of ["55", "65", "70"]) {
+          await threshold.selectOption(rate);
+          assert.equal(await threshold.inputValue(), rate);
+        }
+        const takeProfit = panel.getByTestId("input-clock-take-profit");
+        const lossLimit = panel.getByTestId("input-clock-loss-limit");
+        assert.equal(await takeProfit.inputValue(), "0");
+        assert.equal(await lossLimit.inputValue(), "0");
+        await takeProfit.fill("5");
+        await lossLimit.fill("2");
+        assert.equal(await takeProfit.inputValue(), "5");
+        assert.equal(await lossLimit.inputValue(), "2");
+        assert.match(await panel.getByTestId("clock-run-pnl").innerText(), /0\.00 USD/);
+
+        const visibleClockWorkText = await panel.evaluate((element) => {
+          const clone = element.cloneNode(true);
+          clone.querySelector(".cw-ai-threshold")?.remove();
+          return clone.textContent ?? "";
+        });
         assert.doesNotMatch(
           visibleClockWorkText,
           /price chart|recent moves|observed lean|higher barrier|lower barrier|half barrier|aggressive auto trading|higher and lower|dual|\d+(?:\.\d+)?%/i,
@@ -518,8 +539,12 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
         await startButton.click();
         const stopButton = panel.getByTestId("button-clock-stop");
         await stopButton.waitFor({ state: "visible" });
+        assert.equal(await takeProfit.isDisabled(), true);
+        assert.equal(await lossLimit.isDisabled(), true);
         await stopButton.click();
         await panel.getByTestId("button-clock-start").waitFor({ state: "visible" });
+        assert.equal(await takeProfit.isDisabled(), false);
+        assert.equal(await lossLimit.isDisabled(), false);
       }
       for (const viewport of bulkViewports) {
         await page.setViewportSize({ width: viewport.width, height: viewport.height });

@@ -121,11 +121,18 @@ import {
 import {
   appendClockWorkQuote,
   chooseClockWorkAiCandidate,
+  createClockWorkAiConfirmationState,
+  getClockWorkAiCandidateKey,
+  getClockWorkLimitReached,
+  updateClockWorkAiConfirmation,
   CLOCK_WORK_AI_DURATION_TICKS,
   CLOCK_WORK_AI_MIN_SAMPLE_COUNT,
   CLOCK_WORK_AI_MIN_WIN_RATE,
+  CLOCK_WORK_AI_REQUIRED_CONFIRMATIONS,
+  type ClockWorkAiMinimumWinRate,
   type ClockWorkQuoteBuffer,
 } from "../lib/clock-work-logic";
+import { getClockWorkRunSummary } from "../lib/clock-work-session";
 import { buildCashGrabBulkBuyPayload } from "../lib/cash-grab-order";
 import { getCashGrabLimitReached } from "../lib/cash-grab-limits";
 import { getCashGrabSessionSettlements } from "../lib/cash-grab-session";
@@ -472,6 +479,9 @@ export default function XTraderPage() {
   const [clockWorkSymbol, setClockWorkSymbol] = useState("R_75");
   const [clockWorkStake, setClockWorkStake] = useState(1);
   const [clockWorkAiEnabled, setClockWorkAiEnabled] = useState(false);
+  const [clockWorkAiMinimumWinRate, setClockWorkAiMinimumWinRate] = useState<ClockWorkAiMinimumWinRate>(CLOCK_WORK_AI_MIN_WIN_RATE);
+  const [clockWorkTakeProfit, setClockWorkTakeProfit] = useState(0);
+  const [clockWorkLossLimit, setClockWorkLossLimit] = useState(0);
   const [clockWorkRunning, setClockWorkRunning] = useState(false);
   const [clockWorkQuoteBuffer, setClockWorkQuoteBuffer] = useState<ClockWorkQuoteBuffer>({
     symbol: "R_75",
@@ -632,6 +642,9 @@ export default function XTraderPage() {
   const clockWorkActionLockRef = useRef(false);
   const clockWorkAiAttemptAtRef = useRef(0);
   const clockWorkAutomationRef = useRef<(() => void) | null>(null);
+  const clockWorkAiConfirmationRef = useRef(createClockWorkAiConfirmationState());
+  const clockWorkRunContractIdsRef = useRef(new Set<string>());
+  const clockWorkRunAccountIdRef = useRef<string | null>(null);
   const configRef = useRef({
     direction,
     barrier,
@@ -912,6 +925,17 @@ export default function XTraderPage() {
     .filter((trade) => cashGrabClaimedHistoryIdsRef.current.has(trade.contract_id)) as CashGrabTrade[];
   const clockWorkSessionRows = clockWorkAllRows.filter((trade) => clockWorkClaimedHistoryIdsRef.current.has(trade.contract_id));
   const clockWorkRows = clockWorkSessionRows.filter((trade) => !clockWorkHiddenHistoryIds.has(trade.contract_id));
+  const clockWorkRunAccountId = currentAccount
+    && String(currentAccount.id) === clockWorkRunAccountIdRef.current
+    ? clockWorkRunAccountIdRef.current
+    : null;
+  const clockWorkRunSummary = getClockWorkRunSummary(
+    clockWorkSessionRows,
+    clockWorkRunAccountId,
+    clockWorkRunContractIdsRef.current,
+  );
+  const clockWorkRunPnl = clockWorkRunSummary.pnl;
+  const clockWorkRunHasUnsettledResults = clockWorkRunSummary.hasUnsettled;
   const cashGrabSymbols = markets.map(([value, label]) => ({ value, label }));
   const clockWorkSymbols = markets.map(([value, label]) => ({ value, label }));
   const clockWorkLatestTick = status.data?.last_tick;
@@ -936,8 +960,53 @@ export default function XTraderPage() {
     clockWorkLatestTick?.quote,
     clockWorkLatestTick?.symbol,
   ]);
-  const clockWorkAiCandidate = chooseClockWorkAiCandidate(clockWorkQuoteHistory);
+  const clockWorkAiCandidate = chooseClockWorkAiCandidate(clockWorkQuoteHistory, {
+    minimumWinRate: clockWorkAiMinimumWinRate,
+  });
   const clockWorkTickEpoch = clockWorkTickIsFreshForMarket ? clockWorkLatestTick?.epoch ?? null : null;
+  const clockWorkLatestTickId = clockWorkQuoteBuffer.symbol === clockWorkSymbol
+    ? clockWorkQuoteBuffer.lastTickId
+    : null;
+
+  useEffect(() => {
+    const canConfirm = clockWorkEnabled
+      && clockWorkAiEnabled
+      && clockWorkRunning
+      && clockWorkTickIsFreshForMarket
+      && isConnected
+      && Boolean(currentAccount)
+      && (!isReal || Boolean(status.data?.live_trading_enabled))
+      && !tradeSlotBlocked
+      && !clockWorkRunHasUnsettledResults
+      && !clockWorkBusy
+      && !clockWorkBuyMutation.isPending;
+    if (!canConfirm) {
+      clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
+      return;
+    }
+    clockWorkAiConfirmationRef.current = updateClockWorkAiConfirmation(
+      clockWorkAiConfirmationRef.current,
+      clockWorkAiCandidate,
+      clockWorkLatestTickId,
+    );
+  }, [
+    clockWorkEnabled,
+    clockWorkAiEnabled,
+    clockWorkRunning,
+    clockWorkTickIsFreshForMarket,
+    clockWorkLatestTickId,
+    clockWorkAiCandidate?.direction,
+    clockWorkAiCandidate?.barrier,
+    clockWorkAiMinimumWinRate,
+    isConnected,
+    currentAccount?.id,
+    isReal,
+    status.data?.live_trading_enabled,
+    tradeSlotBlocked,
+    clockWorkRunHasUnsettledResults,
+    clockWorkBusy,
+    clockWorkBuyMutation.isPending,
+  ]);
 
   useEffect(() => {
     if (!clockWorkStatusMessage) return;
@@ -4203,7 +4272,15 @@ export default function XTraderPage() {
     try {
       const result = await clockWorkBuyMutation.mutateAsync({ data: { contracts: [contract] } });
       for (const contract of result.contracts) {
-        claimFeatureRows("clock-work", clockWorkClaimedHistoryIdsRef.current, [String(contract.buy.contract_id)]);
+        const contractId = String(contract.buy.contract_id);
+        claimFeatureRows("clock-work", clockWorkClaimedHistoryIdsRef.current, [contractId]);
+        if (
+          contractId
+          && contractId !== "undefined"
+          && clockWorkRunAccountIdRef.current === String(currentAccount.id)
+        ) {
+          clockWorkRunContractIdsRef.current.add(contractId);
+        }
       }
       setClockWorkStatusMessage(result.message);
       refreshTradeResults();
@@ -4588,10 +4665,28 @@ export default function XTraderPage() {
   const clockWorkControlsDisabled = !canUseClockWork
     || !isConnected
     || !currentAccount
-    || (isReal && !status.data?.live_trading_enabled);
+    || (isReal && !status.data?.live_trading_enabled)
+    || tradeSlotBlocked
+    || clockWorkRunHasUnsettledResults;
 
   clockWorkAutomationRef.current = () => {
     if (!clockWorkEnabled || !clockWorkAiEnabled || !clockWorkRunning) return;
+    const limitReached = getClockWorkLimitReached(clockWorkRunPnl, clockWorkTakeProfit, clockWorkLossLimit);
+    if (limitReached) {
+      setClockWorkRunning(false);
+      clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
+      if (limitReached === "invalid") {
+        setClockWorkAiStatus("Ai Clock stopped because the session result or limits could not be verified. No new entry was sent.");
+        return;
+      }
+      const limitAmount = limitReached === "take-profit" ? clockWorkTakeProfit : clockWorkLossLimit;
+      setClockWorkAiStatus(
+        limitReached === "take-profit"
+          ? `Clock Work reached its ${currentAccount?.currency ?? "USD"} ${limitAmount.toFixed(2)} profit target. No new entries will be opened; open contracts will settle.`
+          : `Clock Work reached its ${currentAccount?.currency ?? "USD"} ${limitAmount.toFixed(2)} loss limit. No new entries will be opened; open contracts will settle.`,
+      );
+      return;
+    }
     if (!canUseClockWork) {
       setClockWorkAiEnabled(false);
       setClockWorkRunning(false);
@@ -4599,25 +4694,41 @@ export default function XTraderPage() {
       return;
     }
     if (!isConnected || !currentAccount) {
+      clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
       setClockWorkAiStatus("Waiting for the Clock Work account connection.");
       return;
     }
+    if (clockWorkRunAccountIdRef.current && String(currentAccount.id) !== clockWorkRunAccountIdRef.current) {
+      setClockWorkRunning(false);
+      clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
+      setClockWorkAiStatus("Clock Work stopped because the selected Deriv account changed.");
+      return;
+    }
     if (isReal && !status.data?.live_trading_enabled) {
+      clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
       setClockWorkAiStatus("Live-account trading is disabled for this workspace.");
       return;
     }
     if (Date.now() < clockWorkAiAttemptAtRef.current) return;
     if (clockWorkActionLockRef.current || clockWorkBuyMutation.isPending) return;
     if (tradeSlotBlocked) {
+      clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
       setClockWorkAiStatus(tradeSlotMessage ?? "Waiting for open contracts to settle.");
       return;
     }
+    if (clockWorkRunHasUnsettledResults) {
+      clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
+      setClockWorkAiStatus("Waiting for the previous Clock Work result to update session P/L.");
+      return;
+    }
     if (clockWorkCurrentQuote == null || clockWorkTickEpoch == null) {
+      clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
       setClockWorkAiStatus("Waiting for fresh market data.");
       return;
     }
     const quoteAgeMs = Date.now() - Number(clockWorkTickEpoch) * 1_000;
     if (!Number.isFinite(quoteAgeMs) || quoteAgeMs < -10_000 || quoteAgeMs > 60_000) {
+      clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
       setClockWorkAiStatus("Waiting for fresh market data.");
       return;
     }
@@ -4625,6 +4736,14 @@ export default function XTraderPage() {
       setClockWorkAiStatus(clockWorkQuoteHistory.length < CLOCK_WORK_AI_MIN_SAMPLE_COUNT * CLOCK_WORK_AI_DURATION_TICKS + 1
         ? "Collecting recent market history before trading."
         : "Waiting for a qualifying setup.");
+      return;
+    }
+    const confirmation = clockWorkAiConfirmationRef.current;
+    if (
+      confirmation.count < CLOCK_WORK_AI_REQUIRED_CONFIRMATIONS
+      || confirmation.candidateKey !== getClockWorkAiCandidateKey(clockWorkAiCandidate)
+    ) {
+      setClockWorkAiStatus("Confirming the same direction and barrier on fresh market ticks.");
       return;
     }
     if (currentAccountBalance == null) {
@@ -4647,6 +4766,7 @@ export default function XTraderPage() {
       symbol: clockWorkSymbol,
     };
     clockWorkAiAttemptAtRef.current = Date.now() + 5_000;
+    clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
     setClockWorkAiStatus("Ai Clock found a qualifying setup and is sending one entry.");
     void executeClockWorkOrder(contract);
   };
@@ -5332,6 +5452,7 @@ export default function XTraderPage() {
             onSymbolChange={(next) => {
               clockWorkMarketResetEpochRef.current = Math.floor(Date.now() / 1000);
               setClockWorkQuoteBuffer({ symbol: next, quotes: [], lastTickId: null });
+              clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState();
               clockWorkAiAttemptAtRef.current = 0;
               setClockWorkSymbol(next);
               setClockWorkAiStatus("The selected market changed. Fresh live data is loading.");
@@ -5340,8 +5461,20 @@ export default function XTraderPage() {
             stake={clockWorkStake}
             onStakeChange={(value) => setClockWorkStake(roundTradeStakeToCents(Math.max(1, value)))}
             aiEnabled={clockWorkAiEnabled}
+            minimumWinRate={clockWorkAiMinimumWinRate}
+            onMinimumWinRateChange={(value) => {
+              setClockWorkAiMinimumWinRate(value);
+              clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
+              setClockWorkAiStatus("Ai Clock is rechecking the selected threshold.");
+            }}
+            takeProfit={clockWorkTakeProfit}
+            onTakeProfitChange={(value) => setClockWorkTakeProfit(roundTradeStakeToCents(Math.max(0, value)))}
+            lossLimit={clockWorkLossLimit}
+            onLossLimitChange={(value) => setClockWorkLossLimit(roundTradeStakeToCents(Math.max(0, value)))}
+            sessionPnl={clockWorkRunPnl}
             onAiEnabledChange={(enabled) => {
               setClockWorkAiEnabled(enabled);
+              clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
               setClockWorkStatusMessage(null);
               if (!enabled) {
                 setClockWorkRunning(false);
@@ -5358,12 +5491,16 @@ export default function XTraderPage() {
             currency={currentAccount?.currency ?? "USD"}
             onStart={() => {
               if (!clockWorkAiEnabled || clockWorkControlsDisabled) return;
+              clockWorkRunContractIdsRef.current.clear();
+              clockWorkRunAccountIdRef.current = currentAccount ? String(currentAccount.id) : null;
+              clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
               clockWorkAiAttemptAtRef.current = 0;
               setClockWorkRunning(true);
               setClockWorkAiStatus("Ai Clock is monitoring the selected market.");
             }}
             onStop={() => {
               setClockWorkRunning(false);
+              clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
               setClockWorkAiStatus("Clock Work stopped. Open contracts can continue to settle.");
             }}
           />
@@ -5371,7 +5508,7 @@ export default function XTraderPage() {
             <DerivHistory
               title="Clock Work History"
               strategy="Ai Clock"
-              summaryMode="pnl-only"
+              summaryMode="hidden"
               rows={clockWorkRows}
               sessionRows={clockWorkRows}
               currency={currentAccount?.currency}

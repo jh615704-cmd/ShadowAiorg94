@@ -3,6 +3,10 @@ import test from "node:test";
 import {
   appendClockWorkQuote,
   chooseClockWorkAiCandidate,
+  createClockWorkAiConfirmationState,
+  getClockWorkAiCandidateKey,
+  getClockWorkLimitReached,
+  updateClockWorkAiConfirmation,
   type ClockWorkQuoteBuffer,
 } from "./clock-work-logic.ts";
 
@@ -19,7 +23,7 @@ function historyForOutcomes(outcomes: readonly boolean[]) {
 }
 
 test("Clock Work selects the strongest side and smallest tied barrier at 70%", () => {
-  const outcomes = [...Array.from({ length: 14 }, () => true), ...Array.from({ length: 6 }, () => false)];
+  const outcomes = [...Array.from({ length: 28 }, () => true), ...Array.from({ length: 12 }, () => false)];
   const candidate = chooseClockWorkAiCandidate(historyForOutcomes(outcomes));
 
   assert.deepEqual(candidate, {
@@ -27,38 +31,44 @@ test("Clock Work selects the strongest side and smallest tied barrier at 70%", (
     barrier: "+0.05",
     barrierOffset: 0.05,
     observedRate: 70,
-    sampleCount: 20,
+    sampleCount: 40,
   });
 });
 
 test("Clock Work does not select a direction below the 70% cutoff", () => {
-  const outcomes = [...Array.from({ length: 13 }, () => true), ...Array.from({ length: 7 }, () => false)];
+  const outcomes = [...Array.from({ length: 27 }, () => true), ...Array.from({ length: 13 }, () => false)];
   assert.equal(chooseClockWorkAiCandidate(historyForOutcomes(outcomes)), null);
 });
 
+test("Clock Work accepts the selected 55%, 65%, or 70% entry threshold", () => {
+  const outcomes = [...Array.from({ length: 26 }, () => true), ...Array.from({ length: 14 }, () => false)];
+  const quotes = historyForOutcomes(outcomes);
+
+  assert.equal(chooseClockWorkAiCandidate(quotes, { minimumWinRate: 55 })?.observedRate, 65);
+  assert.equal(chooseClockWorkAiCandidate(quotes, { minimumWinRate: 65 })?.observedRate, 65);
+  assert.equal(chooseClockWorkAiCandidate(quotes, { minimumWinRate: 70 }), null);
+});
+
 test("Clock Work selects LOWER and sends a negative barrier when that side qualifies", () => {
-  const outcomes = [...Array.from({ length: 6 }, () => true), ...Array.from({ length: 14 }, () => false)];
+  const outcomes = [...Array.from({ length: 12 }, () => true), ...Array.from({ length: 28 }, () => false)];
   assert.deepEqual(chooseClockWorkAiCandidate(historyForOutcomes(outcomes)), {
     direction: "LOWER",
     barrier: "-0.05",
     barrierOffset: 0.05,
     observedRate: 70,
-    sampleCount: 20,
+    sampleCount: 40,
   });
 });
 
-test("Clock Work waits for 20 complete non-overlapping five-tick outcomes", () => {
-  assert.equal(chooseClockWorkAiCandidate(Array.from({ length: 100 }, (_, index) => 100 + index)), null);
-  assert.deepEqual(
-    chooseClockWorkAiCandidate(Array.from({ length: 101 }, (_, index) => 100 + index)),
-    {
-      direction: "HIGHER",
-      barrier: "+0.05",
-      barrierOffset: 0.05,
-      observedRate: 100,
-      sampleCount: 20,
-    },
-  );
+test("Clock Work waits for 40 complete non-overlapping five-tick outcomes", () => {
+  assert.equal(chooseClockWorkAiCandidate(historyForOutcomes(Array.from({ length: 39 }, () => true))), null);
+  assert.deepEqual(chooseClockWorkAiCandidate(historyForOutcomes(Array.from({ length: 40 }, () => true))), {
+    direction: "HIGHER",
+    barrier: "+0.05",
+    barrierOffset: 0.05,
+    observedRate: 100,
+    sampleCount: 40,
+  });
 });
 
 test("Clock Work does not count an expiry that only touches its barrier as a win", () => {
@@ -68,6 +78,39 @@ test("Clock Work does not count an expiry that only touches its barrier as a win
     barrierOffsets: [1],
   });
   assert.equal(candidate, null);
+});
+
+test("Clock Work requires three distinct fresh-tick confirmations of the same setup", () => {
+  const candidate = chooseClockWorkAiCandidate(historyForOutcomes(Array.from({ length: 40 }, () => true)))!;
+  let state = createClockWorkAiConfirmationState("10:100");
+  assert.equal(getClockWorkAiCandidateKey(candidate), "HIGHER:+0.05");
+
+  state = updateClockWorkAiConfirmation(state, candidate, "11:101");
+  assert.equal(state.count, 1);
+  assert.equal(updateClockWorkAiConfirmation(state, candidate, "11:101"), state, "Duplicate ticks must not add confirmations.");
+  state = updateClockWorkAiConfirmation(state, candidate, "12:102");
+  assert.equal(state.count, 2);
+  state = updateClockWorkAiConfirmation(state, candidate, "13:103");
+  assert.equal(state.count, 3);
+});
+
+test("Clock Work resets confirmations when evidence changes, disappears, or goes stale", () => {
+  const higher = chooseClockWorkAiCandidate(historyForOutcomes(Array.from({ length: 40 }, () => true)))!;
+  const lower = chooseClockWorkAiCandidate(historyForOutcomes(Array.from({ length: 40 }, () => false)))!;
+  let state = updateClockWorkAiConfirmation(createClockWorkAiConfirmationState("10:100"), higher, "11:101");
+  state = updateClockWorkAiConfirmation(state, lower, "12:102");
+  assert.equal(state.count, 1, "A different direction or barrier starts a new confirmation sequence.");
+  state = updateClockWorkAiConfirmation(state, null, "13:103");
+  assert.deepEqual(state, { candidateKey: null, lastTickId: "13:103", count: 0 });
+  state = updateClockWorkAiConfirmation(state, higher, "100:104");
+  assert.equal(state.count, 1, "A long gap in fresh ticks starts a new sequence.");
+});
+
+test("Clock Work stops at configured settled P&L limits and treats zero as disabled", () => {
+  assert.equal(getClockWorkLimitReached(2, 2, 1), "take-profit");
+  assert.equal(getClockWorkLimitReached(-1, 2, 1), "loss-limit");
+  assert.equal(getClockWorkLimitReached(10, 0, 0), null);
+  assert.equal(getClockWorkLimitReached(Number.NaN, 0, 0), "invalid");
 });
 
 test("Clock Work quote history deduplicates ticks and respects its cap", () => {

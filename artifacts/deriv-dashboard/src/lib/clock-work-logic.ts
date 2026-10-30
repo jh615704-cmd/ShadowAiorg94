@@ -1,7 +1,10 @@
 export type ClockWorkDirection = "HIGHER" | "LOWER";
 
 export const CLOCK_WORK_AI_MIN_WIN_RATE = 70;
-export const CLOCK_WORK_AI_MIN_SAMPLE_COUNT = 20;
+export const CLOCK_WORK_AI_MIN_WIN_RATE_OPTIONS = [55, 65, 70] as const;
+export type ClockWorkAiMinimumWinRate = typeof CLOCK_WORK_AI_MIN_WIN_RATE_OPTIONS[number];
+export const CLOCK_WORK_AI_MIN_SAMPLE_COUNT = 40;
+export const CLOCK_WORK_AI_REQUIRED_CONFIRMATIONS = 3;
 export const CLOCK_WORK_AI_DURATION_TICKS = 5;
 export const CLOCK_WORK_AI_BARRIER_OFFSETS = [0.05, 0.12, 0.25, 0.5] as const;
 export const CLOCK_WORK_MAX_TICKS = 900;
@@ -18,6 +21,78 @@ export interface ClockWorkAiCandidate {
   barrierOffset: number;
   observedRate: number;
   sampleCount: number;
+}
+
+export interface ClockWorkAiConfirmationState {
+  candidateKey: string | null;
+  lastTickId: string | null;
+  count: number;
+}
+
+export type ClockWorkLimitReached = "take-profit" | "loss-limit" | "invalid";
+
+export function createClockWorkAiConfirmationState(lastTickId: string | null = null): ClockWorkAiConfirmationState {
+  return { candidateKey: null, lastTickId, count: 0 };
+}
+
+export function getClockWorkAiCandidateKey(candidate: ClockWorkAiCandidate | null): string | null {
+  return candidate ? `${candidate.direction}:${candidate.barrier}` : null;
+}
+
+function getClockWorkTickEpoch(tickId: string | null): number | null {
+  if (!tickId) return null;
+  const epoch = Number(tickId.split(":", 1)[0]);
+  return Number.isFinite(epoch) ? epoch : null;
+}
+
+export function updateClockWorkAiConfirmation(
+  current: ClockWorkAiConfirmationState,
+  candidate: ClockWorkAiCandidate | null,
+  tickId: string | null,
+): ClockWorkAiConfirmationState {
+  const candidateKey = getClockWorkAiCandidateKey(candidate);
+  if (!candidateKey) {
+    const lastTickId = tickId ?? current.lastTickId;
+    if (current.candidateKey === null && current.count === 0 && current.lastTickId === lastTickId) return current;
+    return { candidateKey: null, lastTickId, count: 0 };
+  }
+  if (!tickId) return current;
+  if (tickId === current.lastTickId) {
+    return current.candidateKey === candidateKey
+      ? current
+      : { candidateKey, lastTickId: tickId, count: 0 };
+  }
+
+  const previousEpoch = getClockWorkTickEpoch(current.lastTickId);
+  const currentEpoch = getClockWorkTickEpoch(tickId);
+  const tickGapTooLarge = previousEpoch != null
+    && currentEpoch != null
+    && (currentEpoch < previousEpoch || currentEpoch - previousEpoch > 60);
+  const isSameSetup = current.candidateKey === candidateKey && !tickGapTooLarge;
+  return {
+    candidateKey,
+    lastTickId: tickId,
+    count: isSameSetup ? current.count + 1 : 1,
+  };
+}
+
+export function getClockWorkLimitReached(
+  sessionPnl: number,
+  takeProfit: number,
+  lossLimit: number,
+): ClockWorkLimitReached | null {
+  if (
+    !Number.isFinite(sessionPnl)
+    || !Number.isFinite(takeProfit)
+    || !Number.isFinite(lossLimit)
+    || takeProfit < 0
+    || lossLimit < 0
+  ) {
+    return "invalid";
+  }
+  if (takeProfit > 0 && sessionPnl >= takeProfit) return "take-profit";
+  if (lossLimit > 0 && sessionPnl <= -lossLimit) return "loss-limit";
+  return null;
 }
 
 export function appendClockWorkQuote(
@@ -51,7 +126,7 @@ export function appendClockWorkQuote(
 /**
  * Choose the best historical five-tick Higher/Lower contract setup.
  * Evaluation uses only the newest non-overlapping expiry windows; it returns
- * no candidate until the sample floor and observed-rate threshold are met.
+ * no candidate until the sample floor and selected entry threshold are met.
  */
 export function chooseClockWorkAiCandidate(
   inputQuotes: readonly number[],

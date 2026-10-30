@@ -1,4 +1,8 @@
 import { Bot, Clock3, Pause, Play } from "lucide-react";
+import {
+  CLOCK_WORK_AI_MIN_WIN_RATE_OPTIONS,
+  type ClockWorkAiMinimumWinRate,
+} from "../lib/clock-work-logic";
 import "./clock-work-panel.css";
 
 export interface ClockWorkPanelProps {
@@ -10,6 +14,13 @@ export interface ClockWorkPanelProps {
   onStakeChange: (value: number) => void;
   aiEnabled: boolean;
   onAiEnabledChange: (value: boolean) => void;
+  minimumWinRate: ClockWorkAiMinimumWinRate;
+  onMinimumWinRateChange: (value: ClockWorkAiMinimumWinRate) => void;
+  takeProfit: number;
+  onTakeProfitChange: (value: number) => void;
+  lossLimit: number;
+  onLossLimitChange: (value: number) => void;
+  sessionPnl: number;
   running: boolean;
   busy: boolean;
   disabled: boolean;
@@ -54,6 +65,13 @@ export default function ClockWorkPanel({
   onStakeChange,
   aiEnabled,
   onAiEnabledChange,
+  minimumWinRate,
+  onMinimumWinRateChange,
+  takeProfit,
+  onTakeProfitChange,
+  lossLimit,
+  onLossLimitChange,
+  sessionPnl,
   running,
   busy,
   disabled,
@@ -115,6 +133,53 @@ export default function ClockWorkPanel({
           </label>
         </div>
 
+        <section className="cw-risk-card" aria-label="Clock Work profit and loss limits">
+          <div className="cw-risk-heading">
+            <span>SESSION PROFIT &amp; LOSS</span>
+            <small>0 disables a limit</small>
+          </div>
+          <div className="cw-risk-inputs">
+            <label>
+              <span>TAKE PROFIT · {currency}</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={takeProfit}
+                onChange={(event) => {
+                  const amount = Number(event.target.value);
+                  onTakeProfitChange(Number.isFinite(amount) ? Math.max(0, amount) : 0);
+                }}
+                disabled={running || busy}
+                aria-label={`Clock Work take-profit limit in ${currency}`}
+                data-testid="input-clock-take-profit"
+              />
+            </label>
+            <label>
+              <span>LOSS LIMIT · {currency}</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={lossLimit}
+                onChange={(event) => {
+                  const amount = Number(event.target.value);
+                  onLossLimitChange(Number.isFinite(amount) ? Math.max(0, amount) : 0);
+                }}
+                disabled={running || busy}
+                aria-label={`Clock Work session loss limit in ${currency}`}
+                data-testid="input-clock-loss-limit"
+              />
+            </label>
+          </div>
+          <output className="cw-session-pnl" aria-live="polite" data-testid="clock-run-pnl">
+            <span>SETTLED P/L THIS RUN</span>
+            <strong className={sessionPnl < 0 ? "negative" : "positive"}>
+              {Number.isFinite(sessionPnl) ? `${sessionPnl > 0 ? "+" : ""}${sessionPnl.toFixed(2)} ${currency}` : "Unavailable"}
+            </strong>
+          </output>
+        </section>
+
         <section className={`cw-ai-card ${aiEnabled ? "is-enabled" : ""}`}>
           <div className="cw-ai-heading">
             <div className="cw-ai-title">
@@ -123,6 +188,18 @@ export default function ClockWorkPanel({
             </div>
             <Toggle checked={aiEnabled} onChange={onAiEnabledChange} disabled={disabled && !aiEnabled} />
           </div>
+          <label className="cw-ai-threshold" htmlFor="cw-ai-minimum-rate">
+            <span>MINIMUM WIN RATE</span>
+            <select
+              id="cw-ai-minimum-rate"
+              value={minimumWinRate}
+              onChange={(event) => onMinimumWinRateChange(Number(event.target.value) as ClockWorkAiMinimumWinRate)}
+              aria-label="Ai Clock minimum win-rate threshold"
+              data-testid="select-ai-clock-rate"
+            >
+              {CLOCK_WORK_AI_MIN_WIN_RATE_OPTIONS.map((rate) => <option key={rate} value={rate}>{rate}%</option>)}
+            </select>
+          </label>
           <div className={`cw-ai-status ${running ? "is-running" : ""}`} role="status" aria-live="polite" data-testid="clock-ai-status">
             <i aria-hidden="true" />
             <span>{statusMessage || aiStatus}</span>
