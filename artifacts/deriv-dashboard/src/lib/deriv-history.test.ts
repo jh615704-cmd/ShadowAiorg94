@@ -5,6 +5,7 @@ import {
   claimConfirmedDerivContractIds,
   claimDerivHistoryFeatureContractIds,
   formatSignedDerivProfit,
+  getDerivOpenLiveProfit,
   isDerivHistoryOpen,
   removeSettledHistoryAcknowledgements,
   shouldShowFeatureHistoryWhenStopped,
@@ -162,6 +163,13 @@ test("closed zero-profit contracts are not labeled as wins", () => {
 test("USD history profits put the sign before the US$ currency marker", () => {
   assert.equal(createDerivHistoryRowView(row({ profit: 2.5 }), "USD").profit, "+US$2.50");
   assert.equal(createDerivHistoryRowView(row({ profit: -0.35 }), "USD").profit, "-US$0.35");
+});
+
+test("open-trade live profit follows current value without claiming settlement", () => {
+  assert.equal(getDerivOpenLiveProfit(1.25, 1), 0.25);
+  assert.equal(getDerivOpenLiveProfit(0.75, 1), -0.25);
+  assert.equal(getDerivOpenLiveProfit(1, 1), 0);
+  assert.equal(getDerivOpenLiveProfit(Number.NaN, 1), null);
 });
 
 test("history rows label net profit and show the amount returned after settlement", () => {

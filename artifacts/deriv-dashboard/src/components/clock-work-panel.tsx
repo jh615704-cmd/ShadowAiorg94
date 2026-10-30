@@ -204,7 +204,7 @@ export default function ClockWorkPanel({
             <i aria-hidden="true" />
             <span>{statusMessage || aiStatus}</span>
           </div>
-          <p className="cw-ai-note">Ai Clock checks recent price outcomes and waits when no setup qualifies. Past results do not guarantee future outcomes.</p>
+          <p className="cw-ai-note">Ai Clock checks one completed five-tick sample before choosing a setup. One sample is limited evidence; past results do not guarantee future outcomes.</p>
         </section>
 
         <button

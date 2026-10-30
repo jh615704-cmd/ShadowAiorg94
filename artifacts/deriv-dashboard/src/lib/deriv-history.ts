@@ -179,6 +179,11 @@ export function formatSignedDerivProfit(amount: number, currency?: string) {
   return `${amount < 0 ? "-" : "+"}${money(Math.abs(amount), currency)}`;
 }
 
+export function getDerivOpenLiveProfit(currentValue: number, buyPrice: number): number | null {
+  if (!Number.isFinite(currentValue) || !Number.isFinite(buyPrice)) return null;
+  return Math.round((currentValue - buyPrice) * 100) / 100;
+}
+
 function timeLabel(epoch?: number | null) {
   if (epoch == null || !Number.isFinite(epoch)) return "—";
   const date = new Date(epoch * 1000);

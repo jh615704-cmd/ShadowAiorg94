@@ -431,6 +431,8 @@
 .at-result-pill.won { border-color: #258b70; background: rgba(28, 173, 133, .19); color: #57e0b3; }
 .at-result-pill.lost { border-color: #694654; background: rgba(147, 57, 69, .14); color: #f28d95; }
 .at-result-pill.open { border-color: #876d39; background: rgba(148, 117, 48, .13); color: #e4c26c; }
+.at-result-pill.open.positive { border-color: #258b70; background: rgba(28, 173, 133, .19); color: #57e0b3; }
+.at-result-pill.open.negative { border-color: #694654; background: rgba(147, 57, 69, .14); color: #f28d95; }
 .at-history-market { display: grid; gap: 5px; min-width: 0; }
 .at-history-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
 .at-history-meta code { max-width: 100%; overflow: hidden; color: #92a9c4; font: 8px "DM Mono", monospace; text-overflow: ellipsis; white-space: nowrap; }

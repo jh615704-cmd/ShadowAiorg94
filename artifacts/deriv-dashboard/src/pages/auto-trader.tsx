@@ -27,7 +27,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { DerivAccountSwitcher } from "@/components/deriv-account-switcher";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getAccountBalance } from "@/lib/account-balance";
-import { formatSignedDerivProfit, isDerivHistoryOpen, uniqueDerivHistoryRows } from "@/lib/deriv-history";
+import { formatSignedDerivProfit, getDerivOpenLiveProfit, isDerivHistoryOpen, uniqueDerivHistoryRows } from "@/lib/deriv-history";
 import { validateAutoTraderBatch } from "@/lib/trade-entry-guards";
 import "./auto-trader.css";
 
@@ -688,12 +688,36 @@ function AutoTraderContent() {
                   const metadata = localContractById.get(String(trade.contract_id));
                   const open = isDerivHistoryOpen(trade.status);
                   const resultLabel = open ? "OPEN" : trade.profit > 0 ? "WON" : trade.profit < 0 ? "LOST" : "CLOSED";
+                  const liveProfit = getDerivOpenLiveProfit(trade.current_value, trade.buy_price);
+                  const liveResult = liveProfit == null ? "even" : liveProfit > 0 ? "positive" : liveProfit < 0 ? "negative" : "even";
+                  const resultPillClass = open
+                    ? `open ${liveResult}`
+                    : trade.profit > 0
+                      ? "won"
+                      : trade.profit < 0
+                        ? "lost"
+                        : "";
+                  const livePositionLabel = liveProfit == null
+                    ? "not available"
+                    : liveResult === "positive"
+                      ? "above"
+                      : liveResult === "negative"
+                        ? "below"
+                        : "at";
                   const marketLabel = (markets.find((market) => market.symbol === trade.symbol)?.name ?? trade.symbol)
                     .replace("Volatility ", "V")
                     .replace(" · 1s", " 1s");
                   return (
                     <div className={`at-history-row${historyFading ? " fading" : ""}`} key={trade.contract_id} data-testid={`row-trade-${trade.contract_id}`}>
-                      <span className={`at-result-pill ${open ? "open" : trade.profit > 0 ? "won" : trade.profit < 0 ? "lost" : ""}`}>{resultLabel}</span>
+                      <span
+                        className={`at-result-pill ${resultPillClass}`}
+                        aria-label={open
+                          ? `Open, live value is ${livePositionLabel} the entry price; final result is not settled`
+                          : resultLabel}
+                        title={open ? "Live direction only; Deriv has not settled this contract." : undefined}
+                      >
+                        {resultLabel}
+                      </span>
                       <span className="at-history-market">
                         <span className="at-history-meta">
                           <code>{trade.contract_id}</code>
@@ -704,8 +728,10 @@ function AutoTraderContent() {
                         <strong>DIFFERS {trade.barrier ?? "—"} on {marketLabel}</strong>
                       </span>
                       <span className="at-history-numbers">
-                        <strong className={`at-history-profit${open ? "" : trade.profit > 0 ? " positive" : trade.profit < 0 ? " negative" : ""}`}>
-                          {open ? "Open" : formatSignedDerivProfit(trade.profit, trade.currency)}
+                        <strong className={`at-history-profit${open ? liveResult === "positive" ? " positive" : liveResult === "negative" ? " negative" : "" : trade.profit > 0 ? " positive" : trade.profit < 0 ? " negative" : ""}`}>
+                          {open
+                            ? liveProfit == null || liveProfit === 0 ? "Open" : `Live ${formatSignedDerivProfit(liveProfit, trade.currency)}`
+                            : formatSignedDerivProfit(trade.profit, trade.currency)}
                         </strong>
                         <small>{money(trade.buy_price, trade.currency)}</small>
                       </span>

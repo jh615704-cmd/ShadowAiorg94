@@ -60,14 +60,14 @@ test("Clock Work selects LOWER and sends a negative barrier when that side quali
   });
 });
 
-test("Clock Work waits for 40 complete non-overlapping five-tick outcomes", () => {
-  assert.equal(chooseClockWorkAiCandidate(historyForOutcomes(Array.from({ length: 39 }, () => true))), null);
-  assert.deepEqual(chooseClockWorkAiCandidate(historyForOutcomes(Array.from({ length: 40 }, () => true))), {
+test("Clock Work waits for one complete five-tick outcome", () => {
+  assert.equal(chooseClockWorkAiCandidate([100, 101, 102, 103, 104]), null);
+  assert.deepEqual(chooseClockWorkAiCandidate(historyForOutcomes([true])), {
     direction: "HIGHER",
     barrier: "+0.05",
     barrierOffset: 0.05,
     observedRate: 100,
-    sampleCount: 40,
+    sampleCount: 1,
   });
 });
 
@@ -80,23 +80,19 @@ test("Clock Work does not count an expiry that only touches its barrier as a win
   assert.equal(candidate, null);
 });
 
-test("Clock Work requires three distinct fresh-tick confirmations of the same setup", () => {
-  const candidate = chooseClockWorkAiCandidate(historyForOutcomes(Array.from({ length: 40 }, () => true)))!;
+test("Clock Work requires one fresh-tick confirmation of the same setup", () => {
+  const candidate = chooseClockWorkAiCandidate(historyForOutcomes([true]))!;
   let state = createClockWorkAiConfirmationState("10:100");
   assert.equal(getClockWorkAiCandidateKey(candidate), "HIGHER:+0.05");
 
   state = updateClockWorkAiConfirmation(state, candidate, "11:101");
   assert.equal(state.count, 1);
   assert.equal(updateClockWorkAiConfirmation(state, candidate, "11:101"), state, "Duplicate ticks must not add confirmations.");
-  state = updateClockWorkAiConfirmation(state, candidate, "12:102");
-  assert.equal(state.count, 2);
-  state = updateClockWorkAiConfirmation(state, candidate, "13:103");
-  assert.equal(state.count, 3);
 });
 
 test("Clock Work resets confirmations when evidence changes, disappears, or goes stale", () => {
-  const higher = chooseClockWorkAiCandidate(historyForOutcomes(Array.from({ length: 40 }, () => true)))!;
-  const lower = chooseClockWorkAiCandidate(historyForOutcomes(Array.from({ length: 40 }, () => false)))!;
+  const higher = chooseClockWorkAiCandidate(historyForOutcomes([true]))!;
+  const lower = chooseClockWorkAiCandidate(historyForOutcomes([false]))!;
   let state = updateClockWorkAiConfirmation(createClockWorkAiConfirmationState("10:100"), higher, "11:101");
   state = updateClockWorkAiConfirmation(state, lower, "12:102");
   assert.equal(state.count, 1, "A different direction or barrier starts a new confirmation sequence.");
