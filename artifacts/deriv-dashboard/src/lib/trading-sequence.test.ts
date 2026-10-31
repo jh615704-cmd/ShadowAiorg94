@@ -7,6 +7,7 @@ import {
   chooseBestEdgeTradeSignal,
   chooseEdgeDurationByWinRate,
   createEdgeDurationAvailabilitySetup,
+  rankBestEdgeTradeSignals,
   digitForTick,
   findNewlySettledTrade,
   rankDigitsForDiffers,
@@ -273,6 +274,33 @@ describe("Percentage evidence selection", () => {
 
     assert.equal(chooseBestEdgeTradeSignal([sample], 55, 20)?.score, 55);
     assert.equal(chooseBestEdgeTradeSignal([sample], 56, 20), null);
+  });
+
+  it("ranks alternate EDGE markets so unsupported quotes can fall through", () => {
+    const ranked = rankBestEdgeTradeSignals([
+      {
+        symbol: "JD100",
+        quote: 100.5,
+        sample_count: 80,
+        digit_streaks: [],
+        digit_outcomes: [{ digit: 8, over_percentage: 61, under_percentage: 39 }],
+      },
+      {
+        symbol: "R_75",
+        quote: 75.5,
+        sample_count: 60,
+        digit_streaks: [],
+        digit_outcomes: [{ digit: 5, over_percentage: 58, under_percentage: 42 }],
+      },
+    ], 55, 20);
+
+    assert.deepEqual(
+      ranked.map(({ symbol, direction, digit }) => ({ symbol, direction, digit })),
+      [
+        { symbol: "JD100", direction: "DIGITOVER", digit: 8 },
+        { symbol: "R_75", direction: "DIGITOVER", digit: 5 },
+      ],
+    );
   });
 
   it("ignores insufficient, tied, invalid, and tautological Over/Under samples", () => {

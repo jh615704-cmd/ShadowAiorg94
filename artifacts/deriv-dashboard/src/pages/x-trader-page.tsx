@@ -251,7 +251,7 @@ const digitFlipGuidePages = [
   { title: "Welcome to DigitFlip", body: "DigitFlip trades Even or Odd contracts using a live parity sample. Estimates describe recent ticks and never guarantee the next contract result.", points: ["Start with a demo account.", "Only one of DigitFlip, Trade X, and EDGE can run at once.", "Auto Candidates reviews the strongest market every 10 seconds after settlement."] },
   { title: "Choose a market and parity", body: "DigitFlip starts with an automatically selected market, then lets you choose Volatility or Jump markets manually. Even and Odd have distinct selected states.", points: ["The quote and last digit are live telemetry.", "Recent percentages come from the selected market sample.", "The market selector does not predict the next digit."] },
   { title: "Stake and duration", body: "Choose 1 to 5 ticks and begin with a flat stake of 0.50 or more. Tick 0 is entry; settlement is evaluated on the selected numbered tick. Martingale after loss is optional and can grow exposure quickly.", points: ["Decimals are supported for the multiplier.", "Use a small stake while evaluating a signal.", "There is no max-stake control in this workspace."] },
-  { title: "Run, stop, and reset", body: "Run starts the guarded loop. Stop prevents another entry after the active request. Reset clears only session P/L and current stake; it does not delete Deriv history.", points: ["Take Profit and Stop Loss stop the loop.", "Recent trades can be hidden from this dashboard.", "Hidden rows remain in Deriv."] },
+  { title: "Run and stop", body: "Run starts the guarded loop. Stop prevents another entry after the active request; Deriv history remains authoritative.", points: ["Take Profit and Stop Loss stop the loop.", "Recent trades can be hidden from this dashboard.", "Hidden rows remain in Deriv."] },
   { title: "Reading the live parity", body: "DigitFlip uses the live Even and Odd percentages as market context. The percentages describe recent ticks and never guarantee the next contract result.", points: ["Wait for a meaningful live sample before trading.", "Use a small stake while evaluating a market.", "No condition is presented as a guaranteed win."] },
   { title: "Live account protection", body: "Selecting a real account routes DigitFlip orders to real funds. The server's live-trading setting and balance checks still apply.", points: ["Use demo funds while learning.", "Check the selected account before every session.", "Deriv confirms each contract and its settlement."] },
   { title: "Reading the market label", body: "The market label identifies the stream currently used for the parity sample. A new market needs fresh observations before its percentages become useful.", points: ["Wait for the sample to refresh after switching.", "Do not mix observations from different markets.", "The quote is live context, not a promise."] },
@@ -260,7 +260,7 @@ const digitFlipGuidePages = [
   { title: "Magic mode", body: "Magic mode applies the configured parity decision from the live sample and session state. It remains subject to the same account and balance guards.", points: ["Server-side permissions and balance checks still apply.", "The mode does not change contract expiry.", "Turn it off when you want manual control."] },
   { title: "Take Profit and Stop Loss", body: "Session limits stop the local loop when the configured positive or negative result is reached. They do not close an already-open contract.", points: ["A limit is a guardrail, not a guarantee.", "Open contracts may settle after stopping.", "Review history before restarting."] },
   { title: "Martingale caution", body: "If Martingale is enabled, the next stake can increase after a losing settlement and reset after a profitable one.", points: ["Losses can grow exposure quickly.", "Keep a reserve in the selected account.", "Demo-test before considering real funds."] },
-  { title: "History and session state", body: "The session counter and P/L describe the active DigitFlip run. History rows remain separate from other feature histories.", points: ["Reset does not delete Deriv records.", "Clear hides rows from this dashboard only.", "Open contracts show as unsettled until Deriv responds."] },
+  { title: "History and session state", body: "The session counter and P/L describe the active DigitFlip run. History rows remain separate from other feature histories.", points: ["P/L updates from confirmed settlements.", "Clear hides rows from this dashboard only.", "Open contracts show as unsettled until Deriv responds."] },
   { title: "A safe first session", body: "Begin with one-tick demo contracts, a small stake, and a fresh sample. Stop when the signal no longer matches your plan.", points: ["Confirm the account and market.", "Check the active parity and duration.", "Never call a streak a guaranteed win."] },
   { title: "Final checklist", body: "You are ready to use DigitFlip when the account, market, parity, duration, stake, and risk limits are all intentional.", points: ["Start with one small demo trade.", "Watch the settlement and history update.", "Keep the guide open while learning."] },
   { title: "Live tick timing", body: "The quote and last digit can change between the moment you read the panel and the moment a request reaches Deriv.", points: ["Use the live label to confirm the stream.", "Do not assume the previous digit repeats.", "Short duration does not remove timing risk."] },
@@ -3837,7 +3837,7 @@ export default function XTraderPage() {
     const config = digitFlipConfigRef.current;
     const signals = digitFlipMarketSignalsRef.current
       .filter((signal) =>
-        Number.isFinite(signal.sampleCount)
+        Number.isInteger(signal.sampleCount)
         && signal.sampleCount >= (requireThreshold ? DIGIT_FLIP_SCANNER_MIN_SAMPLE : 1)
         && isValidDigitFlipParityRates(signal.evenPercentage, signal.oddPercentage),
       )
@@ -3972,8 +3972,11 @@ export default function XTraderPage() {
     if (
       requiresObservedSignal
       && (
-        selectedSampleCount < DIGIT_FLIP_SCANNER_MIN_SAMPLE
+        !Number.isInteger(selectedSampleCount)
+        || selectedSampleCount < DIGIT_FLIP_SCANNER_MIN_SAMPLE
+        || !Number.isFinite(selectedRate)
         || selectedRate < DIGIT_FLIP_SIGNAL_FLOOR
+        || selectedRate > 100
       )
     ) {
       setConnectionMessage({ kind: "info", text: "DigitFlip is waiting for a sufficiently strong, adequately sampled parity signal. No trade was sent." });
@@ -4231,19 +4234,6 @@ export default function XTraderPage() {
     digitFlipRunningRef.current = true;
     setDigitFlipRunning(true);
     void runDigitFlipLoop();
-  };
-
-  const resetDigitFlip = () => {
-    digitFlipSessionKnownIdsRef.current = new Set(digitFlipAllRows.map((trade) => trade.contract_id));
-    setDigitFlipSessionPnl(0);
-    setDigitFlipTradeCount(0);
-    setDigitFlipCurrentStake(digitFlipStake);
-    resetDigitFlipScanner();
-    digitFlipNextStakeRef.current = digitFlipStake;
-    digitFlipMartingaleWatchRef.current = null;
-    digitFlipAssaultWatchRef.current = null;
-    digitFlipAssaultLossesRef.current = { DIGITEVEN: 0, DIGITODD: 0 };
-    digitFlipNextMarketScanAtRef.current = 0;
   };
 
   const refreshDigitFlipSample = () => {
@@ -5247,7 +5237,10 @@ export default function XTraderPage() {
           onMarketTypeChange={(next) => {
             setDigitFlipMarketType(next);
              if (next === "auto") {
-               window.setTimeout(() => void chooseDigitFlipSetup(false), 0);
+               window.setTimeout(
+                 () => void chooseDigitFlipSetup(next === "auto" || digitFlipMagicRef.current),
+                 0,
+               );
              } else {
                const nextSymbol = tradeXSymbols.find((option) => option.marketType === next)?.value;
                if (nextSymbol) {
@@ -5266,7 +5259,6 @@ export default function XTraderPage() {
           onStopLossChange={setDigitFlipStopLoss}
           onRunStop={toggleDigitFlipRun}
           onAiScan={runDigitFlipAiScanner}
-          onReset={resetDigitFlip}
            onRefreshSample={refreshDigitFlipSample}
            onAssaultChange={toggleDigitFlipAssault}
            onMagicChange={toggleDigitFlipMagic}

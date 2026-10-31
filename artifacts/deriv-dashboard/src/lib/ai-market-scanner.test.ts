@@ -100,8 +100,8 @@ test("DigitFlip scanner ignores malformed and under-threshold parity rates", () 
   assert.deepEqual(candidate, {
     symbol: "R_75",
     parity: "DIGITEVEN",
-    observedRate: 53,
-    sampleCount: 25,
+    observedRate: 95,
+    sampleCount: 100,
   });
   assert.equal(isValidDigitFlipParityRates(0, 100), true);
   assert.equal(isValidDigitFlipParityRates(Number.POSITIVE_INFINITY, 0), false);
