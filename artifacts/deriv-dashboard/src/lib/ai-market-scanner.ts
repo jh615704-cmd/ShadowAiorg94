@@ -1,6 +1,6 @@
 export const AI_SCANNER_MIN_SAMPLE = 20;
 export const DIGIT_FLIP_SCANNER_MIN_SAMPLE = 100;
-export const DIGIT_FLIP_SIGNAL_FLOOR = 95;
+export const DIGIT_FLIP_SIGNAL_FLOOR = 55;
 export const TRADE_X_SCANNER_MIN_OBSERVED_RATE = 95;
 
 export type AiScannerMarketSignal = {
@@ -39,6 +39,28 @@ export function isValidDigitFlipParityRates(even: number, odd: number): boolean 
     && Number.isFinite(odd)
     && odd >= 0
     && odd <= 100;
+}
+
+/**
+ * Shrink small parity samples toward an even 50/50 baseline so a short-lived
+ * percentage spike does not dominate market selection. This is a ranking
+ * heuristic, not a forecast or a guarantee of future results.
+ */
+export function getDigitFlipAdjustedRate(observedRate: number, sampleCount: number): number | null {
+  if (
+    !Number.isFinite(observedRate)
+    || observedRate < 0
+    || observedRate > 100
+    || !Number.isFinite(sampleCount)
+    || sampleCount <= 0
+  ) {
+    return null;
+  }
+
+  const priorWins = 10;
+  const priorSamples = 20;
+  const estimatedWins = sampleCount * observedRate / 100;
+  return ((estimatedWins + priorWins) / (sampleCount + priorSamples)) * 100;
 }
 
 export type TradeXScannerCandidate = {
@@ -186,15 +208,29 @@ export function chooseDigitFlipScannerCandidate(
     const parity = signal.digit_even_percentage >= signal.digit_odd_percentage
       ? "DIGITEVEN" as const
       : "DIGITODD" as const;
+    const observedRate = Math.max(signal.digit_even_percentage, signal.digit_odd_percentage);
     return {
       symbol: signal.symbol,
       parity,
-      observedRate: Math.max(signal.digit_even_percentage, signal.digit_odd_percentage),
+      observedRate,
+      adjustedRate: getDigitFlipAdjustedRate(observedRate, signal.sample_count) ?? 0,
       sampleCount: signal.sample_count,
     };
-  }).filter((candidate) => candidate.observedRate >= minimumObservedRate);
+  }).filter((candidate) => candidate.adjustedRate >= minimumObservedRate);
 
-  return strongest(candidates);
+  candidates.sort((left, right) =>
+    right.adjustedRate - left.adjustedRate
+    || right.sampleCount - left.sampleCount
+    || left.symbol.localeCompare(right.symbol),
+  );
+  const best = candidates[0];
+  if (!best) return null;
+  return {
+    symbol: best.symbol,
+    parity: best.parity,
+    observedRate: best.observedRate,
+    sampleCount: best.sampleCount,
+  };
 }
 
 export function chooseTradeXScannerCandidate(

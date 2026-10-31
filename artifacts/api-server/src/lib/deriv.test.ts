@@ -82,6 +82,27 @@ mock.module("./trading-protection", {
 
 const deriv = await import("./deriv.ts");
 
+test("EDGE proposal checks distinguish unavailable setups from connection failures", () => {
+  assert.equal(
+    deriv.isDerivProposalUnavailableError(
+      new Error("Deriv is not currently quoting this Over/Under setup for JD100."),
+    ),
+    true,
+  );
+  assert.equal(
+    deriv.isDerivProposalUnavailableError(
+      Object.assign(new Error("Trading is not offered for this duration."), {
+        code: "TradingDurationNotAllowed",
+      }),
+    ),
+    true,
+  );
+  assert.equal(
+    deriv.isDerivProposalUnavailableError(new Error("Deriv WebSocket is not ready")),
+    false,
+  );
+});
+
 test("trade failure diagnostics distinguish app, transport, Deriv, and unverified outcomes", () => {
   assert.deepEqual(
     deriv.classifyBuyFailure(new Error("WebSocket is not ready")),

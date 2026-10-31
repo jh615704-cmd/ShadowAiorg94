@@ -67,6 +67,7 @@ import {
   chooseDigitFlipScannerCandidate,
   DIGIT_FLIP_SCANNER_MIN_SAMPLE,
   DIGIT_FLIP_SIGNAL_FLOOR,
+  getDigitFlipAdjustedRate,
   chooseTradeXScannerCandidate,
   TRADE_X_SCANNER_MIN_OBSERVED_RATE,
   digitDiffersRateFromPercentages,
@@ -234,7 +235,7 @@ const tradeXGuidePages = [
   { title: "Live-money protection", body: "The server's live-trading setting and balance checks guard real-account orders; account selection determines where a trade is placed.", points: ["Switch to demo while learning.", "A disabled action can indicate the server live-trading setting is off.", "Check the selected account before trading."] },
   { title: "Reading open contracts", body: "An open row has been bought but does not yet have a final result. It remains visible while Deriv settles the contract.", points: ["Do not treat an open row as a win or loss.", "History refreshes as settlement arrives.", "New actions remain separate from open rows."] },
   { title: "Clearing Trade X history", body: "The Trade X clear control hides the dashboard rows after a second tap. It does not delete contracts or records from Deriv.", points: ["Use the two-step action intentionally.", "The fade confirms the rows were removed from view.", "Clearing does not stop automation."] },
-  { title: "Reset the sample", body: "Refreshing analysis starts a new local sample window so the distribution reflects the next stream of ticks.", points: ["Wait for enough observations after refresh.", "Avoid making decisions from an empty sample.", "The account and contract history remain unchanged."] },
+  { title: "Read live parity samples", body: "DigitFlip updates its local parity sample from incoming market ticks. Selecting another market starts a fresh local sample.", points: ["Automated selection waits for its minimum sample.", "Displayed percentages describe prior observations, not the next outcome.", "Deriv account history remains unchanged."] },
   { title: "Safe first session", body: "Start with one small demo Digit Differs contract, a fresh sample, and manual selection.", points: ["Confirm market, digit, duration, and stake.", "Watch the returned row settle.", "Stop if the signal no longer matches your plan."] },
   { title: "Final checklist", body: "Trade X is ready when the market, sample, digit, duration, stake, and automation state are all intentional.", points: ["Start small.", "Check the selected account before trading.", "Use observed data as context, never as certainty."] },
 ] as const;
@@ -3574,7 +3575,6 @@ export default function XTraderPage() {
     const triedMarkets = new Set<string>();
     for (const scannedCandidate of rankedCandidates) {
       if (triedMarkets.has(scannedCandidate.symbol)) continue;
-      if (triedMarkets.size >= 8) break;
       triedMarkets.add(scannedCandidate.symbol);
 
       const setupKey = edgeDurationSetupKey(
@@ -3638,6 +3638,7 @@ export default function XTraderPage() {
     setDirection(candidate.direction);
     setBarrier(candidate.digit);
     setDuration(selectedDuration);
+    setSymbol(candidate.symbol);
     configRef.current = {
       ...configRef.current,
       symbol: candidate.symbol,
@@ -3846,9 +3847,13 @@ export default function XTraderPage() {
         signal,
         parity: signal.evenPercentage >= signal.oddPercentage ? "DIGITEVEN" as const : "DIGITODD" as const,
         rate: Math.max(signal.evenPercentage, signal.oddPercentage),
+        adjustedRate: getDigitFlipAdjustedRate(
+          Math.max(signal.evenPercentage, signal.oddPercentage),
+          signal.sampleCount,
+        ) ?? 0,
       }))
-      .filter((candidate) => !requireThreshold || candidate.rate >= DIGIT_FLIP_SIGNAL_FLOOR)
-      .sort((left, right) => right.rate - left.rate || right.signal.sampleCount - left.signal.sampleCount);
+      .filter((candidate) => !requireThreshold || candidate.adjustedRate >= DIGIT_FLIP_SIGNAL_FLOOR)
+      .sort((left, right) => right.adjustedRate - left.adjustedRate || right.signal.sampleCount - left.signal.sampleCount);
     const best = signals[0];
     if (!best) return "no-candidate";
     if (best.signal.symbol !== config.symbol) {
@@ -3874,15 +3879,27 @@ export default function XTraderPage() {
 
   useEffect(() => {
     if (!digitFlipEnabled || (!digitFlipMagic && digitFlipMarketType !== "auto") || !digitFlipMarketSignals.length) return;
+    if (digitFlipRunningRef.current || digitFlipActionLockRef.current || tradeSlotBlocked) return;
     const eligible = digitFlipMarketSignals
       .filter((signal) => digitFlipMarketType === "auto" || tradeXSymbols.some((option) => option.value === signal.symbol && option.marketType === digitFlipMarketType))
-      .filter((signal) =>
+      .map((signal) => ({
+        signal,
+        adjustedRate: getDigitFlipAdjustedRate(
+          Math.max(signal.evenPercentage, signal.oddPercentage),
+          signal.sampleCount,
+        ),
+      }))
+      .filter(({ signal, adjustedRate }) =>
         signal.sampleCount >= DIGIT_FLIP_SCANNER_MIN_SAMPLE
-        && Math.max(signal.evenPercentage, signal.oddPercentage) >= DIGIT_FLIP_SIGNAL_FLOOR
-        && isValidDigitFlipParityRates(signal.evenPercentage, signal.oddPercentage),
+        && isValidDigitFlipParityRates(signal.evenPercentage, signal.oddPercentage)
+        && adjustedRate != null
+        && adjustedRate >= DIGIT_FLIP_SIGNAL_FLOOR,
       )
-      .sort((left, right) => Math.max(right.evenPercentage, right.oddPercentage) - Math.max(left.evenPercentage, left.oddPercentage) || right.sampleCount - left.sampleCount);
-    const best = eligible[0];
+      .sort((left, right) =>
+        (right.adjustedRate ?? 0) - (left.adjustedRate ?? 0)
+        || right.signal.sampleCount - left.signal.sampleCount,
+      );
+    const best = eligible[0]?.signal;
     if (!best) return;
     const parity = best.oddPercentage > best.evenPercentage ? "DIGITODD" : "DIGITEVEN";
     const key = `${best.symbol}:${parity}`;
@@ -3890,7 +3907,7 @@ export default function XTraderPage() {
     digitFlipAutoSelectionKeyRef.current = key;
     if (digitFlipConfigRef.current.symbol === best.symbol && digitFlipConfigRef.current.parity === parity) return;
     void chooseDigitFlipSetup(true);
-  }, [digitFlipEnabled, digitFlipMagic, digitFlipMarketSignals, digitFlipMarketType]);
+  }, [digitFlipEnabled, digitFlipMagic, digitFlipMarketSignals, digitFlipMarketType, tradeSlotBlocked]);
 
   const chooseDigitFlipMarket = async () =>
     chooseDigitFlipSetup(digitFlipMarketType === "auto" || digitFlipMagicRef.current);
@@ -3916,7 +3933,7 @@ export default function XTraderPage() {
         setDigitFlipParity(nextParity);
         setConnectionMessage({
           kind: "info",
-          text: `Assault switched to ${nextParity === "DIGITEVEN" ? "Even" : "Odd"} after a ${settledParity === "DIGITEVEN" ? "Even" : "Odd"} loss${digitFlipAssaultLossesRef.current[settledParity] >= 3 ? " (3-loss trigger)" : ""}.`,
+          text: `Flip Switch changed the next parity to ${nextParity === "DIGITEVEN" ? "Even" : "Odd"} after the settled loss.`,
         });
       } else {
         digitFlipAssaultLossesRef.current[settledParity] = 0;
@@ -3975,7 +3992,7 @@ export default function XTraderPage() {
         !Number.isInteger(selectedSampleCount)
         || selectedSampleCount < DIGIT_FLIP_SCANNER_MIN_SAMPLE
         || !Number.isFinite(selectedRate)
-        || selectedRate < DIGIT_FLIP_SIGNAL_FLOOR
+        || (getDigitFlipAdjustedRate(selectedRate, selectedSampleCount) ?? 0) < DIGIT_FLIP_SIGNAL_FLOOR
         || selectedRate > 100
       )
     ) {
@@ -4234,11 +4251,6 @@ export default function XTraderPage() {
     digitFlipRunningRef.current = true;
     setDigitFlipRunning(true);
     void runDigitFlipLoop();
-  };
-
-  const refreshDigitFlipSample = () => {
-    resetDigitFlipScanner();
-    setConnectionMessage({ kind: "info", text: "DigitFlip parity scanner reset. Waiting for fresh ticks." });
   };
 
   const clearDigitFlipHistory = async () => {
@@ -5259,7 +5271,6 @@ export default function XTraderPage() {
           onStopLossChange={setDigitFlipStopLoss}
           onRunStop={toggleDigitFlipRun}
           onAiScan={runDigitFlipAiScanner}
-           onRefreshSample={refreshDigitFlipSample}
            onAssaultChange={toggleDigitFlipAssault}
            onMagicChange={toggleDigitFlipMagic}
         />

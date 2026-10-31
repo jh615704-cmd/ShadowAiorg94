@@ -7,6 +7,7 @@ import {
   chooseDigitFlipScannerCandidate,
   chooseTradeXScannerCandidate,
   digitDiffersRateFromPercentages,
+  getDigitFlipAdjustedRate,
   isValidObservedPercentage,
   isValidDigitFlipParityRates,
   type AiScannerMarketSignal,
@@ -78,40 +79,39 @@ test("Bulk Trader scanner rejects invalid barriers and rates but tolerates perce
   assert.equal(isValidObservedPercentage(Number.NaN), false);
 });
 
-test("DigitFlip requires a 95% observed parity signal across 100 samples", () => {
+test("DigitFlip ranks a sufficiently sampled parity after shrinking toward an even baseline", () => {
   const candidate = chooseDigitFlipScannerCandidate([
     signal("R_10", 100, [], 96, 4),
-    signal("JD25", 120, [], 94, 6),
+    signal("JD25", 120, [], 60, 40),
   ], ["R_10", "JD25"]);
 
   assert.equal(candidate?.symbol, "R_10");
   assert.equal(candidate?.parity, "DIGITEVEN");
   assert.equal(candidate?.observedRate, 96);
+  assert.equal(getDigitFlipAdjustedRate(60, 100), 58.333333333333336);
 });
 
-test("DigitFlip scanner ignores malformed and under-threshold parity rates", () => {
+test("DigitFlip scanner ignores malformed, undersampled, and weak adjusted parity rates", () => {
   const candidate = chooseDigitFlipScannerCandidate([
     signal("R_10", 40, [], 140, -40),
     signal("JD25", 100, [], 55, Number.NaN),
-    signal("R_25", 100, [], 94, 6),
-    signal("R_75", 100, [], 95, 5),
+    signal("R_25", 100, [], 55, 45),
+    signal("R_75", 100, [], 60, 40),
   ], ["R_10", "JD25", "R_75"]);
 
-  assert.deepEqual(candidate, {
-    symbol: "R_75",
-    parity: "DIGITEVEN",
-    observedRate: 95,
-    sampleCount: 100,
-  });
+  assert.equal(candidate?.symbol, "R_75");
+  assert.equal(candidate?.parity, "DIGITEVEN");
+  assert.equal(candidate?.observedRate, 60);
+  assert.equal(candidate?.sampleCount, 100);
   assert.equal(isValidDigitFlipParityRates(0, 100), true);
   assert.equal(isValidDigitFlipParityRates(Number.POSITIVE_INFINITY, 0), false);
 });
 
-test("DigitFlip does not scan a setup below the observed-rate or sample gate", () => {
+test("DigitFlip does not scan a setup below the adjusted-rate or sample gate", () => {
   assert.equal(
     chooseDigitFlipScannerCandidate([
       signal("R_10", 99, [], 100, 0),
-      signal("JD25", 200, [], 94, 6),
+      signal("JD25", 200, [], 54, 46),
     ], ["R_10", "JD25"]),
     null,
   );

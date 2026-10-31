@@ -3,7 +3,6 @@ import {
   ChevronDown,
   CircleStop,
   Play,
-  RefreshCw,
   Zap,
 } from "lucide-react";
 import { formatDerivQuote } from "../lib/format-deriv-quote";
@@ -66,7 +65,6 @@ export type DigitFlipPanelProps = {
   onStopLossChange: (value: number) => void;
   onRunStop: () => void;
   onAiScan: () => Promise<string>;
-  onRefreshSample: () => void;
   onAssaultChange: (value: boolean) => void;
   onMagicChange: (value: boolean) => void;
 };
@@ -144,7 +142,6 @@ export default function DigitFlipPanel({
   onStopLossChange,
   onRunStop,
   onAiScan,
-  onRefreshSample,
   onAssaultChange,
   onMagicChange,
 }: DigitFlipPanelProps) {
@@ -248,9 +245,9 @@ export default function DigitFlipPanel({
             <span>{bestParity === "DIGITODD" ? "o" : "•"}</span>
           </div>
           <div className="df-best-copy">
-            <span>BEST PARITY TO TRADE NOW</span>
+              <span>LEADING OBSERVED PARITY</span>
             <p>
-              <strong>{bestRate.toFixed(1)}% score</strong>
+              <strong>{bestRate.toFixed(1)}% observed</strong>
               <em>·</em> payout varies by quote <em>·</em> {bestLabel}
             </p>
           </div>
@@ -438,14 +435,6 @@ export default function DigitFlipPanel({
             <div className="df-section-label">Trade setup</div>
             <h3>Stake and session limits</h3>
           </div>
-          <button
-            type="button"
-            className="df-refresh"
-            onClick={onRefreshSample}
-            disabled={disabled}
-          >
-            <RefreshCw size={13} /> Refresh
-          </button>
         </div>
         <div className="df-setup-grid">
           <label>
@@ -556,6 +545,7 @@ export default function DigitFlipPanel({
         <AiScannerAction
           onScan={onAiScan}
           disabled={disabled || isPlacingTrade || running || entryBlocked}
+          messageAutoDismissMs={3000}
         />
         <div className="df-action-row">
           <button

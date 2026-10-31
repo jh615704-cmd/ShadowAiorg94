@@ -223,6 +223,32 @@ class DerivApiError extends Error {
   }
 }
 
+const UNAVAILABLE_PROPOSAL_CODES = new Set([
+  "BarrierNotAllowed",
+  "ContractNotAvailable",
+  "ContractUnavailable",
+  "InvalidContractProposal",
+  "MarketClosed",
+  "MarketIsClosed",
+  "MarketNotAvailable",
+  "TradingDurationNotAllowed",
+  "TradingNotOffered",
+]);
+
+export function isDerivProposalUnavailableError(error: unknown): boolean {
+  const code = typeof error === "object" && error !== null && "code" in error
+    ? String((error as { code?: unknown }).code ?? "")
+    : "";
+  if (UNAVAILABLE_PROPOSAL_CODES.has(code)) return true;
+
+  const message = error instanceof Error
+    ? error.message
+    : typeof error === "string"
+      ? error
+      : "";
+  return /not currently quoting|not offered for (?:this|the selected)|not available for (?:this|the selected)|market (?:is )?(?:closed|unavailable)|contract (?:is )?unavailable|invalid contract proposal|barrier not allowed|duration not allowed/i.test(message);
+}
+
 export function isDerivBuyRateLimitError(error: unknown): boolean {
   if (error instanceof DerivApiError) return error.code === "RateLimit";
   if (typeof error !== "object" || error === null || !("code" in error)) return false;
@@ -2144,7 +2170,7 @@ async function requestFreshProposal(input: ProposalInput, options: { trackLatest
         return proposal;
       } catch (error) {
         lastError = error instanceof Error ? error.message : "Deriv proposal request failed";
-        if (error instanceof DerivApiError && error.code === "TradingDurationNotAllowed") {
+        if (isDerivProposalUnavailableError(error)) {
           throw error;
         }
         logger.warn({ attempt, err: error }, "Deriv proposal attempt failed");
@@ -2183,7 +2209,7 @@ export async function getEdgeAvailableDurations(input: {
       }, { trackLatest: false });
       supportedDurations.push(duration);
     } catch (error) {
-      if (error instanceof DerivApiError && error.code === "TradingDurationNotAllowed") {
+      if (isDerivProposalUnavailableError(error)) {
         continue;
       }
       throw error;
