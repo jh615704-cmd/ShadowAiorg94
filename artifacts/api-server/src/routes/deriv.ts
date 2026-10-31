@@ -5,6 +5,8 @@ import {
   GetDerivStatusResponse,
   RequestDerivProposalBody,
   RequestDerivProposalResponse,
+  GetEdgeAvailableDurationsBody,
+  GetEdgeAvailableDurationsResponse,
   BuyDerivContractBody,
   BuyDerivContractResponse,
   SellDerivContractBody,
@@ -35,6 +37,7 @@ import {
   refreshDerivHistory,
   clearHistory,
   requestProposal,
+  getEdgeAvailableDurations,
   scanAccumulatorKnockout,
   buyContract,
   sellContract,
@@ -368,6 +371,38 @@ router.post("/deriv/proposals", async (req, res) => {
      const missingCredential = isCredentialError(error);
       return res.status(missingCredential ? credentialHttpStatus(error) : 503).json({
        error: missingCredential ? error.message : "Deriv WebSocket is not ready",
+    });
+  }
+});
+
+router.post("/deriv/edge-available-durations", requireTradeAccessFeature, async (req, res) => {
+  const parsed = GetEdgeAvailableDurationsBody.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid EDGE duration availability request" });
+  }
+
+  try {
+    const result = GetEdgeAvailableDurationsResponse.parse(await withCredential(
+      res.locals.userId,
+      () => getEdgeAvailableDurations({
+        amount: parsed.data.amount,
+        contract_type: parsed.data.contract_type,
+        barrier: parsed.data.barrier,
+        symbol: parsed.data.symbol,
+      }),
+      true,
+    ));
+    return res.json(result);
+  } catch (error) {
+    req.log.error({ err: error }, "EDGE duration availability check failed");
+    if (isCapacityError(error)) {
+      return res.status(503).json({ error: error.message });
+    }
+    if (isCredentialError(error)) {
+      return res.status(credentialHttpStatus(error)).json({ error: error.message });
+    }
+    return res.status(502).json({
+      error: error instanceof Error ? error.message : "EDGE duration availability check failed",
     });
   }
 });

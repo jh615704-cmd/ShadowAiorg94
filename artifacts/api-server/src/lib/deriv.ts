@@ -330,7 +330,12 @@ return {
   lastProposalRefreshAt: 0,
   proposalSequence: 0,
   buySequence: 0,
-  proposalWaiters: new Map<number, { resolve: (proposal: DerivProposal) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }>(),
+  proposalWaiters: new Map<number, {
+    resolve: (proposal: DerivProposal) => void;
+    reject: (error: Error) => void;
+    timer: NodeJS.Timeout;
+    trackLatest: boolean;
+  }>(),
   portfolioSequence: 0,
   portfolioWaiters: new Map<number, {
     resolve: (contractIds: string[]) => void;
@@ -1758,10 +1763,12 @@ async function connectInternal() {
       } else if (message.msg_type === "proposal") {
         const proposal = proposalFromMessage(message.proposal);
         if (proposal) {
-          getState().lastProposal = proposal;
-          getState().proposalIds.add(proposal.id);
           const reqId = Number(message.req_id ?? message.echo_req?.req_id);
           const waiter = getState().proposalWaiters.get(reqId);
+          if (waiter?.trackLatest !== false) {
+            getState().lastProposal = proposal;
+            getState().proposalIds.add(proposal.id);
+          }
           if (waiter) {
             clearTimeout(waiter.timer);
             getState().proposalWaiters.delete(reqId);
@@ -2105,10 +2112,13 @@ export async function requestProposal(input: ProposalInput) {
   };
 }
 
-async function requestFreshProposal(input: ProposalInput) {
-  getState().lastProposalContractType = input.contract_type;
-  getState().lastProposalSymbol = input.symbol ?? defaultSymbol;
-  getState().lastProposalInput = input;
+async function requestFreshProposal(input: ProposalInput, options: { trackLatest?: boolean } = {}) {
+  const trackLatest = options.trackLatest ?? true;
+  if (trackLatest) {
+    getState().lastProposalContractType = input.contract_type;
+    getState().lastProposalSymbol = input.symbol ?? defaultSymbol;
+    getState().lastProposalInput = input;
+  }
   let lastError = "Deriv WebSocket is not ready";
 
   for (let attempt = 1; attempt <= proposalAttempts; attempt += 1) {
@@ -2123,7 +2133,7 @@ async function requestFreshProposal(input: ProposalInput) {
             getState().proposalWaiters.delete(reqId);
             reject(new Error("Deriv did not return a proposal in time"));
           }, proposalTimeoutMs);
-          getState().proposalWaiters.set(reqId, { resolve, reject, timer });
+          getState().proposalWaiters.set(reqId, { resolve, reject, timer, trackLatest });
           const sent = sendStakeProposal(input, reqId);
           if (!sent) {
             clearTimeout(timer);
@@ -2134,6 +2144,9 @@ async function requestFreshProposal(input: ProposalInput) {
         return proposal;
       } catch (error) {
         lastError = error instanceof Error ? error.message : "Deriv proposal request failed";
+        if (error instanceof DerivApiError && error.code === "TradingDurationNotAllowed") {
+          throw error;
+        }
         logger.warn({ attempt, err: error }, "Deriv proposal attempt failed");
       }
     }
@@ -2152,6 +2165,31 @@ async function requestFreshProposal(input: ProposalInput) {
       ? "Deriv did not return a proposal after 3 attempts. The connection was refreshed; please try again."
       : lastError,
   );
+}
+
+export async function getEdgeAvailableDurations(input: {
+  amount: number;
+  contract_type: "DIGITOVER" | "DIGITUNDER";
+  barrier: number;
+  symbol: string;
+}) {
+  const supportedDurations: number[] = [];
+  for (const duration of [1, 2, 3, 4, 5]) {
+    try {
+      await requestFreshProposal({
+        ...input,
+        duration,
+        duration_unit: "t",
+      }, { trackLatest: false });
+      supportedDurations.push(duration);
+    } catch (error) {
+      if (error instanceof DerivApiError && error.code === "TradingDurationNotAllowed") {
+        continue;
+      }
+      throw error;
+    }
+  }
+  return { supported_durations: supportedDurations };
 }
 
 export async function selectAccount(accountId: string) {

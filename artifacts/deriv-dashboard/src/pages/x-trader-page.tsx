@@ -23,6 +23,7 @@ import {
   useTestDerivConnection,
   useTestDerivToken,
   useRequestDerivProposal,
+  useGetEdgeAvailableDurations,
   useScanDerivAccumulatorKnockout,
   type MoneyBankKnockoutScannerResponse,
   getGetDerivTokenStatusQueryKey,
@@ -434,6 +435,11 @@ export default function XTraderPage() {
   const [direction, setDirection] = useState<"DIGITOVER" | "DIGITUNDER">("DIGITOVER");
   const [barrier, setBarrier] = useState(5);
   const [duration, setDuration] = useState(5);
+  const [edgeDurationAvailability, setEdgeDurationAvailability] = useState<{
+    key: string;
+    durations: number[];
+    checkedAt: number;
+  } | null>(null);
   const [stake, setStake] = useState(1);
   const [strategy, setStrategy] = useState<"flat" | "martingale">("martingale");
   const [martingale, setMartingale] = useState(2);
@@ -569,6 +575,12 @@ export default function XTraderPage() {
   const edgePercentageModeRef = useRef(edgePercentageMode);
   const edgeProposalRequestKeyRef = useRef("");
   const edgeProposalMutation = useRequestDerivProposal();
+  const edgeDurationAvailabilityMutation = useGetEdgeAvailableDurations();
+  const edgeDurationAvailabilityRef = useRef<{
+    key: string;
+    durations: number[];
+    checkedAt: number;
+  } | null>(null);
   const edgeLossStreakRef = useRef(0);
   const edgeProcessedSettlementIdsRef = useRef(new Set<string>());
   const nextStakeRef = useRef(stake);
@@ -3507,6 +3519,16 @@ export default function XTraderPage() {
     }
   };
 
+  const edgeDurationSetupKey = (contractType: "DIGITOVER" | "DIGITUNDER") =>
+    JSON.stringify([
+      symbol,
+      contractType,
+      barrier,
+      stake,
+      currentAccount?.id ?? "",
+      currentAccount?.currency ?? "USD",
+    ]);
+
   const runEdgeAiScanner = () => withAiScannerLock(async () => {
     if (!xTraderEnabled || !isConnected) throw new Error("Enable EDGE and connect Deriv before scanning.");
     if (running) throw new Error("Stop the active EDGE run before changing its direction.");
@@ -3559,6 +3581,43 @@ export default function XTraderPage() {
       duration,
       stake,
     };
+
+    const durationSetupKey = edgeDurationSetupKey(candidate.direction);
+    let supportedDurations = edgeDurationAvailabilityRef.current?.key === durationSetupKey
+      && Date.now() - edgeDurationAvailabilityRef.current.checkedAt < 60_000
+      ? edgeDurationAvailabilityRef.current.durations
+      : null;
+    if (!supportedDurations) {
+      const availability = await edgeDurationAvailabilityMutation.mutateAsync({
+        data: {
+          access_feature: "edge",
+          amount: stake,
+          contract_type: candidate.direction,
+          barrier,
+          symbol,
+        },
+      });
+      supportedDurations = availability.supported_durations;
+      const cachedAvailability = {
+        key: durationSetupKey,
+        durations: supportedDurations,
+        checkedAt: Date.now(),
+      };
+      edgeDurationAvailabilityRef.current = cachedAvailability;
+      setEdgeDurationAvailability(cachedAvailability);
+    }
+    if (!supportedDurations.includes(duration)) {
+      const availableLabel = supportedDurations
+        .map((ticks) => `${ticks} tick${ticks === 1 ? "" : "s"}`)
+        .join(", ");
+      if (!availableLabel) {
+        throw new Error(`Deriv is not currently quoting this Over/Under setup for ${symbol}. No trade was sent.`);
+      }
+      throw new Error(
+        `Deriv supports ${availableLabel} for this setup. Select one of those durations; no trade was sent.`,
+      );
+    }
+
     const historySnapshot = await readHistorySnapshot();
     if (!historySnapshot.fresh || historySnapshot.rows.some((trade) => isDerivHistoryOpen(trade.status))) {
       throw new Error("EDGE needs a fresh, settled history check before sending a scanned trade.");
@@ -3570,18 +3629,28 @@ export default function XTraderPage() {
     edgeSettlementLockRef.current = true;
     try {
       armMartingaleWatch(historySnapshot.rows, stake, 1);
-      const result = await bulkBuyMutation.mutateAsync({
-        data: {
-          access_feature: "edge",
-          amount: stake,
-          duration,
-          duration_unit: "t",
-          contract_type: candidate.direction,
-          barrier,
-          symbol,
-          count: 1,
-        },
-      });
+      let result;
+      try {
+        result = await bulkBuyMutation.mutateAsync({
+          data: {
+            access_feature: "edge",
+            amount: stake,
+            duration,
+            duration_unit: "t",
+            contract_type: candidate.direction,
+            barrier,
+            symbol,
+            count: 1,
+          },
+        });
+      } catch (error) {
+        if (errorMessage(error).includes("Trading is not offered for this duration")) {
+          edgeDurationAvailabilityRef.current = null;
+          setEdgeDurationAvailability(null);
+          throw new Error(`Deriv no longer offers ${duration} ticks for this setup. Run Scan + Trade again to refresh supported durations. No trade was sent.`);
+        }
+        throw error;
+      }
       if (!result.buys.length) throw new Error("Deriv did not return a confirmed EDGE contract.");
       claimFeatureRows("edge", edgeClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
       setSessionTrades((value) => value + result.buys.length);
@@ -5174,6 +5243,11 @@ export default function XTraderPage() {
           onBarrierChange={setBarrier}
           duration={duration}
           onDurationChange={selectDuration}
+          supportedDurations={
+            edgeDurationAvailability?.key === edgeDurationSetupKey(direction)
+              ? edgeDurationAvailability.durations
+              : null
+          }
           stake={stake}
           onStakeChange={setStake}
           strategy={strategy}

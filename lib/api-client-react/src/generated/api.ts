@@ -57,6 +57,8 @@ import type {
   DerivTradeEventStream,
   DiagnosticReportInput,
   DiagnosticReportResponse,
+  EdgeDurationAvailability,
+  EdgeDurationAvailabilityInput,
   ErrorResponse,
   HealthStatus,
   MoneyBankKnockoutScannerInput,
@@ -2096,6 +2098,77 @@ export const useRequestDerivProposal = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getRequestDerivProposalMutationOptions(options));
+    }
+
+export const getGetEdgeAvailableDurationsUrl = () => {
+
+
+
+
+  return `/api/deriv/edge-available-durations`
+}
+
+/**
+ * @summary Check which EDGE tick durations Deriv currently quotes
+ */
+export const getEdgeAvailableDurations = async (edgeDurationAvailabilityInput: EdgeDurationAvailabilityInput, options?: Parameters<typeof customFetch>[1]): Promise<EdgeDurationAvailability> => {
+
+  return customFetch<EdgeDurationAvailability>(getGetEdgeAvailableDurationsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(edgeDurationAvailabilityInput)
+  }
+);}
+
+
+
+
+
+export const getGetEdgeAvailableDurationsMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getEdgeAvailableDurations>>, TError,{data: BodyType<EdgeDurationAvailabilityInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof getEdgeAvailableDurations>>, TError,{data: BodyType<EdgeDurationAvailabilityInput>}, TContext> => {
+
+const mutationKey = ['getEdgeAvailableDurations'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getEdgeAvailableDurations>>, {data: BodyType<EdgeDurationAvailabilityInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  getEdgeAvailableDurations(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GetEdgeAvailableDurationsMutationResult = NonNullable<Awaited<ReturnType<typeof getEdgeAvailableDurations>>>
+    export type GetEdgeAvailableDurationsMutationBody = BodyType<EdgeDurationAvailabilityInput>
+    export type GetEdgeAvailableDurationsMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Check which EDGE tick durations Deriv currently quotes
+ */
+export const useGetEdgeAvailableDurations = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getEdgeAvailableDurations>>, TError,{data: BodyType<EdgeDurationAvailabilityInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof getEdgeAvailableDurations>>,
+        TError,
+        {data: BodyType<EdgeDurationAvailabilityInput>},
+        TContext
+      > => {
+      return useMutation(getGetEdgeAvailableDurationsMutationOptions(options));
     }
 
 export const getScanDerivAccumulatorKnockoutUrl = () => {

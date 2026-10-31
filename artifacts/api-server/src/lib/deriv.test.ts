@@ -27,6 +27,7 @@ let mockPortfolioContracts: SocketMessage[] = [];
 let mockProfitTableTransactions: SocketMessage[] = [];
 const mockOpenContractResponses = new Map<string, SocketMessage>();
 const buySendCountsAtAck: number[] = [];
+const unavailableProposalDurations = new Set<number>();
 
 class FakeWebSocket extends EventEmitter {
   static readonly CONNECTING = 0;
@@ -171,6 +172,17 @@ function handleClientMessage(socket: FakeWebSocket, message: SocketMessage) {
   }
 
   if (message.proposal) {
+    if (unavailableProposalDurations.has(Number(message.duration))) {
+      emitMessage(socket, {
+        error: {
+          code: "TradingDurationNotAllowed",
+          message: "Trading is not offered for this duration.",
+        },
+        ...(message.req_id == null ? {} : { req_id: message.req_id }),
+        echo_req: { req_id: message.req_id },
+      });
+      return;
+    }
     proposalNumber += 1;
     const proposalId = `proposal-${proposalNumber}`;
     if (proposalNumber === 1) {
@@ -374,7 +386,29 @@ beforeEach(() => {
   mockProfitTableTransactions = [];
   mockOpenContractResponses.clear();
   buySendCountsAtAck.length = 0;
+  unavailableProposalDurations.clear();
   sockets.length = 0;
+});
+
+describe("EDGE duration availability", { concurrency: false }, () => {
+  test("reports quoteable tick durations without sending a buy or retrying rejected durations", async () => {
+    unavailableProposalDurations.add(2);
+
+    await withSelectedAccount("edge-duration-availability-user", async () => {
+      const result = await deriv.getEdgeAvailableDurations({
+        amount: 1,
+        contract_type: "DIGITOVER",
+        barrier: 5,
+        symbol: "R_75",
+      });
+
+      assert.deepEqual(result.supported_durations, [1, 3, 4, 5]);
+      const proposals = latestSocket().sent.filter((message) => message.proposal);
+      assert.deepEqual(proposals.map((message) => message.duration), [1, 2, 3, 4, 5]);
+      assert.equal(proposals.filter((message) => message.duration === 2).length, 1);
+      assert.equal(latestSocket().sent.some((message) => message.buy), false);
+    });
+  });
 });
 
 after(() => {

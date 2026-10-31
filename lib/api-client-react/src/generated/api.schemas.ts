@@ -618,6 +618,35 @@ export interface DerivProposalInput {
   symbol?: string;
 }
 
+export type EdgeDurationAvailabilityInputAccessFeature = typeof EdgeDurationAvailabilityInputAccessFeature[keyof typeof EdgeDurationAvailabilityInputAccessFeature];
+
+
+export const EdgeDurationAvailabilityInputAccessFeature = {
+  edge: 'edge',
+} as const;
+
+export type EdgeDurationAvailabilityInputContractType = typeof EdgeDurationAvailabilityInputContractType[keyof typeof EdgeDurationAvailabilityInputContractType];
+
+
+export const EdgeDurationAvailabilityInputContractType = {
+  DIGITOVER: 'DIGITOVER',
+  DIGITUNDER: 'DIGITUNDER',
+} as const;
+
+export interface EdgeDurationAvailabilityInput {
+  access_feature: EdgeDurationAvailabilityInputAccessFeature;
+  /** @exclusiveMinimum 0 */
+  amount: number;
+  contract_type: EdgeDurationAvailabilityInputContractType;
+  /**
+     * @minimum 0
+     * @maximum 9
+     */
+  barrier: number;
+  /** @minLength 1 */
+  symbol: string;
+}
+
 export type MoneyBankKnockoutScannerInputAction = typeof MoneyBankKnockoutScannerInputAction[keyof typeof MoneyBankKnockoutScannerInputAction];
 
 
@@ -698,6 +727,14 @@ export interface MoneyBankKnockoutScannerResponse {
 export interface DerivProposalRequest {
   ok: boolean;
   message: string;
+}
+
+export interface EdgeDurationAvailability {
+  /**
+     * @items.minimum 1
+     * @items.maximum 5
+     */
+  supported_durations: number[];
 }
 
 export interface DerivAccountSelection {

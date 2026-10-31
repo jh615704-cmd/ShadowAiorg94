@@ -34,6 +34,7 @@ type EdgeReferencePanelProps = {
   onBarrierChange: (value: number) => void;
   duration: number;
   onDurationChange: (value: number) => void;
+  supportedDurations: readonly number[] | null;
   stake: number;
   onStakeChange: (value: number) => void;
   strategy: EdgeStrategy;
@@ -83,6 +84,7 @@ export default function EdgeReferencePanel({
   onBarrierChange,
   duration,
   onDurationChange,
+  supportedDurations,
   stake,
   onStakeChange,
   strategy,
@@ -426,13 +428,20 @@ export default function EdgeReferencePanel({
               className={duration === ticks ? "active" : ""}
               aria-pressed={duration === ticks}
               onClick={() => onDurationChange(ticks)}
-              disabled={running}
+              disabled={running || (supportedDurations !== null && !supportedDurations.includes(ticks))}
               data-testid={`edge-duration-${ticks}`}
             >
               {ticks}
             </button>
           ))}
         </div>
+        {supportedDurations !== null && (
+          <p className="edge-ref-duration-availability" role="status">
+            {supportedDurations.length
+              ? `Available from Deriv: ${supportedDurations.join(", ")} ticks`
+              : "No tick durations are currently quoted for this setup"}
+          </p>
+        )}
       </div>
       <label className="edge-ref-input-card">
         <span>Initial stake</span>

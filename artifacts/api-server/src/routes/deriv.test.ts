@@ -202,6 +202,10 @@ mock.module("../lib/deriv", {
       observePat();
       return { ok: true, message: "proposal requested" };
     },
+    getEdgeAvailableDurations: async () => {
+      observePat();
+      return { supported_durations: [1, 3, 4, 5] };
+    },
     scanAccumulatorKnockout: async () => {
       observePat();
       knockoutScanInvocations += 1;
@@ -348,6 +352,22 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
       }),
     });
     assert.equal(proposalResponse.status, 202);
+
+    const edgeDurationsResponse = await fetch(`${baseUrl}/deriv/edge-available-durations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        access_feature: "edge",
+        amount: 1,
+        contract_type: "DIGITOVER",
+        barrier: 5,
+        symbol: "R_75",
+      }),
+    });
+    assert.equal(edgeDurationsResponse.status, 200);
+    assert.deepEqual(await readJson(edgeDurationsResponse), {
+      supported_durations: [1, 3, 4, 5],
+    });
 
     const scanResponse = await fetch(`${baseUrl}/deriv/accumulator-knockout-scan`, {
       method: "POST",
@@ -606,7 +626,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
     });
     assert.equal(outOfRangeAutoTraderResponse.status, 400);
     assert.match(String((await readJson(outOfRangeAutoTraderResponse)).error), /1 to 5 ticks/);
-    assert.deepEqual(observedPats, Array.from({ length: 29 }, () => enteredPat));
+    assert.deepEqual(observedPats, Array.from({ length: 30 }, () => enteredPat));
 
     const priorBuyInvocations = buyInvocations;
     const priorBulkBuyInvocations = bulkBuyInvocations;

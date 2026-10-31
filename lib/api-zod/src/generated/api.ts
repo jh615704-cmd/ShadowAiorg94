@@ -837,6 +837,34 @@ export const RequestDerivProposalResponse = zod.object({
 
 
 /**
+ * @summary Check which EDGE tick durations Deriv currently quotes
+ */
+export const getEdgeAvailableDurationsBodyAmountExclusiveMin = 0;
+
+export const getEdgeAvailableDurationsBodyBarrierMin = 0;
+export const getEdgeAvailableDurationsBodyBarrierMax = 9;
+
+
+
+
+export const GetEdgeAvailableDurationsBody = zod.object({
+  "access_feature": zod.enum(['edge']),
+  "amount": zod.number().gt(getEdgeAvailableDurationsBodyAmountExclusiveMin),
+  "contract_type": zod.enum(['DIGITOVER', 'DIGITUNDER']),
+  "barrier": zod.number().int().min(getEdgeAvailableDurationsBodyBarrierMin).max(getEdgeAvailableDurationsBodyBarrierMax),
+  "symbol": zod.string().min(1)
+})
+
+export const getEdgeAvailableDurationsResponseSupportedDurationsItemMax = 5;
+
+
+
+export const GetEdgeAvailableDurationsResponse = zod.object({
+  "supported_durations": zod.array(zod.number().int().min(1).max(getEdgeAvailableDurationsResponseSupportedDurationsItemMax))
+})
+
+
+/**
  * @summary Start or check the live Money Bank knockout scanner
  */
 export const scanDerivAccumulatorKnockoutBodyAmountExclusiveMin = 0;
