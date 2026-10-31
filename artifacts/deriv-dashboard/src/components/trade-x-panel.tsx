@@ -37,7 +37,6 @@ export interface TradeXPanelProps {
   stake: number;
   selectedDigit: number;
   duration: TradeXDuration;
-  manualSelectMode: boolean;
   distribution?: readonly TradeXDigitDistribution[];
   rankedSafestDigits?: readonly number[];
   symbols?: readonly TradeXSymbolOption[];
@@ -53,7 +52,6 @@ export interface TradeXPanelProps {
   onStakeChange: (stake: number) => void;
   onSelectedDigitChange: (digit: number) => void;
   onDurationChange: (duration: TradeXDuration) => void;
-  onManualSelectModeChange: (enabled: boolean) => void;
   onTradeSelect: (digit: number) => void;
   onPlaceTrade: () => void;
   onAiScan: () => Promise<string>;
@@ -86,7 +84,6 @@ export default function TradeXPanel({
   stake,
   selectedDigit,
   duration,
-  manualSelectMode,
   distribution = [],
   rankedSafestDigits,
   symbols = defaultSymbols,
@@ -102,7 +99,6 @@ export default function TradeXPanel({
   onStakeChange,
   onSelectedDigitChange,
   onDurationChange,
-  onManualSelectModeChange,
   onTradeSelect,
   onPlaceTrade,
   onAiScan,
@@ -584,29 +580,6 @@ export default function TradeXPanel({
                   </button>
                 ))}
               </div>
-            </div>
-            <div className="tx-mode-actions">
-              <button
-                type="button"
-                className={`tx-mode-button ${manualSelectMode ? "tx-mode-button-active" : ""}`}
-                onClick={() => onManualSelectModeChange(!manualSelectMode)}
-                disabled={disabled}
-                aria-pressed={manualSelectMode}
-                data-testid="button-trade-x-manual-mode"
-              >
-                <Target size={15} />
-                <span>
-                  <b>Manual select</b>
-                  <small>
-                    {manualSelectMode
-                      ? "select a digit before trade"
-                      : "ranked entry mode"}
-                  </small>
-                </span>
-                <span className="tx-mini-toggle">
-                  <i />
-                </span>
-              </button>
             </div>
           </div>
           <div className="tx-action-grid">

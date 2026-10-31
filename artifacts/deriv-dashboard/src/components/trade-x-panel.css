@@ -493,7 +493,7 @@
 .tx-smart { margin-top: 14px; }
 .tx-execution-grid {
   display: grid;
-  grid-template-columns: 1.12fr .88fr;
+  grid-template-columns: 1fr;
   gap: 18px;
   padding: 16px 18px 18px;
 }

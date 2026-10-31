@@ -1,4 +1,5 @@
 export const AI_SCANNER_MIN_SAMPLE = 20;
+export const TRADE_X_SCANNER_MIN_OBSERVED_RATE = 95;
 
 export type AiScannerMarketSignal = {
   symbol: string;
@@ -190,17 +191,23 @@ export function chooseTradeXScannerCandidate(
   signals: readonly AiScannerMarketSignal[],
   symbols: readonly string[],
   minimumSample = AI_SCANNER_MIN_SAMPLE,
+  minimumObservedRate = TRADE_X_SCANNER_MIN_OBSERVED_RATE,
 ): TradeXScannerCandidate | null {
+  if (!Number.isFinite(minimumObservedRate) || minimumObservedRate < 0 || minimumObservedRate > 100) {
+    return null;
+  }
   const candidates: TradeXScannerCandidate[] = [];
   for (const signal of eligibleSignals(signals, symbols, minimumSample)) {
     for (const outcome of signal.digit_outcomes ?? []) {
+      if (!Number.isInteger(outcome.digit) || outcome.digit < 0 || outcome.digit > 9) continue;
       const overRate = Number(outcome.over_percentage);
       const underRate = Number(outcome.under_percentage);
-      if (!Number.isFinite(overRate) || !Number.isFinite(underRate)) continue;
+      const observedRate = digitDiffersRateFromPercentages(overRate, underRate);
+      if (observedRate == null || observedRate < minimumObservedRate) continue;
       candidates.push({
         symbol: signal.symbol,
         digit: outcome.digit,
-        observedRate: overRate + underRate,
+        observedRate,
         sampleCount: signal.sample_count,
       });
     }

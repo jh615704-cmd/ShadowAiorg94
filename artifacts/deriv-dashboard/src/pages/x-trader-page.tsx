@@ -45,9 +45,9 @@ import {
 } from "lucide-react";
 import {
   chooseBestDigitSignal,
-  chooseBestEdgeDirectionForDigit,
   chooseBestEdgeSignal,
-  digitForTick,
+  chooseBestEdgeTradeSignal,
+  chooseEdgeDurationByWinRate,
   nextStakeAfterSettlement,
   rankDigitsByDistribution,
   sessionStopReason,
@@ -65,6 +65,7 @@ import {
   chooseCashGrabDirectionalMarket,
   chooseDigitFlipScannerCandidate,
   chooseTradeXScannerCandidate,
+  TRADE_X_SCANNER_MIN_OBSERVED_RATE,
   digitDiffersRateFromPercentages,
   isValidObservedPercentage,
   isValidDigitFlipParityRates,
@@ -223,7 +224,7 @@ const tradeXGuidePages = [
   { title: "Manual actions", body: "Place Trade X Trade sends one Digit Differs contract using the active digit. Tick 0 is entry; one tick settles on the next price update, and 2–5 settle on their matching numbered update.", points: ["Check market, stake, duration, and digit before sending.", "Manual digit taps switch to exact-digit selection so the request matches the screen.", "The expiry result is decided by Deriv."] },
   { title: "A careful workflow", body: "Start with a small demo stake, wait for a meaningful sample, and treat every signal as descriptive market context rather than certainty.", points: ["Confirm the selected account is the one you intend to use.", "Use the lowest practical stake while evaluating a market.", "Stop automation before changing markets or strategy assumptions."] },
   { title: "Set the stake", body: "Stake controls the amount requested for each Digit Differs contract. Start low while learning how the distribution reacts.", points: ["Keep a reserve in the account.", "The server and account balance remain final guards.", "A higher stake does not make a signal stronger."] },
-  { title: "Manual selection", body: "Manual selection lets you choose the exact digit barrier rather than accepting the current ranked candidate.", points: ["Tap a digit to make it active.", "Confirm the selected digit before placing a trade.", "The barrier is sent with the contract request."] },
+  { title: "Choose a Trade X digit", body: "Trade X always sends the selected digit for a manual trade. Pick it from the distribution grid or the safe-entry list; the scanner chooses its own ranked candidate.", points: ["Tap a digit to make it active.", "Confirm the selected digit before placing a manual trade.", "The selected barrier is sent with the contract request."] },
   { title: "Ranked candidates", body: "The ranked list orders digits from the observed distribution so you can compare the least frequent candidates for a Differs idea.", points: ["Ranking is based on the current sample.", "A low observed frequency is not a guarantee.", "Refresh the sample when the context changes."] },
   { title: "Observed percentages", body: "The distribution percentages summarize the selected sample and update as live ticks arrive.", points: ["Small samples can move sharply.", "Use sample count beside the percentage.", "Treat the number as context, not certainty."] },
   { title: "Place a manual trade", body: "Place Trade X Trade uses the active market, stake, duration, and selected digit to send one Digit Differs contract.", points: ["Review every control before placing.", "Selecting a real account sends orders to that account when server live trading is enabled.", "The expiry result is decided by Deriv."] },
@@ -343,6 +344,7 @@ const DIGIT_FLIP_SIGNAL_FLOOR = 80;
 const DIGIT_FLIP_MARKET_SCAN_INTERVAL_MS = 10_000;
 const EDGE_PERCENTAGE_SCAN_FLOOR = 90;
 const EDGE_MIN_MARKET_SAMPLE = 20;
+const EDGE_AI_SCANNER_MIN_OBSERVED_RATE = 95;
 // The trading calendar is deliberately internal. "all-days" keeps the
 // strategy available on both weekdays and weekends without adding another
 // user-facing switch that could be mistaken for a market prediction.
@@ -408,7 +410,22 @@ export default function XTraderPage() {
   const accounts = useGetDerivAccounts({ query: { enabled: connectedToken && canUseDeriv, retry: false, refetchInterval: 10_000, queryKey: getGetDerivAccountsQueryKey() } });
   const storedPatInvalid = errorMessage(accounts.error).includes("saved Deriv token is no longer readable");
   const status = useGetDerivStatus({ query: { enabled: connectedToken && canUseDeriv, retry: false, refetchInterval: 500, queryKey: getGetDerivStatusQueryKey() } });
-  const history = useGetDerivHistory({ query: { enabled: connectedToken && canViewHistory, retry: false, refetchInterval: 5_000, queryKey: getGetDerivHistoryQueryKey() } });
+  const history = useGetDerivHistory({
+    query: {
+      enabled: connectedToken && canViewHistory,
+      retry: false,
+      refetchInterval: (query) => {
+        const historyRows = query.state.data ?? [];
+        const hasOpenHistory = historyRows.some((trade) =>
+          ["open", "pending", "active"].includes(trade.status.trim().toLowerCase()),
+        );
+        return (status.data?.active_contract_count ?? 0) > 0 || hasOpenHistory
+          ? 2_000
+          : 5_000;
+      },
+      queryKey: getGetDerivHistoryQueryKey(),
+    },
+  });
   const derivCapacityError = [accounts.error, status.error]
     .map(errorMessage)
     .find((message) => message.includes("Deriv session limit"));
@@ -457,7 +474,6 @@ export default function XTraderPage() {
   const [tradeXStake, setTradeXStake] = useState(1);
   const [tradeXSelectedDigit, setTradeXSelectedDigit] = useState(5);
   const [tradeXDuration, setTradeXDuration] = useState<TradeXDuration>(1);
-  const [tradeXManualSelect, setTradeXManualSelect] = useState(false);
   const [digitFlipEnabled, setDigitFlipEnabled] = useState(false);
   const [edge2Enabled, setEdge2Enabled] = useState(false);
   const [moneyBankSymbol, setMoneyBankSymbol] = useState("1HZ90V");
@@ -686,9 +702,6 @@ export default function XTraderPage() {
     stake: tradeXStake,
     selectedDigit: tradeXSelectedDigit,
     duration: tradeXDuration,
-    manualSelect: tradeXManualSelect,
-    frameworkSignalReady: false,
-    rankedDigits: [] as number[],
   });
 
   const currentAccount = status.data?.account;
@@ -1289,17 +1302,7 @@ export default function XTraderPage() {
       : [],
     [analysisTickCount, tradeXDistribution],
   );
-  const tradeXRankedEntryDigit = digitForTick(tradeXDuration, tradeXRankedDigits, tradeXSelectedDigit);
-  const tradeXEntryDigit = tradeXManualSelect ? tradeXSelectedDigit : tradeXRankedEntryDigit;
-  const tradeXFrameworkSignalReady = useMemo(() => {
-    const selectedSignal = tradeXDistribution[tradeXEntryDigit];
-    return Boolean(
-      selectedSignal
-      && selectedSignal.percentage < 7
-      && (selectedSignal.streak === 3 || selectedSignal.streak === 4)
-      && lastDigit === tradeXEntryDigit,
-    );
-  }, [lastDigit, tradeXDistribution, tradeXEntryDigit]);
+  const tradeXEntryDigit = tradeXSelectedDigit;
   useEffect(() => {
     edgeAnalysisRef.current = {
       sample: analysisDigits.length,
@@ -1362,9 +1365,6 @@ export default function XTraderPage() {
       stake: tradeXStake,
       selectedDigit: tradeXEntryDigit,
       duration: tradeXDuration,
-      manualSelect: tradeXManualSelect,
-      frameworkSignalReady: tradeXFrameworkSignalReady,
-      rankedDigits: tradeXRankedDigits,
     };
   }, [
     tradeXMarketType,
@@ -1372,9 +1372,6 @@ export default function XTraderPage() {
     tradeXStake,
     tradeXEntryDigit,
     tradeXDuration,
-    tradeXManualSelect,
-    tradeXFrameworkSignalReady,
-    tradeXRankedDigits,
   ]);
 
   useEffect(() => {
@@ -3426,11 +3423,7 @@ export default function XTraderPage() {
       return false;
     }
     const config = tradeXConfigRef.current;
-    const entryDigit = digitOverride ?? (config.manualSelect
-      ? config.selectedDigit
-      : config.frameworkSignalReady
-        ? config.selectedDigit
-        : digitForTick(durationOverride, config.rankedDigits, config.selectedDigit));
+    const entryDigit = digitOverride ?? config.selectedDigit;
     if (!isConnected) {
       notifyTradeX("Connect Deriv before sending a Trade X contract.");
       return false;
@@ -3519,12 +3512,17 @@ export default function XTraderPage() {
     }
   };
 
-  const edgeDurationSetupKey = (contractType: "DIGITOVER" | "DIGITUNDER") =>
+  const edgeDurationSetupKey = (
+    contractType: "DIGITOVER" | "DIGITUNDER",
+    setupSymbol = symbol,
+    setupBarrier = barrier,
+    setupStake = stake,
+  ) =>
     JSON.stringify([
-      symbol,
+      setupSymbol,
       contractType,
-      barrier,
-      stake,
+      setupBarrier,
+      setupStake,
       currentAccount?.id ?? "",
       currentAccount?.currency ?? "USD",
     ]);
@@ -3535,19 +3533,16 @@ export default function XTraderPage() {
     if (edgeActionLockRef.current || edgeSettlementLockRef.current || bulkBuyMutation.isPending) {
       throw new Error("EDGE is already sending or settling a contract.");
     }
-    if (!Number.isInteger(duration) || duration < 1 || duration > 5) {
-      throw new Error("Choose an EDGE duration from 1 to 5 ticks first.");
-    }
     if (!Number.isFinite(stake) || stake < 0.35) throw new Error("Set an EDGE stake of at least 0.35 first.");
-    if (!Number.isInteger(barrier) || barrier < 0 || barrier > 9) {
-      throw new Error("Choose a digit from 0 to 9 before scanning.");
-    }
 
     const freshStatus = await status.refetch();
-    if (!freshStatus.data?.open_contracts_ready || (freshStatus.data.active_contract_count ?? 0) > 0) {
+    if (!freshStatus.data?.connected || !freshStatus.data.authorized) {
+      throw new Error("EDGE needs a fresh authorized Deriv connection. No trade was sent.");
+    }
+    if (!freshStatus.data.open_contracts_ready || (freshStatus.data.active_contract_count ?? 0) > 0) {
       throw new Error(tradeSlotMessage ?? "Deriv has not confirmed that the previous contract settled.");
     }
-    if (isReal && !freshStatus.data.live_trading_enabled) {
+    if (freshStatus.data.account?.type === "real" && !freshStatus.data.live_trading_enabled) {
       throw new Error("Live trading is disabled for this workspace.");
     }
     const freshBalance = getAccountBalance(freshStatus.data.account) ?? currentAccountBalanceRef.current;
@@ -3555,34 +3550,23 @@ export default function XTraderPage() {
       throw new Error("The selected EDGE stake exceeds the available account balance.");
     }
     const signals = (freshStatus.data?.market_signals ?? []) as MarketSignal[];
-    const selectedMarket = signals.find((signal) => signal.symbol === symbol);
-    if (!selectedMarket || selectedMarket.sample_count < EDGE_MIN_MARKET_SAMPLE) {
-      throw new Error(`EDGE needs at least ${EDGE_MIN_MARKET_SAMPLE} live samples for ${symbol}.`);
+    const candidate = chooseBestEdgeTradeSignal(
+      signals,
+      EDGE_AI_SCANNER_MIN_OBSERVED_RATE,
+      EDGE_MIN_MARKET_SAMPLE,
+    );
+    if (!candidate) {
+      throw new Error(
+        `No valid Over/Under setup reached ${EDGE_AI_SCANNER_MIN_OBSERVED_RATE}% observed frequency in at least ${EDGE_MIN_MARKET_SAMPLE} samples. No trade was sent; observed history does not guarantee the next outcome.`,
+      );
     }
-    const outcome = selectedMarket.digit_outcomes?.find((entry) => entry.digit === barrier);
-    if (!outcome) throw new Error(`No live Over/Under sample is available for digit ${barrier} on ${symbol}.`);
-    const overRate = Number(outcome.over_percentage);
-    const underRate = Number(outcome.under_percentage);
-    if (![overRate, underRate].every((rate) => Number.isFinite(rate) && rate >= 0 && rate <= 100)) {
-      throw new Error(`The live Over/Under sample for digit ${barrier} is not usable yet.`);
-    }
-    if (overRate === underRate) {
-      throw new Error(`Over and Under are tied at ${overRate.toFixed(1)}% for ${symbol} digit ${barrier}. No trade was sent.`);
-    }
-    const candidate = chooseBestEdgeDirectionForDigit(signals, symbol, barrier, EDGE_MIN_MARKET_SAMPLE);
-    if (!candidate) throw new Error("EDGE could not validate the current quote and sample. No trade was sent.");
 
-    setDirection(candidate.direction);
-    configRef.current = {
-      ...configRef.current,
-      symbol,
-      direction: candidate.direction,
-      barrier,
-      duration,
+    const durationSetupKey = edgeDurationSetupKey(
+      candidate.direction,
+      candidate.symbol,
+      candidate.digit,
       stake,
-    };
-
-    const durationSetupKey = edgeDurationSetupKey(candidate.direction);
+    );
     let supportedDurations = edgeDurationAvailabilityRef.current?.key === durationSetupKey
       && Date.now() - edgeDurationAvailabilityRef.current.checkedAt < 60_000
       ? edgeDurationAvailabilityRef.current.durations
@@ -3606,17 +3590,37 @@ export default function XTraderPage() {
       edgeDurationAvailabilityRef.current = cachedAvailability;
       setEdgeDurationAvailability(cachedAvailability);
     }
-    if (!supportedDurations.includes(duration)) {
-      const availableLabel = supportedDurations
-        .map((ticks) => `${ticks} tick${ticks === 1 ? "" : "s"}`)
-        .join(", ");
-      if (!availableLabel) {
-        throw new Error(`Deriv is not currently quoting this Over/Under setup for ${symbol}. No trade was sent.`);
-      }
-      throw new Error(
-        `Deriv supports ${availableLabel} for this setup. Select one of those durations; no trade was sent.`,
-      );
+    const availableDurations = [...new Set(supportedDurations)]
+      .filter((ticks) => Number.isInteger(ticks) && ticks >= 1 && ticks <= 5)
+      .sort((left, right) => left - right);
+    if (!availableDurations.length) {
+      throw new Error(`Deriv is not currently quoting this Over/Under setup for ${candidate.symbol}. No trade was sent.`);
     }
+    const selectedDuration = chooseEdgeDurationByWinRate(
+      edgeRows,
+      candidate.symbol,
+      candidate.direction,
+      candidate.digit,
+      availableDurations,
+      duration,
+    );
+    if (selectedDuration == null) {
+      throw new Error(`No supported tick duration is available for ${candidate.symbol}. No trade was sent.`);
+    }
+    if (candidate.symbol !== symbol && !await selectMarket(candidate.symbol)) {
+      throw new Error(`Deriv could not select ${candidate.symbol}. No trade was sent.`);
+    }
+    setDirection(candidate.direction);
+    setBarrier(candidate.digit);
+    setDuration(selectedDuration);
+    configRef.current = {
+      ...configRef.current,
+      symbol: candidate.symbol,
+      direction: candidate.direction,
+      barrier: candidate.digit,
+      duration: selectedDuration,
+      stake,
+    };
 
     const historySnapshot = await readHistorySnapshot();
     if (!historySnapshot.fresh || historySnapshot.rows.some((trade) => isDerivHistoryOpen(trade.status))) {
@@ -3635,11 +3639,11 @@ export default function XTraderPage() {
           data: {
             access_feature: "edge",
             amount: stake,
-            duration,
+            duration: selectedDuration,
             duration_unit: "t",
             contract_type: candidate.direction,
-            barrier,
-            symbol,
+            barrier: candidate.digit,
+            symbol: candidate.symbol,
             count: 1,
           },
         });
@@ -3647,7 +3651,7 @@ export default function XTraderPage() {
         if (errorMessage(error).includes("Trading is not offered for this duration")) {
           edgeDurationAvailabilityRef.current = null;
           setEdgeDurationAvailability(null);
-          throw new Error(`Deriv no longer offers ${duration} ticks for this setup. Run Scan + Trade again to refresh supported durations. No trade was sent.`);
+          throw new Error(`Deriv no longer offers ${selectedDuration} ticks for this setup. Run Scan + Trade again to refresh supported durations. No trade was sent.`);
         }
         throw error;
       }
@@ -3661,7 +3665,7 @@ export default function XTraderPage() {
       edgeSettlementLockRef.current = false;
     }
     const side = candidate.direction === "DIGITOVER" ? "Over" : "Under";
-    return `Sent one ${side} ${barrier} contract on ${symbol} for ${duration} ticks at ${stake.toFixed(2)} ${currentAccount?.currency ?? "USD"}. The selected side had ${candidate.score.toFixed(1)}% in ${candidate.sampleCount} observed samples; that is not a win-rate guarantee.`;
+    return `Sent one ${side} ${candidate.digit} contract on ${candidate.symbol} for ${selectedDuration} ticks at ${stake.toFixed(2)} ${currentAccount?.currency ?? "USD"}. That side appeared in ${candidate.score.toFixed(1)}% of ${candidate.sampleCount} observed samples; this is not a win-rate guarantee.`;
   });
 
   const runCashGrabAiScanner = () => withAiScannerLock(async () => {
@@ -3788,11 +3792,12 @@ export default function XTraderPage() {
       .map((item) => item.value);
     const candidate = chooseTradeXScannerCandidate(signals, symbols);
     if (!candidate) {
-      throw new Error(`No ${tradeXMarketType} market has at least ${AI_SCANNER_MIN_SAMPLE} observed moves.`);
+      throw new Error(
+        `No ${tradeXMarketType} Digit Differs setup reached ${TRADE_X_SCANNER_MIN_OBSERVED_RATE}% observed frequency in at least ${AI_SCANNER_MIN_SAMPLE} samples. No trade was sent; observed history does not guarantee the next outcome.`,
+      );
     }
     setTradeXSymbol(candidate.symbol);
     setTradeXSelectedDigit(candidate.digit);
-    setTradeXManualSelect(true);
     if (!await selectMarket(candidate.symbol)) throw new Error("Deriv could not select the scanned market. No trade was sent.");
     if (currentAccountBalanceRef.current == null || tradeXStake > currentAccountBalanceRef.current) {
       throw new Error("The selected Trade X stake exceeds the current account balance.");
@@ -5063,7 +5068,7 @@ export default function XTraderPage() {
       </section>
 
       <section className={`xt-feature-card xt-feature-card-trade-x ${!canUseTradeX ? "xt-feature-card-restricted" : ""}`}>
-        <div><Activity size={18} /><span><b>Trade X</b><small><FeatureStatusText control={featureControl("trade-x")} isAdmin={isAdmin} fallback={canUseTradeX ? "Digit Differs distribution and ranked-entry automation" : "Restricted — admin access only"} /></small></span></div>
+        <div><Activity size={18} /><span><b>Trade X</b><small><FeatureStatusText control={featureControl("trade-x")} isAdmin={isAdmin} fallback={canUseTradeX ? "Digit Differs distribution and selected-digit trading" : "Restricted — admin access only"} /></small></span></div>
         <div className="xt-feature-actions">
           {!canUseTradeX && <span className="xt-feature-locked">RESTRICTED</span>}
           <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("trade-x"); setGuidePage(0); setGuideOpen(true); }}>
@@ -5382,7 +5387,6 @@ export default function XTraderPage() {
             stake={tradeXStake}
             selectedDigit={tradeXEntryDigit}
             duration={tradeXDuration}
-            manualSelectMode={tradeXManualSelect}
             distribution={tradeXDistribution}
             rankedSafestDigits={tradeXRankedDigits}
             symbols={tradeXSymbols}
@@ -5398,13 +5402,10 @@ export default function XTraderPage() {
             onStakeChange={(next) => setTradeXStake(Math.max(0.35, Number.isFinite(next) ? next : 0.35))}
              onSelectedDigitChange={(digit) => {
                setTradeXSelectedDigit(digit);
-               setTradeXManualSelect(true);
              }}
             onDurationChange={setTradeXDuration}
-            onManualSelectModeChange={setTradeXManualSelect}
              onTradeSelect={(digit) => {
                setTradeXSelectedDigit(digit);
-               setTradeXManualSelect(true);
                void executeTradeX(1, tradeXDuration, digit);
              }}
              onPlaceTrade={() => void executeTradeX(1, tradeXDuration)}

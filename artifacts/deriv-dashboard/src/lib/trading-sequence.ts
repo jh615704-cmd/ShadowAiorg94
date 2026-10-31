@@ -32,6 +32,15 @@ export type BestEdgeDirectionSignal = Omit<BestEdgeSignal, "direction"> & {
   direction: "DIGITOVER" | "DIGITUNDER";
 };
 
+export type EdgeDurationHistorySample = {
+  symbol: string;
+  contract_type: string;
+  barrier: number | null;
+  duration: number | null;
+  status: string;
+  profit: number;
+};
+
 export type BestDigitSignal = {
   symbol: string;
   direction: DigitDirection;
@@ -170,6 +179,144 @@ export function chooseBestEdgeSignal(
       || Number(right.direction === "DUAL") - Number(left.direction === "DUAL")
       || left.digit - right.digit,
   )[0] ?? null;
+}
+
+export function chooseBestEdgeTradeSignal(
+  signals: readonly MarketSignal[],
+  minimumObservedRate = 95,
+  minimumSampleCount = 20,
+): BestEdgeDirectionSignal | null {
+  if (
+    !Number.isFinite(minimumObservedRate)
+    || minimumObservedRate < 0
+    || minimumObservedRate > 100
+    || !Number.isInteger(minimumSampleCount)
+    || minimumSampleCount < 1
+  ) {
+    return null;
+  }
+
+  const candidates: BestEdgeDirectionSignal[] = [];
+  for (const signal of signals) {
+    if (
+      signal.quote == null
+      || !Number.isInteger(signal.sample_count)
+      || signal.sample_count < minimumSampleCount
+    ) {
+      continue;
+    }
+
+    for (const outcome of signal.digit_outcomes ?? []) {
+      if (!Number.isInteger(outcome.digit) || outcome.digit < 0 || outcome.digit > 9) {
+        continue;
+      }
+      const over = Number(outcome.over_percentage);
+      const under = Number(outcome.under_percentage);
+      if (![over, under].every((rate) => Number.isFinite(rate) && rate >= 0 && rate <= 100)) {
+        continue;
+      }
+      if (over === under) continue;
+
+      const direction = over > under ? "DIGITOVER" as const : "DIGITUNDER" as const;
+      // These two combinations are tautological and do not provide a useful
+      // observed signal for an Over/Under entry.
+      if ((outcome.digit === 0 && direction === "DIGITOVER")
+        || (outcome.digit === 9 && direction === "DIGITUNDER")) {
+        continue;
+      }
+
+      const score = Math.max(over, under);
+      if (score < minimumObservedRate) continue;
+      candidates.push({
+        symbol: signal.symbol,
+        direction,
+        digit: outcome.digit,
+        score,
+        sampleCount: signal.sample_count,
+      });
+    }
+  }
+
+  return candidates.sort(
+    (left, right) => right.score - left.score
+      || right.sampleCount - left.sampleCount
+      || left.symbol.localeCompare(right.symbol)
+      || left.digit - right.digit,
+  )[0] ?? null;
+}
+
+export function chooseEdgeDurationByWinRate(
+  rows: readonly EdgeDurationHistorySample[],
+  symbol: string,
+  direction: DigitDirection,
+  barrier: number,
+  supportedDurations: readonly number[],
+  preferredDuration: number,
+  minimumSamples = 20,
+  minimumWinRate = 95,
+): number | null {
+  const availableDurations = [...new Set(supportedDurations)]
+    .filter((duration) => Number.isInteger(duration) && duration >= 1 && duration <= 5)
+    .sort((left, right) => left - right);
+  if (!availableDurations.length) return null;
+  if (
+    !Number.isInteger(minimumSamples)
+    || minimumSamples < 1
+    || !Number.isFinite(minimumWinRate)
+    || minimumWinRate < 0
+    || minimumWinRate > 100
+  ) {
+    return availableDurations.includes(preferredDuration)
+      ? preferredDuration
+      : availableDurations[0];
+  }
+
+  const resultsByDuration = new Map<number, { wins: number; losses: number }>();
+  for (const row of rows) {
+    if (
+      row.symbol !== symbol
+      || row.contract_type !== direction
+      || row.barrier !== barrier
+      || row.duration == null
+      || !availableDurations.includes(row.duration)
+      || ["open", "pending", "active"].includes(row.status.trim().toLowerCase())
+      || !Number.isFinite(row.profit)
+      || row.profit === 0
+    ) {
+      continue;
+    }
+
+    const result = resultsByDuration.get(row.duration) ?? { wins: 0, losses: 0 };
+    if (row.profit > 0) result.wins += 1;
+    else result.losses += 1;
+    resultsByDuration.set(row.duration, result);
+  }
+
+  const bestHistoricalDuration = availableDurations
+    .map((duration) => {
+      const result = resultsByDuration.get(duration) ?? { wins: 0, losses: 0 };
+      const sampleCount = result.wins + result.losses;
+      return {
+        duration,
+        sampleCount,
+        winRate: sampleCount ? (result.wins / sampleCount) * 100 : 0,
+      };
+    })
+    .filter((result) =>
+      result.sampleCount >= minimumSamples
+      && result.winRate >= minimumWinRate,
+    )
+    .sort((left, right) =>
+      right.winRate - left.winRate
+      || right.sampleCount - left.sampleCount
+      || Number(right.duration === preferredDuration) - Number(left.duration === preferredDuration)
+      || left.duration - right.duration,
+    )[0];
+
+  return bestHistoricalDuration?.duration
+    ?? (availableDurations.includes(preferredDuration)
+      ? preferredDuration
+      : availableDurations[0]);
 }
 
 export function chooseBestEdgeDirectionForDigit(

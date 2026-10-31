@@ -4,6 +4,8 @@ import {
   chooseBestDigitSignal,
   chooseBestEdgeDirectionForDigit,
   chooseBestEdgeSignal,
+  chooseBestEdgeTradeSignal,
+  chooseEdgeDurationByWinRate,
   digitForTick,
   findNewlySettledTrade,
   rankDigitsForDiffers,
@@ -210,6 +212,139 @@ describe("Percentage evidence selection", () => {
         90,
       ),
       null,
+    );
+  });
+
+  it("chooses the strongest qualifying cross-market Over or Under sample", () => {
+    assert.deepEqual(
+      chooseBestEdgeTradeSignal([
+        {
+          symbol: "R_75",
+          quote: 75.5,
+          sample_count: 40,
+          digit_streaks: [],
+          digit_outcomes: [
+            { digit: 4, over_percentage: 92, under_percentage: 8 },
+            { digit: 7, over_percentage: 51, under_percentage: 49 },
+          ],
+        },
+        {
+          symbol: "JD25",
+          quote: 123.4,
+          sample_count: 30,
+          digit_streaks: [],
+          digit_outcomes: [
+            { digit: 2, over_percentage: 4, under_percentage: 96 },
+          ],
+        },
+      ]),
+      {
+        symbol: "JD25",
+        direction: "DIGITUNDER",
+        digit: 2,
+        score: 96,
+        sampleCount: 30,
+      },
+    );
+  });
+
+  it("does not turn an observed sample below the floor into a trade signal", () => {
+    assert.equal(
+      chooseBestEdgeTradeSignal([{
+        symbol: "R_75",
+        quote: 75.5,
+        sample_count: 100,
+        digit_streaks: [],
+        digit_outcomes: [{ digit: 5, over_percentage: 94.9, under_percentage: 5.1 }],
+      }]),
+      null,
+    );
+  });
+
+  it("ignores insufficient, tied, invalid, and tautological Over/Under samples", () => {
+    assert.equal(
+      chooseBestEdgeTradeSignal([
+        {
+          symbol: "R_75",
+          quote: 75.5,
+          sample_count: 19,
+          digit_streaks: [],
+          digit_outcomes: [{ digit: 5, over_percentage: 100, under_percentage: 0 }],
+        },
+        {
+          symbol: "JD25",
+          quote: 123.4,
+          sample_count: 30,
+          digit_streaks: [],
+          digit_outcomes: [
+            { digit: 5, over_percentage: 50, under_percentage: 50 },
+            { digit: 5, over_percentage: 1000, under_percentage: 0 },
+            { digit: 0, over_percentage: 100, under_percentage: 0 },
+            { digit: 9, over_percentage: 0, under_percentage: 100 },
+          ],
+        },
+      ]),
+      null,
+    );
+  });
+});
+
+describe("EDGE duration selection", () => {
+  const makeHistory = (
+    duration: number,
+    wins: number,
+    losses: number,
+    overrides: Partial<{
+      symbol: string;
+      contract_type: string;
+      barrier: number;
+      status: string;
+    }> = {},
+  ) => [
+    ...Array.from({ length: wins }, () => ({
+      symbol: "R_75",
+      contract_type: "DIGITUNDER",
+      barrier: 4,
+      duration,
+      status: "won",
+      profit: 0.5,
+      ...overrides,
+    })),
+    ...Array.from({ length: losses }, () => ({
+      symbol: "R_75",
+      contract_type: "DIGITUNDER",
+      barrier: 4,
+      duration,
+      status: "lost",
+      profit: -1,
+      ...overrides,
+    })),
+  ];
+
+  it("uses only sufficiently sampled, matching settled results for tick selection", () => {
+    const rows = [
+      ...makeHistory(1, 19, 1),
+      ...makeHistory(2, 18, 2),
+      ...makeHistory(3, 20, 0, { symbol: "JD25" }),
+      ...makeHistory(4, 20, 0, { status: "open" }),
+    ];
+
+    assert.equal(
+      chooseEdgeDurationByWinRate(rows, "R_75", "DIGITUNDER", 4, [1, 2, 3, 4], 2),
+      1,
+    );
+  });
+
+  it("keeps the preferred supported duration until a qualifying history sample exists", () => {
+    const rows = makeHistory(1, 19, 0);
+
+    assert.equal(
+      chooseEdgeDurationByWinRate(rows, "R_75", "DIGITUNDER", 4, [1, 2, 5], 2),
+      2,
+    );
+    assert.equal(
+      chooseEdgeDurationByWinRate(rows, "R_75", "DIGITUNDER", 4, [1, 2], 5),
+      1,
     );
   });
 });

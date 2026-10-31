@@ -138,6 +138,36 @@ test("Trade X ranks the least frequent observed digit across eligible markets", 
   assert.equal(candidate?.observedRate, 96);
 });
 
+test("Trade X AI scanner only returns a valid digit with at least 95% observed differs rate", () => {
+  const candidate = chooseTradeXScannerCandidate([
+    signal("R_10", 80, [
+      { digit: 2, over_percentage: 84, under_percentage: 12 },
+      { digit: 7, over_percentage: 47.5, under_percentage: 47.5 },
+      { digit: 12, over_percentage: 100, under_percentage: 0 },
+      { digit: 4, over_percentage: 120, under_percentage: 0 },
+    ]),
+    signal("JD25", 19, [
+      { digit: 8, over_percentage: 49, under_percentage: 49 },
+    ]),
+  ], ["R_10", "JD25"]);
+
+  assert.deepEqual(candidate, {
+    symbol: "R_10",
+    digit: 2,
+    observedRate: 96,
+    sampleCount: 80,
+  });
+});
+
+test("Trade X AI scanner skips candidates below its observed-rate gate", () => {
+  assert.equal(
+    chooseTradeXScannerCandidate([
+      signal("R_75", 200, [{ digit: 5, over_percentage: 47, under_percentage: 47 }]),
+    ], ["R_75"]),
+    null,
+  );
+});
+
 test("Cash Grab chooses the strongest valid Rise/Fall sample on a supported market", () => {
   const candidate = chooseCashGrabScannerCandidate([
     signal("R_10", 30, [], 50, 50, 48, 53),
