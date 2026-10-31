@@ -535,7 +535,7 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
         assert.equal(await panel.getByTestId("select-clock-duration").count(), 0, "Clock Work should not expose other contract durations.");
 
         const threshold = panel.getByTestId("select-ai-clock-rate");
-        assert.equal(await threshold.inputValue(), "70");
+        assert.equal(await threshold.inputValue(), "55");
         assert.deepEqual(await threshold.locator("option").allTextContents(), ["55%", "65%", "70%"]);
         for (const rate of ["55", "65", "70"]) {
           await threshold.selectOption(rate);

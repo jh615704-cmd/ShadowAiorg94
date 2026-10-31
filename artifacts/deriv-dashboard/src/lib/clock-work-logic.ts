@@ -1,6 +1,6 @@
 export type ClockWorkDirection = "HIGHER" | "LOWER";
 
-export const CLOCK_WORK_AI_MIN_WIN_RATE = 70;
+export const CLOCK_WORK_AI_MIN_WIN_RATE = 55;
 export const CLOCK_WORK_AI_MIN_WIN_RATE_OPTIONS = [55, 65, 70] as const;
 export type ClockWorkAiMinimumWinRate = typeof CLOCK_WORK_AI_MIN_WIN_RATE_OPTIONS[number];
 export const CLOCK_WORK_AI_MIN_SAMPLE_COUNT = 20;
@@ -164,6 +164,11 @@ export function getClockWorkQuoteHistory(
   return signal?.recent_quotes.filter(Number.isFinite).slice(-CLOCK_WORK_MAX_TICKS) ?? [];
 }
 
+export function getClockWorkFiveTickSampleCount(inputQuotes: readonly number[]): number {
+  const quotes = inputQuotes.filter(Number.isFinite).slice(-CLOCK_WORK_MAX_TICKS);
+  return Math.max(0, Math.floor((quotes.length - 1) / CLOCK_WORK_CONTRACT_DURATION_TICKS));
+}
+
 /**
  * Choose the best historical Higher/Lower setup for a fixed five-tick expiry.
  * Evaluation uses only the newest non-overlapping expiry windows; it returns
@@ -221,7 +226,6 @@ export function chooseClockWorkAiCandidate(
         observedRate,
         sampleCount: outcomes.length,
       };
-      if (getClockWorkStabilityScore(candidate) <= 50) continue;
       candidates.push(candidate);
     }
   }

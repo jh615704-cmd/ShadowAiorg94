@@ -132,6 +132,7 @@ import {
   chooseClockWorkAutoBestMarket,
   chooseClockWorkAiCandidate,
   createClockWorkAiConfirmationState,
+  getClockWorkFiveTickSampleCount,
   getClockWorkQuoteHistory,
   getClockWorkAiCandidateKey,
   getClockWorkLimitReached,
@@ -349,7 +350,11 @@ const tradeXSymbols: readonly TradeXSymbolOption[] = markets.map(([value, label]
 
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 const DIGIT_FLIP_MARKET_SCAN_INTERVAL_MS = 10_000;
+const DIGIT_FLIP_NO_SETUP_RETRY_MS = 1_000;
 const EDGE_PERCENTAGE_SCAN_FLOOR = 90;
+const EDGE_NO_SETUP_RETRY_MS = 500;
+const CASH_GRAB_AUTO_SWITCH_RETRY_MS = 5_000;
+const CASH_GRAB_AUTO_SWITCH_INTERVAL_MS = 20_000;
 const EDGE_MIN_MARKET_SAMPLE = 20;
 const EDGE_AI_SCANNER_MIN_OBSERVED_RATE = 55;
 // The trading calendar is deliberately internal. "all-days" keeps the
@@ -1927,7 +1932,7 @@ export default function XTraderPage() {
         } else if (edgePercentageModeRef.current) {
           const recommendation = await applyPercentageRecommendation();
           if (!recommendation) {
-            await sleep(1500);
+            await sleep(EDGE_NO_SETUP_RETRY_MS);
             continue;
           }
           if (recommendation.direction === "DUAL") await executeDualBatch();
@@ -1944,7 +1949,7 @@ export default function XTraderPage() {
               kind: "info",
               text: `Auto Best Digit is waiting for ${edgeMinWinRate}% live win percentage. Current ${configRef.current.direction === "DIGITOVER" ? "Over" : "Under"} signal: ${Math.round(directionRate)}%.`,
             });
-            await sleep(1500);
+            await sleep(EDGE_NO_SETUP_RETRY_MS);
             continue;
           }
           }
@@ -2744,7 +2749,11 @@ export default function XTraderPage() {
 
     if (config.autoSwitchSafestPair && Date.now() >= (cashGrabAutoSwitchNextAtRef.current ?? 0)) {
       const recommendation = await scanCashGrabAutoSwitch(config);
-      cashGrabAutoSwitchNextAtRef.current = Date.now() + 20_000;
+      cashGrabAutoSwitchNextAtRef.current = Date.now() + (
+        recommendation
+          ? CASH_GRAB_AUTO_SWITCH_INTERVAL_MS
+          : CASH_GRAB_AUTO_SWITCH_RETRY_MS
+      );
       if (!cashGrabRunningRef.current) return;
       if (!recommendation) return;
       config = {
@@ -4164,10 +4173,14 @@ export default function XTraderPage() {
           || digitFlipAssaultRef.current;
         const selection = await chooseDigitFlipSetup(requiresObservedSignal);
         if (selection !== "selected") {
-        setConnectionMessage(selection === "market-selection-failed"
+          setConnectionMessage(selection === "market-selection-failed"
             ? { kind: "error", text: "DigitFlip could not switch to the scanned market. No trade was sent." }
-          : { kind: "info", text: "DigitFlip is waiting for a market with a qualifying parity sample. No trade was sent." });
-          digitFlipNextMarketScanAtRef.current = Date.now() + DIGIT_FLIP_MARKET_SCAN_INTERVAL_MS;
+            : { kind: "info", text: "DigitFlip is waiting for a market with a qualifying parity sample. No trade was sent." });
+          digitFlipNextMarketScanAtRef.current = Date.now() + (
+            selection === "no-candidate"
+              ? DIGIT_FLIP_NO_SETUP_RETRY_MS
+              : DIGIT_FLIP_MARKET_SCAN_INTERVAL_MS
+          );
           await waitForMarketTicks(1, () => digitFlipRunningRef.current);
           continue;
         }
@@ -4878,7 +4891,10 @@ export default function XTraderPage() {
       return;
     }
     if (!clockWorkAiCandidate) {
-      setClockWorkAiStatus("No qualifying setup is ready yet. Waiting for a fresh market update.");
+      const sampleCount = getClockWorkFiveTickSampleCount(clockWorkQuoteHistory);
+      setClockWorkAiStatus(sampleCount < clockWorkAiMinimumSamples
+        ? `Collecting Clock Work five-tick samples: ${sampleCount}/${clockWorkAiMinimumSamples}.`
+        : `No setup met the ${clockWorkAiMinimumWinRate}% historical threshold in ${sampleCount} completed five-tick samples. Waiting for updated evidence.`);
       return;
     }
     const confirmation = clockWorkAiConfirmationRef.current;

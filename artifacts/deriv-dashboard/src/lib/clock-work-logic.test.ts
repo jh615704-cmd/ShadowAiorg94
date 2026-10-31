@@ -5,6 +5,7 @@ import {
   chooseClockWorkAutoBestMarket,
   chooseClockWorkAiCandidate,
   createClockWorkAiConfirmationState,
+  getClockWorkFiveTickSampleCount,
   getClockWorkQuoteHistory,
   getClockWorkAiCandidateKey,
   getClockWorkLimitReached,
@@ -30,7 +31,7 @@ function historyForOutcomes(outcomes: readonly boolean[]) {
 
 test("Clock Work selects the strongest side and smallest tied barrier at 70%", () => {
   const outcomes = [...Array.from({ length: 28 }, () => true), ...Array.from({ length: 12 }, () => false)];
-  const candidate = chooseClockWorkAiCandidate(historyForOutcomes(outcomes));
+  const candidate = chooseClockWorkAiCandidate(historyForOutcomes(outcomes), { minimumWinRate: 70 });
 
   assert.deepEqual(candidate, {
     direction: "HIGHER",
@@ -43,7 +44,7 @@ test("Clock Work selects the strongest side and smallest tied barrier at 70%", (
 
 test("Clock Work does not select a direction below the 70% cutoff", () => {
   const outcomes = [...Array.from({ length: 27 }, () => true), ...Array.from({ length: 13 }, () => false)];
-  assert.equal(chooseClockWorkAiCandidate(historyForOutcomes(outcomes)), null);
+  assert.equal(chooseClockWorkAiCandidate(historyForOutcomes(outcomes), { minimumWinRate: 70 }), null);
 });
 
 test("Clock Work accepts the selected 55%, 65%, or 70% entry threshold", () => {
@@ -53,6 +54,14 @@ test("Clock Work accepts the selected 55%, 65%, or 70% entry threshold", () => {
   assert.equal(chooseClockWorkAiCandidate(quotes, { minimumWinRate: 55 })?.observedRate, 65);
   assert.equal(chooseClockWorkAiCandidate(quotes, { minimumWinRate: 65 })?.observedRate, 65);
   assert.equal(chooseClockWorkAiCandidate(quotes, { minimumWinRate: 70 }), null);
+
+  const minimumRateQuotes = historyForOutcomes([
+    ...Array.from({ length: 11 }, () => true),
+    ...Array.from({ length: 9 }, () => false),
+  ]);
+  const minimumRateCandidate = chooseClockWorkAiCandidate(minimumRateQuotes, { minimumWinRate: 55 });
+  assert.ok(Math.abs((minimumRateCandidate?.observedRate ?? 0) - 55) < 1e-9,
+    "The selected 55% threshold must not be silently overridden by an additional confidence gate.");
 });
 
 test("Clock Work auto-best ranks fresh markets by stable five-tick evidence", () => {
@@ -159,6 +168,8 @@ test("Clock Work waits for the minimum history of complete five-tick outcomes", 
   assert.equal(chooseClockWorkAiCandidate([100, 101, 102, 103, 104]), null);
   assert.equal(chooseClockWorkAiCandidate(historyForOutcomes(Array.from({ length: 19 }, () => true))), null);
   assert.equal(chooseClockWorkAiCandidate(historyForOutcomes(Array.from({ length: 20 }, () => true)))?.sampleCount, 20);
+  assert.equal(getClockWorkFiveTickSampleCount(historyForOutcomes(Array.from({ length: 19 }, () => true))), 19);
+  assert.equal(getClockWorkFiveTickSampleCount(historyForOutcomes(Array.from({ length: 20 }, () => true))), 20);
 });
 
 test("Clock Work does not count an expiry that only touches its barrier as a win", () => {
