@@ -389,7 +389,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
           <span className="brand-mark">S</span>
           <span className="access-brand-copy"><strong>Shadow Ai Trading</strong><small>AI Trading</small></span>
         </div>
-        <div className="access-gate-risk"><b>RISK DISCLAIMER</b><p>Deriv offers complex derivatives, such as options and contracts for difference (“CFDs”). These products may not be suitable for all clients, and trading them puts you at risk. You may lose some or all of the money you invest. If your trade involves currency conversion, exchange rates affect your profits and losses. Never trade with borrowed money or money you cannot afford to lose.</p></div>
+        <div className="access-gate-risk"><b>TRADING RISK</b><p>Options and CFDs are risky. You may lose some or all of your money; currency conversion can affect results. Never trade with borrowed money or money you cannot afford to lose.</p></div>
         <div className="access-gate-lock"><ShieldCheck size={25} /></div>
         <h1>Login to Shadow Ai</h1>
         <p className="access-gate-intro">Use your access key to open your private trading workspace.</p>

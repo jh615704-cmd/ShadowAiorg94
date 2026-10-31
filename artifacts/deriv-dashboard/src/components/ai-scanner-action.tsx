@@ -3,9 +3,14 @@ import { useState } from "react";
 type Props = {
   onScan: () => Promise<string>;
   disabled?: boolean;
+  actionLabel?: string;
 };
 
-export default function AiScannerAction({ onScan, disabled = false }: Props) {
+export default function AiScannerAction({
+  onScan,
+  disabled = false,
+  actionLabel = "AI Scanner",
+}: Props) {
   const [scanning, setScanning] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -25,7 +30,7 @@ export default function AiScannerAction({ onScan, disabled = false }: Props) {
   return (
     <div className="ai-scanner-control">
       <button type="button" className="ai-scanner-button" onClick={() => void scan()} disabled={disabled || scanning}>
-        {scanning ? "Scanning.." : "AI Scanner"}
+        {scanning ? "Scanning..." : actionLabel}
       </button>
       {message && <p className="ai-scanner-message" role="status" aria-live="polite">{message}</p>}
     </div>

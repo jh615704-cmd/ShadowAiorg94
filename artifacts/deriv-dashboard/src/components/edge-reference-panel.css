@@ -352,11 +352,18 @@
 .edge-ref-setup select { height: 36px; padding: 0 34px 0 11px; border-radius: 9px; appearance: none; background: #263039; }
 .edge-ref-setup label:first-of-type svg { position: absolute; right: 10px; color: #e4ad34; pointer-events: none; }
 .edge-ref-callout { margin: 11px 0 0; padding: 8px 9px; border: 1px solid rgba(31, 213, 188, .75); border-radius: 8px; color: #b7d6d0; background: rgba(4, 48, 47, .55); font-size: 8px; line-height: 1.45; }
-.edge-ref-wipeout { display: grid; gap: 5px; }
-.edge-ref-wipeout > strong { color: #f1e7ce; font-size: 9px; }
+.edge-ref-wipeout { display: grid; gap: 8px; padding: 12px; }
+.edge-ref-wipeout > strong {
+  color: #fff0ee;
+  font-size: clamp(15px, 2vw, 17px);
+  font-weight: 900;
+  line-height: 1.35;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
 .edge-ref-wipeout > small { color: #b8c1c9; font-size: 8px; line-height: 1.5; }
 .edge-ref-callout b { color: #52e6cb; }
-.edge-ref-callout.danger { border-color: rgba(125, 126, 139, .45); color: #c7c6cd; background: rgba(57, 53, 62, .44); }
+.edge-ref-callout.danger { border-color: rgba(227, 111, 111, .7); color: #e2d9dd; background: rgba(73, 34, 43, .74); }
 .edge-ref-callout.danger b { color: #f2d36b; }
 
 .edge-ref-session { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 15px 16px; background: #1b2a3b; }
@@ -403,9 +410,9 @@
 .edge-ref-empty { display: grid; place-items: center; min-height: 66px; color: #94a0ad; font-size: 9px; }
 .edge-ref-history .xt-trade { position: relative; z-index: 1; }
 
-.edge-ref-disclaimer { padding: 13px 15px 18px; color: #aaa6a7; background: rgba(26, 26, 34, .72); }
-.edge-ref-disclaimer b { color: #d0cbce; font-size: 7px; letter-spacing: .18em; }
-.edge-ref-disclaimer p { margin: 8px 0 0; font-size: 8px; line-height: 1.55; }
+.edge-ref-disclaimer { padding: 13px 15px 18px; color: #d0cbce; background: rgba(42, 30, 35, .88); }
+.edge-ref-disclaimer b { color: #ffd0a8; font-size: 9px; font-weight: 900; letter-spacing: .12em; }
+.edge-ref-disclaimer p { margin: 8px 0 0; color: #e7dce0; font-size: 11px; line-height: 1.55; }
 
 @media (max-width: 640px) {
   .edge-reference-layout { margin-top: 12px; padding: 0 16px; gap: 12px; }

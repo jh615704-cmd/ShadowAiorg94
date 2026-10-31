@@ -8,12 +8,8 @@ import {
   type MarketSignal,
 } from "../lib/trading-sequence";
 import {
-  EDGE_WIPEOUT_MIN_SAMPLE_COUNT,
   clampEdgeMultiplier,
   estimateEdgeWipeout,
-  getEdgeHistoricalSampleCount,
-  getEdgeObservedContractOdds,
-  getEdgeObservedOdds,
 } from "../lib/edge-risk";
 import DerivHistory, { type DerivHistoryRow } from "./deriv-history";
 import "./edge-reference-panel.css";
@@ -197,7 +193,6 @@ export default function EdgeReferencePanel({
       ? "waiting"
       : `${payoutPercent.toFixed(1)}%`;
   const currency = currentAccount?.currency ?? "USD";
-  const selectedSide = direction === "DIGITOVER" ? "Over" : "Under";
   const wipeoutEstimate = estimateEdgeWipeout({
     balance: currentAccount?.balance,
     baseStake: stake,
@@ -208,25 +203,6 @@ export default function EdgeReferencePanel({
     stopLoss,
     sessionPnl,
   });
-  const selectedOdds = getEdgeObservedOdds({
-    marketSignals,
-    symbol,
-    digit: barrier,
-    direction,
-  });
-  const historicalOddsFilter = {
-    trades: recentTrades,
-    accountId: currentAccount?.id,
-    symbol,
-    digit: barrier,
-    direction,
-    duration,
-  };
-  const historicalOdds = getEdgeObservedContractOdds(historicalOddsFilter);
-  const historicalSampleCount =
-    getEdgeHistoricalSampleCount(historicalOddsFilter);
-  const selectedSampleCount =
-    marketSignals.find((signal) => signal.symbol === symbol)?.sample_count ?? 0;
 
   const wipeoutMessage =
     wipeoutEstimate.limit === "profit-target-reached"
@@ -332,6 +308,10 @@ export default function EdgeReferencePanel({
         >
           <span className="edge-sniper-copy">
             <b>Sniper over/under</b>
+            <small>
+              Waits for two fresh matching ticks; a short streak does not
+              predict or guarantee the contract result.
+            </small>
           </span>
           <span className="edge-sniper-control">
             <span
@@ -476,9 +456,17 @@ export default function EdgeReferencePanel({
       </label>
       <section className="edge-ref-ai-scanner">
         <div>
-          <b>AI SCANNER</b>
+          <b>LIVE MARKET SCANNER</b>
+          <small>
+            Uses fresh Deriv samples for the selected digit. If its checks pass,
+            scanning places one contract; observed rates are not guarantees.
+          </small>
         </div>
-        <AiScannerAction onScan={onAiScan} disabled={!canRunAiScanner} />
+        <AiScannerAction
+          onScan={onAiScan}
+          disabled={!canRunAiScanner}
+          actionLabel="Scan + trade"
+        />
       </section>
 
       <section className="edge-ref-card edge-ref-setup">
@@ -562,49 +550,8 @@ export default function EdgeReferencePanel({
           <b>Wipeout radar</b>
           <strong>{wipeoutMessage}</strong>
           <small>
-            Selected setup: {selectedSide} {barrier} · {duration}{" "}
-            {duration === 1 ? "tick" : "ticks"} · {strategy === "martingale" ? `Martingale ${clampEdgeMultiplier(martingale)}×` : "Flat stake"}
-          </small>
-          {selectedOdds ? (
-            <small>
-              Live tick rate: win {selectedOdds.winPercent.toFixed(1)}% · loss{" "}
-              {selectedOdds.lossPercent.toFixed(1)}% ·{" "}
-              {selectedOdds.sampleCount} live samples
-            </small>
-          ) : (
-            <small>
-              Waiting for {EDGE_WIPEOUT_MIN_SAMPLE_COUNT} live samples for{" "}
-              {symbol} digit {barrier}
-              {selectedSampleCount > 0
-                ? ` · ${selectedSampleCount} available`
-                : ""}
-              .
-            </small>
-          )}
-          {historicalOdds ? (
-            <small>
-              Settled EDGE history for this exact setup: win{" "}
-              {historicalOdds.winPercent.toFixed(1)}% · loss{" "}
-              {historicalOdds.lossPercent.toFixed(1)}% ·{" "}
-              {historicalOdds.sampleCount} contracts
-            </small>
-          ) : (
-            <small>
-              Exact setup history: {historicalSampleCount}/
-              {EDGE_WIPEOUT_MIN_SAMPLE_COUNT} settled contracts for this
-              market, side, digit, and expiry.
-            </small>
-          )}
-          <small>
-            Session P/L {sessionPnl >= 0 ? "+" : ""}
-            {sessionPnl.toFixed(2)} {currency} · profit target +
-            {takeProfit.toFixed(2)} {currency} · loss limit −
-            {stopLoss.toFixed(2)} {currency}
-          </small>
-          <small>
-            Historical rates are not predictions. Each losing contract risks
-            its full stake; the selected digit and side change observed odds,
-            while ticks set the contract expiry.
+            Each losing contract risks its full stake. Observed rates and past
+            results do not predict the next outcome.
           </small>
         </p>
       </section>
@@ -673,15 +620,10 @@ export default function EdgeReferencePanel({
       )}
 
       <section className="edge-ref-disclaimer">
-        <b>RISK DISCLAIMER</b>
+        <b>TRADING RISK</b>
         <p>
-          Deriv offers complex derivatives, such as options and contracts for
-          difference (“CFDs”). These products may not be suitable for all
-          clients, and trading them puts you at risk. Please make sure that you
-          understand the following risks before trading Deriv products: a) you
-          may lose some or all of the money you invest in the trade, b) if your
-          trade involves currency conversion, exchange rates will affect your
-          profit or loss.
+          Options and CFDs are risky. You may lose some or all of your money;
+          currency conversion can affect results.
         </p>
       </section>
     </section>
