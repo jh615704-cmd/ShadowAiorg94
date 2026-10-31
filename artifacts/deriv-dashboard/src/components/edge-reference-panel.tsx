@@ -460,10 +460,6 @@ export default function EdgeReferencePanel({
         </div>
       </label>
       <section className="edge-ref-ai-scanner">
-        <div>
-          <b>SCAN + TRADE</b>
-          <small>Automatically selects a supported market, direction, digit, and tick duration. Stake remains manual.</small>
-        </div>
         <AiScannerAction
           onScan={onAiScan}
           disabled={!canRunAiScanner}
