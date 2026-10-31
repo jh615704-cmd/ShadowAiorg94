@@ -20,13 +20,6 @@ export interface MoneyBankKnockoutScannerResponse {
      */
   required_knockouts: number;
   /** @minimum 0 */
-  tick_progress: number;
-  /**
-     * @minimum 5
-     * @maximum 50
-     */
-  take_profit_ticks: number;
-  /** @minimum 0 */
   tick_sequence: number;
   ready_to_trade: boolean;
   market_matches: boolean;

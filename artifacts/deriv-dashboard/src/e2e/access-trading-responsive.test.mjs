@@ -1411,17 +1411,14 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
     assert.match(await autoKnockoutStatus.innerText(), /Waiting for knockouts 0\/5/);
     assert.match(await autoKnockoutStatus.innerText(), /Scanner cycle: 0\/5 cleared knockouts/);
     assert.match(await autoKnockoutStatus.innerText(), /Qualified knockouts required/);
-    assert.match(await autoKnockoutStatus.innerText(), /A target of 1 still waits for the selected Take Ticks/);
+    assert.match(await autoKnockoutStatus.innerText(), /Take Ticks applies to the actual Accumulator trade, not the scanner/);
+    assert.doesNotMatch(await autoKnockoutStatus.innerText(), /Current virtual contract|exit tick progress|survive beyond Take Ticks/);
     assert.match(await autoKnockoutStatus.innerText(), /Money Bank AI reviews the selected market/);
     await page.getByRole("button", { name: "Start Accumulator" }).click();
-    await page.getByText(/Waiting for live .* ticks/).waitFor({ timeout: 5_000 });
-    const exitTickProgress = page.getByRole("progressbar", { name: "Money Bank exit tick progress" });
-    await exitTickProgress.waitFor({ state: "visible" });
-    const progressAtStart = Number(await exitTickProgress.getAttribute("aria-valuenow"));
+    await page.getByText(/Watching live .* ticks for scanner knockouts/).waitFor({ timeout: 5_000 });
+    assert.equal(await page.getByRole("progressbar", { name: "Money Bank exit tick progress" }).count(), 0);
     await page.waitForTimeout(1_200);
     assert.equal(await autoKnockoutStatus.isVisible(), true, "The scanner status must remain visible while Money Bank waits for knockouts.");
-    const progressAfterWait = Number(await exitTickProgress.getAttribute("aria-valuenow"));
-    assert.ok(progressAfterWait > progressAtStart, "Exit-tick progress should advance as live scanner ticks arrive.");
     await page.getByRole("button", { name: "Stop Accumulator" }).click();
     assert.equal(await autoKnockoutStatus.isVisible(), true, "Stopping Money Bank should leave the enabled scanner panel visible.");
     for (const viewport of viewports) {
@@ -1587,7 +1584,7 @@ function createState(session) {
     allowFixtureTrades: false,
     tradeSequence: 0,
     selectedSymbol: "R_75",
-    knockoutScanProgress: 0,
+    knockoutScanTickSequence: 0,
     apiCalls: [],
     unhandledApis: [],
     logoutCount: 0,
@@ -1821,19 +1818,17 @@ async function mockApiRequest(route, state, pathname, method) {
   }
   if (pathname === "/api/deriv/accumulator-knockout-scan" && method === "POST") {
     const input = request.postDataJSON();
-    if (input.action === "start") state.knockoutScanProgress = 0;
-    else if (input.action === "poll") state.knockoutScanProgress = Math.min(input.duration, state.knockoutScanProgress + 1);
-    const progress = state.knockoutScanProgress;
+    if (input.action === "start") state.knockoutScanTickSequence = 0;
+    else if (input.action === "poll") state.knockoutScanTickSequence += 1;
+    const tickSequence = state.knockoutScanTickSequence;
     await fulfillJson(route, {
       ok: true,
-      message: "Waiting for the virtual Accumulator to survive the selected Take Ticks.",
-      phase: progress >= input.duration ? "waiting_for_knockout" : "waiting_for_take_ticks",
+      message: "Watching the selected market for a live scanner knockout.",
+      phase: "waiting_for_knockout",
       symbol: input.symbol,
       qualified_knockouts: 0,
       required_knockouts: input.required_knockouts,
-      tick_progress: progress,
-      take_profit_ticks: input.duration,
-      tick_sequence: progress,
+      tick_sequence: tickSequence,
       ready_to_trade: false,
       market_matches: true,
     });

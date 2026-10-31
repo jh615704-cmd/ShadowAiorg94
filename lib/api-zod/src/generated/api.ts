@@ -854,7 +854,7 @@ export const scanDerivAccumulatorKnockoutBodyRequiredKnockoutsMax = 20;
 export const ScanDerivAccumulatorKnockoutBody = zod.object({
   "action": zod.enum(['start', 'poll', 'reset']),
   "amount": zod.number().gt(scanDerivAccumulatorKnockoutBodyAmountExclusiveMin),
-  "duration": zod.number().int().min(scanDerivAccumulatorKnockoutBodyDurationMin).max(scanDerivAccumulatorKnockoutBodyDurationMax).describe('Selected Money Bank take-profit tick threshold for virtual scanner contracts.'),
+  "duration": zod.number().int().min(scanDerivAccumulatorKnockoutBodyDurationMin).max(scanDerivAccumulatorKnockoutBodyDurationMax).describe('Selected Accumulator duration, used when requesting the proposal barrier.'),
   "duration_unit": zod.enum(['t']),
   "contract_type": zod.enum(['ACCU']),
   "growth_rate": zod.number().min(scanDerivAccumulatorKnockoutBodyGrowthRateMin).max(scanDerivAccumulatorKnockoutBodyGrowthRateMax),
@@ -866,11 +866,6 @@ export const scanDerivAccumulatorKnockoutResponseQualifiedKnockoutsMin = 0;
 
 export const scanDerivAccumulatorKnockoutResponseRequiredKnockoutsMax = 20;
 
-export const scanDerivAccumulatorKnockoutResponseTickProgressMin = 0;
-
-export const scanDerivAccumulatorKnockoutResponseTakeProfitTicksMin = 5;
-export const scanDerivAccumulatorKnockoutResponseTakeProfitTicksMax = 50;
-
 export const scanDerivAccumulatorKnockoutResponseTickSequenceMin = 0;
 
 
@@ -878,12 +873,10 @@ export const scanDerivAccumulatorKnockoutResponseTickSequenceMin = 0;
 export const ScanDerivAccumulatorKnockoutResponse = zod.object({
   "ok": zod.boolean(),
   "message": zod.string(),
-  "phase": zod.enum(['idle', 'waiting_for_market', 'waiting_for_quote', 'waiting_for_take_ticks', 'waiting_for_knockout', 'waiting_for_clear', 'ready']),
+  "phase": zod.enum(['idle', 'waiting_for_market', 'waiting_for_quote', 'waiting_for_knockout', 'waiting_for_clear', 'ready']),
   "symbol": zod.string(),
   "qualified_knockouts": zod.number().int().min(scanDerivAccumulatorKnockoutResponseQualifiedKnockoutsMin),
   "required_knockouts": zod.number().int().min(1).max(scanDerivAccumulatorKnockoutResponseRequiredKnockoutsMax),
-  "tick_progress": zod.number().int().min(scanDerivAccumulatorKnockoutResponseTickProgressMin),
-  "take_profit_ticks": zod.number().int().min(scanDerivAccumulatorKnockoutResponseTakeProfitTicksMin).max(scanDerivAccumulatorKnockoutResponseTakeProfitTicksMax),
   "tick_sequence": zod.number().int().min(scanDerivAccumulatorKnockoutResponseTickSequenceMin),
   "ready_to_trade": zod.boolean(),
   "market_matches": zod.boolean()

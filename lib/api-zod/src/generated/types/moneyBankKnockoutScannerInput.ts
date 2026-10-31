@@ -14,7 +14,7 @@ export interface MoneyBankKnockoutScannerInput {
   /** @exclusiveMinimum 0 */
   amount: number;
   /**
-     * Selected Money Bank take-profit tick threshold for virtual scanner contracts.
+     * Selected Accumulator duration, used when requesting the proposal barrier.
      * @minimum 5
      * @maximum 50
      */

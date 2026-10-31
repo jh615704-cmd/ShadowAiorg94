@@ -208,12 +208,10 @@ mock.module("../lib/deriv", {
       return {
         ok: true,
         message: "scan passed",
-        phase: "waiting_for_take_ticks",
+        phase: "waiting_for_knockout",
         symbol: "1HZ90V",
         qualified_knockouts: 0,
         required_knockouts: 5,
-        tick_progress: 0,
-        take_profit_ticks: 5,
         tick_sequence: 0,
         ready_to_trade: false,
         market_matches: true,

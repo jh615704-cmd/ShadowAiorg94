@@ -742,7 +742,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
     });
   });
 
-  test("starts the live Auto Knockout scanner and reports selected exit-tick progress", async () => {
+  test("starts the live Auto Knockout scanner without virtual exit-tick progress", async () => {
     await withSelectedAccount("accumulator-knockout-scan-progress-user", async () => {
       await deriv.selectSymbol("1HZ90V");
       const socket = latestSocket();
@@ -758,27 +758,28 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
         required_knockouts: 5,
       } as const;
       const started = await deriv.scanAccumulatorKnockout(input);
-      assert.equal(started.phase, "waiting_for_take_ticks");
+      assert.equal(started.phase, "waiting_for_knockout");
       assert.equal(started.required_knockouts, 5);
+      assert.equal("tick_progress" in started, false);
+      assert.equal("take_profit_ticks" in started, false);
 
       emitAccumulatorTick(socket, 75.5);
       const progress = await deriv.scanAccumulatorKnockout({ ...input, action: "poll" });
-      assert.equal(progress.phase, "waiting_for_take_ticks");
-      assert.equal(progress.tick_progress, 1);
+      assert.equal(progress.phase, "waiting_for_knockout");
       assert.equal(progress.qualified_knockouts, 0);
       assert.equal(progress.ready_to_trade, false);
       assert.equal(socket.sent.some((message) => message.buy), false);
     });
   });
 
-  test("does not count a knockout that happens before selected Take Ticks", async () => {
-    await withSelectedAccount("accumulator-knockout-early-user", async () => {
+  test("counts a cleared knockout immediately regardless of selected Take Ticks", async () => {
+    const result = await withSelectedAccount("accumulator-knockout-immediate-user", async () => {
       await deriv.selectSymbol("1HZ90V");
       const socket = latestSocket();
       emitAccumulatorTicks(socket, [75.5, 75.5, 75.5, 75.5, 75.5, 75.5]);
       const input = {
         amount: 1,
-        duration: 5,
+        duration: 50,
         duration_unit: "t" as const,
         contract_type: "ACCU" as const,
         growth_rate: 0.04,
@@ -789,17 +790,25 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       assert.equal(started.ready_to_trade, false);
 
       emitAccumulatorTick(socket, 75.50006);
-      const earlyKnockout = await deriv.scanAccumulatorKnockout({ ...input, action: "poll" });
-      assert.equal(earlyKnockout.phase, "waiting_for_clear");
-      assert.equal(earlyKnockout.tick_progress, 1);
+      const detected = await deriv.scanAccumulatorKnockout({ ...input, action: "poll" });
+      assert.equal(detected.phase, "waiting_for_clear");
 
       emitAccumulatorTick(socket, 75.5);
-      const clearedEarlyKnockout = await deriv.scanAccumulatorKnockout({ ...input, action: "poll" });
-      assert.equal(clearedEarlyKnockout.phase, "waiting_for_take_ticks");
-      assert.equal(clearedEarlyKnockout.qualified_knockouts, 0);
-      assert.equal(clearedEarlyKnockout.ready_to_trade, false);
-      assert.equal(socket.sent.some((message) => message.buy), false);
+      const cleared = await deriv.scanAccumulatorKnockout({ ...input, action: "poll" });
+      assert.equal(cleared.phase, "ready");
+      assert.equal(cleared.qualified_knockouts, 1);
+      assert.equal(cleared.required_knockouts, 1);
+      assert.equal(cleared.ready_to_trade, true);
+
+      return deriv.buyContract({
+        ...input,
+        auto_knockout: true,
+        auto_knockout_target: 1,
+      });
     });
+
+    assert.ok(result.buy.contract_id);
+    assert.ok(latestSocket().sent.some((message) => message.buy));
   });
 
   test("requires five cleared knockouts before an Auto Knockout buy", async () => {
@@ -809,7 +818,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       emitAccumulatorTicks(socket, [75.5, 75.5, 75.5, 75.5, 75.5, 75.5]);
       const input = {
         amount: 1,
-        duration: 5,
+        duration: 50,
         duration_unit: "t" as const,
         contract_type: "ACCU" as const,
         growth_rate: 0.04,
@@ -820,11 +829,6 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       assert.equal(started.ready_to_trade, false);
 
       for (let knockout = 1; knockout <= 5; knockout += 1) {
-        for (let tick = 0; tick < 5; tick += 1) emitAccumulatorTick(socket, 75.5);
-        const exitTicksSurvived = await deriv.scanAccumulatorKnockout({ ...input, action: "poll" });
-        assert.equal(exitTicksSurvived.phase, "waiting_for_knockout");
-        assert.equal(exitTicksSurvived.tick_progress, 5);
-
         emitAccumulatorTick(socket, 75.50006);
         const knockoutDetected = await deriv.scanAccumulatorKnockout({ ...input, action: "poll" });
         assert.equal(knockoutDetected.phase, "waiting_for_clear");
@@ -834,12 +838,18 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
         const knockoutCleared = await deriv.scanAccumulatorKnockout({ ...input, action: "poll" });
         assert.equal(knockoutCleared.qualified_knockouts, knockout);
         assert.equal(knockoutCleared.ready_to_trade, knockout === 5);
-        assert.equal(knockoutCleared.phase, knockout === 5 ? "ready" : "waiting_for_take_ticks");
+        assert.equal(knockoutCleared.phase, knockout === 5 ? "ready" : "waiting_for_knockout");
       }
+
+      emitAccumulatorTick(socket, 75.50006);
+      const remainsReady = await deriv.scanAccumulatorKnockout({ ...input, action: "poll" });
+      assert.equal(remainsReady.phase, "ready");
+      assert.equal(remainsReady.qualified_knockouts, 5);
+      assert.equal(remainsReady.ready_to_trade, true);
 
       return deriv.buyContract({
         amount: 1,
-        duration: 5,
+        duration: 50,
         duration_unit: "t",
         contract_type: "ACCU",
         growth_rate: 0.04,

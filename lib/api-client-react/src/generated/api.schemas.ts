@@ -646,7 +646,7 @@ export interface MoneyBankKnockoutScannerInput {
   /** @exclusiveMinimum 0 */
   amount: number;
   /**
-     * Selected Money Bank take-profit tick threshold for virtual scanner contracts.
+     * Selected Accumulator duration, used when requesting the proposal barrier.
      * @minimum 5
      * @maximum 50
      */
@@ -673,7 +673,6 @@ export const MoneyBankKnockoutScannerResponsePhase = {
   idle: 'idle',
   waiting_for_market: 'waiting_for_market',
   waiting_for_quote: 'waiting_for_quote',
-  waiting_for_take_ticks: 'waiting_for_take_ticks',
   waiting_for_knockout: 'waiting_for_knockout',
   waiting_for_clear: 'waiting_for_clear',
   ready: 'ready',
@@ -691,13 +690,6 @@ export interface MoneyBankKnockoutScannerResponse {
      * @maximum 20
      */
   required_knockouts: number;
-  /** @minimum 0 */
-  tick_progress: number;
-  /**
-     * @minimum 5
-     * @maximum 50
-     */
-  take_profit_ticks: number;
   /** @minimum 0 */
   tick_sequence: number;
   ready_to_trade: boolean;

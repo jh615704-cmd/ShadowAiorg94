@@ -1565,7 +1565,7 @@ components:
           type: integer
           minimum: 5
           maximum: 50
-          description: Selected Money Bank take-profit tick threshold for virtual scanner contracts.
+          description: Selected Accumulator duration, used when requesting the proposal barrier.
         duration_unit:
           type: string
           enum: [t]
@@ -1584,7 +1584,7 @@ components:
           maximum: 20
     MoneyBankKnockoutScannerResponse:
       type: object
-      required: [ok, message, phase, symbol, qualified_knockouts, required_knockouts, tick_progress, take_profit_ticks, tick_sequence, ready_to_trade, market_matches]
+      required: [ok, message, phase, symbol, qualified_knockouts, required_knockouts, tick_sequence, ready_to_trade, market_matches]
       properties:
         ok:
           type: boolean
@@ -1592,7 +1592,7 @@ components:
           type: string
         phase:
           type: string
-          enum: [idle, waiting_for_market, waiting_for_quote, waiting_for_take_ticks, waiting_for_knockout, waiting_for_clear, ready]
+          enum: [idle, waiting_for_market, waiting_for_quote, waiting_for_knockout, waiting_for_clear, ready]
         symbol:
           type: string
         qualified_knockouts:
@@ -1602,13 +1602,6 @@ components:
           type: integer
           minimum: 1
           maximum: 20
-        tick_progress:
-          type: integer
-          minimum: 0
-        take_profit_ticks:
-          type: integer
-          minimum: 5
-          maximum: 50
         tick_sequence:
           type: integer
           minimum: 0

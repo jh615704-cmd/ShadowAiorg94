@@ -181,9 +181,6 @@ export function MoneyBankPanel({
   const retainedProfit = roundCents(Math.max(0, profitBasis - reinvestedProfit));
   const requiredKnockouts = autoKnockoutScan?.required_knockouts ?? knockoutsBeforeTrade;
   const qualifiedKnockouts = autoKnockoutScan?.qualified_knockouts ?? 0;
-  const exitTickTarget = autoKnockoutScan?.take_profit_ticks ?? takeProfitTicks;
-  const exitTicksReached = Math.min(exitTickTarget, autoKnockoutScan?.tick_progress ?? 0);
-  const exitTickProgress = exitTickTarget > 0 ? exitTicksReached / exitTickTarget : 0;
   const knockoutReady = autoKnockoutScan?.ready_to_trade === true;
   const [historyHidden, setHistoryHidden] = useState<Set<string>>(new Set());
   const [historyClearArmed, setHistoryClearArmed] = useState(false);
@@ -324,7 +321,6 @@ export function MoneyBankPanel({
                 <div className="money-bank-knockout-heading">
                   <b>{knockoutReady ? "Knockout sample complete" : `Waiting for knockouts ${qualifiedKnockouts}/${requiredKnockouts}`}</b>
                   <span>Scanner cycle: {qualifiedKnockouts}/{requiredKnockouts} cleared knockouts</span>
-                  <span>Current virtual contract: {exitTicksReached}/{exitTickTarget} exit ticks</span>
                 </div>
                 <p>
                   {autoKnockoutScan?.phase === "waiting_for_market"
@@ -334,11 +330,11 @@ export function MoneyBankPanel({
                       : autoKnockoutScan?.phase === "waiting_for_clear"
                         ? "Knockout observed. Waiting for the market move to clear before counting it."
                         : autoKnockoutScan?.phase === "waiting_for_knockout"
-                          ? `Take Ticks ${takeProfitTicks} survived. Waiting for a live scanner knockout.`
+                          ? `Watching live ${selectedMarket} ticks for the next scanner knockout.`
                       : autoKnockoutScan?.phase === "ready"
-                            ? "Knockout sample complete. Money Bank AI is reviewing the selected market, percentage, stake, and exit ticks before entry."
+                            ? "Knockout sample complete. Money Bank AI is reviewing the selected market, percentage, stake, and Take Ticks before entry."
                             : running
-                              ? `Waiting for live ${selectedMarket} ticks. Knockouts must survive beyond Take Ticks ${takeProfitTicks}.`
+                              ? `Watching live ${selectedMarket} ticks for scanner knockouts.`
                               : "Start Accumulator to begin checking live scanner knockouts."}
                 </p>
                 <div className="money-bank-knockout-settings">
@@ -355,25 +351,11 @@ export function MoneyBankPanel({
                     disabled={controlsDisabled}
                   />
                 </div>
-                <div
-                  className="money-bank-knockout-progress"
-                  role="progressbar"
-                  aria-label="Money Bank exit tick progress"
-                  aria-valuemin={0}
-                  aria-valuemax={exitTickTarget}
-                  aria-valuenow={exitTicksReached}
-                >
-                  <i
-                    style={{
-                      transform: `scaleX(${Math.min(1, Math.max(0, exitTickProgress))})`,
-                    }}
-                  />
-                </div>
                 <small className="money-bank-knockout-footnote">
-                  A target of 1 still waits for the selected Take Ticks. An event counts only after the virtual contract survives that window, the barrier is hit, and the move clears. The trade uses the same Take Ticks.
+                  Each knockout counts when price moves beyond the proposal barrier and returns inside it. Take Ticks applies to the actual Accumulator trade, not the scanner.
                 </small>
                 <small className="money-bank-knockout-footnote">
-                  At the target, Money Bank AI reviews the selected market, percentage, stake, and exit ticks before entry. Manual losses do not count; this does not guarantee a win.
+                  At the target, Money Bank AI reviews the selected market, percentage, stake, and Take Ticks before entry. Manual losses do not count; this does not guarantee a win.
                 </small>
               </div>
             )}
