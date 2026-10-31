@@ -261,6 +261,19 @@ describe("Percentage evidence selection", () => {
     );
   });
 
+  it("accepts EDGE signals at the configured 55% observed-frequency threshold", () => {
+    const sample = {
+      symbol: "R_75",
+      quote: 75.5,
+      sample_count: 20,
+      digit_streaks: [],
+      digit_outcomes: [{ digit: 5, over_percentage: 55, under_percentage: 45 }],
+    };
+
+    assert.equal(chooseBestEdgeTradeSignal([sample], 55, 20)?.score, 55);
+    assert.equal(chooseBestEdgeTradeSignal([sample], 56, 20), null);
+  });
+
   it("ignores insufficient, tied, invalid, and tautological Over/Under samples", () => {
     assert.equal(
       chooseBestEdgeTradeSignal([

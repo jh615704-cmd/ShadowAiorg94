@@ -344,7 +344,7 @@ const DIGIT_FLIP_SIGNAL_FLOOR = 80;
 const DIGIT_FLIP_MARKET_SCAN_INTERVAL_MS = 10_000;
 const EDGE_PERCENTAGE_SCAN_FLOOR = 90;
 const EDGE_MIN_MARKET_SAMPLE = 20;
-const EDGE_AI_SCANNER_MIN_OBSERVED_RATE = 95;
+const EDGE_AI_SCANNER_MIN_OBSERVED_RATE = 55;
 // The trading calendar is deliberately internal. "all-days" keeps the
 // strategy available on both weekdays and weekends without adding another
 // user-facing switch that could be mistaken for a market prediction.
