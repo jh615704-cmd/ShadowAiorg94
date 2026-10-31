@@ -3,10 +3,10 @@ export type ClockWorkDirection = "HIGHER" | "LOWER";
 export const CLOCK_WORK_AI_MIN_WIN_RATE = 70;
 export const CLOCK_WORK_AI_MIN_WIN_RATE_OPTIONS = [55, 65, 70] as const;
 export type ClockWorkAiMinimumWinRate = typeof CLOCK_WORK_AI_MIN_WIN_RATE_OPTIONS[number];
-export const CLOCK_WORK_AI_MIN_SAMPLE_COUNT = 1;
-export const CLOCK_WORK_AUTO_BEST_MARKET_MIN_SAMPLE_COUNT = 15;
+export const CLOCK_WORK_AI_MIN_SAMPLE_COUNT = 20;
+export const CLOCK_WORK_AUTO_BEST_MARKET_MIN_SAMPLE_COUNT = 20;
 export const CLOCK_WORK_AUTO_BEST_MARKET_VALUE = "__clock_work_auto_best_market__";
-export const CLOCK_WORK_AI_REQUIRED_CONFIRMATIONS = 1;
+export const CLOCK_WORK_AI_REQUIRED_CONFIRMATIONS = 2;
 export const CLOCK_WORK_CONTRACT_DURATION_TICKS = 5 as const;
 export const CLOCK_WORK_AI_BARRIER_OFFSETS = [0.05, 0.12, 0.25, 0.5] as const;
 export const CLOCK_WORK_MAX_TICKS = 900;
@@ -44,6 +44,7 @@ export interface ClockWorkAiConfirmationState {
 }
 
 export type ClockWorkLimitReached = "take-profit" | "loss-limit" | "invalid";
+export type ClockWorkLossBudgetBlockReason = "invalid" | "loss-limit" | "stake-exceeds-loss-limit" | null;
 
 export function createClockWorkAiConfirmationState(lastTickId: string | null = null): ClockWorkAiConfirmationState {
   return { candidateKey: null, lastTickId, count: 0 };
@@ -109,6 +110,24 @@ export function getClockWorkLimitReached(
   return null;
 }
 
+export function getClockWorkLossBudgetBlockReason(
+  sessionPnl: number,
+  lossLimit: number,
+  nextStake: number,
+): ClockWorkLossBudgetBlockReason {
+  if (
+    !Number.isFinite(sessionPnl)
+    || !Number.isFinite(lossLimit)
+    || !Number.isFinite(nextStake)
+    || lossLimit < 0
+    || nextStake <= 0
+  ) return "invalid";
+  if (lossLimit === 0) return null;
+  if (sessionPnl <= -lossLimit) return "loss-limit";
+  const remainingBudget = Math.round((lossLimit + sessionPnl + Number.EPSILON) * 100) / 100;
+  return nextStake > remainingBudget ? "stake-exceeds-loss-limit" : null;
+}
+
 export function appendClockWorkQuote(
   current: ClockWorkQuoteBuffer,
   selectedSymbol: string,
@@ -169,6 +188,7 @@ export function chooseClockWorkAiCandidate(
     || !Number.isFinite(minimumWinRate)
     || minimumWinRate < 0
     || minimumWinRate > 100
+    || !Number.isFinite(minimumSamples)
     || minimumSamples < 1
   ) {
     return null;
@@ -194,13 +214,15 @@ export function chooseClockWorkAiCandidate(
       if (observedRate < minimumWinRate) continue;
 
       const signedBarrier = direction === "HIGHER" ? barrierOffset : -barrierOffset;
-      candidates.push({
+      const candidate: ClockWorkAiCandidate = {
         direction,
         barrier: `${signedBarrier > 0 ? "+" : ""}${signedBarrier.toFixed(2)}`,
         barrierOffset,
         observedRate,
         sampleCount: outcomes.length,
-      });
+      };
+      if (getClockWorkStabilityScore(candidate) <= 50) continue;
+      candidates.push(candidate);
     }
   }
 

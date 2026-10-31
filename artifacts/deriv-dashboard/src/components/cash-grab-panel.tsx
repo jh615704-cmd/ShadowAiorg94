@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { formatDerivQuote } from "../lib/format-deriv-quote";
 import { getLossRunwayMessage } from "../lib/loss-runway";
+import { getCashGrabDurationEvidence } from "../lib/ai-market-scanner";
 import AiScannerAction from "./ai-scanner-action";
 import DerivHistory, { type DerivHistoryRow } from "./deriv-history";
 import "./cash-grab-panel.css";
@@ -27,9 +28,7 @@ export interface CashGrabSymbolOption {
 
 export interface CashGrabMarketSignal {
   symbol: string;
-  risePercentage: number;
-  fallPercentage: number;
-  sampleCount: number;
+  recentQuotes: readonly number[];
 }
 
 export type CashGrabTrade = DerivHistoryRow & { account_type: string };
@@ -72,7 +71,9 @@ export interface CashGrabPanelProps {
   autoSwitchSafestPairStatus?: CashGrabAiStatus;
   autoSwitchSafestPairRecommendation?: {
     symbol: string;
+    direction: CashGrabDirection;
     observedWinRate: number;
+    conservativeRate: number;
     sampleCount: number;
   } | null;
   running: boolean;
@@ -170,13 +171,15 @@ export default function CashGrabPanel({
   const canRunScanner = isConnected && !running && !starting && !scannerBusy && !tradeSlotBlocked && !isPlacingTrade && !stopping && stake >= minimumStake;
   const selectedSymbol = symbols.find((item) => item.value === symbol);
   const selectedSignal = marketSignals.find((item) => item.symbol === symbol);
-  const liveRate = selectedSignal
-    ? direction === "CALL" ? selectedSignal.risePercentage : selectedSignal.fallPercentage
+  const selectedEvidence = getCashGrabDurationEvidence(selectedSignal?.recentQuotes ?? [], duration);
+  const liveRate = selectedEvidence
+    ? direction === "CALL" ? selectedEvidence.callRate : selectedEvidence.putRate
     : 0;
-  const riseRate = selectedSignal?.risePercentage ?? 0;
-  const fallRate = selectedSignal?.fallPercentage ?? 0;
-  const rateTotal = riseRate + fallRate;
-  const riseWidth = rateTotal > 0 ? riseRate / rateTotal * 100 : 50;
+  const riseRate = selectedEvidence?.callRate ?? 0;
+  const fallRate = selectedEvidence?.putRate ?? 0;
+  const riseWidth = selectedEvidence && selectedEvidence.callRate + selectedEvidence.putRate > 0
+    ? selectedEvidence.callRate / (selectedEvidence.callRate + selectedEvidence.putRate) * 100
+    : 50;
   const bestMarketLabel = symbols.find((item) => item.value === bestSymbol)?.label ?? bestSymbol;
 
   const submitStart = () => {
@@ -223,7 +226,8 @@ export default function CashGrabPanel({
           <div className="df-best-copy">
             <span>Selected direction · {selectedSymbol?.value ?? symbol}</span>
             <p>
-              Observed rate <strong>{liveRate.toFixed(1)}%</strong>
+              Observed {duration}-tick rate <strong>{liveRate.toFixed(1)}%</strong>
+              <em>·</em>{selectedEvidence?.sampleCount ?? 0} sampled outcomes
               {bestSymbol ? <><em>·</em>best pair <strong>{bestSymbol}</strong></> : null}
             </p>
           </div>
@@ -236,7 +240,7 @@ export default function CashGrabPanel({
           {autoSwitchSafestPairRecommendation && (
             <p className="df-running-note">
               <i />
-              {autoSwitchSafestPairRecommendation.symbol} · {autoSwitchSafestPairRecommendation.observedWinRate.toFixed(1)}%
+              {autoSwitchSafestPairRecommendation.symbol} · {autoSwitchSafestPairRecommendation.direction === "CALL" ? "RISE" : "FALL"} · {autoSwitchSafestPairRecommendation.observedWinRate.toFixed(1)}%
             </p>
           )}
         </div>
@@ -304,7 +308,10 @@ export default function CashGrabPanel({
             </button>
             {symbols.map((item) => {
               const signal = marketSignals.find((entry) => entry.symbol === item.value);
-              const rate = direction === "CALL" ? signal?.risePercentage ?? 0 : signal?.fallPercentage ?? 0;
+              const evidence = getCashGrabDurationEvidence(signal?.recentQuotes ?? [], duration);
+              const rate = evidence
+                ? direction === "CALL" ? evidence.callRate : evidence.putRate
+                : 0;
               return (
                 <button
                   type="button"
@@ -357,7 +364,7 @@ export default function CashGrabPanel({
       </div>
 
       <section className="df-card df-parity-card">
-        <span className="df-section-label">LIVE DIRECTION SAMPLE · {selectedSymbol?.value ?? symbol}</span>
+        <span className="df-section-label">HISTORICAL {duration}-TICK SAMPLE · {selectedSymbol?.value ?? symbol}</span>
         <div className="df-parity-track" aria-label={`Rise ${riseRate.toFixed(1)} percent, Fall ${fallRate.toFixed(1)} percent`}>
           <i className="rise" style={{ width: `${riseWidth}%` }} />
           <i className="fall" style={{ width: `${100 - riseWidth}%` }} />

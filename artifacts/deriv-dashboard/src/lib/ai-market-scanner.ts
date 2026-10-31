@@ -2,6 +2,7 @@ export const AI_SCANNER_MIN_SAMPLE = 20;
 export const DIGIT_FLIP_SCANNER_MIN_SAMPLE = 100;
 export const DIGIT_FLIP_SIGNAL_FLOOR = 55;
 export const TRADE_X_SCANNER_MIN_OBSERVED_RATE = 95;
+export const CASH_GRAB_MIN_DURATION_SAMPLE = 20;
 
 export type AiScannerMarketSignal = {
   symbol: string;
@@ -10,6 +11,7 @@ export type AiScannerMarketSignal = {
   digit_odd_percentage: number;
   rise_percentage?: number | null;
   fall_percentage?: number | null;
+  recent_quotes?: number[];
   digit_outcomes?: Array<{
     digit: number;
     over_percentage: number;
@@ -75,6 +77,7 @@ export type CashGrabScannerCandidate = {
   contractType: "CALL" | "PUT";
   observedRate: number;
   sampleCount: number;
+  conservativeRate: number;
 };
 
 export function isValidObservedPercentage(rate: number): boolean {
@@ -170,20 +173,34 @@ export function chooseCashGrabDirectionalMarket(
   signals: readonly AiScannerMarketSignal[],
   symbols: readonly string[],
   direction: "CALL" | "PUT",
-  minimumSample = AI_SCANNER_MIN_SAMPLE,
+  duration = 1,
+  minimumSample = CASH_GRAB_MIN_DURATION_SAMPLE,
 ): string | null {
-  const candidates = eligibleSignals(signals, symbols, minimumSample)
-    .map((signal) => ({
-      symbol: signal.symbol,
-      observedRate: Number(direction === "CALL" ? signal.rise_percentage : signal.fall_percentage),
-      sampleCount: signal.sample_count,
-    }))
-    .filter((candidate) =>
-      Number.isInteger(candidate.sampleCount)
-      && isValidObservedPercentage(candidate.observedRate)
-      && candidate.observedRate >= 50,
+  const allowedSymbols = new Set(symbols);
+  const candidates = signals
+    .filter((signal) => allowedSymbols.has(signal.symbol))
+    .map((signal) => {
+      const evidence = getCashGrabDurationEvidence(signal.recent_quotes ?? [], duration);
+      if (!evidence || evidence.sampleCount < minimumSample) return null;
+      return {
+        symbol: signal.symbol,
+        observedRate: direction === "CALL" ? evidence.callRate : evidence.putRate,
+        conservativeRate: direction === "CALL"
+          ? evidence.callConservativeRate
+          : evidence.putConservativeRate,
+        sampleCount: evidence.sampleCount,
+      };
+    })
+    .filter((candidate): candidate is NonNullable<typeof candidate> =>
+      candidate != null && candidate.conservativeRate > 50,
+    )
+    .sort((left, right) =>
+      right.conservativeRate - left.conservativeRate
+      || right.observedRate - left.observedRate
+      || right.sampleCount - left.sampleCount
+      || left.symbol.localeCompare(right.symbol),
     );
-  return strongest(candidates)?.symbol ?? null;
+  return candidates[0]?.symbol ?? null;
 }
 
 export function chooseDigitFlipScannerCandidate(
@@ -264,28 +281,124 @@ export function chooseTradeXScannerCandidate(
 export function chooseCashGrabScannerCandidate(
   signals: readonly AiScannerMarketSignal[],
   symbols: readonly string[],
-  minimumSample = AI_SCANNER_MIN_SAMPLE,
+  duration = 1,
+  minimumSample = CASH_GRAB_MIN_DURATION_SAMPLE,
 ): CashGrabScannerCandidate | null {
-  const candidates: CashGrabScannerCandidate[] = [];
-  for (const signal of eligibleSignals(signals, symbols, minimumSample)) {
-    const riseRate = Number(signal.rise_percentage);
-    const fallRate = Number(signal.fall_percentage);
-    if (!Number.isInteger(signal.sample_count)) continue;
-    if (
-      !Number.isFinite(riseRate)
-      || !Number.isFinite(fallRate)
-      || riseRate < 0
-      || riseRate > 100
-      || fallRate < 0
-      || fallRate > 100
-      || riseRate === fallRate
-    ) continue;
-    candidates.push({
+  const allowedSymbols = new Set(symbols);
+  const candidates = signals.flatMap((signal) => {
+    if (!allowedSymbols.has(signal.symbol)) return [];
+    const evidence = chooseCashGrabHistoricalDirection(
+      signal.recent_quotes ?? [],
+      duration,
+      minimumSample,
+    );
+    if (!evidence) return [];
+    return [{
       symbol: signal.symbol,
-      contractType: riseRate > fallRate ? "CALL" : "PUT",
-      observedRate: Math.max(riseRate, fallRate),
-      sampleCount: signal.sample_count,
-    });
+      contractType: evidence.contractType,
+      observedRate: evidence.observedRate,
+      sampleCount: evidence.sampleCount,
+      conservativeRate: evidence.conservativeRate,
+    }];
+  });
+  candidates.sort((left, right) =>
+    right.conservativeRate - left.conservativeRate
+    || right.observedRate - left.observedRate
+    || right.sampleCount - left.sampleCount
+    || left.symbol.localeCompare(right.symbol),
+  );
+  return candidates[0] ?? null;
+}
+
+export interface CashGrabDurationEvidence {
+  callRate: number;
+  putRate: number;
+  callConservativeRate: number;
+  putConservativeRate: number;
+  sampleCount: number;
+}
+
+export interface CashGrabHistoricalDirection {
+  contractType: "CALL" | "PUT";
+  observedRate: number;
+  conservativeRate: number;
+  sampleCount: number;
+}
+
+function getWilsonLowerBoundPercentage(rate: number, sampleCount: number): number | null {
+  if (
+    !Number.isFinite(rate)
+    || rate < 0
+    || rate > 100
+    || !Number.isInteger(sampleCount)
+    || sampleCount < 1
+  ) return null;
+
+  // A conservative ranking filter for historical samples, not a prediction
+  // or guarantee; market observations are not necessarily independent.
+  const z = 1.96;
+  const p = rate / 100;
+  const zSquared = z * z;
+  const denominator = 1 + zSquared / sampleCount;
+  const center = p + zSquared / (2 * sampleCount);
+  const margin = z * Math.sqrt((p * (1 - p) + zSquared / (4 * sampleCount)) / sampleCount);
+  return Math.max(0, ((center - margin) / denominator) * 100);
+}
+
+export function getCashGrabDurationEvidence(
+  inputQuotes: readonly number[],
+  duration: number,
+): CashGrabDurationEvidence | null {
+  if (!Number.isInteger(duration) || duration < 1 || duration > 5) return null;
+  if (inputQuotes.some((quote) => !Number.isFinite(quote))) return null;
+  const quotes = inputQuotes.slice(-200);
+  let callWins = 0;
+  let putWins = 0;
+  let sampleCount = 0;
+
+  // Use complete, non-overlapping expiry windows at the selected duration.
+  for (let expiryIndex = quotes.length - 1; expiryIndex >= duration; expiryIndex -= duration) {
+    const start = quotes[expiryIndex - duration];
+    const expiry = quotes[expiryIndex];
+    sampleCount += 1;
+    if (expiry > start) callWins += 1;
+    else if (expiry < start) putWins += 1;
   }
-  return strongest(candidates);
+
+  if (!sampleCount) {
+    return {
+      callRate: 0,
+      putRate: 0,
+      callConservativeRate: 0,
+      putConservativeRate: 0,
+      sampleCount: 0,
+    };
+  }
+  const callRate = (callWins / sampleCount) * 100;
+  const putRate = (putWins / sampleCount) * 100;
+  return {
+    callRate,
+    putRate,
+    callConservativeRate: getWilsonLowerBoundPercentage(callRate, sampleCount) ?? 0,
+    putConservativeRate: getWilsonLowerBoundPercentage(putRate, sampleCount) ?? 0,
+    sampleCount,
+  };
+}
+
+export function chooseCashGrabHistoricalDirection(
+  quotes: readonly number[],
+  duration: number,
+  minimumSample = CASH_GRAB_MIN_DURATION_SAMPLE,
+): CashGrabHistoricalDirection | null {
+  if (!Number.isInteger(minimumSample) || minimumSample < 1) return null;
+  const evidence = getCashGrabDurationEvidence(quotes, duration);
+  if (!evidence || evidence.sampleCount < minimumSample) return null;
+  if (evidence.callRate === evidence.putRate) return null;
+  const contractType = evidence.callRate > evidence.putRate ? "CALL" : "PUT";
+  const observedRate = contractType === "CALL" ? evidence.callRate : evidence.putRate;
+  const conservativeRate = contractType === "CALL"
+    ? evidence.callConservativeRate
+    : evidence.putConservativeRate;
+  if (conservativeRate <= 50) return null;
+  return { contractType, observedRate, conservativeRate, sampleCount: evidence.sampleCount };
 }

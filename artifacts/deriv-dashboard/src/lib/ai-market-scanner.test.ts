@@ -4,6 +4,7 @@ import {
   chooseBulkScannerCandidate,
   chooseCashGrabScannerCandidate,
   chooseCashGrabDirectionalMarket,
+  getCashGrabDurationEvidence,
   chooseDigitFlipScannerCandidate,
   chooseTradeXScannerCandidate,
   digitDiffersRateFromPercentages,
@@ -31,6 +32,25 @@ function signal(
     rise_percentage: rise,
     fall_percentage: fall,
     digit_outcomes: outcomes,
+  };
+}
+
+function quotesForOutcomes(outcomes: readonly boolean[], duration = 1): number[] {
+  const quotes = [100];
+  for (const wins of outcomes) {
+    const start = quotes[quotes.length - 1]!;
+    const expiry = start + (wins ? 1 : -1);
+    for (let tick = 1; tick <= duration; tick += 1) {
+      quotes.push(start + ((expiry - start) * tick) / duration);
+    }
+  }
+  return quotes;
+}
+
+function signalWithQuotes(symbol: string, outcomes: readonly boolean[], duration = 1): AiScannerMarketSignal {
+  return {
+    ...signal(symbol, outcomes.length, []),
+    recent_quotes: quotesForOutcomes(outcomes, duration),
   };
 }
 
@@ -179,39 +199,75 @@ test("Trade X AI scanner skips candidates below its observed-rate gate", () => {
   );
 });
 
-test("Cash Grab chooses the strongest valid Rise/Fall sample on a supported market", () => {
+test("Cash Grab scans actual duration-matched outcomes and favors conservative evidence", () => {
   const candidate = chooseCashGrabScannerCandidate([
-    signal("R_10", 30, [], 50, 50, 48, 53),
-    signal("JD25", 80, [], 50, 50, 63, 35),
-    signal("R_25", 100, [], 50, 50, 51, 47),
-    signal("JD50", 100, [], 50, 50, 90, 5),
-  ], ["R_10", "JD25", "R_25"]);
+    signalWithQuotes("R_10", [...Array.from({ length: 18 }, () => true), ...Array.from({ length: 2 }, () => false)]),
+    signalWithQuotes("JD25", [...Array.from({ length: 24 }, () => true), ...Array.from({ length: 6 }, () => false)]),
+    signalWithQuotes("R_25", [...Array.from({ length: 28 }, () => true), ...Array.from({ length: 12 }, () => false)]),
+    signalWithQuotes("JD50", [...Array.from({ length: 36 }, () => true), ...Array.from({ length: 4 }, () => false)]),
+  ], ["R_10", "JD25", "R_25", "JD50"], 1);
 
-  assert.deepEqual(candidate, {
-    symbol: "JD25",
-    contractType: "CALL",
-    observedRate: 63,
-    sampleCount: 80,
-  });
+  assert.equal(candidate?.symbol, "JD50");
+  assert.equal(candidate?.contractType, "CALL");
+  assert.equal(candidate?.observedRate, 90);
+  assert.equal(candidate?.sampleCount, 40);
+  assert.ok((candidate?.conservativeRate ?? 0) > 70);
+  assert.ok((candidate?.conservativeRate ?? 0) > 50);
 });
 
-test("Cash Grab ignores undersampled, equal, and invalid Rise/Fall readings", () => {
+test("Cash Grab counts non-overlapping windows at the selected duration", () => {
+  const quotes = quotesForOutcomes([
+    ...Array.from({ length: 24 }, () => true),
+    ...Array.from({ length: 6 }, () => false),
+  ], 5);
+  const evidence = getCashGrabDurationEvidence(quotes, 5);
+  const mismatchedDuration = getCashGrabDurationEvidence(quotes, 1);
+
+  assert.equal(evidence?.sampleCount, 30);
+  assert.equal(evidence?.callRate, 80);
+  assert.equal(evidence?.putRate, 20);
+  assert.notEqual(mismatchedDuration?.sampleCount, evidence?.sampleCount);
+  assert.equal(getCashGrabDurationEvidence(quotes, 6), null);
+  assert.equal(getCashGrabDurationEvidence([100, Number.NaN], 1), null);
+});
+
+test("Cash Grab candidate waits for adequate duration-specific samples and a conservative edge", () => {
   const candidate = chooseCashGrabScannerCandidate([
-    signal("R_10", 19, [], 50, 50, 99, 1),
-    signal("R_25", 40, [], 50, 50, 50, 50),
-    signal("JD25", 60, [], 50, 50, Number.NaN, 40),
+    signalWithQuotes("R_10", [...Array.from({ length: 19 }, () => true)]),
+    signalWithQuotes("JD25", [...Array.from({ length: 20 }, () => true)]),
+    signalWithQuotes("R_25", [...Array.from({ length: 10 }, () => true), ...Array.from({ length: 10 }, () => false)]),
+  ], ["R_10", "JD25", "R_25"]);
+
+  assert.equal(candidate?.symbol, "JD25");
+  assert.equal(candidate?.contractType, "CALL");
+  assert.equal(candidate?.observedRate, 100);
+  assert.equal(candidate?.sampleCount, 20);
+  assert.ok((candidate?.conservativeRate ?? 0) > 50);
+});
+
+test("Cash Grab ignores undersampled, equal, and invalid quote histories", () => {
+  const candidate = chooseCashGrabScannerCandidate([
+    signalWithQuotes("R_10", Array.from({ length: 19 }, () => true)),
+    signalWithQuotes("R_25", [
+      ...Array.from({ length: 15 }, () => true),
+      ...Array.from({ length: 15 }, () => false),
+    ]),
+    {
+      ...signal("JD25", 100, []),
+      recent_quotes: [100, Number.NaN, 101],
+    },
   ], ["R_10", "R_25", "JD25"]);
 
   assert.equal(candidate, null);
 });
 
-test("Cash Grab auto-best requires a supported market, adequate sample, and 50% for the selected side", () => {
+test("Cash Grab auto-best uses duration-specific evidence for the selected direction", () => {
   const signals = [
-    signal("R_10", 19, [], 50, 50, 99, 1),
-    signal("JD25", 40, [], 50, 50, 62, 35),
-    signal("R_25", 60, [], 50, 50, 48, 52),
-    signal("JD50", 80, [], 50, 50, 49, 51),
-    signal("JD75", 90, [], 50, 50, 49, Number.NaN),
+    signalWithQuotes("R_10", Array.from({ length: 19 }, () => true)),
+    signalWithQuotes("JD25", [...Array.from({ length: 30 }, () => true), ...Array.from({ length: 10 }, () => false)]),
+    signalWithQuotes("R_25", [...Array.from({ length: 10 }, () => true), ...Array.from({ length: 30 }, () => false)]),
+    signalWithQuotes("JD50", [...Array.from({ length: 20 }, () => true), ...Array.from({ length: 20 }, () => false)]),
+    { ...signal("JD75", 100, []), recent_quotes: [100, Number.NaN, 101] },
   ];
 
   assert.equal(chooseCashGrabDirectionalMarket(signals, ["R_10", "JD25", "R_25", "JD50", "JD75"], "CALL"), "JD25");

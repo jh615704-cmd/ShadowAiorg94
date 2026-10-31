@@ -219,6 +219,13 @@ export default function ClockWorkPanel({
               />
             </label>
           </div>
+          <p className="cw-risk-note" role="note" data-testid="clock-work-loss-warning">
+            20 full-stake losses at {currency} 0.50 total {currency} 10.00. At your current {currency} {stake.toFixed(2)} base stake,
+            {" "}{Math.max(1, Math.ceil(10 / Math.max(stake, 0.01)))} flat losses could reach or pass {currency} 10.00; the ×{lossMultiplier} multiplier can reach it sooner.
+            {lossLimit > 0
+              ? ` The ${currency} ${lossLimit.toFixed(2)} limit blocks a next stake larger than its remaining loss budget.`
+              : ` The session loss limit is off; set a limit to enable this guard.`}
+          </p>
         </section>
 
         <section className={`cw-ai-card ${aiEnabled ? "is-enabled" : ""}`}>
@@ -230,12 +237,12 @@ export default function ClockWorkPanel({
             <Toggle checked={aiEnabled} onChange={onAiEnabledChange} disabled={disabled && !aiEnabled} />
           </div>
           <label className="cw-ai-threshold" htmlFor="cw-ai-minimum-rate">
-            <span>MINIMUM WIN RATE</span>
+            <span>MINIMUM HISTORICAL RATE</span>
             <select
               id="cw-ai-minimum-rate"
               value={minimumWinRate}
               onChange={(event) => onMinimumWinRateChange(Number(event.target.value) as ClockWorkAiMinimumWinRate)}
-              aria-label="Ai Clock minimum win-rate threshold"
+              aria-label="Ai Clock minimum historical rate threshold"
               data-testid="select-ai-clock-rate"
             >
               {CLOCK_WORK_AI_MIN_WIN_RATE_OPTIONS.map((rate) => <option key={rate} value={rate}>{rate}%</option>)}

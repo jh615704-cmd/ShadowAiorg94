@@ -210,6 +210,16 @@
   letter-spacing: .07em;
 }
 .cw-risk-heading small { color: #718ba3; font-size: 9px; }
+.cw-risk-note {
+  margin: 10px 0 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(245, 186, 92, .24);
+  border-radius: 7px;
+  color: #d6c18f;
+  background: rgba(69, 51, 20, .2);
+  font-size: 9px;
+  line-height: 1.5;
+}
 .cw-risk-inputs {
   margin-top: 10px;
   display: grid;

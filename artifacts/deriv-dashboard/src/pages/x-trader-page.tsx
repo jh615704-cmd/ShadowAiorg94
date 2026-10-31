@@ -61,9 +61,12 @@ import {
 } from "../lib/trade-entry-guards";
 import {
   AI_SCANNER_MIN_SAMPLE,
+  CASH_GRAB_MIN_DURATION_SAMPLE,
   chooseBulkScannerCandidate,
   chooseCashGrabScannerCandidate,
+  chooseCashGrabHistoricalDirection,
   chooseCashGrabDirectionalMarket,
+  getCashGrabDurationEvidence,
   chooseDigitFlipScannerCandidate,
   DIGIT_FLIP_SCANNER_MIN_SAMPLE,
   DIGIT_FLIP_SIGNAL_FLOOR,
@@ -132,6 +135,7 @@ import {
   getClockWorkQuoteHistory,
   getClockWorkAiCandidateKey,
   getClockWorkLimitReached,
+  getClockWorkLossBudgetBlockReason,
   updateClockWorkAiConfirmation,
   CLOCK_WORK_AUTO_BEST_MARKET_MIN_SAMPLE_COUNT,
   CLOCK_WORK_AUTO_BEST_MARKET_VALUE,
@@ -244,7 +248,7 @@ const clockWorkGuidePages = [
   { title: "Welcome to Clock Work", body: "Clock Work places Higher or Lower contracts on the selected market and account.", points: ["Use a demo account while learning.", "Only one trading feature can be active at a time.", "The selected Deriv account receives any accepted order."] },
   { title: "Connect and choose an account", body: "Connect Deriv and confirm which account is selected before enabling Clock Work. Real-account orders remain subject to the workspace's live-trading and balance checks.", points: ["A disconnected account blocks new entries.", "Open contracts must settle before Clock Work can enter again.", "Use demo mode to learn the controls."] },
   { title: "Choose a market and stake", body: "Select a supported market and set the stake for each entry.", points: ["The selected market is shown above the control.", "Auto Best is available as a market choice.", "Review your account balance before starting."] },
-  { title: "Start and stop Clock Work", body: "Choose your market and win-rate threshold, then press Start Clock Work when your account and settings are ready.", points: ["Stop prevents new entries.", "Accepted contracts settle through Deriv.", "An open or unsettled contract pauses the next entry."] },
+  { title: "Start and stop Clock Work", body: "Choose your market and historical-rate threshold, then press Start Clock Work when your account and settings are ready.", points: ["Stop prevents new entries.", "Accepted contracts settle through Deriv.", "An open or unsettled contract pauses the next entry."] },
   { title: "Stop and review history", body: "Stop Clock Work to prevent new entries. An order already accepted by Deriv is not canceled by Stop and must settle through Deriv.", points: ["Clock Work History shows entries and their reported results.", "Clearing history hides local rows only; it does not delete Deriv's account history.", "Check Deriv history before restarting after an uncertain order."] },
 ] as const;
 
@@ -377,9 +381,10 @@ type DigitFlipSetupResult = "selected" | "no-candidate" | "market-selection-fail
 
 type CashGrabAutoSwitchRecommendation = {
   symbol: string;
+  direction: CashGrabDirection;
   observedWinRate: number;
+  conservativeRate: number;
   sampleCount: number;
-  score: number;
 };
 
 export default function XTraderPage() {
@@ -518,7 +523,7 @@ export default function XTraderPage() {
   const [clockWorkAiEnabled, setClockWorkAiEnabled] = useState(false);
   const [clockWorkAiMinimumWinRate, setClockWorkAiMinimumWinRate] = useState<ClockWorkAiMinimumWinRate>(CLOCK_WORK_AI_MIN_WIN_RATE);
   const [clockWorkTakeProfit, setClockWorkTakeProfit] = useState(0);
-  const [clockWorkLossLimit, setClockWorkLossLimit] = useState(0);
+  const [clockWorkLossLimit, setClockWorkLossLimit] = useState(10);
   const [clockWorkRunning, setClockWorkRunning] = useState(false);
   const [clockWorkQuoteBuffer, setClockWorkQuoteBuffer] = useState<ClockWorkQuoteBuffer>({
     symbol: "R_75",
@@ -994,9 +999,7 @@ export default function XTraderPage() {
     status.data?.market_signals ?? [],
     clockWorkSymbol,
   );
-  const clockWorkAiMinimumSamples = clockWorkAutoBestMode
-    ? CLOCK_WORK_AUTO_BEST_MARKET_MIN_SAMPLE_COUNT
-    : CLOCK_WORK_AI_MIN_SAMPLE_COUNT;
+  const clockWorkAiMinimumSamples = CLOCK_WORK_AI_MIN_SAMPLE_COUNT;
   useEffect(() => {
     const tick = clockWorkTickIsFreshForMarket ? clockWorkLatestTick : null;
     setClockWorkQuoteBuffer((current) => appendClockWorkQuote(current, clockWorkSymbol, tick));
@@ -1066,8 +1069,9 @@ export default function XTraderPage() {
       (status.data?.market_signals ?? []) as AiScannerMarketSignal[],
       cashGrabSymbols.map((item) => item.value),
       cashGrabDirection,
+      cashGrabDuration,
     );
-  }, [cashGrabDirection, cashGrabSymbols, status.data?.market_signals]);
+  }, [cashGrabDirection, cashGrabDuration, cashGrabSymbols, status.data?.market_signals]);
   const bulkSessionRows = bulkSessionKnownIdsRef.current
     ? bulkAllRows.filter((trade) => (
       bulkClaimedHistoryIdsRef.current.has(trade.contract_id)
@@ -1119,9 +1123,7 @@ export default function XTraderPage() {
   const cashGrabMarketSignals = useMemo<CashGrabMarketSignal[]>(
     () => (status.data?.market_signals ?? []).map((signal) => ({
       symbol: signal.symbol,
-      risePercentage: Number(signal.rise_percentage ?? 0),
-      fallPercentage: Number(signal.fall_percentage ?? 0),
-      sampleCount: signal.sample_count,
+      recentQuotes: signal.recent_quotes ?? [],
     })),
     [status.data?.market_signals],
   );
@@ -2529,26 +2531,33 @@ export default function XTraderPage() {
       const candidates: CashGrabAutoSwitchRecommendation[] = [];
 
       for (const signal of signals) {
-        if (
-          !cashGrabSymbols.some((item) => item.value === signal.symbol)
-          || !Number.isInteger(signal.sample_count)
-          || signal.sample_count < AI_SCANNER_MIN_SAMPLE
-        ) continue;
-        const observedWinRate = config.direction === "PUT"
-          ? signal.fall_percentage ?? 0
-          : signal.rise_percentage ?? 0;
-        if (!isValidObservedPercentage(observedWinRate) || currentStake > balance || observedWinRate < 50) continue;
-        const sampleConfidence = Math.min(signal.sample_count, 200) / 20;
-        candidates.push({
-          symbol: signal.symbol,
-          observedWinRate,
-          sampleCount: signal.sample_count,
-          score: observedWinRate * 2 + sampleConfidence,
-        });
+        if (!cashGrabSymbols.some((item) => item.value === signal.symbol)) continue;
+        const evidence = getCashGrabDurationEvidence(
+          signal.recent_quotes ?? [],
+          config.duration,
+        );
+        if (!evidence || evidence.sampleCount < 20) continue;
+        const directions = config.autoDirection
+          ? (["CALL", "PUT"] as const)
+          : ([config.direction] as const);
+        for (const direction of directions) {
+          const observedWinRate = direction === "CALL" ? evidence.callRate : evidence.putRate;
+          const conservativeRate = direction === "CALL"
+            ? evidence.callConservativeRate
+            : evidence.putConservativeRate;
+          if (!isValidObservedPercentage(observedWinRate) || currentStake > balance || conservativeRate <= 50) continue;
+          candidates.push({
+            symbol: signal.symbol,
+            direction,
+            observedWinRate,
+            conservativeRate,
+            sampleCount: evidence.sampleCount,
+          });
+        }
       }
 
       const recommendation = candidates.sort((left, right) =>
-        right.score - left.score
+        right.conservativeRate - left.conservativeRate
         || right.observedWinRate - left.observedWinRate
         || right.sampleCount - left.sampleCount,
       )[0] ?? null;
@@ -2558,11 +2567,11 @@ export default function XTraderPage() {
         setCashGrabAutoSwitchSafestPairStatus("ready");
         setConnectionMessage({
           kind: "info",
-          text: `Auto-switch selected ${recommendation.symbol} for the next entry.`,
+          text: `Auto-switch selected ${recommendation.symbol} using ${recommendation.sampleCount} non-overlapping ${config.duration}-tick samples.`,
         });
       } else {
         setCashGrabAutoSwitchSafestPairStatus("quiet");
-        setConnectionMessage({ kind: "info", text: "Auto-switch is waiting for a supported market with enough sampled moves, at least a 50% observed direction rate, and room for the current stake." });
+        setConnectionMessage({ kind: "info", text: "Auto-switch is waiting for a supported market with enough duration-matched samples, a conservative signal above 50%, and room for the current stake." });
       }
       return recommendation;
     } catch (error) {
@@ -2621,7 +2630,10 @@ export default function XTraderPage() {
     }
   };
 
-  const confirmCashGrabDirection = async (marketSymbol: string): Promise<CashGrabDirection | null> => {
+  const confirmCashGrabDirection = async (
+    marketSymbol: string,
+    duration: CashGrabDuration,
+  ): Promise<CashGrabDirection | null> => {
     const initial = await status.refetch();
     if (!initial.isSuccess || !initial.data?.connected || !initial.data.authorized) {
       setConnectionMessage({ kind: "info", text: "Auto Direction is waiting for a fresh Deriv connection. No trade was sent." });
@@ -2633,31 +2645,23 @@ export default function XTraderPage() {
       return null;
     }
     const signal = initial.data.market_signals?.find((entry) => entry.symbol === marketSymbol);
-    const initialRise = Number(signal?.rise_percentage);
-    const initialFall = Number(signal?.fall_percentage);
-    if (
-      !signal
-      || !Number.isInteger(signal.sample_count)
-      || signal.sample_count < AI_SCANNER_MIN_SAMPLE
-      || !isValidObservedPercentage(initialRise)
-      || !isValidObservedPercentage(initialFall)
-    ) {
-      setConnectionMessage({ kind: "info", text: `Auto Direction is waiting for live Rise/Fall samples on ${marketSymbol}. No trade was sent.` });
+    const initialCandidate = signal
+      ? chooseCashGrabHistoricalDirection(signal.recent_quotes ?? [], duration)
+      : null;
+    if (!signal || !initialCandidate) {
+      setConnectionMessage({
+        kind: "info",
+        text: `Auto Direction is waiting for at least 20 qualifying non-overlapping ${duration}-tick samples on ${marketSymbol}. No trade was sent.`,
+      });
       return null;
     }
-    const rise = initialRise;
-    const fall = initialFall;
-    if (rise === fall) {
-      setConnectionMessage({ kind: "info", text: `Auto Direction is waiting for a clear Rise or Fall leader on ${marketSymbol}. No trade was sent.` });
-      return null;
-    }
-    const selectedDirection: CashGrabDirection = rise > fall ? "CALL" : "PUT";
+    const selectedDirection: CashGrabDirection = initialCandidate.contractType;
     let lastSequence = signal.tick_sequence;
     let freshTicks = 0;
 
     setConnectionMessage({
       kind: "info",
-      text: `Auto Direction is checking the leading ${selectedDirection === "CALL" ? "Rise" : "Fall"} sample on ${marketSymbol}; waiting for two fresh ticks.`,
+      text: `Auto Direction is rechecking the ${duration}-tick ${selectedDirection === "CALL" ? "Rise" : "Fall"} sample on ${marketSymbol}; waiting for two fresh ticks.`,
     });
     for (let attempt = 0; attempt < 240 && cashGrabRunningRef.current; attempt += 1) {
       await sleep(300);
@@ -2670,29 +2674,21 @@ export default function XTraderPage() {
         return null;
       }
       const latestSignal = latest.data?.market_signals?.find((entry) => entry.symbol === marketSymbol);
-      if (!latestSignal || latestSignal.tick_sequence <= lastSequence) continue;
+      if (!latestSignal || !Number.isInteger(latestSignal.tick_sequence) || latestSignal.tick_sequence <= lastSequence) continue;
       freshTicks += latestSignal.tick_sequence - lastSequence;
       lastSequence = latestSignal.tick_sequence;
       if (freshTicks < 2) continue;
 
-      const latestRise = Number(latestSignal.rise_percentage);
-      const latestFall = Number(latestSignal.fall_percentage);
-      if (
-        !Number.isInteger(latestSignal.sample_count)
-        ||
-        latestSignal.sample_count < AI_SCANNER_MIN_SAMPLE
-        || !isValidObservedPercentage(latestRise)
-        || !isValidObservedPercentage(latestFall)
-      ) {
-        setConnectionMessage({ kind: "info", text: `Auto Direction is waiting for valid Rise/Fall samples on ${marketSymbol}. No trade was sent.` });
-        return null;
-      }
-      if (selectedDirection === "CALL" ? latestRise > latestFall : latestFall > latestRise) {
+      const latestCandidate = chooseCashGrabHistoricalDirection(
+        latestSignal.recent_quotes ?? [],
+        duration,
+      );
+      if (latestCandidate?.contractType === selectedDirection) {
         return selectedDirection;
       }
       setConnectionMessage({
         kind: "info",
-        text: `Auto Direction found that ${selectedDirection === "CALL" ? "Rise" : "Fall"} no longer leads after two fresh ticks. It will check the live sample again; no trade was sent.`,
+        text: `Auto Direction found that the ${duration}-tick ${selectedDirection === "CALL" ? "Rise" : "Fall"} setup no longer qualifies after two fresh ticks. No trade was sent.`,
       });
       return null;
     }
@@ -2754,6 +2750,7 @@ export default function XTraderPage() {
       config = {
         ...config,
         symbol: recommendation.symbol,
+        direction: config.autoDirection ? recommendation.direction : config.direction,
         autoSelectBest: false,
       };
       if (!await selectMarket(recommendation.symbol)) {
@@ -2764,6 +2761,7 @@ export default function XTraderPage() {
       }
       cashGrabConfigRef.current = config;
       setCashGrabSymbol(recommendation.symbol);
+      if (config.autoDirection) setCashGrabDirection(recommendation.direction);
     }
     if (!cashGrabRunningRef.current) return;
 
@@ -2783,6 +2781,7 @@ export default function XTraderPage() {
         (freshSelection.data.market_signals ?? []) as AiScannerMarketSignal[],
         cashGrabSymbols.map((item) => item.value),
         config.direction,
+        config.duration,
       );
       if (!bestSymbol) {
         setConnectionMessage({ kind: "info", text: "Cash Grab remains active and is waiting for a supported market with enough valid samples for the selected side." });
@@ -2803,7 +2802,7 @@ export default function XTraderPage() {
     if (!cashGrabRunningRef.current) return;
     const amount = Number(cashGrabCurrentStakeRef.current.toFixed(2));
     if (config.autoDirection) {
-      const selectedDirection = await confirmCashGrabDirection(config.symbol);
+      const selectedDirection = await confirmCashGrabDirection(config.symbol, config.duration);
       if (!cashGrabRunningRef.current) return;
       if (!selectedDirection) {
         await sleep(500);
@@ -2823,6 +2822,25 @@ export default function XTraderPage() {
         setConnectionMessage({ kind: "info", text: "Cash Grab remains active and is waiting for a fresh Deriv status check." });
         await sleep(1_500);
         return;
+      }
+      if (!freshStatus.data.connected || !freshStatus.data.authorized) {
+        setConnectionMessage({ kind: "info", text: "Cash Grab remains active and is waiting for a fresh authorized Deriv status check." });
+        await sleep(1_500);
+        return;
+      }
+      if (config.autoDirection) {
+        const finalSignal = freshStatus.data.market_signals?.find((entry) => entry.symbol === config.symbol);
+        const finalDirection = finalSignal
+          ? chooseCashGrabHistoricalDirection(finalSignal.recent_quotes ?? [], config.duration)
+          : null;
+        if (!finalDirection || finalDirection.contractType !== config.direction) {
+          setConnectionMessage({
+            kind: "info",
+            text: `Auto Direction changed or lost its qualifying ${config.duration}-tick evidence before entry. No trade was sent.`,
+          });
+          await sleep(1_000);
+          return;
+        }
       }
       const freshAccount = freshStatus.data.account;
       if (freshAccount?.type === "real" && !freshStatus.data.live_trading_enabled) {
@@ -3729,9 +3747,13 @@ export default function XTraderPage() {
       }
 
       const signals = (initialStatus.data.market_signals ?? []) as AiScannerMarketSignal[];
-      const candidate = chooseCashGrabScannerCandidate(signals, cashGrabSymbols.map((market) => market.value));
+      const candidate = chooseCashGrabScannerCandidate(
+        signals,
+        cashGrabSymbols.map((market) => market.value),
+        cashGrabDuration,
+      );
       if (!candidate) {
-        throw new Error(`Cash Grab needs at least ${AI_SCANNER_MIN_SAMPLE} valid Rise/Fall samples on a supported market.`);
+        throw new Error(`Cash Grab needs at least ${CASH_GRAB_MIN_DURATION_SAMPLE} qualifying non-overlapping ${cashGrabDuration}-tick samples with a conservative signal above 50%.`);
       }
       if (!await selectMarket(candidate.symbol)) throw new Error("Deriv could not select the scanned market. No contract was sent.");
       const historySnapshot = await readHistorySnapshot();
@@ -4366,6 +4388,21 @@ export default function XTraderPage() {
     }
     if (tradeSlotBlocked) {
       setClockWorkStatusMessage(tradeSlotMessage ?? "Wait for open Deriv contracts to settle before placing another order.");
+      return false;
+    }
+    const lossBudgetBlock = getClockWorkLossBudgetBlockReason(
+      clockWorkRunPnl,
+      clockWorkLossLimit,
+      contract.amount,
+    );
+    if (lossBudgetBlock) {
+      setClockWorkRunning(false);
+      clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
+      setClockWorkAiStatus(
+        lossBudgetBlock === "stake-exceeds-loss-limit"
+          ? `The next ${currentAccount.currency ?? "USD"} ${contract.amount.toFixed(2)} stake could exceed the remaining ${currentAccount.currency ?? "USD"} ${clockWorkLossLimit.toFixed(2)} loss budget. Clock Work stopped without sending it.`
+          : `Clock Work stopped before sending an order because its ${currentAccount.currency ?? "USD"} session loss budget could not be verified.`,
+      );
       return false;
     }
     if (clockWorkActionLockRef.current) return false;

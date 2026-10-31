@@ -480,7 +480,7 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
   state.hasToken = true;
   state.marketSignalOverrides = {
     R_10: {
-      recent_quotes: clockWorkQuotesForOutcomes(Array.from({ length: 15 }, () => true)),
+      recent_quotes: clockWorkQuotesForOutcomes(Array.from({ length: 20 }, () => true)),
       tick_epoch: Math.floor(Date.now() / 1_000),
     },
     R_75: {
@@ -544,7 +544,8 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
         const takeProfit = panel.getByTestId("input-clock-take-profit");
         const lossLimit = panel.getByTestId("input-clock-loss-limit");
         assert.equal(await takeProfit.inputValue(), "0");
-        assert.equal(await lossLimit.inputValue(), "0");
+        assert.equal(await lossLimit.inputValue(), "10");
+        assert.match(await panel.getByTestId("clock-work-loss-warning").innerText(), /20 full-stake losses at USD 0\.50 total USD 10\.00/);
         await takeProfit.fill("5");
         await lossLimit.fill("2");
         assert.equal(await takeProfit.inputValue(), "5");
