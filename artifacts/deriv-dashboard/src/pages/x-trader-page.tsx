@@ -460,7 +460,7 @@ export default function XTraderPage() {
   const [moneyBankGrowthRate, setMoneyBankGrowthRate] = useState(4);
   const [moneyBankTakeProfitTicks, setMoneyBankTakeProfitTicks] = useState(5);
   const [moneyBankAutoKnockout, setMoneyBankAutoKnockout] = useState(false);
-  const [moneyBankKnockoutsBeforeTrade, setMoneyBankKnockoutsBeforeTrade] = useState(4);
+  const [moneyBankKnockoutsBeforeTrade, setMoneyBankKnockoutsBeforeTrade] = useState(5);
   const [moneyBankStrategy, setMoneyBankStrategy] = useState<MoneyBankStrategy>("budget");
   const [moneyBankBudget, setMoneyBankBudget] = useState(500);
   const [moneyBankManualBase, setMoneyBankManualBase] = useState(1);
@@ -2229,27 +2229,6 @@ export default function XTraderPage() {
     );
     if (sessionStopReason) throw new Error(sessionStopReason);
     const tradeSymbol = currentConfig.symbol;
-    if (moneyBankJdyEnabled) {
-      // The Money Bank gate evaluates the market selected in the form.
-      const decision = await scanJdyMoneyBank(currentConfig, tradeSymbol);
-      if (!moneyBankRunningRef.current) return;
-      if (!decision?.safe) {
-        setMoneyBankJdyState("not-good");
-        setConnectionMessage({
-          kind: "info",
-          text: decision
-            ? `Shadows is waiting on the selected setup: ${decision.holdReason ?? `estimated ${decision.estimatedLossStreak}-loss streak risk`}. Money Bank remains active and will check again.`
-            : "Shadows could not confirm the selected setup. Money Bank remains active and will check again.",
-        });
-        await sleep(2_000);
-        return;
-      }
-      setMoneyBankJdyState("safe");
-      setConnectionMessage({
-        kind: "info",
-        text: `Shadows confirmed the selected ${tradeSymbol} setup before entry.`,
-      });
-    }
     const level = currentConfig.ladder?.[Math.min(6, moneyBankLevelRef.current)];
     if (!level) throw new Error("Money Bank reached the planned recovery limit; no planned recovery level remains.");
     const availableBalance = currentAccountBalanceRef.current ?? 0;
@@ -2349,6 +2328,28 @@ export default function XTraderPage() {
         false,
       );
       if (freshConfigError) throw new Error(freshConfigError);
+
+      if (moneyBankJdyEnabled) {
+        // Evaluate the selected setup only after the Auto Knockout sample is complete.
+        const decision = await scanJdyMoneyBank(currentConfig, tradeSymbol);
+        if (!moneyBankRunningRef.current) return;
+        if (!decision?.safe) {
+          setMoneyBankJdyState("not-good");
+          setConnectionMessage({
+            kind: "info",
+            text: decision
+              ? `Shadows is waiting on the selected setup: ${decision.holdReason ?? `estimated ${decision.estimatedLossStreak}-loss streak risk`}. Money Bank remains active and will check again.`
+              : "Shadows could not confirm the selected setup. Money Bank remains active and will check again.",
+          });
+          await sleep(2_000);
+          return;
+        }
+        setMoneyBankJdyState("safe");
+        setConnectionMessage({
+          kind: "info",
+          text: `Shadows confirmed the selected ${tradeSymbol} setup before entry.`,
+        });
+      }
 
       const result = await moneyBankBuyMutation.mutateAsync({
         data: {

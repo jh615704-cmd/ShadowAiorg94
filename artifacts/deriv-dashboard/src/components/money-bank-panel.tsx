@@ -314,7 +314,7 @@ export function MoneyBankPanel({
             </div>
             <div className="money-bank-toggle-list money-bank-market-toggle">
               <label>
-                <span><b>Auto Knockout</b>{autoKnockout && <small>{knockoutReady ? "Ready to enter" : "Waiting for knockouts"}</small>}</span>
+                <span><b>Auto Knockout</b>{autoKnockout && <small>{knockoutReady ? "Sample complete" : "Waiting for knockouts"}</small>}</span>
                 <input type="checkbox" checked={autoKnockout} onChange={(event) => onAutoKnockoutChange(event.target.checked)} disabled={controlsDisabled} aria-label="Toggle Money Bank Auto Knockout" />
                 <i />
               </label>
@@ -322,8 +322,9 @@ export function MoneyBankPanel({
             {autoKnockout && (
               <div className="money-bank-knockout-scan" role="status" aria-live="polite">
                 <div className="money-bank-knockout-heading">
-                  <b>{knockoutReady ? "Knockout condition met" : `Waiting for knockouts ${qualifiedKnockouts}/${requiredKnockouts}`}</b>
-                  <span>Scanner cycle: {exitTicksReached}/{exitTickTarget} exit ticks · {qualifiedKnockouts}/{requiredKnockouts} qualified</span>
+                  <b>{knockoutReady ? "Knockout sample complete" : `Waiting for knockouts ${qualifiedKnockouts}/${requiredKnockouts}`}</b>
+                  <span>Scanner cycle: {qualifiedKnockouts}/{requiredKnockouts} cleared knockouts</span>
+                  <span>Current virtual contract: {exitTicksReached}/{exitTickTarget} exit ticks</span>
                 </div>
                 <p>
                   {autoKnockoutScan?.phase === "waiting_for_market"
@@ -334,8 +335,8 @@ export function MoneyBankPanel({
                         ? "Knockout observed. Waiting for the market move to clear before counting it."
                         : autoKnockoutScan?.phase === "waiting_for_knockout"
                           ? `Take Ticks ${takeProfitTicks} survived. Waiting for a live scanner knockout.`
-                          : autoKnockoutScan?.phase === "ready"
-                            ? autoKnockoutScan.message
+                      : autoKnockoutScan?.phase === "ready"
+                            ? "Knockout sample complete. Checking the selected market, growth rate, stake, and exit ticks before entry."
                             : running
                               ? `Waiting for live ${selectedMarket} ticks. Knockouts must survive beyond Take Ticks ${takeProfitTicks}.`
                               : "Start Accumulator to begin checking live scanner knockouts."}

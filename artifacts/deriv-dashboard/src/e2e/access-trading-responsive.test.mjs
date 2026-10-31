@@ -1408,7 +1408,8 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
     assert.equal(await autoKnockoutSwitch.isChecked(), true);
     const autoKnockoutStatus = page.locator(".money-bank-knockout-scan");
     await autoKnockoutStatus.waitFor({ state: "visible" });
-    assert.match(await autoKnockoutStatus.innerText(), /Waiting for knockouts 0\/4/);
+    assert.match(await autoKnockoutStatus.innerText(), /Waiting for knockouts 0\/5/);
+    assert.match(await autoKnockoutStatus.innerText(), /Scanner cycle: 0\/5 cleared knockouts/);
     assert.match(await autoKnockoutStatus.innerText(), /Knockouts before trade/);
     await page.getByRole("button", { name: "Start Accumulator" }).click();
     await page.getByText(/Waiting for live .* ticks/).waitFor({ timeout: 5_000 });
@@ -1420,7 +1421,7 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
     const progressAfterWait = Number(await exitTickProgress.getAttribute("aria-valuenow"));
     assert.ok(progressAfterWait > progressAtStart, "Exit-tick progress should advance as live scanner ticks arrive.");
     await page.getByRole("button", { name: "Stop Accumulator" }).click();
-    assert.equal(await autoKnockoutStatus.isVisible(), true, "Stopping Money Bank should leave the enabled countdown panel visible.");
+    assert.equal(await autoKnockoutStatus.isVisible(), true, "Stopping Money Bank should leave the enabled scanner panel visible.");
     for (const viewport of viewports) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await assertNoHorizontalOverflow(page, viewport, "Money Bank Auto Knockout");

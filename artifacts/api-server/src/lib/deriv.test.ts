@@ -734,7 +734,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
           growth_rate: 0.04,
           symbol: "1HZ90V",
           auto_knockout: true,
-          auto_knockout_target: 4,
+          auto_knockout_target: 5,
         }),
         /waiting for the required live scanner knockouts/,
       );
@@ -755,11 +755,11 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
         contract_type: "ACCU",
         growth_rate: 0.04,
         symbol: "1HZ90V",
-        required_knockouts: 4,
+        required_knockouts: 5,
       } as const;
       const started = await deriv.scanAccumulatorKnockout(input);
       assert.equal(started.phase, "waiting_for_take_ticks");
-      assert.equal(started.required_knockouts, 4);
+      assert.equal(started.required_knockouts, 5);
 
       emitAccumulatorTick(socket, 75.5);
       const progress = await deriv.scanAccumulatorKnockout({ ...input, action: "poll" });
@@ -771,7 +771,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
     });
   });
 
-  test("only permits an Auto Knockout buy after the exit window, knockout, and clear are confirmed", async () => {
+  test("requires five cleared knockouts before an Auto Knockout buy", async () => {
     const result = await withSelectedAccount("accumulator-knockout-ready-user", async () => {
       await deriv.selectSymbol("1HZ90V");
       const socket = latestSocket();
@@ -783,26 +783,28 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
         contract_type: "ACCU" as const,
         growth_rate: 0.04,
         symbol: "1HZ90V",
-        required_knockouts: 1,
+        required_knockouts: 5,
       };
       const started = await deriv.scanAccumulatorKnockout({ ...input, action: "start" });
       assert.equal(started.ready_to_trade, false);
 
-      for (let tick = 0; tick < 5; tick += 1) emitAccumulatorTick(socket, 75.5);
-      const exitTicksSurvived = await deriv.scanAccumulatorKnockout({ ...input, action: "poll" });
-      assert.equal(exitTicksSurvived.phase, "waiting_for_knockout");
-      assert.equal(exitTicksSurvived.tick_progress, 5);
+      for (let knockout = 1; knockout <= 5; knockout += 1) {
+        for (let tick = 0; tick < 5; tick += 1) emitAccumulatorTick(socket, 75.5);
+        const exitTicksSurvived = await deriv.scanAccumulatorKnockout({ ...input, action: "poll" });
+        assert.equal(exitTicksSurvived.phase, "waiting_for_knockout");
+        assert.equal(exitTicksSurvived.tick_progress, 5);
 
-      emitAccumulatorTick(socket, 75.50006);
-      const knockoutDetected = await deriv.scanAccumulatorKnockout({ ...input, action: "poll" });
-      assert.equal(knockoutDetected.phase, "waiting_for_clear");
-      assert.equal(knockoutDetected.ready_to_trade, false);
+        emitAccumulatorTick(socket, 75.50006);
+        const knockoutDetected = await deriv.scanAccumulatorKnockout({ ...input, action: "poll" });
+        assert.equal(knockoutDetected.phase, "waiting_for_clear");
+        assert.equal(knockoutDetected.ready_to_trade, false);
 
-      emitAccumulatorTick(socket, 75.5);
-      const knockoutCleared = await deriv.scanAccumulatorKnockout({ ...input, action: "poll" });
-      assert.equal(knockoutCleared.phase, "ready");
-      assert.equal(knockoutCleared.qualified_knockouts, 1);
-      assert.equal(knockoutCleared.ready_to_trade, true);
+        emitAccumulatorTick(socket, 75.5);
+        const knockoutCleared = await deriv.scanAccumulatorKnockout({ ...input, action: "poll" });
+        assert.equal(knockoutCleared.qualified_knockouts, knockout);
+        assert.equal(knockoutCleared.ready_to_trade, knockout === 5);
+        assert.equal(knockoutCleared.phase, knockout === 5 ? "ready" : "waiting_for_take_ticks");
+      }
 
       return deriv.buyContract({
         amount: 1,
@@ -812,7 +814,7 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
         growth_rate: 0.04,
         symbol: "1HZ90V",
         auto_knockout: true,
-        auto_knockout_target: 1,
+        auto_knockout_target: 5,
       });
     });
 

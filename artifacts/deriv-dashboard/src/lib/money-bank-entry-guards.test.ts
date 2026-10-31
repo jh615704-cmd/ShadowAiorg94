@@ -14,7 +14,7 @@ const validConfig: MoneyBankStartConfig = {
   growthRate: 4,
   takeProfitTicks: 5,
   autoKnockout: true,
-  knockoutsBeforeTrade: 4,
+  knockoutsBeforeTrade: 5,
   strategy: "budget",
   budget: 2.2,
   manualBase: 1,

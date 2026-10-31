@@ -211,7 +211,7 @@ mock.module("../lib/deriv", {
         phase: "waiting_for_take_ticks",
         symbol: "1HZ90V",
         qualified_knockouts: 0,
-        required_knockouts: 4,
+        required_knockouts: 5,
         tick_progress: 0,
         take_profit_ticks: 5,
         tick_sequence: 0,
@@ -362,12 +362,12 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
         contract_type: "ACCU",
         growth_rate: 0.04,
         symbol: "1HZ90V",
-        required_knockouts: 4,
+      required_knockouts: 5,
       }),
     });
     const scanResponseBody = await readJson(scanResponse);
     assert.equal(scanResponse.status, 200, JSON.stringify(scanResponseBody));
-    assert.equal(scanResponseBody.required_knockouts, 4);
+    assert.equal(scanResponseBody.required_knockouts, 5);
     assert.equal(knockoutScanInvocations, 1);
 
     const invalidMoneyBankDurationResponse = await fetch(`${baseUrl}/deriv/buy`, {
