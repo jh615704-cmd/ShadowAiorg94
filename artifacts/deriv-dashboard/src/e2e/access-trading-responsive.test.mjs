@@ -545,7 +545,10 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
         const lossLimit = panel.getByTestId("input-clock-loss-limit");
         assert.equal(await takeProfit.inputValue(), "0");
         assert.equal(await lossLimit.inputValue(), "10");
-        assert.match(await panel.getByTestId("clock-work-loss-warning").innerText(), /20 full-stake losses at USD 0\.50 total USD 10\.00/);
+        assert.equal(
+          await panel.getByTestId("clock-work-loss-warning").innerText(),
+          "4 consecutive full-stake losses could reach the $10.00 session loss limit.",
+        );
         await takeProfit.fill("5");
         await lossLimit.fill("2");
         assert.equal(await takeProfit.inputValue(), "5");

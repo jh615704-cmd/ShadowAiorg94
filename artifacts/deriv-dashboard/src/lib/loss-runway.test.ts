@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { estimateLossRunway, getLossRunwayMessage } from "./loss-runway.ts";
+import {
+  estimateLossRunway,
+  getLossLimitRunwayMessage,
+  getLossRunwayMessage,
+} from "./loss-runway.ts";
 
 const defaults = {
   balance: 100,
@@ -82,6 +86,38 @@ test("shows only the consecutive-loss estimate for a configured session loss lim
     "10 consecutive full-stake losses could reach the $10.00 session loss limit.",
   );
   assert.doesNotMatch(message, /Current plan|profit target|balance|win-rate/i);
+});
+
+test("calculates the Clock Work loss message from its stake, multiplier, and loss limit", () => {
+  const message = getLossLimitRunwayMessage({
+    balance: null,
+    baseStake: 1,
+    nextStake: 1,
+    stakeMode: "multiply",
+    multiplier: 2,
+    takeProfit: 5,
+    lossLimit: 10,
+    sessionPnl: 0,
+  }, "USD");
+  assert.equal(
+    message,
+    "4 consecutive full-stake losses could reach the $10.00 session loss limit.",
+  );
+
+  const changedSettingsMessage = getLossLimitRunwayMessage({
+    balance: null,
+    baseStake: 2,
+    nextStake: 2,
+    stakeMode: "multiply",
+    multiplier: 1,
+    takeProfit: 5,
+    lossLimit: 10,
+    sessionPnl: 0,
+  }, "USD");
+  assert.equal(
+    changedSettingsMessage,
+    "5 consecutive full-stake losses could reach the $10.00 session loss limit.",
+  );
 });
 
 test("keeps the no-limit estimate concise", () => {

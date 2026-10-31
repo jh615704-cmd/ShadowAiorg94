@@ -5703,6 +5703,7 @@ export default function XTraderPage() {
             onTakeProfitChange={(value) => setClockWorkTakeProfit(roundTradeStakeToCents(Math.max(0, value)))}
             lossLimit={clockWorkLossLimit}
             onLossLimitChange={(value) => setClockWorkLossLimit(roundTradeStakeToCents(Math.max(0, value)))}
+            sessionPnl={clockWorkRunPnl}
             onAiEnabledChange={(enabled) => {
               setClockWorkAiEnabled(enabled);
               clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);

@@ -197,3 +197,19 @@ export function getLossRunwayMessage(
 
   return `${formatLossCount(estimate.lossesToSessionLossLimit, estimate.calculationCapped)} consecutive full-stake losses could reach the ${lossLimitText} session loss limit.`;
 }
+
+export function getLossLimitRunwayMessage(
+  input: LossRunwayEstimateInput,
+  currency: string,
+) {
+  const estimate = estimateLossRunway(input);
+  if (!estimate.valid) {
+    return "Set a valid stake, multiplier, and session loss limit to see the loss estimate.";
+  }
+  if (input.lossLimit === 0 || estimate.lossesToSessionLossLimit === null) {
+    return "Set a session loss limit to see the consecutive-loss estimate.";
+  }
+
+  const lossLimitText = formatMoney(input.lossLimit, currency);
+  return `${formatLossCount(estimate.lossesToSessionLossLimit, estimate.calculationCapped)} consecutive full-stake losses could reach the ${lossLimitText} session loss limit.`;
+}
