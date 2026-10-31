@@ -46,10 +46,10 @@ import {
 import {
   chooseBestDigitSignal,
   chooseBestEdgeSignal,
-  chooseBestEdgeTradeSignal,
   chooseEdgeDurationByWinRate,
   createEdgeDurationAvailabilitySetup,
   nextStakeAfterSettlement,
+  rankBestEdgeTradeSignals,
   rankDigitsByDistribution,
   sessionStopReason,
   type BestEdgeSignal,
@@ -65,6 +65,8 @@ import {
   chooseCashGrabScannerCandidate,
   chooseCashGrabDirectionalMarket,
   chooseDigitFlipScannerCandidate,
+  DIGIT_FLIP_SCANNER_MIN_SAMPLE,
+  DIGIT_FLIP_SIGNAL_FLOOR,
   chooseTradeXScannerCandidate,
   TRADE_X_SCANNER_MIN_OBSERVED_RATE,
   digitDiffersRateFromPercentages,
@@ -341,7 +343,6 @@ const tradeXSymbols: readonly TradeXSymbolOption[] = markets.map(([value, label]
 }));
 
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
-const DIGIT_FLIP_SIGNAL_FLOOR = 80;
 const DIGIT_FLIP_MARKET_SCAN_INTERVAL_MS = 10_000;
 const EDGE_PERCENTAGE_SCAN_FLOOR = 90;
 const EDGE_MIN_MARKET_SAMPLE = 20;
@@ -645,7 +646,7 @@ export default function XTraderPage() {
   const digitFlipNextMarketScanAtRef = useRef(0);
   const digitFlipAutoSelectionKeyRef = useRef("");
   const digitFlipMarketSignalsRef = useRef<DigitFlipMarketSignal[]>([]);
-  const digitFlipRatesRef = useRef({ even: 50, odd: 50 });
+  const digitFlipRatesRef = useRef({ even: 50, odd: 50, sampleCount: 0 });
   const digitFlipConfigRef = useRef({
     marketType: digitFlipMarketType,
     symbol: digitFlipSymbol,
@@ -1435,7 +1436,12 @@ export default function XTraderPage() {
     digitFlipAssaultRef.current = digitFlipAssault;
     digitFlipMagicRef.current = digitFlipMagic;
     digitFlipMarketSignalsRef.current = digitFlipMarketSignals;
-    digitFlipRatesRef.current = { even: digitFlipEvenPercentage, odd: digitFlipOddPercentage };
+    const selectedMarketSignal = digitFlipMarketSignals.find((signal) => signal.symbol === digitFlipSymbol);
+    digitFlipRatesRef.current = {
+      even: selectedMarketSignal?.evenPercentage ?? digitFlipEvenPercentage,
+      odd: selectedMarketSignal?.oddPercentage ?? digitFlipOddPercentage,
+      sampleCount: selectedMarketSignal?.sampleCount ?? digitFlipSampleCount,
+    };
     digitFlipConfigRef.current = {
       marketType: digitFlipMarketType,
       symbol: digitFlipSymbol,
@@ -1445,7 +1451,7 @@ export default function XTraderPage() {
       stakeMode: digitFlipStakeMode,
       multiplier: digitFlipMultiplier,
     };
-  }, [digitFlipAssault, digitFlipMagic, digitFlipMarketSignals, digitFlipEvenPercentage, digitFlipOddPercentage, digitFlipMarketType, digitFlipSymbol, digitFlipParity, digitFlipDuration, digitFlipStake, digitFlipStakeMode, digitFlipMultiplier]);
+  }, [digitFlipAssault, digitFlipMagic, digitFlipMarketSignals, digitFlipEvenPercentage, digitFlipOddPercentage, digitFlipSampleCount, digitFlipMarketType, digitFlipSymbol, digitFlipParity, digitFlipDuration, digitFlipStake, digitFlipStakeMode, digitFlipMultiplier]);
 
   useEffect(() => {
     const pnl = fastSessionPnl;
@@ -3551,62 +3557,83 @@ export default function XTraderPage() {
       throw new Error("The selected EDGE stake exceeds the available account balance.");
     }
     const signals = (freshStatus.data?.market_signals ?? []) as MarketSignal[];
-    const candidate = chooseBestEdgeTradeSignal(
+    const rankedCandidates = rankBestEdgeTradeSignals(
       signals,
       EDGE_AI_SCANNER_MIN_OBSERVED_RATE,
       EDGE_MIN_MARKET_SAMPLE,
     );
-    if (!candidate) {
+    if (!rankedCandidates.length) {
       throw new Error(
         `No valid Over/Under setup reached ${EDGE_AI_SCANNER_MIN_OBSERVED_RATE}% observed frequency in at least ${EDGE_MIN_MARKET_SAMPLE} samples. No trade was sent; observed history does not guarantee the next outcome.`,
       );
     }
 
-    const durationSetupKey = edgeDurationSetupKey(
-      candidate.direction,
-      candidate.symbol,
-      candidate.digit,
-      stake,
-    );
-    let supportedDurations = edgeDurationAvailabilityRef.current?.key === durationSetupKey
-      && Date.now() - edgeDurationAvailabilityRef.current.checkedAt < 60_000
-      ? edgeDurationAvailabilityRef.current.durations
-      : null;
-    if (!supportedDurations) {
-      const availability = await edgeDurationAvailabilityMutation.mutateAsync({
-        data: {
-          access_feature: "edge",
-          ...createEdgeDurationAvailabilitySetup(candidate, stake),
-        },
-      });
-      supportedDurations = availability.supported_durations;
-      const cachedAvailability = {
-        key: durationSetupKey,
-        durations: supportedDurations,
-        checkedAt: Date.now(),
-      };
-      edgeDurationAvailabilityRef.current = cachedAvailability;
-      setEdgeDurationAvailability(cachedAvailability);
+    let candidate: (typeof rankedCandidates)[number] | null = null;
+    let supportedDurations: number[] = [];
+    let selectedSetupKey: string | null = null;
+    const triedMarkets = new Set<string>();
+    for (const scannedCandidate of rankedCandidates) {
+      if (triedMarkets.has(scannedCandidate.symbol)) continue;
+      if (triedMarkets.size >= 8) break;
+      triedMarkets.add(scannedCandidate.symbol);
+
+      const setupKey = edgeDurationSetupKey(
+        scannedCandidate.direction,
+        scannedCandidate.symbol,
+        scannedCandidate.digit,
+        stake,
+      );
+      let candidateDurations = edgeDurationAvailabilityRef.current?.key === setupKey
+        && Date.now() - edgeDurationAvailabilityRef.current.checkedAt < 60_000
+        ? edgeDurationAvailabilityRef.current.durations
+        : null;
+      if (!candidateDurations) {
+        const availability = await edgeDurationAvailabilityMutation.mutateAsync({
+          data: {
+            access_feature: "edge",
+            ...createEdgeDurationAvailabilitySetup(scannedCandidate, stake),
+          },
+        });
+        candidateDurations = availability.supported_durations;
+        edgeDurationAvailabilityRef.current = {
+          key: setupKey,
+          durations: candidateDurations,
+          checkedAt: Date.now(),
+        };
+      }
+
+      const availableDurations = [...new Set(candidateDurations)]
+        .filter((ticks) => Number.isInteger(ticks) && ticks >= 1 && ticks <= 5)
+        .sort((left, right) => left - right);
+      if (!availableDurations.length) continue;
+      if (scannedCandidate.symbol !== symbol && !await selectMarket(scannedCandidate.symbol)) continue;
+
+      candidate = scannedCandidate;
+      supportedDurations = availableDurations;
+      selectedSetupKey = setupKey;
+      break;
     }
-    const availableDurations = [...new Set(supportedDurations)]
-      .filter((ticks) => Number.isInteger(ticks) && ticks >= 1 && ticks <= 5)
-      .sort((left, right) => left - right);
-    if (!availableDurations.length) {
-      throw new Error(`Deriv is not currently quoting this Over/Under setup for ${candidate.symbol}. No trade was sent.`);
+    if (!candidate || !selectedSetupKey) {
+      setEdgeDurationAvailability(null);
+      throw new Error("Deriv did not quote an eligible Over/Under setup on the scanned markets. No trade was sent.");
     }
+    const selectedAvailability = {
+      key: selectedSetupKey,
+      durations: supportedDurations,
+      checkedAt: Date.now(),
+    };
+    edgeDurationAvailabilityRef.current = selectedAvailability;
+    setEdgeDurationAvailability(selectedAvailability);
     const selectedDuration = chooseEdgeDurationByWinRate(
       edgeRows,
       candidate.symbol,
       candidate.direction,
       candidate.digit,
-      availableDurations,
-      duration,
+      supportedDurations,
+      1,
     );
     if (selectedDuration == null) {
       throw new Error(`No supported tick duration is available for ${candidate.symbol}. No trade was sent.`);
-    }
-    if (candidate.symbol !== symbol && !await selectMarket(candidate.symbol)) {
-      throw new Error(`Deriv could not select ${candidate.symbol}. No trade was sent.`);
     }
     setDirection(candidate.direction);
     setBarrier(candidate.digit);
@@ -3811,7 +3838,7 @@ export default function XTraderPage() {
     const signals = digitFlipMarketSignalsRef.current
       .filter((signal) =>
         Number.isFinite(signal.sampleCount)
-        && signal.sampleCount > 0
+        && signal.sampleCount >= (requireThreshold ? DIGIT_FLIP_SCANNER_MIN_SAMPLE : 1)
         && isValidDigitFlipParityRates(signal.evenPercentage, signal.oddPercentage),
       )
       .filter((signal) => config.marketType === "auto" || tradeXSymbols.find((option) => option.value === signal.symbol)?.marketType === config.marketType)
@@ -3835,6 +3862,7 @@ export default function XTraderPage() {
     digitFlipRatesRef.current = {
       even: best.signal.evenPercentage,
       odd: best.signal.oddPercentage,
+      sampleCount: best.signal.sampleCount,
     };
     digitFlipConfigRef.current = {
       ...digitFlipConfigRef.current,
@@ -3848,6 +3876,11 @@ export default function XTraderPage() {
     if (!digitFlipEnabled || (!digitFlipMagic && digitFlipMarketType !== "auto") || !digitFlipMarketSignals.length) return;
     const eligible = digitFlipMarketSignals
       .filter((signal) => digitFlipMarketType === "auto" || tradeXSymbols.some((option) => option.value === signal.symbol && option.marketType === digitFlipMarketType))
+      .filter((signal) =>
+        signal.sampleCount >= DIGIT_FLIP_SCANNER_MIN_SAMPLE
+        && Math.max(signal.evenPercentage, signal.oddPercentage) >= DIGIT_FLIP_SIGNAL_FLOOR
+        && isValidDigitFlipParityRates(signal.evenPercentage, signal.oddPercentage),
+      )
       .sort((left, right) => Math.max(right.evenPercentage, right.oddPercentage) - Math.max(left.evenPercentage, left.oddPercentage) || right.sampleCount - left.sampleCount);
     const best = eligible[0];
     if (!best) return;
@@ -3856,10 +3889,11 @@ export default function XTraderPage() {
     if (digitFlipAutoSelectionKeyRef.current === key) return;
     digitFlipAutoSelectionKeyRef.current = key;
     if (digitFlipConfigRef.current.symbol === best.symbol && digitFlipConfigRef.current.parity === parity) return;
-    void chooseDigitFlipSetup(false);
+    void chooseDigitFlipSetup(true);
   }, [digitFlipEnabled, digitFlipMagic, digitFlipMarketSignals, digitFlipMarketType]);
 
-  const chooseDigitFlipMarket = async () => chooseDigitFlipSetup(false);
+  const chooseDigitFlipMarket = async () =>
+    chooseDigitFlipSetup(digitFlipMarketType === "auto" || digitFlipMagicRef.current);
 
   const applyDigitFlipAssaultSettlements = (latestRows: typeof rows) => {
     if (!digitFlipAssaultRef.current) return;
@@ -3890,7 +3924,9 @@ export default function XTraderPage() {
     }
   };
 
-  const executeDigitFlip = async () => {
+  const executeDigitFlip = async (
+    observedSignalOverride?: { parity: DigitFlipParity; observedRate: number; sampleCount: number },
+  ) => {
     if (digitFlipActionLockRef.current) return false;
     if (!isConnected) {
       setConnectionMessage({ kind: "info", text: "DigitFlip remains active and is waiting for the Deriv connection." });
@@ -3922,9 +3958,25 @@ export default function XTraderPage() {
     }
     applyDigitFlipAssaultSettlements(latestRows);
     const config = digitFlipConfigRef.current;
-    const selectedRate = config.parity === "DIGITEVEN" ? digitFlipRatesRef.current.even : digitFlipRatesRef.current.odd;
-    if (digitFlipMagicRef.current && selectedRate < DIGIT_FLIP_SIGNAL_FLOOR) {
-      setConnectionMessage({ kind: "info", text: `Standby is waiting for an ${DIGIT_FLIP_SIGNAL_FLOOR}% observed parity signal. Current ${selectedRate.toFixed(1)}%.` });
+    if (observedSignalOverride && config.parity !== observedSignalOverride.parity) {
+      setConnectionMessage({ kind: "info", text: "The scanned parity changed before entry. No trade was sent." });
+      return false;
+    }
+    const selectedRate = observedSignalOverride?.observedRate
+      ?? (config.parity === "DIGITEVEN" ? digitFlipRatesRef.current.even : digitFlipRatesRef.current.odd);
+    const selectedSampleCount = observedSignalOverride?.sampleCount ?? digitFlipRatesRef.current.sampleCount;
+    const requiresObservedSignal = observedSignalOverride != null
+      || config.marketType === "auto"
+      || digitFlipMagicRef.current
+      || digitFlipAssaultRef.current;
+    if (
+      requiresObservedSignal
+      && (
+        selectedSampleCount < DIGIT_FLIP_SCANNER_MIN_SAMPLE
+        || selectedRate < DIGIT_FLIP_SIGNAL_FLOOR
+      )
+    ) {
+      setConnectionMessage({ kind: "info", text: "DigitFlip is waiting for a sufficiently strong, adequately sampled parity signal. No trade was sent." });
       return false;
     }
     const watch = digitFlipMartingaleWatchRef.current;
@@ -4016,16 +4068,13 @@ export default function XTraderPage() {
       .map((item) => item.value);
     const candidate = chooseDigitFlipScannerCandidate(signals, symbols);
     if (!candidate) {
-      throw new Error(`No eligible market has at least ${AI_SCANNER_MIN_SAMPLE} observed moves.`);
+      throw new Error("No DigitFlip market passed the observed-sample checks. No trade was sent.");
     }
     const selectedSignal = signals.find((signal) => signal.symbol === candidate.symbol);
     if (!selectedSignal) throw new Error("The selected market sample is no longer available.");
     digitFlipRunningRef.current = false;
     setDigitFlipRunning(false);
-    digitFlipRatesRef.current = {
-      even: selectedSignal.digit_even_percentage,
-      odd: selectedSignal.digit_odd_percentage,
-    };
+    const shouldSwitchMarket = candidate.symbol !== digitFlipConfigRef.current.symbol;
     digitFlipConfigRef.current = {
       ...digitFlipConfigRef.current,
       symbol: candidate.symbol,
@@ -4033,14 +4082,25 @@ export default function XTraderPage() {
     };
     setDigitFlipSymbol(candidate.symbol);
     setDigitFlipParity(candidate.parity);
-    if (!await selectMarket(candidate.symbol)) throw new Error("Deriv could not select the scanned market. No trade was sent.");
+    if (shouldSwitchMarket && !await selectMarket(candidate.symbol)) {
+      throw new Error("Deriv could not select the scanned market. No trade was sent.");
+    }
+    digitFlipRatesRef.current = {
+      even: selectedSignal.digit_even_percentage,
+      odd: selectedSignal.digit_odd_percentage,
+      sampleCount: selectedSignal.sample_count,
+    };
     const currentDigitFlipStake = digitFlipStakeMode === "martingale"
       ? digitFlipNextStakeRef.current
       : digitFlipStake;
     if (currentAccountBalanceRef.current == null || currentDigitFlipStake > currentAccountBalanceRef.current) {
       throw new Error("The selected DigitFlip stake exceeds the current account balance.");
     }
-    const sent = await executeDigitFlip();
+    const sent = await executeDigitFlip({
+      parity: candidate.parity,
+      observedRate: candidate.observedRate,
+      sampleCount: candidate.sampleCount,
+    });
     if (!sent) throw new Error("The setup was selected, but the existing DigitFlip checks blocked the order.");
     return `Sent one ${candidate.symbol} ${candidate.parity === "DIGITEVEN" ? "Even" : "Odd"} trade. That parity appeared in ${candidate.observedRate.toFixed(1)}% of ${candidate.sampleCount} sampled moves; that history is not a prediction.`;
   });
@@ -4057,11 +4117,14 @@ export default function XTraderPage() {
     while (digitFlipRunningRef.current) {
       const config = digitFlipConfigRef.current;
       if ((config.marketType === "auto" || digitFlipMagicRef.current) && Date.now() >= digitFlipNextMarketScanAtRef.current) {
-        const selection = await chooseDigitFlipSetup(digitFlipMagicRef.current);
+        const requiresObservedSignal = config.marketType === "auto"
+          || digitFlipMagicRef.current
+          || digitFlipAssaultRef.current;
+        const selection = await chooseDigitFlipSetup(requiresObservedSignal);
         if (selection !== "selected") {
-          setConnectionMessage(selection === "market-selection-failed"
+        setConnectionMessage(selection === "market-selection-failed"
             ? { kind: "error", text: "DigitFlip could not switch to the scanned market. No trade was sent." }
-            : { kind: "info", text: `Standby is waiting for a market with an ${DIGIT_FLIP_SIGNAL_FLOOR}% observed parity signal.` });
+          : { kind: "info", text: "DigitFlip is waiting for a market with a qualifying parity sample. No trade was sent." });
           digitFlipNextMarketScanAtRef.current = Date.now() + DIGIT_FLIP_MARKET_SCAN_INTERVAL_MS;
           await waitForMarketTicks(1, () => digitFlipRunningRef.current);
           continue;
@@ -4123,7 +4186,7 @@ export default function XTraderPage() {
     digitFlipMagicRef.current = enabled;
     setDigitFlipMagic(enabled);
     if (enabled) {
-      setConnectionMessage({ kind: "info", text: `Standby is working with an ${DIGIT_FLIP_SIGNAL_FLOOR}% observed-signal gate; it does not guarantee a win.` });
+      setConnectionMessage({ kind: "info", text: "Auto Switch Best Pair is armed and will wait for a qualifying observed sample." });
     }
   };
 

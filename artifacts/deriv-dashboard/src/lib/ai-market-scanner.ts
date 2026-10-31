@@ -1,4 +1,6 @@
 export const AI_SCANNER_MIN_SAMPLE = 20;
+export const DIGIT_FLIP_SCANNER_MIN_SAMPLE = 100;
+export const DIGIT_FLIP_SIGNAL_FLOOR = 95;
 export const TRADE_X_SCANNER_MIN_OBSERVED_RATE = 95;
 
 export type AiScannerMarketSignal = {
@@ -165,8 +167,16 @@ export function chooseCashGrabDirectionalMarket(
 export function chooseDigitFlipScannerCandidate(
   signals: readonly AiScannerMarketSignal[],
   symbols: readonly string[],
-  minimumSample = AI_SCANNER_MIN_SAMPLE,
+  minimumSample = DIGIT_FLIP_SCANNER_MIN_SAMPLE,
+  minimumObservedRate = DIGIT_FLIP_SIGNAL_FLOOR,
 ): ParityScannerCandidate | null {
+  if (
+    !Number.isFinite(minimumObservedRate)
+    || minimumObservedRate < 0
+    || minimumObservedRate > 100
+  ) {
+    return null;
+  }
   const candidates = eligibleSignals(signals, symbols, minimumSample)
     .filter((signal) => isValidDigitFlipParityRates(
       signal.digit_even_percentage,
@@ -182,7 +192,7 @@ export function chooseDigitFlipScannerCandidate(
       observedRate: Math.max(signal.digit_even_percentage, signal.digit_odd_percentage),
       sampleCount: signal.sample_count,
     };
-  });
+  }).filter((candidate) => candidate.observedRate >= minimumObservedRate);
 
   return strongest(candidates);
 }

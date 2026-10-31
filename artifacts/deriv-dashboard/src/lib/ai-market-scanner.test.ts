@@ -78,22 +78,23 @@ test("Bulk Trader scanner rejects invalid barriers and rates but tolerates perce
   assert.equal(isValidObservedPercentage(Number.NaN), false);
 });
 
-test("DigitFlip selects the strongest eligible observed parity without inventing a threshold", () => {
+test("DigitFlip requires a 95% observed parity signal across 100 samples", () => {
   const candidate = chooseDigitFlipScannerCandidate([
-    signal("R_10", 30, [], 58, 42),
-    signal("JD25", 80, [], 47, 53),
+    signal("R_10", 100, [], 96, 4),
+    signal("JD25", 120, [], 94, 6),
   ], ["R_10", "JD25"]);
 
   assert.equal(candidate?.symbol, "R_10");
   assert.equal(candidate?.parity, "DIGITEVEN");
-  assert.equal(candidate?.observedRate, 58);
+  assert.equal(candidate?.observedRate, 96);
 });
 
-test("DigitFlip scanner ignores malformed parity rates without adding a signal threshold", () => {
+test("DigitFlip scanner ignores malformed and under-threshold parity rates", () => {
   const candidate = chooseDigitFlipScannerCandidate([
     signal("R_10", 40, [], 140, -40),
-    signal("JD25", 30, [], 55, Number.NaN),
-    signal("R_75", 25, [], 53, 47),
+    signal("JD25", 100, [], 55, Number.NaN),
+    signal("R_25", 100, [], 94, 6),
+    signal("R_75", 100, [], 95, 5),
   ], ["R_10", "JD25", "R_75"]);
 
   assert.deepEqual(candidate, {
@@ -104,6 +105,16 @@ test("DigitFlip scanner ignores malformed parity rates without adding a signal t
   });
   assert.equal(isValidDigitFlipParityRates(0, 100), true);
   assert.equal(isValidDigitFlipParityRates(Number.POSITIVE_INFINITY, 0), false);
+});
+
+test("DigitFlip does not scan a setup below the observed-rate or sample gate", () => {
+  assert.equal(
+    chooseDigitFlipScannerCandidate([
+      signal("R_10", 99, [], 100, 0),
+      signal("JD25", 200, [], 94, 6),
+    ], ["R_10", "JD25"]),
+    null,
+  );
 });
 
 test("DigitFlip settlement processing ignores unclaimed, open, known, and processed contracts", () => {

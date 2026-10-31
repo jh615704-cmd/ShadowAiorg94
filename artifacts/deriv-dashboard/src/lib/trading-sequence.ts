@@ -200,11 +200,11 @@ export function chooseBestEdgeSignal(
   )[0] ?? null;
 }
 
-export function chooseBestEdgeTradeSignal(
+export function rankBestEdgeTradeSignals(
   signals: readonly MarketSignal[],
   minimumObservedRate = 95,
   minimumSampleCount = 20,
-): BestEdgeDirectionSignal | null {
+): BestEdgeDirectionSignal[] {
   if (
     !Number.isFinite(minimumObservedRate)
     || minimumObservedRate < 0
@@ -212,7 +212,7 @@ export function chooseBestEdgeTradeSignal(
     || !Number.isInteger(minimumSampleCount)
     || minimumSampleCount < 1
   ) {
-    return null;
+    return [];
   }
 
   const candidates: BestEdgeDirectionSignal[] = [];
@@ -261,7 +261,15 @@ export function chooseBestEdgeTradeSignal(
       || right.sampleCount - left.sampleCount
       || left.symbol.localeCompare(right.symbol)
       || left.digit - right.digit,
-  )[0] ?? null;
+  );
+}
+
+export function chooseBestEdgeTradeSignal(
+  signals: readonly MarketSignal[],
+  minimumObservedRate = 95,
+  minimumSampleCount = 20,
+): BestEdgeDirectionSignal | null {
+  return rankBestEdgeTradeSignals(signals, minimumObservedRate, minimumSampleCount)[0] ?? null;
 }
 
 export function chooseEdgeDurationByWinRate(

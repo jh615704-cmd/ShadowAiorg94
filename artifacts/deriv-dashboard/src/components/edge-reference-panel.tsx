@@ -464,7 +464,7 @@ export default function EdgeReferencePanel({
           onScan={onAiScan}
           disabled={!canRunAiScanner}
           actionLabel="Scan + trade"
-          successMessageAutoDismissMs={3000}
+          messageAutoDismissMs={3000}
         />
       </section>
 

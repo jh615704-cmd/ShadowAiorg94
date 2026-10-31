@@ -4,14 +4,14 @@ type Props = {
   onScan: () => Promise<string>;
   disabled?: boolean;
   actionLabel?: string;
-  successMessageAutoDismissMs?: number;
+  messageAutoDismissMs?: number;
 };
 
 export default function AiScannerAction({
   onScan,
   disabled = false,
   actionLabel = "AI Scanner",
-  successMessageAutoDismissMs,
+  messageAutoDismissMs = 3_000,
 }: Props) {
   const [scanning, setScanning] = useState(false);
   const [message, setMessage] = useState("");
@@ -32,6 +32,19 @@ export default function AiScannerAction({
 
   useEffect(() => clearMessageTimers, []);
 
+  const scheduleMessageDismiss = () => {
+    if (!Number.isFinite(messageAutoDismissMs) || messageAutoDismissMs <= 0) return;
+    dismissTimerRef.current = window.setTimeout(() => {
+      setMessageFading(true);
+      removeTimerRef.current = window.setTimeout(() => {
+        setMessage("");
+        setMessageFading(false);
+        removeTimerRef.current = undefined;
+      }, 320);
+      dismissTimerRef.current = undefined;
+    }, messageAutoDismissMs);
+  };
+
   const scan = async () => {
     if (scanning || disabled) return;
     clearMessageTimers();
@@ -41,19 +54,10 @@ export default function AiScannerAction({
     try {
       const resultMessage = await onScan();
       setMessage(resultMessage);
-      if (successMessageAutoDismissMs && successMessageAutoDismissMs > 0) {
-        dismissTimerRef.current = window.setTimeout(() => {
-          setMessageFading(true);
-          removeTimerRef.current = window.setTimeout(() => {
-            setMessage("");
-            setMessageFading(false);
-            removeTimerRef.current = undefined;
-          }, 320);
-          dismissTimerRef.current = undefined;
-        }, successMessageAutoDismissMs);
-      }
+      scheduleMessageDismiss();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "The scan could not be completed.");
+      scheduleMessageDismiss();
     } finally {
       setScanning(false);
     }

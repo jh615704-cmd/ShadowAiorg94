@@ -4,7 +4,6 @@ import {
   CircleStop,
   Play,
   RefreshCw,
-  RotateCcw,
   Zap,
 } from "lucide-react";
 import { formatDerivQuote } from "../lib/format-deriv-quote";
@@ -67,7 +66,6 @@ export type DigitFlipPanelProps = {
   onStopLossChange: (value: number) => void;
   onRunStop: () => void;
   onAiScan: () => Promise<string>;
-  onReset: () => void;
   onRefreshSample: () => void;
   onAssaultChange: (value: boolean) => void;
   onMagicChange: (value: boolean) => void;
@@ -146,7 +144,6 @@ export default function DigitFlipPanel({
   onStopLossChange,
   onRunStop,
   onAiScan,
-  onReset,
   onRefreshSample,
   onAssaultChange,
   onMagicChange,
@@ -576,14 +573,6 @@ export default function DigitFlipPanel({
                 <Play size={16} fill="currentColor" /> Run DigitFlip
               </>
             )}
-          </button>
-          <button
-            type="button"
-            className="df-reset"
-            onClick={onReset}
-            disabled={disabled}
-          >
-            <RotateCcw size={15} /> Reset
           </button>
         </div>
       </section>
