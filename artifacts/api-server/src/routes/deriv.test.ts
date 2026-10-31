@@ -275,7 +275,7 @@ app.use(express.json());
 app.use((req, res, next) => {
   Object.assign(req, { log: { error() {}, warn() {} } });
   res.locals.userId = sessionId;
-  res.locals.accessKey = { features: ["clock-work", "edge", "trade-x", "auto-trader", "money-bank"] };
+  res.locals.accessKey = { features: ["clock-work", "edge", "trade-x", "bulk-trader", "auto-trader", "money-bank"] };
   next();
 });
 app.use(derivRouter);
@@ -508,6 +508,56 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
     }
     assert.equal(bulkBuyInvocations, priorTradeXValidationInvocations, "invalid Trade X requests must not reach Deriv");
 
+    const bulkTraderDurationOffset = bulkBuyDurations.length;
+    const bulkTraderContractTypes = ["DIGITOVER", "DIGITUNDER", "DIGITDIFF"] as const;
+    for (const contractType of bulkTraderContractTypes) {
+      for (const duration of [1, 2, 3, 4, 5]) {
+        const bulkTraderResponse = await fetch(`${baseUrl}/deriv/bulk-buy`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            access_feature: "bulk-trader",
+            amount: 1,
+            duration,
+            duration_unit: "t",
+            contract_type: contractType,
+            barrier: contractType === "DIGITDIFF" ? 4 : 3,
+            symbol: "R_75",
+            count: 1,
+          }),
+        });
+        assert.equal(bulkTraderResponse.status, 202, `Bulk Trader should accept ${contractType} at ${duration} tick(s).`);
+      }
+    }
+    assert.deepEqual(
+      bulkBuyDurations.slice(bulkTraderDurationOffset),
+      bulkTraderContractTypes.flatMap(() => [1, 2, 3, 4, 5]),
+    );
+    const priorBulkTraderValidationInvocations = bulkBuyInvocations;
+    const invalidBulkTraderRequests = [
+      { duration: 6, contract_type: "DIGITDIFF", error: /1 to 5 ticks/ },
+      { duration: 1, contract_type: "CALL", error: /only accepts Digit Over, Digit Under, and Digit Differs/ },
+    ] as const;
+    for (const request of invalidBulkTraderRequests) {
+      const response = await fetch(`${baseUrl}/deriv/bulk-buy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          access_feature: "bulk-trader",
+          amount: 1,
+          duration: request.duration,
+          duration_unit: "t",
+          contract_type: request.contract_type,
+          barrier: 4,
+          symbol: "R_75",
+          count: 1,
+        }),
+      });
+      assert.equal(response.status, 400);
+      assert.match(String((await readJson(response)).error), request.error);
+    }
+    assert.equal(bulkBuyInvocations, priorBulkTraderValidationInvocations, "invalid Bulk Trader requests must not reach Deriv");
+
     const autoTraderDurationOffset = bulkBuyDurations.length;
     for (const duration of [1, 2, 3, 4, 5]) {
       const autoTraderBulkResponse = await fetch(`${baseUrl}/deriv/bulk-buy`, {
@@ -543,7 +593,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
     });
     assert.equal(outOfRangeAutoTraderResponse.status, 400);
     assert.match(String((await readJson(outOfRangeAutoTraderResponse)).error), /1 to 5 ticks/);
-    assert.deepEqual(observedPats, Array.from({ length: 14 }, () => enteredPat));
+    assert.deepEqual(observedPats, Array.from({ length: 29 }, () => enteredPat));
 
     const priorBuyInvocations = buyInvocations;
     const priorBulkBuyInvocations = bulkBuyInvocations;

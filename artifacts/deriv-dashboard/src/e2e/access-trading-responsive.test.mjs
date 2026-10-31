@@ -1476,6 +1476,11 @@ test("Bulk Trader digits match Trade X pill styling and fit phone, tablet, lapto
 
     const panel = page.getByTestId("panel-bulk-trader");
     await panel.waitFor();
+    assert.equal(
+      await page.getByTestId("bulk-duration-note").innerText(),
+      "1T settles on the first market tick after Deriv confirms entry; the entry quote is tick 0.",
+    );
+    assert.equal(await page.getByTestId("button-duration-1").getAttribute("aria-pressed"), "true");
     await page.waitForFunction(() =>
       [...document.querySelectorAll(".bulk-digit-streak")].some((element) => /^\d+×$/.test(element.textContent?.trim() ?? "")),
     undefined, { timeout: 10_000 });

@@ -3,13 +3,11 @@ import { Activity, BarChart3, Play, RefreshCw } from "lucide-react";
 import AiScannerAction from "./ai-scanner-action";
 import DerivHistory, { type DerivHistoryRow } from "./deriv-history";
 import { roundTradeStakeToCents } from "../lib/trade-entry-guards";
+import type { BulkTraderContractType } from "../lib/bulk-trader-order";
 
 export type BulkTraderType = "over-under" | "differs";
 export type BulkTraderPrediction = number;
-export type BulkTraderContractType =
-  | "DIGITOVER"
-  | "DIGITUNDER"
-  | "DIGITDIFF";
+export type { BulkTraderContractType } from "../lib/bulk-trader-order";
 
 export type BulkTraderSymbol = {
   value: string;
@@ -220,7 +218,7 @@ export default function BulkTraderPanel({
         <aside className="bulk-trader-controls">
           <div className="bulk-controls-heading"><div><small>{predictionTitle}</small><b>Choose an entry signal</b></div><span>{typeLabels[type]}</span></div>
           <label><div className="bulk-field-label"><small>PREDICTION</small><span>required</span></div><div className={`bulk-prediction-grid ${predictionOptions.length > 9 ? "wide" : ""}`}>{predictionOptions.map((option) => <button type="button" data-testid={`button-prediction-${String(option)}`} key={String(option)} className={prediction === option ? "active" : ""} onClick={() => onPredictionChange(option)}>{option}</button>)}</div></label>
-           <label><small>EXECUTION DURATION</small><div className="bulk-choice-row duration" role="group" aria-label="Bulk Trader duration in ticks">{durationOptions.map((option) => <button type="button" aria-pressed={duration === option} data-testid={`button-duration-${option}`} key={option} className={duration === option ? "active" : ""} onClick={() => onDurationChange(option)}>{option}T</button>)}</div></label>
+           <label><small>EXECUTION DURATION</small><div className="bulk-choice-row duration" role="group" aria-label="Bulk Trader duration in ticks">{durationOptions.map((option) => <button type="button" aria-pressed={duration === option} data-testid={`button-duration-${option}`} key={option} className={duration === option ? "active" : ""} onClick={() => onDurationChange(option)}>{option}T</button>)}</div><small className="bulk-duration-note" data-testid="bulk-duration-note">1T settles on the first market tick after Deriv confirms entry; the entry quote is tick 0.</small></label>
           <label><small>STAKE</small><div className="bulk-money"><span>USD</span><input data-testid="input-bulk-stake" type="number" min=".35" step=".01" value={stake} onChange={(event) => onStakeChange(Math.max(.35, roundTradeStakeToCents(Number(event.target.value) || .35)))} /></div></label>
            <label><small>BULK TRADES</small><div className="bulk-choice-row bulk-count-row">{countOptions.map((option) => <button type="button" data-testid={`button-count-${option}`} key={option} className={tradeCount === option ? "active" : ""} onClick={() => onTradeCountChange(option)}>{option}</button>)}</div></label>
           {tradeSlotMessage && <p className="bulk-contract-warning" role="status">{tradeSlotMessage}</p>}

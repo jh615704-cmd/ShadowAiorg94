@@ -140,6 +140,7 @@ import {
 } from "../lib/clock-work-logic";
 import { getClockWorkNextStake, getClockWorkRunSummary } from "../lib/clock-work-session";
 import { buildCashGrabBulkBuyPayload } from "../lib/cash-grab-order";
+import { buildBulkTraderOrderData } from "../lib/bulk-trader-order";
 import { getCashGrabLimitReached } from "../lib/cash-grab-limits";
 import {
   getCashGrabSessionSettlements,
@@ -274,7 +275,7 @@ const bulkTraderGuidePages = [
   { title: "Reading O, U, and =", body: "For Over / Under, the digit row marks values above the selected barrier with O, below it with U, and the selected barrier with =.", points: ["The markers follow the selected prediction.", "The current tick is marked separately.", "A marker is descriptive market context only."] },
   { title: "Differs predictions", body: "Differs uses digits 0 through 9. The selected digit is the barrier that the contract must differ from at expiry.", points: ["The row does not show O or U markers in this mode.", "The selected digit is visibly emphasized.", "A digit absent from the sample is still not guaranteed to be absent next."] },
   { title: "Current tick display", body: "The current tick readout shows the latest live quote's last digit and marks that digit in the ten-digit strip.", points: ["The red pointer identifies the latest digit.", "A quote can move before the next control action.", "The sample trail shows recent context, not a fixed sequence."] },
-  { title: "Execution ticks", body: "Execution duration is set separately from the analysis window. Choose 1 through 5 ticks for how long each contract observes before settlement.", points: ["One tick resolves quickly.", "Longer durations are not automatically safer.", "Changing duration does not rewrite past rows."] },
+  { title: "Execution ticks", body: "Deriv starts the contract duration at the accepted entry spot (tick 0). A 1-tick contract settles on the first market tick after Deriv confirms the buy; 2–5 ticks settle on their matching numbered tick. A quote may change while the buy request is still pending.", points: ["Use only 1 through 5 ticks.", "The entry quote is not an expiry tick.", "Deriv confirms each contract's settlement."] },
   { title: "Stake", body: "Stake starts at 0.35 and accepts decimals. The server and selected account remain the final authority over whether a contract can be bought.", points: ["Keep a reserve in the account.", "There is no artificial maximum in the control.", "A valid stake does not remove market risk."] },
   { title: "Number of bulk trades", body: "Choose 1 through 6 bulk trades. One action sends that many separate contracts and the history lists each returned contract independently.", points: ["Bulk count is not a single combined contract.", "Watch the account balance before increasing count.", "The request is blocked while another bulk request is pending."] },
   { title: "Trade buttons", body: "The action buttons change with the active trade type and show the current observed percentage beneath the label.", points: ["Over / Under show two buttons.", "Differs shows one action for the selected digit.", "Manual actions remain available when the observed signal is not ready."] },
@@ -4386,16 +4387,14 @@ export default function XTraderPage() {
       bulkSessionKnownIdsRef.current = new Set(beforeRows.map((trade) => trade.contract_id));
     }
     const send = (type: BulkTraderContractType) => bulkBuyMutation.mutateAsync({
-      data: {
-        access_feature: "bulk-trader",
+      data: buildBulkTraderOrderData({
         amount,
         duration: bulkTraderDuration,
-        duration_unit: "t",
-        contract_type: type,
+        contractType: type,
         barrier,
         symbol,
         count: bulkTraderCount,
-      },
+      }),
     });
     bulkActionLockRef.current = true;
     try {

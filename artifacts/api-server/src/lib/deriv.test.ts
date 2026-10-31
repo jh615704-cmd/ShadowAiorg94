@@ -1265,31 +1265,48 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
     });
   });
 
-  test("Auto Trader 1–5 tick durations are passed unchanged to Deriv proposals and buys", async () => {
-    for (const duration of [1, 2, 3, 4, 5]) {
-      mockPortfolioContracts = [];
-      const userId = `auto-trader-duration-${duration}`;
-      const result = await withSelectedAccount(userId, () => deriv.bulkBuyContracts({
-        amount: 1,
-        duration,
-        duration_unit: "t",
-        contract_type: "DIGITDIFF",
-        barrier: 4,
-        symbol: "R_75",
-        count: 1,
-      }, undefined, true));
+  test("Bulk Trader preserves exact 1–5 tick durations for every digit type and order size", async () => {
+    const contractTypes = ["DIGITOVER", "DIGITUNDER", "DIGITDIFF"] as const;
+    for (const count of [1, 3]) {
+      for (const contractType of contractTypes) {
+        for (const duration of [1, 2, 3, 4, 5]) {
+          mockPortfolioContracts = [];
+          const userId = `bulk-duration-${contractType}-${duration}-${count}`;
+          const barrier = contractType === "DIGITDIFF" ? 4 : 3;
+          const result = await withSelectedAccount(userId, () => deriv.bulkBuyContracts({
+            amount: 1,
+            duration,
+            duration_unit: "t",
+            contract_type: contractType,
+            barrier,
+            symbol: "R_75",
+            count,
+          }, undefined, true));
 
-      assert.equal(result.count, 1);
-      const socket = latestSocket();
-      const proposal = socket.sent.find((message) => message.proposal === 1);
-      const buy = socket.sent.find((message) => message.buy === "1");
-      assert.equal(proposal?.duration, duration);
-      assert.equal(proposal?.duration_unit, "t");
-      assert.equal((buy?.parameters as Record<string, unknown> | undefined)?.duration, duration);
-      assert.equal((buy?.parameters as Record<string, unknown> | undefined)?.duration_unit, "t");
-      deriv.disposeUser(userId);
-      testUserIds.delete(userId);
-      mockPortfolioContracts = [];
+          assert.equal(result.count, count);
+          assert.equal(result.buys.length, count);
+          const socket = latestSocket();
+          const proposals = socket.sent.filter((message) => message.proposal === 1);
+          const buys = socket.sent.filter((message) => message.buy === "1");
+          assert.equal(proposals.length, count);
+          assert.equal(buys.length, count);
+          assert.ok(proposals.every((proposal) =>
+            proposal.duration === duration
+            && proposal.duration_unit === "t"
+            && proposal.contract_type === contractType,
+          ));
+          assert.ok(buys.every((buy) => {
+            const parameters = buy.parameters as Record<string, unknown> | undefined;
+            return parameters?.duration === duration
+              && parameters.duration_unit === "t"
+              && parameters.contract_type === contractType;
+          }));
+
+          deriv.disposeUser(userId);
+          testUserIds.delete(userId);
+          mockPortfolioContracts = [];
+        }
+      }
     }
   });
 
@@ -1338,7 +1355,8 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
       amount: 1,
       duration: 1,
       duration_unit: "t",
-      contract_type: "DIGITODD",
+      contract_type: "DIGITOVER",
+      barrier: 3,
       symbol: "R_75",
       count: 1,
     }));
@@ -1356,9 +1374,13 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
           payout: 4.5,
           bid_price: 1,
           profit: 0,
+          duration: 1,
+          duration_unit: "t",
+          tick_passed: 0,
         },
       });
       assert.equal(deriv.getStatus().active_contract_count, 1, "string zero is not a sold flag");
+      assert.equal(deriv.getHistory()[0].tick_passed, 0, "the entry spot is not counted as an expiry tick");
 
       emitMessage(socket, {
         msg_type: "proposal_open_contract",
@@ -1370,18 +1392,23 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
           payout: 4.5,
           sell_price: 1.25,
           profit: 0.25,
+          duration: 1,
+          duration_unit: "t",
+          tick_passed: 1,
           sell_time: 1_700_000_001,
         },
       });
       assert.equal(deriv.getStatus().active_contract_count, 0);
       assert.equal(deriv.getHistory()[0].status, "closed");
+      assert.equal(deriv.getHistory()[0].tick_passed, 1, "Deriv's sold event at the first post-entry tick settles a 1-tick contract");
       assert.equal(deriv.getStatus().last_contract?.is_sold, true);
 
       const nextBatch = await deriv.bulkBuyContracts({
         amount: 1,
         duration: 1,
         duration_unit: "t",
-        contract_type: "DIGITODD",
+        contract_type: "DIGITOVER",
+        barrier: 3,
         symbol: "R_75",
         count: 1,
       });
