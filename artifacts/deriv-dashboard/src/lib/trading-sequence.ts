@@ -41,6 +41,25 @@ export type EdgeDurationHistorySample = {
   profit: number;
 };
 
+export type EdgeDurationAvailabilitySetup = {
+  amount: number;
+  contract_type: DigitDirection;
+  barrier: number;
+  symbol: string;
+};
+
+export function createEdgeDurationAvailabilitySetup(
+  candidate: { direction: DigitDirection; digit: number; symbol: string },
+  amount: number,
+): EdgeDurationAvailabilitySetup {
+  return {
+    amount,
+    contract_type: candidate.direction,
+    barrier: candidate.digit,
+    symbol: candidate.symbol,
+  };
+}
+
 export type BestDigitSignal = {
   symbol: string;
   direction: DigitDirection;

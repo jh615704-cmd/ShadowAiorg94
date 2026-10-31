@@ -48,6 +48,7 @@ import {
   chooseBestEdgeSignal,
   chooseBestEdgeTradeSignal,
   chooseEdgeDurationByWinRate,
+  createEdgeDurationAvailabilitySetup,
   nextStakeAfterSettlement,
   rankDigitsByDistribution,
   sessionStopReason,
@@ -3575,10 +3576,7 @@ export default function XTraderPage() {
       const availability = await edgeDurationAvailabilityMutation.mutateAsync({
         data: {
           access_feature: "edge",
-          amount: stake,
-          contract_type: candidate.direction,
-          barrier,
-          symbol,
+          ...createEdgeDurationAvailabilitySetup(candidate, stake),
         },
       });
       supportedDurations = availability.supported_durations;

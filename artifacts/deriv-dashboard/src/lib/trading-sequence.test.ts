@@ -6,6 +6,7 @@ import {
   chooseBestEdgeSignal,
   chooseBestEdgeTradeSignal,
   chooseEdgeDurationByWinRate,
+  createEdgeDurationAvailabilitySetup,
   digitForTick,
   findNewlySettledTrade,
   rankDigitsForDiffers,
@@ -358,6 +359,24 @@ describe("EDGE duration selection", () => {
     assert.equal(
       chooseEdgeDurationByWinRate(rows, "R_75", "DIGITUNDER", 4, [1, 2], 5),
       1,
+    );
+  });
+
+  it("checks duration availability for the scanned candidate, not stale UI values", () => {
+    assert.deepEqual(
+      createEdgeDurationAvailabilitySetup({
+        symbol: "JD100",
+        direction: "DIGITUNDER",
+        digit: 7,
+        score: 61.2,
+        sampleCount: 50,
+      }, 2.5),
+      {
+        amount: 2.5,
+        contract_type: "DIGITUNDER",
+        barrier: 7,
+        symbol: "JD100",
+      },
     );
   });
 });
