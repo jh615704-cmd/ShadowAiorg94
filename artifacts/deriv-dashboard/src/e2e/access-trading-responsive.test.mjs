@@ -1406,20 +1406,19 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
     await autoKnockoutSwitch.waitFor();
     await page.locator(".money-bank-market-toggle label").click();
     assert.equal(await autoKnockoutSwitch.isChecked(), true);
-    await page.getByText("Ready", { exact: true }).waitFor();
     const autoKnockoutStatus = page.locator(".money-bank-knockout-scan");
     await autoKnockoutStatus.waitFor({ state: "visible" });
-    assert.match(await autoKnockoutStatus.innerText(), /10-second entry countdown/);
-    assert.match(await autoKnockoutStatus.innerText(), /never blocks or closes trades/);
+    assert.match(await autoKnockoutStatus.innerText(), /Waiting for knockouts 0\/4/);
+    assert.match(await autoKnockoutStatus.innerText(), /Knockouts before trade/);
     await page.getByRole("button", { name: "Start Accumulator" }).click();
-    await page.getByText(/Preparing trade ·/).waitFor({ timeout: 5_000 });
-    const countdownProgress = page.getByRole("progressbar", { name: "Money Bank entry countdown progress" });
-    await countdownProgress.waitFor({ state: "visible" });
-    const progressAtStart = Number(await countdownProgress.getAttribute("aria-valuenow"));
+    await page.getByText(/Waiting for live .* ticks/).waitFor({ timeout: 5_000 });
+    const exitTickProgress = page.getByRole("progressbar", { name: "Money Bank exit tick progress" });
+    await exitTickProgress.waitFor({ state: "visible" });
+    const progressAtStart = Number(await exitTickProgress.getAttribute("aria-valuenow"));
     await page.waitForTimeout(1_200);
-    assert.equal(await autoKnockoutStatus.isVisible(), true, "The countdown must remain visible while Money Bank is preparing a trade.");
-    const progressAfterWait = Number(await countdownProgress.getAttribute("aria-valuenow"));
-    assert.ok(progressAfterWait > progressAtStart, "The countdown progress should advance smoothly instead of blinking out.");
+    assert.equal(await autoKnockoutStatus.isVisible(), true, "The scanner status must remain visible while Money Bank waits for knockouts.");
+    const progressAfterWait = Number(await exitTickProgress.getAttribute("aria-valuenow"));
+    assert.ok(progressAfterWait > progressAtStart, "Exit-tick progress should advance as live scanner ticks arrive.");
     await page.getByRole("button", { name: "Stop Accumulator" }).click();
     assert.equal(await autoKnockoutStatus.isVisible(), true, "Stopping Money Bank should leave the enabled countdown panel visible.");
     for (const viewport of viewports) {
@@ -1584,6 +1583,8 @@ function createState(session) {
     hasToken: false,
     allowFixtureTrades: false,
     tradeSequence: 0,
+    selectedSymbol: "R_75",
+    knockoutScanProgress: 0,
     apiCalls: [],
     unhandledApis: [],
     logoutCount: 0,
@@ -1795,7 +1796,7 @@ async function mockApiRequest(route, state, pathname, method) {
   }
   if (pathname === "/api/deriv/status" && method === "GET") {
     state.statusVersion += 1;
-    await fulfillJson(route, makeDerivStatus(state.statusVersion, state.activeContractCount, state.marketSignalOverrides));
+    await fulfillJson(route, makeDerivStatus(state.statusVersion, state.activeContractCount, state.marketSignalOverrides, state.selectedSymbol));
     return;
   }
   if (pathname === "/api/deriv/history" && method === "GET") {
@@ -1812,6 +1813,26 @@ async function mockApiRequest(route, state, pathname, method) {
         spot: 100_000,
         longcode: "Fixture quote",
       })),
+    });
+    return;
+  }
+  if (pathname === "/api/deriv/accumulator-knockout-scan" && method === "POST") {
+    const input = request.postDataJSON();
+    if (input.action === "start") state.knockoutScanProgress = 0;
+    else if (input.action === "poll") state.knockoutScanProgress = Math.min(input.duration, state.knockoutScanProgress + 1);
+    const progress = state.knockoutScanProgress;
+    await fulfillJson(route, {
+      ok: true,
+      message: "Waiting for the virtual Accumulator to survive the selected Take Ticks.",
+      phase: progress >= input.duration ? "waiting_for_knockout" : "waiting_for_take_ticks",
+      symbol: input.symbol,
+      qualified_knockouts: 0,
+      required_knockouts: input.required_knockouts,
+      tick_progress: progress,
+      take_profit_ticks: input.duration,
+      tick_sequence: progress,
+      ready_to_trade: false,
+      market_matches: true,
     });
     return;
   }
@@ -1850,7 +1871,8 @@ async function mockApiRequest(route, state, pathname, method) {
     return;
   }
   if (pathname === "/api/deriv/select-symbol" && method === "POST") {
-    await fulfillJson(route, { symbol: request.postDataJSON().symbol });
+    state.selectedSymbol = request.postDataJSON().symbol;
+    await fulfillJson(route, { symbol: state.selectedSymbol });
     return;
   }
   if (/^\/api\/deriv\/(buy|bulk-buy|dual-buy|sell)(\/|$)/.test(pathname)) {
@@ -1867,7 +1889,7 @@ async function mockApiRequest(route, state, pathname, method) {
   await fulfillJson(route, { error: "Unhandled fixture API request." }, 501);
 }
 
-function makeDerivStatus(version, activeContractCount = 0, marketSignalOverrides = {}) {
+function makeDerivStatus(version, activeContractCount = 0, marketSignalOverrides = {}, selectedSymbol = "R_75") {
   const signals = symbols.map((symbol, index) => {
     const digit = (version + index) % 10;
     return {
@@ -1895,11 +1917,12 @@ function makeDerivStatus(version, activeContractCount = 0, marketSignalOverrides
   return {
     connected: true,
     authorized: true,
+    symbol: selectedSymbol,
     account,
     active_contract_count: activeContractCount,
     last_digit: version % 10,
     open_contracts_ready: true,
-    last_tick: { symbol: "R_75", quote: 100_000 + version, epoch: 1_700_000_000 + version },
+    last_tick: { symbol: selectedSymbol, quote: 100_000 + version, epoch: 1_700_000_000 + version },
     market_signals: signals,
   };
 }

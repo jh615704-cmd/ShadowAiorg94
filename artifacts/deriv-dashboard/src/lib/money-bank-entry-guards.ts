@@ -37,6 +37,9 @@ export function getMoneyBankStartConfigError(
   if (typeof config.autoKnockout !== "boolean") {
     return "Money Bank Auto Knockout setting is invalid.";
   }
+  if (!Number.isInteger(config.knockoutsBeforeTrade) || config.knockoutsBeforeTrade < 1 || config.knockoutsBeforeTrade > 20) {
+    return "Money Bank requires 1 to 20 qualifying knockouts before a trade.";
+  }
   if (
     typeof config.reinvestProfit !== "boolean"
     || !Number.isFinite(config.reinvestPercent)

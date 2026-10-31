@@ -205,7 +205,19 @@ mock.module("../lib/deriv", {
     scanAccumulatorKnockout: async () => {
       observePat();
       knockoutScanInvocations += 1;
-      return { ok: true, message: "scan passed" };
+      return {
+        ok: true,
+        message: "scan passed",
+        phase: "waiting_for_take_ticks",
+        symbol: "1HZ90V",
+        qualified_knockouts: 0,
+        required_knockouts: 4,
+        tick_progress: 0,
+        take_profit_ticks: 5,
+        tick_sequence: 0,
+        ready_to_trade: false,
+        market_matches: true,
+      };
     },
     buyContract: async () => {
       observePat();
@@ -343,16 +355,19 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        access_feature: "edge",
+        action: "start",
         amount: 1,
         duration: 5,
         duration_unit: "t",
         contract_type: "ACCU",
         growth_rate: 0.04,
         symbol: "1HZ90V",
+        required_knockouts: 4,
       }),
     });
-    assert.equal(scanResponse.status, 200, JSON.stringify(await readJson(scanResponse)));
+    const scanResponseBody = await readJson(scanResponse);
+    assert.equal(scanResponse.status, 200, JSON.stringify(scanResponseBody));
+    assert.equal(scanResponseBody.required_knockouts, 4);
     assert.equal(knockoutScanInvocations, 1);
 
     const invalidMoneyBankDurationResponse = await fetch(`${baseUrl}/deriv/buy`, {

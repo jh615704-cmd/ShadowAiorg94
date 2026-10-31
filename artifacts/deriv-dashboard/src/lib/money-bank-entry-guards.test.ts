@@ -14,6 +14,7 @@ const validConfig: MoneyBankStartConfig = {
   growthRate: 4,
   takeProfitTicks: 5,
   autoKnockout: true,
+  knockoutsBeforeTrade: 4,
   strategy: "budget",
   budget: 2.2,
   manualBase: 1,
@@ -46,6 +47,10 @@ describe("Money Bank entry safeguards", () => {
         ladder: [{ ...validConfig.ladder[0], cumulative: 1.5 }],
       }, 10, ["1HZ10V"]) ?? "",
       /totals/,
+    );
+    assert.match(
+      getMoneyBankStartConfigError({ ...validConfig, knockoutsBeforeTrade: 0 }, 10, ["1HZ10V"]) ?? "",
+      /1 to 20 qualifying knockouts/,
     );
   });
 

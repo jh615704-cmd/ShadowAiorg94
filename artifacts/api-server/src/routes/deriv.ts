@@ -16,6 +16,8 @@ import {
   QuoteClockWorkContractsResponse,
   BuyClockWorkContractsBody,
   BuyClockWorkContractsResponse,
+  ScanDerivAccumulatorKnockoutBody,
+  ScanDerivAccumulatorKnockoutResponse,
   SelectDerivAccountBody,
   SelectDerivAccountResponse,
   SelectDerivSymbolBody,
@@ -371,13 +373,13 @@ router.post("/deriv/proposals", async (req, res) => {
 });
 
 router.post("/deriv/accumulator-knockout-scan", async (req, res) => {
-  const parsed = RequestDerivProposalBody.safeParse(req.body);
+  const parsed = ScanDerivAccumulatorKnockoutBody.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid Accumulator scan request" });
   }
 
   try {
-    const result = RequestDerivProposalResponse.parse(
+    const result = ScanDerivAccumulatorKnockoutResponse.parse(
       await withCredential(res.locals.userId, () => scanAccumulatorKnockout(parsed.data), true),
     );
     return res.json(result);

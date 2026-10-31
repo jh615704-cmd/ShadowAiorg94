@@ -3,8 +3,8 @@ name: Money Bank Auto Knockout
 description: Server-side Accumulator entry screening using Deriv's proposal-specific knockout barrier and recent market ticks.
 ---
 
-Money Bank Auto Knockout is a non-blocking 10-second pre-entry countdown. It must not reject or delay an otherwise valid buy based on barrier movement, scan evidence, or exit-tick availability, and must never close an open contract. Standard authorization, account, balance, proposal, and server trading protections remain in force.
+Money Bank Auto Knockout is a server-checked entry gate, not a countdown. Before a buy, the selected market must produce the configured number of virtual Accumulator knockouts that occur after the selected Take Ticks and clear. Default to four; show qualified-knockout count and exit-tick progress. Manual trade losses do not count. Do not describe the scan as a win-rate guarantee.
 
-**Why:** The user explicitly wants Auto Knockout to allow trades regardless of the scan result and not stop trades.
+**Why:** The user specified that Auto Knockout should wait for selected exit ticks, confirm the knockout has cleared, show progress, and only then allow the trade.
 
-**How to apply:** Keep its countdown smooth and visible, but do not connect countdown or knockout scan state to buy approval or contract closure. Preserve unrelated account and Deriv order safeguards.
+**How to apply:** Keep the UI scanner state, API schema, and server-side buy check in sync. Preserve account, market, balance, proposal, and Deriv order safeguards. Never close an open contract as part of knockout scanning.

@@ -1267,10 +1267,12 @@ async function sendDirectBuy(proposal: DerivProposal, input: ProposalInput): Pro
 async function sendDirectBuyWithRateLimitRetry(
   initialProposal: DerivProposal,
   input: ProposalInput,
+  beforeSend?: () => Promise<void>,
 ): Promise<DerivBuy> {
   let proposal = initialProposal;
   for (let retry = 0; ; retry += 1) {
     try {
+      await beforeSend?.();
       return await sendDirectBuy(proposal, input);
     } catch (error) {
       if (!isDerivBuyRateLimitError(error) || retry >= 2) throw error;
@@ -2292,6 +2294,7 @@ export async function buyContract(input: BuyInput, assertAuthorized?: TradeAutho
     assertNoActiveContract(true);
     const freshProposal = await requestFreshProposal(proposalInput);
     if (!await connect()) throw new Error("Deriv WebSocket is not ready");
+    assertMoneyBankKnockoutReady(normalizedInput);
     await assertAuthorized?.();
     return freshProposal;
   });
@@ -2312,9 +2315,22 @@ export async function buyContract(input: BuyInput, assertAuthorized?: TradeAutho
       { code: error.code, contractType: normalizedInput.contract_type, symbol: proposalInput.symbol },
       "Deriv explicitly rejected the single-trade request; requesting a fresh direct quote",
     );
-    proposal = await requestFreshProposal(proposalInput);
-    await assertAuthorized?.();
-    buy = await sendDirectBuyWithRateLimitRetry(proposal, normalizedInput);
+    proposal = await runBeforeBuy(async () => {
+      const freshProposal = await requestFreshProposal(proposalInput);
+      if (!await connect()) throw new Error("Deriv WebSocket is not ready");
+      assertMoneyBankKnockoutReady(normalizedInput);
+      await assertAuthorized?.();
+      return freshProposal;
+    });
+    buy = await sendDirectBuyWithRateLimitRetry(
+      proposal,
+      normalizedInput,
+      () => runBeforeBuy(async () => {
+        if (!await connect()) throw new Error("Deriv WebSocket is not ready");
+        assertMoneyBankKnockoutReady(normalizedInput);
+        await assertAuthorized?.();
+      }),
+    );
   }
   return {
     ok: true,

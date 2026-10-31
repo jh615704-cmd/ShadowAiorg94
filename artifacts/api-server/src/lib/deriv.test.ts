@@ -697,7 +697,6 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
         contract_type: "ACCU",
         growth_rate: 0.04,
         symbol: "1HZ90V",
-        auto_knockout: true,
       });
     });
 
@@ -716,7 +715,6 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
         contract_type: "ACCU",
         growth_rate: 0.04,
         symbol: "1HZ90V",
-        auto_knockout: true,
       });
     });
 
@@ -724,11 +722,88 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
     assert.ok(latestSocket().sent.some((message) => message.buy));
   });
 
-  test("does not gate Money Bank buys on knockout movement or incomplete exit-window ticks", async () => {
-    const result = await withSelectedAccount("accumulator-knockout-nonblocking-user", async () => {
+  test("blocks an Auto Knockout buy until the required scanner events are ready", async () => {
+    await withSelectedAccount("accumulator-knockout-gated-user", async () => {
       const socket = latestSocket();
-      emitAccumulatorTicks(socket, [75.5, 75.5]);
+      await assert.rejects(
+        deriv.buyContract({
+          amount: 1,
+          duration: 5,
+          duration_unit: "t",
+          contract_type: "ACCU",
+          growth_rate: 0.04,
+          symbol: "1HZ90V",
+          auto_knockout: true,
+          auto_knockout_target: 4,
+        }),
+        /waiting for the required live scanner knockouts/,
+      );
+      assert.equal(socket.sent.some((message) => message.buy), false);
+    });
+  });
+
+  test("starts the live Auto Knockout scanner and reports selected exit-tick progress", async () => {
+    await withSelectedAccount("accumulator-knockout-scan-progress-user", async () => {
+      await deriv.selectSymbol("1HZ90V");
+      const socket = latestSocket();
+      emitAccumulatorTicks(socket, [75.5, 75.5, 75.5, 75.5, 75.5, 75.5]);
+      const input = {
+        action: "start" as const,
+        amount: 1,
+        duration: 5,
+        duration_unit: "t",
+        contract_type: "ACCU",
+        growth_rate: 0.04,
+        symbol: "1HZ90V",
+        required_knockouts: 4,
+      } as const;
+      const started = await deriv.scanAccumulatorKnockout(input);
+      assert.equal(started.phase, "waiting_for_take_ticks");
+      assert.equal(started.required_knockouts, 4);
+
+      emitAccumulatorTick(socket, 75.5);
+      const progress = await deriv.scanAccumulatorKnockout({ ...input, action: "poll" });
+      assert.equal(progress.phase, "waiting_for_take_ticks");
+      assert.equal(progress.tick_progress, 1);
+      assert.equal(progress.qualified_knockouts, 0);
+      assert.equal(progress.ready_to_trade, false);
+      assert.equal(socket.sent.some((message) => message.buy), false);
+    });
+  });
+
+  test("only permits an Auto Knockout buy after the exit window, knockout, and clear are confirmed", async () => {
+    const result = await withSelectedAccount("accumulator-knockout-ready-user", async () => {
+      await deriv.selectSymbol("1HZ90V");
+      const socket = latestSocket();
+      emitAccumulatorTicks(socket, [75.5, 75.5, 75.5, 75.5, 75.5, 75.5]);
+      const input = {
+        amount: 1,
+        duration: 5,
+        duration_unit: "t" as const,
+        contract_type: "ACCU" as const,
+        growth_rate: 0.04,
+        symbol: "1HZ90V",
+        required_knockouts: 1,
+      };
+      const started = await deriv.scanAccumulatorKnockout({ ...input, action: "start" });
+      assert.equal(started.ready_to_trade, false);
+
+      for (let tick = 0; tick < 5; tick += 1) emitAccumulatorTick(socket, 75.5);
+      const exitTicksSurvived = await deriv.scanAccumulatorKnockout({ ...input, action: "poll" });
+      assert.equal(exitTicksSurvived.phase, "waiting_for_knockout");
+      assert.equal(exitTicksSurvived.tick_progress, 5);
+
       emitAccumulatorTick(socket, 75.50006);
+      const knockoutDetected = await deriv.scanAccumulatorKnockout({ ...input, action: "poll" });
+      assert.equal(knockoutDetected.phase, "waiting_for_clear");
+      assert.equal(knockoutDetected.ready_to_trade, false);
+
+      emitAccumulatorTick(socket, 75.5);
+      const knockoutCleared = await deriv.scanAccumulatorKnockout({ ...input, action: "poll" });
+      assert.equal(knockoutCleared.phase, "ready");
+      assert.equal(knockoutCleared.qualified_knockouts, 1);
+      assert.equal(knockoutCleared.ready_to_trade, true);
+
       return deriv.buyContract({
         amount: 1,
         duration: 5,
@@ -737,74 +812,12 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
         growth_rate: 0.04,
         symbol: "1HZ90V",
         auto_knockout: true,
+        auto_knockout_target: 1,
       });
     });
 
-    assert.equal(result.buy.contract_id, "900000001");
+    assert.ok(result.buy.contract_id);
     assert.ok(latestSocket().sent.some((message) => message.buy));
-  });
-
-  test("requires a clear ten-second Auto Knockout scan and a fresh exit-window quote", async () => {
-    const result = await withSelectedAccount("accumulator-knockout-scan-safe-user", async () => {
-      const socket = latestSocket();
-      emitAccumulatorTicks(socket, [75.5, 75.5, 75.5, 75.5, 75.5, 75.5]);
-      setTimeout(() => emitAccumulatorTick(socket, 75.5), 15);
-      return deriv.scanAccumulatorKnockout({
-        amount: 1,
-        duration: 5,
-        duration_unit: "t",
-        contract_type: "ACCU",
-        growth_rate: 0.04,
-        symbol: "1HZ90V",
-      }, 60);
-    });
-
-    assert.equal(result.ok, true);
-    assert.equal(latestSocket().sent.some((message) => message.buy), false);
-  });
-
-  test("blocks the Auto Knockout scan when a tick reaches Deriv's barrier", async () => {
-    await withSelectedAccount("accumulator-knockout-scan-risk-user", async () => {
-      const socket = latestSocket();
-      emitAccumulatorTicks(socket, [75.5, 75.5, 75.5, 75.5, 75.5, 75.5]);
-      setTimeout(() => emitAccumulatorTick(socket, 75.50006), 15);
-      await assert.rejects(
-        deriv.scanAccumulatorKnockout({
-          amount: 1,
-          duration: 5,
-          duration_unit: "t",
-          contract_type: "ACCU",
-          growth_rate: 0.04,
-          symbol: "1HZ90V",
-        }, 60),
-        /knockout-sized move during its 10-second scan/,
-      );
-      assert.equal(socket.sent.some((message) => message.buy), false);
-    });
-  });
-
-  test("blocks cumulative movement that reaches the barrier during the scan", async () => {
-    await withSelectedAccount("accumulator-knockout-cumulative-scan-user", async () => {
-      const socket = latestSocket();
-      emitAccumulatorTicks(socket, [75.5, 75.5, 75.5, 75.5, 75.5, 75.5]);
-      setTimeout(() => {
-        emitAccumulatorTick(socket, 75.50002);
-        emitAccumulatorTick(socket, 75.50004);
-        emitAccumulatorTick(socket, 75.50006);
-      }, 15);
-      await assert.rejects(
-        deriv.scanAccumulatorKnockout({
-          amount: 1,
-          duration: 5,
-          duration_unit: "t",
-          contract_type: "ACCU",
-          growth_rate: 0.04,
-          symbol: "1HZ90V",
-        }, 60),
-        /knockout-sized move during its 10-second scan/,
-      );
-      assert.equal(socket.sent.some((message) => message.buy), false);
-    });
   });
 
   test("rounds Accumulator stakes before Deriv receives the proposal", async () => {

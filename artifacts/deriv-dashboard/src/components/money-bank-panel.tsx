@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Activity, ChevronDown, Download, Play, RefreshCw, ShieldCheck, Square, TrendingUp } from "lucide-react";
+import type { MoneyBankKnockoutScannerResponse } from "@workspace/api-client-react";
 import {
   calculateRecoveryLadder,
   estimateAccumulatorReturnRate,
@@ -18,6 +19,7 @@ export type MoneyBankStartConfig = {
   growthRate: number;
   takeProfitTicks: number;
   autoKnockout: boolean;
+  knockoutsBeforeTrade: number;
   strategy: MoneyBankStrategy;
   budget: number;
   manualBase: number;
@@ -83,8 +85,10 @@ type MoneyBankPanelProps = {
   takeProfitTicks: number;
   onTakeProfitTicksChange: (value: number) => void;
   autoKnockout: boolean;
-  autoKnockoutCountdown: number | null;
+  knockoutsBeforeTrade: number;
+  autoKnockoutScan: MoneyBankKnockoutScannerResponse | null;
   onAutoKnockoutChange: (enabled: boolean) => void;
+  onKnockoutsBeforeTradeChange: (value: number) => void;
   strategy: MoneyBankStrategy;
   onStrategyChange: (strategy: MoneyBankStrategy) => void;
   budget: number;
@@ -133,8 +137,10 @@ export function MoneyBankPanel({
   takeProfitTicks,
   onTakeProfitTicksChange,
   autoKnockout,
-  autoKnockoutCountdown,
+  knockoutsBeforeTrade,
+  autoKnockoutScan,
   onAutoKnockoutChange,
+  onKnockoutsBeforeTradeChange,
   strategy,
   onStrategyChange,
   budget,
@@ -173,6 +179,12 @@ export function MoneyBankPanel({
   const profitBasis = lastSettledProfit != null && lastSettledProfit > 0 ? lastSettledProfit : projectedProfit;
   const reinvestedProfit = roundCents(profitBasis * reinvestPercent / 100);
   const retainedProfit = roundCents(Math.max(0, profitBasis - reinvestedProfit));
+  const requiredKnockouts = autoKnockoutScan?.required_knockouts ?? knockoutsBeforeTrade;
+  const qualifiedKnockouts = autoKnockoutScan?.qualified_knockouts ?? 0;
+  const exitTickTarget = autoKnockoutScan?.take_profit_ticks ?? takeProfitTicks;
+  const exitTicksReached = Math.min(exitTickTarget, autoKnockoutScan?.tick_progress ?? 0);
+  const exitTickProgress = exitTickTarget > 0 ? exitTicksReached / exitTickTarget : 0;
+  const knockoutReady = autoKnockoutScan?.ready_to_trade === true;
   const [historyHidden, setHistoryHidden] = useState<Set<string>>(new Set());
   const [historyClearArmed, setHistoryClearArmed] = useState(false);
   const [historyFading, setHistoryFading] = useState(false);
@@ -191,6 +203,7 @@ export function MoneyBankPanel({
       growthRate,
       takeProfitTicks,
       autoKnockout,
+      knockoutsBeforeTrade,
       strategy,
       budget,
       manualBase,
@@ -301,35 +314,63 @@ export function MoneyBankPanel({
             </div>
             <div className="money-bank-toggle-list money-bank-market-toggle">
               <label>
-                <span><b>Auto Knockout</b>{autoKnockout && <small>{autoKnockoutCountdown == null ? "Ready" : "Countdown"}</small>}</span>
+                <span><b>Auto Knockout</b>{autoKnockout && <small>{knockoutReady ? "Ready to enter" : "Waiting for knockouts"}</small>}</span>
                 <input type="checkbox" checked={autoKnockout} onChange={(event) => onAutoKnockoutChange(event.target.checked)} disabled={controlsDisabled} aria-label="Toggle Money Bank Auto Knockout" />
                 <i />
               </label>
             </div>
             {autoKnockout && (
               <div className="money-bank-knockout-scan" role="status" aria-live="polite">
-                <Activity size={15} />
-                <span>
-                  {autoKnockoutCountdown == null
-                    ? "Ready · 10-second entry countdown; Auto Knockout never blocks or closes trades."
-                    : autoKnockoutCountdown > 0
-                      ? `Preparing trade · ${growthRate}% growth · ${takeProfitTicks} exit ticks · ${selectedMarket}: ${autoKnockoutCountdown.toFixed(1)}s`
-                      : "Countdown complete · submitting the trade…"}
-                </span>
+                <div className="money-bank-knockout-heading">
+                  <b>{knockoutReady ? "Knockout condition met" : `Waiting for knockouts ${qualifiedKnockouts}/${requiredKnockouts}`}</b>
+                  <span>Scanner cycle: {exitTicksReached}/{exitTickTarget} exit ticks · {qualifiedKnockouts}/{requiredKnockouts} qualified</span>
+                </div>
+                <p>
+                  {autoKnockoutScan?.phase === "waiting_for_market"
+                    ? `Re-confirming the selected ${selectedMarket} market before scanning.`
+                    : autoKnockoutScan?.phase === "waiting_for_quote"
+                      ? `Waiting for a fresh live ${selectedMarket} quote.`
+                      : autoKnockoutScan?.phase === "waiting_for_clear"
+                        ? "Knockout observed. Waiting for the market move to clear before counting it."
+                        : autoKnockoutScan?.phase === "waiting_for_knockout"
+                          ? `Take Ticks ${takeProfitTicks} survived. Waiting for a live scanner knockout.`
+                          : autoKnockoutScan?.phase === "ready"
+                            ? autoKnockoutScan.message
+                            : running
+                              ? `Waiting for live ${selectedMarket} ticks. Knockouts must survive beyond Take Ticks ${takeProfitTicks}.`
+                              : "Start Accumulator to begin checking live scanner knockouts."}
+                </p>
+                <div className="money-bank-knockout-settings">
+                  <label htmlFor="money-bank-knockouts-before-trade">Knockouts before trade</label>
+                  <input
+                    id="money-bank-knockouts-before-trade"
+                    aria-label="Knockouts before trade"
+                    type="number"
+                    min={1}
+                    max={20}
+                    step={1}
+                    value={knockoutsBeforeTrade}
+                    onChange={(event) => onKnockoutsBeforeTradeChange(Math.min(20, Math.max(1, Number(event.target.value) || 1)))}
+                    disabled={controlsDisabled}
+                  />
+                </div>
                 <div
                   className="money-bank-knockout-progress"
                   role="progressbar"
-                  aria-label="Money Bank entry countdown progress"
+                  aria-label="Money Bank exit tick progress"
                   aria-valuemin={0}
-                  aria-valuemax={10}
-                  aria-valuenow={autoKnockoutCountdown == null ? 0 : 10 - autoKnockoutCountdown}
+                  aria-valuemax={exitTickTarget}
+                  aria-valuenow={exitTicksReached}
                 >
                   <i
                     style={{
-                      transform: `scaleX(${autoKnockoutCountdown == null ? 0 : Math.min(1, Math.max(0, (10 - autoKnockoutCountdown) / 10))})`,
+                      transform: `scaleX(${Math.min(1, Math.max(0, exitTickProgress))})`,
                     }}
                   />
                 </div>
+                <small className="money-bank-knockout-footnote">
+                  Each qualifying virtual knockout must survive the selected Take Ticks and clear. Manual trade losses do not count. A completed scan is not a guarantee of a winning trade.
+                </small>
               </div>
             )}
           </section>
