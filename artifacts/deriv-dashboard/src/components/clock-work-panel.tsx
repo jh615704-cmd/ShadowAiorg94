@@ -89,7 +89,7 @@ export default function ClockWorkPanel({
   onStart,
   onStop,
 }: ClockWorkPanelProps) {
-  const startDisabled = disabled || busy || !aiEnabled;
+  const startDisabled = disabled || busy;
 
   return (
     <section className={`cw-panel ${enabled ? "cw-live" : ""}`} data-testid="clock-work-panel">
@@ -98,7 +98,7 @@ export default function ClockWorkPanel({
         <div className="cw-heading">
           <span className="cw-kicker"><i /> LIVE MARKET WORKBENCH</span>
           <h2>Clock Work</h2>
-          <p>One AI-selected Higher or Lower entry · 5-tick contracts</p>
+          <p>Higher or Lower contracts · 5 ticks</p>
         </div>
         <span className={`cw-live-chip ${enabled ? "is-live" : ""}`}><i />{enabled ? "LIVE" : "READY"}</span>
       </header>
@@ -130,7 +130,7 @@ export default function ClockWorkPanel({
             {autoBestMode && !autoBestSelection && (
               <aside className="cw-market-recommendation is-pending" data-testid="clock-work-auto-best-pending">
                 <span>NO AUTO BEST MARKET YET</span>
-                <small>No market currently meets the {minimumWinRate}% threshold with 15 fresh five-tick samples.</small>
+                <small>No eligible market is ready yet.</small>
               </aside>
             )}
           </label>
@@ -225,7 +225,7 @@ export default function ClockWorkPanel({
           <div className="cw-ai-heading">
             <div className="cw-ai-title">
               <span className="cw-ai-icon"><Bot size={18} /></span>
-              <span><b>Ai Clock</b><small>Chooses the direction and barrier</small></span>
+              <span><b>Ai Clock</b></span>
             </div>
             <Toggle checked={aiEnabled} onChange={onAiEnabledChange} disabled={disabled && !aiEnabled} />
           </div>

@@ -515,7 +515,7 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
         assert.equal(await panel.locator('input[type="number"]').count(), 4, "Clock Work should have stake, loss multiplier, and two session-limit inputs.");
         assert.equal(await panel.getByTestId("button-clock-start").count(), 1);
         assert.equal(await panel.getByTestId("switch-ai-clock").isChecked(), false);
-        assert.equal(await panel.getByTestId("button-clock-start").isDisabled(), true);
+        assert.equal(await panel.getByTestId("button-clock-start").isDisabled(), false);
 
         const marketSelect = panel.getByTestId("select-clock-market");
         assert.equal(await marketSelect.locator("option").first().textContent(), "Auto best market");
@@ -527,7 +527,7 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
         const autoBestValue = await marketSelect.locator("option").first().getAttribute("value");
         assert.ok(autoBestValue);
         await marketSelect.selectOption(autoBestValue);
-        await panel.getByTestId("clock-ai-status").getByText(/Auto Best selected Volatility 75 Index \(R_75\): 97\.4% observed across 39 completed five-tick samples/).waitFor();
+        await panel.getByTestId("clock-ai-status").getByText(/Auto Best selected Volatility 75 Index\. Waiting for a live quote\./).waitFor();
         await panel.getByTestId("clock-work-auto-best-market").getByText(/Volatility 75 Index/).waitFor();
         assert.equal(await marketSelect.inputValue(), "R_75", "Auto best should select the market with the stronger sample-adjusted results.");
 
@@ -568,18 +568,18 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
         });
         assert.doesNotMatch(
           visibleClockWorkText,
-          /price chart|recent moves|observed lean|higher barrier|lower barrier|half barrier|aggressive auto trading|higher and lower|dual|\d+(?:\.\d+)?%/i,
+          /price chart|recent moves|observed lean|higher barrier|lower barrier|half barrier|aggressive auto trading|higher and lower|dual|\d+(?:\.\d+)?%|chooses the direction and barrier|one ai-selected/i,
         );
         assert.equal(await panel.getByText("WIN RATE", { exact: true }).count(), 0, "Clock Work controls should not show a win-rate percentage.");
 
         const aiSwitch = panel.getByTestId("switch-ai-clock");
         const startButton = panel.getByTestId("button-clock-start");
-        await panel.locator(".cw-toggle").click();
-        assert.equal(await aiSwitch.isChecked(), true);
+        assert.equal(await aiSwitch.isChecked(), false);
         assert.equal(await startButton.isDisabled(), false);
         await startButton.click();
         const stopButton = panel.getByTestId("button-clock-stop");
         await stopButton.waitFor({ state: "visible" });
+        assert.equal(await aiSwitch.isChecked(), false, "Start should work while the Ai Clock switch remains off.");
         assert.equal(await takeProfit.isDisabled(), true);
         assert.equal(await lossLimit.isDisabled(), true);
         await stopButton.click();

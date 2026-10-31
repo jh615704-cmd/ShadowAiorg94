@@ -235,10 +235,10 @@ const tradeXGuidePages = [
 ] as const;
 
 const clockWorkGuidePages = [
-  { title: "Welcome to Clock Work", body: "Ai Clock chooses a Higher or Lower contract and its barrier from recent market outcomes. It only sends one entry when its historical signal qualifies; past outcomes do not guarantee future results.", points: ["Use a demo account while learning.", "Only one trading feature can be active at a time.", "The selected Deriv account receives any accepted order."] },
-  { title: "Connect and choose an account", body: "Connect Deriv and confirm which account is selected before enabling Clock Work. Real-account orders remain subject to the workspace's live-trading and balance checks.", points: ["A disconnected account blocks new entries.", "Open contracts must settle before Ai Clock can enter again.", "Use demo mode to learn the controls."] },
-  { title: "Choose a market and stake", body: "Select a supported market or choose Auto best market to compare recent results for fixed five-tick contracts. Auto Best requires at least 15 completed samples and will not switch markets during a run.", points: ["The selected market and its observed results are shown below the market control.", "Auto Best ranks eligible history by observed results and sample stability; it does not predict future outcomes.", "A settled loss multiplies the next stake; a win resets it to the base stake."] },
-  { title: "Enable and start Ai Clock", body: "Turn on the Ai Clock switch to arm the automation, then press Start Clock Work. Ai Clock evaluates recent five-tick outcomes and confirms a qualifying setup on one fresh quote.", points: ["Every Clock Work contract expires after five ticks.", "The switch alone does not start trading.", "An open or unsettled contract pauses the next entry."] },
+  { title: "Welcome to Clock Work", body: "Clock Work places Higher or Lower contracts on the selected market and account.", points: ["Use a demo account while learning.", "Only one trading feature can be active at a time.", "The selected Deriv account receives any accepted order."] },
+  { title: "Connect and choose an account", body: "Connect Deriv and confirm which account is selected before enabling Clock Work. Real-account orders remain subject to the workspace's live-trading and balance checks.", points: ["A disconnected account blocks new entries.", "Open contracts must settle before Clock Work can enter again.", "Use demo mode to learn the controls."] },
+  { title: "Choose a market and stake", body: "Select a supported market and set the stake for each entry.", points: ["The selected market is shown above the control.", "Auto Best is available as a market choice.", "Review your account balance before starting."] },
+  { title: "Start and stop Clock Work", body: "Choose your market and win-rate threshold, then press Start Clock Work when your account and settings are ready.", points: ["Stop prevents new entries.", "Accepted contracts settle through Deriv.", "An open or unsettled contract pauses the next entry."] },
   { title: "Stop and review history", body: "Stop Clock Work to prevent new entries. An order already accepted by Deriv is not canceled by Stop and must settle through Deriv.", points: ["Clock Work History shows entries and their reported results.", "Clearing history hides local rows only; it does not delete Deriv's account history.", "Check Deriv history before restarting after an uncertain order."] },
 ] as const;
 
@@ -990,7 +990,6 @@ export default function XTraderPage() {
 
   useEffect(() => {
     const canConfirm = clockWorkEnabled
-      && clockWorkAiEnabled
       && clockWorkRunning
       && clockWorkTickIsFreshForMarket
       && isConnected
@@ -1011,7 +1010,6 @@ export default function XTraderPage() {
     );
   }, [
     clockWorkEnabled,
-    clockWorkAiEnabled,
     clockWorkRunning,
     clockWorkTickIsFreshForMarket,
     clockWorkLatestTickId,
@@ -4237,7 +4235,7 @@ export default function XTraderPage() {
     clockWorkActionLockRef.current = true;
     setClockWorkBusy(true);
     setClockWorkStatusMessage(null);
-    setClockWorkAiStatus("Sending the AI-selected order to Deriv.");
+      setClockWorkAiStatus("Sending the selected order to Deriv.");
     try {
       const result = await clockWorkBuyMutation.mutateAsync({ data: { contracts: [contract] } });
       for (const contract of result.contracts) {
@@ -4639,7 +4637,7 @@ export default function XTraderPage() {
     || clockWorkRunHasUnsettledResults;
 
   clockWorkAutomationRef.current = () => {
-    if (!clockWorkEnabled || !clockWorkAiEnabled || !clockWorkRunning) return;
+    if (!clockWorkEnabled || !clockWorkRunning) return;
     const limitReached = getClockWorkLimitReached(clockWorkRunPnl, clockWorkTakeProfit, clockWorkLossLimit);
     if (limitReached) {
       setClockWorkRunning(false);
@@ -4696,7 +4694,7 @@ export default function XTraderPage() {
       return;
     }
     if (clockWorkAutoBestMode && !clockWorkAutoBestSelection) {
-      setClockWorkAiStatus("Auto Best has no qualifying five-tick market yet. Select Auto Best again after more market data arrives.");
+      setClockWorkAiStatus("Auto Best is waiting for an eligible market.");
       return;
     }
     const quoteAgeMs = Date.now() - Number(clockWorkTickEpoch) * 1_000;
@@ -4706,9 +4704,7 @@ export default function XTraderPage() {
       return;
     }
     if (!clockWorkAiCandidate) {
-      setClockWorkAiStatus(
-        `No qualifying five-tick setup is available from recent market history. Ai Clock will recheck on the next fresh quote.`,
-      );
+      setClockWorkAiStatus("No qualifying setup is ready yet. Waiting for a fresh market update.");
       return;
     }
     const confirmation = clockWorkAiConfirmationRef.current;
@@ -4716,7 +4712,7 @@ export default function XTraderPage() {
       confirmation.count < CLOCK_WORK_AI_REQUIRED_CONFIRMATIONS
       || confirmation.candidateKey !== getClockWorkAiCandidateKey(clockWorkAiCandidate)
     ) {
-      setClockWorkAiStatus("Confirming the selected five-tick setup on one fresh quote.");
+      setClockWorkAiStatus("Waiting for a fresh market update.");
       return;
     }
     if (currentAccountBalance == null) {
@@ -4750,14 +4746,15 @@ export default function XTraderPage() {
     };
     clockWorkAiAttemptAtRef.current = Date.now() + 5_000;
     clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
-    setClockWorkAiStatus("Ai Clock found a qualifying setup and is sending one entry.");
+    setClockWorkAiStatus("Clock Work found a qualifying setup and is sending one entry.");
     void executeClockWorkOrder(contract);
   };
   useEffect(() => {
-    if (!clockWorkEnabled || !clockWorkAiEnabled || !clockWorkRunning) return;
-    const timer = window.setInterval(() => clockWorkAutomationRef.current?.(), 1_000);
+    if (!clockWorkEnabled || !clockWorkRunning) return;
+    clockWorkAutomationRef.current?.();
+    const timer = window.setInterval(() => clockWorkAutomationRef.current?.(), 300);
     return () => window.clearInterval(timer);
-  }, [clockWorkEnabled, clockWorkAiEnabled, clockWorkRunning]);
+  }, [clockWorkEnabled, clockWorkRunning]);
 
   const refreshClockWorkAutoBest = (
     minimumWinRate: ClockWorkAiMinimumWinRate,
@@ -4778,7 +4775,7 @@ export default function XTraderPage() {
     if (!bestMarket || !selectedSignal) {
       setClockWorkAutoBestSelection(null);
       setClockWorkAiStatus(
-        `No market meets the ${minimumWinRate}% threshold with at least ${CLOCK_WORK_AUTO_BEST_MARKET_MIN_SAMPLE_COUNT} fresh five-tick samples. No entry will be sent until a market qualifies.`,
+        "Auto Best is waiting for an eligible market.",
       );
       return false;
     }
@@ -4802,7 +4799,7 @@ export default function XTraderPage() {
       });
     }
     setClockWorkAiStatus(
-      `Auto Best selected ${selectedMarketLabel} (${bestMarket.symbol}): ${bestMarket.candidate.observedRate.toFixed(1)}% observed across ${bestMarket.candidate.sampleCount} completed five-tick samples. Historical results are not a prediction; waiting for one fresh quote.`,
+      `Auto Best selected ${selectedMarketLabel}. Waiting for a live quote.`,
     );
     return true;
   };
@@ -5523,7 +5520,7 @@ export default function XTraderPage() {
               if (clockWorkAutoBestMode) {
                 refreshClockWorkAutoBest(value, false);
               } else {
-                setClockWorkAiStatus("Ai Clock is rechecking the selected threshold.");
+                setClockWorkAiStatus("Win-rate threshold updated.");
               }
             }}
             takeProfit={clockWorkTakeProfit}
@@ -5548,13 +5545,13 @@ export default function XTraderPage() {
             statusMessage={clockWorkStatusMessage}
             currency={currentAccount?.currency ?? "USD"}
             onStart={() => {
-              if (!clockWorkAiEnabled || clockWorkControlsDisabled) return;
+              if (clockWorkControlsDisabled) return;
               clockWorkRunContractIdsRef.current.clear();
               clockWorkRunAccountIdRef.current = currentAccount ? String(currentAccount.id) : null;
               clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
               clockWorkAiAttemptAtRef.current = 0;
               setClockWorkRunning(true);
-              setClockWorkAiStatus("Ai Clock is monitoring the selected market.");
+              setClockWorkAiStatus("Clock Work is checking the selected market.");
             }}
             onStop={() => {
               setClockWorkRunning(false);
