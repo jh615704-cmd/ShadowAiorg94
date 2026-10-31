@@ -103,6 +103,7 @@ import {
   checkMoneyBankJdySignal,
   getMoneyBankSessionStopReason,
   getMoneyBankStartConfigError,
+  shouldRunMoneyBankJdyGate,
 } from "../lib/money-bank-entry-guards";
 import CashGrabPanel, {
   type CashGrabAiStatus,
@@ -2178,6 +2179,10 @@ export default function XTraderPage() {
     );
     if (settledAccumulator) {
       moneyBankProcessedSettlementIdsRef.current.add(settledAccumulator.contract_id);
+      if (config.autoKnockout) {
+        moneyBankKnockoutScanRef.current = null;
+        setMoneyBankAutoKnockoutScan(null);
+      }
       const nextSessionPnl = moneyBankSessionPnlRef.current + settledAccumulator.profit;
       moneyBankSessionPnlRef.current = nextSessionPnl;
       setMoneyBankSessionPnl(nextSessionPnl);
@@ -2329,7 +2334,12 @@ export default function XTraderPage() {
       );
       if (freshConfigError) throw new Error(freshConfigError);
 
-      if (moneyBankJdyEnabled) {
+      if (shouldRunMoneyBankJdyGate({
+        autoKnockout: currentConfig.autoKnockout,
+        jdyEnabled: moneyBankJdyEnabled,
+        knockoutSampleComplete: !currentConfig.autoKnockout
+          || moneyBankKnockoutScanRef.current?.ready_to_trade === true,
+      })) {
         // Evaluate the selected setup only after the Auto Knockout sample is complete.
         const decision = await scanJdyMoneyBank(currentConfig, tradeSymbol);
         if (!moneyBankRunningRef.current) return;
@@ -2504,9 +2514,9 @@ export default function XTraderPage() {
       setMoneyBankTradeCount(0);
       moneyBankRunningRef.current = true;
       setMoneyBankRunning(true);
-      if (moneyBankJdyEnabled) {
+      if (config.autoKnockout || moneyBankJdyEnabled) {
         setMoneyBankJdyDecision(null);
-        setMoneyBankJdyState("scanning");
+        setMoneyBankJdyState("idle");
       }
       void runMoneyBankLoop();
     } catch (error) {

@@ -1410,7 +1410,9 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
     await autoKnockoutStatus.waitFor({ state: "visible" });
     assert.match(await autoKnockoutStatus.innerText(), /Waiting for knockouts 0\/5/);
     assert.match(await autoKnockoutStatus.innerText(), /Scanner cycle: 0\/5 cleared knockouts/);
-    assert.match(await autoKnockoutStatus.innerText(), /Knockouts before trade/);
+    assert.match(await autoKnockoutStatus.innerText(), /Qualified knockouts required/);
+    assert.match(await autoKnockoutStatus.innerText(), /A target of 1 still waits for the selected Take Ticks/);
+    assert.match(await autoKnockoutStatus.innerText(), /Money Bank AI reviews the selected market/);
     await page.getByRole("button", { name: "Start Accumulator" }).click();
     await page.getByText(/Waiting for live .* ticks/).waitFor({ timeout: 5_000 });
     const exitTickProgress = page.getByRole("progressbar", { name: "Money Bank exit tick progress" });

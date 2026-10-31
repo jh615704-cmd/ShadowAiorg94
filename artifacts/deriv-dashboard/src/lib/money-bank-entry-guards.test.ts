@@ -7,6 +7,7 @@ import {
   getMoneyBankStartConfigError,
   MONEY_BANK_JDY_MAX_TICK_AGE_SECONDS,
   MONEY_BANK_JDY_MIN_SAMPLES,
+  shouldRunMoneyBankJdyGate,
 } from "./money-bank-entry-guards.ts";
 
 const validConfig: MoneyBankStartConfig = {
@@ -69,6 +70,44 @@ describe("Money Bank entry safeguards", () => {
     assert.equal(getMoneyBankSessionStopReason(5, validConfig), "Money Bank reached the session Profit target.");
     assert.equal(getMoneyBankSessionStopReason(-4, validConfig), "Money Bank reached the session Loss limit.");
     assert.equal(getMoneyBankSessionStopReason(4.99, validConfig), null);
+  });
+});
+
+describe("Money Bank AI entry gate", () => {
+  it("always requires AI approval after Auto Knockout completes its sample", () => {
+    assert.equal(shouldRunMoneyBankJdyGate({
+      autoKnockout: true,
+      jdyEnabled: false,
+      knockoutSampleComplete: false,
+    }), false);
+    assert.equal(shouldRunMoneyBankJdyGate({
+      autoKnockout: true,
+      jdyEnabled: false,
+      knockoutSampleComplete: true,
+    }), true);
+    assert.equal(shouldRunMoneyBankJdyGate({
+      autoKnockout: true,
+      jdyEnabled: true,
+      knockoutSampleComplete: false,
+    }), false);
+    assert.equal(shouldRunMoneyBankJdyGate({
+      autoKnockout: true,
+      jdyEnabled: true,
+      knockoutSampleComplete: true,
+    }), true);
+  });
+
+  it("keeps manual Money Bank AI review controlled by JDY", () => {
+    assert.equal(shouldRunMoneyBankJdyGate({
+      autoKnockout: false,
+      jdyEnabled: false,
+      knockoutSampleComplete: false,
+    }), false);
+    assert.equal(shouldRunMoneyBankJdyGate({
+      autoKnockout: false,
+      jdyEnabled: true,
+      knockoutSampleComplete: false,
+    }), true);
   });
 });
 

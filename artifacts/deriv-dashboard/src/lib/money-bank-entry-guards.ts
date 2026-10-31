@@ -7,6 +7,14 @@ const LADDER_LEVEL_NAMES = ["BASE", "L1", "L2", "L3", "L4", "L5", "L6"] as const
 export const MONEY_BANK_JDY_MIN_SAMPLES = 20;
 export const MONEY_BANK_JDY_MAX_TICK_AGE_SECONDS = 5;
 
+export function shouldRunMoneyBankJdyGate(input: {
+  autoKnockout: boolean;
+  jdyEnabled: boolean;
+  knockoutSampleComplete: boolean;
+}): boolean {
+  return input.autoKnockout ? input.knockoutSampleComplete : input.jdyEnabled;
+}
+
 const roundCents = (value: number) =>
   Number((Math.round((value + Number.EPSILON) * 100) / 100).toFixed(2));
 
