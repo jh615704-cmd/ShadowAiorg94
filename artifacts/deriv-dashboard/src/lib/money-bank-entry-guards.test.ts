@@ -2,12 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { MoneyBankStartConfig } from "../components/money-bank-panel.tsx";
 import {
-  checkMoneyBankJdySignal,
   getMoneyBankSessionStopReason,
   getMoneyBankStartConfigError,
-  MONEY_BANK_JDY_MAX_TICK_AGE_SECONDS,
-  MONEY_BANK_JDY_MIN_SAMPLES,
-  shouldRunMoneyBankJdyGate,
 } from "./money-bank-entry-guards.ts";
 
 const validConfig: MoneyBankStartConfig = {
@@ -70,87 +66,5 @@ describe("Money Bank entry safeguards", () => {
     assert.equal(getMoneyBankSessionStopReason(5, validConfig), "Money Bank reached the session Profit target.");
     assert.equal(getMoneyBankSessionStopReason(-4, validConfig), "Money Bank reached the session Loss limit.");
     assert.equal(getMoneyBankSessionStopReason(4.99, validConfig), null);
-  });
-});
-
-describe("Money Bank AI entry gate", () => {
-  it("always requires AI approval after Auto Knockout completes its sample", () => {
-    assert.equal(shouldRunMoneyBankJdyGate({
-      autoKnockout: true,
-      jdyEnabled: false,
-      knockoutSampleComplete: false,
-    }), false);
-    assert.equal(shouldRunMoneyBankJdyGate({
-      autoKnockout: true,
-      jdyEnabled: false,
-      knockoutSampleComplete: true,
-    }), true);
-    assert.equal(shouldRunMoneyBankJdyGate({
-      autoKnockout: true,
-      jdyEnabled: true,
-      knockoutSampleComplete: false,
-    }), false);
-    assert.equal(shouldRunMoneyBankJdyGate({
-      autoKnockout: true,
-      jdyEnabled: true,
-      knockoutSampleComplete: true,
-    }), true);
-  });
-
-  it("keeps manual Money Bank AI review controlled by JDY", () => {
-    assert.equal(shouldRunMoneyBankJdyGate({
-      autoKnockout: false,
-      jdyEnabled: false,
-      knockoutSampleComplete: false,
-    }), false);
-    assert.equal(shouldRunMoneyBankJdyGate({
-      autoKnockout: false,
-      jdyEnabled: true,
-      knockoutSampleComplete: false,
-    }), true);
-  });
-});
-
-describe("Money Bank JDY entry signal", () => {
-  const now = 1_800_000_000;
-
-  it("accepts only a fresh, sufficiently sampled, valid upward movement signal", () => {
-    const result = checkMoneyBankJdySignal({
-      symbol: "1HZ10V",
-      sample_count: MONEY_BANK_JDY_MIN_SAMPLES,
-      tick_epoch: now,
-      rise_percentage: 62,
-    }, now);
-
-    assert.deepEqual(result, {
-      ready: true,
-      sampleCount: MONEY_BANK_JDY_MIN_SAMPLES,
-      observedBalance: 62,
-      reason: null,
-    });
-  });
-
-  it("holds on insufficient or stale market data", () => {
-    const signal = {
-      symbol: "1HZ10V",
-      sample_count: MONEY_BANK_JDY_MIN_SAMPLES - 1,
-      tick_epoch: now,
-      rise_percentage: 70,
-    };
-    assert.match(checkMoneyBankJdySignal(signal, now).reason ?? "", /at least/);
-    assert.match(checkMoneyBankJdySignal({
-      ...signal,
-      sample_count: MONEY_BANK_JDY_MIN_SAMPLES,
-      tick_epoch: now - MONEY_BANK_JDY_MAX_TICK_AGE_SECONDS - 1,
-    }, now).reason ?? "", /stale/);
-  });
-
-  it("rejects invalid direction percentages instead of treating them as safe", () => {
-    assert.equal(checkMoneyBankJdySignal({
-      symbol: "1HZ10V",
-      sample_count: MONEY_BANK_JDY_MIN_SAMPLES,
-      tick_epoch: now,
-      rise_percentage: 101,
-    }, now).ready, false);
   });
 });

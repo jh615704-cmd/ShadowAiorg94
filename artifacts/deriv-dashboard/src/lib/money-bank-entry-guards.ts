@@ -1,19 +1,8 @@
-import type { MoneyBankMarketSignal, MoneyBankStartConfig } from "../components/money-bank-panel";
+import type { MoneyBankStartConfig } from "../components/money-bank-panel";
 
 const MIN_STAKE = 1;
 const MAX_LADDER_LEVELS = 7;
 const LADDER_LEVEL_NAMES = ["BASE", "L1", "L2", "L3", "L4", "L5", "L6"] as const;
-
-export const MONEY_BANK_JDY_MIN_SAMPLES = 20;
-export const MONEY_BANK_JDY_MAX_TICK_AGE_SECONDS = 5;
-
-export function shouldRunMoneyBankJdyGate(input: {
-  autoKnockout: boolean;
-  jdyEnabled: boolean;
-  knockoutSampleComplete: boolean;
-}): boolean {
-  return input.autoKnockout ? input.knockoutSampleComplete : input.jdyEnabled;
-}
 
 const roundCents = (value: number) =>
   Number((Math.round((value + Number.EPSILON) * 100) / 100).toFixed(2));
@@ -102,56 +91,6 @@ export function getMoneyBankStartConfigError(
     return "The planned Auto Budget cycle exceeds the connected balance. Lower the budget before starting.";
   }
   return null;
-}
-
-export type MoneyBankJdySignalCheck = {
-  ready: boolean;
-  sampleCount: number;
-  observedBalance: number | null;
-  reason: string | null;
-};
-
-export function checkMoneyBankJdySignal(
-  signal: MoneyBankMarketSignal | null | undefined,
-  nowEpoch = Math.floor(Date.now() / 1000),
-): MoneyBankJdySignalCheck {
-  if (!signal) {
-    return { ready: false, sampleCount: 0, observedBalance: null, reason: "the selected market has no live sample" };
-  }
-
-  const sampleCount = Number.isInteger(signal.sample_count) && signal.sample_count >= 0
-    ? signal.sample_count
-    : 0;
-  if (sampleCount < MONEY_BANK_JDY_MIN_SAMPLES) {
-    return {
-      ready: false,
-      sampleCount,
-      observedBalance: null,
-      reason: `the selected market needs at least ${MONEY_BANK_JDY_MIN_SAMPLES} recent samples`,
-    };
-  }
-
-  const tickEpoch = signal.tick_epoch;
-  const age = nowEpoch - (tickEpoch ?? 0);
-  if (
-    !Number.isFinite(tickEpoch)
-    || tickEpoch! <= 0
-    || age < -2
-    || age > MONEY_BANK_JDY_MAX_TICK_AGE_SECONDS
-  ) {
-    return { ready: false, sampleCount, observedBalance: null, reason: "the selected market data is stale" };
-  }
-
-  const observedBalance = signal.rise_percentage;
-  if (
-    !Number.isFinite(observedBalance)
-    || observedBalance! < 0
-    || observedBalance! > 100
-  ) {
-    return { ready: false, sampleCount, observedBalance: null, reason: "the selected market direction data is invalid" };
-  }
-
-  return { ready: true, sampleCount, observedBalance: observedBalance!, reason: null };
 }
 
 export function getMoneyBankSessionStopReason(

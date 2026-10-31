@@ -1413,7 +1413,7 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
     assert.match(await autoKnockoutStatus.innerText(), /Qualified knockouts required/);
     assert.match(await autoKnockoutStatus.innerText(), /Take Ticks applies only to the actual Accumulator trade/);
     assert.doesNotMatch(await autoKnockoutStatus.innerText(), /Current virtual contract|exit tick progress|survive beyond Take Ticks|waiting for the market move to clear/i);
-    assert.match(await autoKnockoutStatus.innerText(), /Money Bank AI reviews the selected market/);
+    assert.doesNotMatch(await autoKnockoutStatus.innerText(), /AI reviews|Shadows|estimated \d+-loss streak risk/i);
     await page.getByRole("button", { name: "Start Accumulator" }).click();
     await page.getByText(/Watching live .* ticks for scanner knockouts/).waitFor({ timeout: 5_000 });
     assert.equal(await page.getByRole("progressbar", { name: "Money Bank exit tick progress" }).count(), 0);
@@ -1431,8 +1431,7 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
     assert.deepEqual(state.tradeRequests, [], "Responsive controls must be tested without submitting any trade.");
 
     await page.getByRole("button", { name: "Start Accumulator" }).waitFor();
-    await page.locator(".money-bank-market-toggle label").click();
-    assert.equal(await autoKnockoutSwitch.isChecked(), false);
+    state.knockoutScanReady = true;
     state.allowFixtureTrades = true;
     state.buyResponseDelayMs = 500;
     const pendingBuyRequest = page.waitForRequest((request) =>
@@ -1440,6 +1439,7 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
     );
     await page.getByRole("button", { name: "Start Accumulator" }).click();
     await pendingBuyRequest;
+    assert.equal(await autoKnockoutSwitch.isChecked(), true, "The tested Money Bank trade must still use Auto Knockout.");
     const sellRequest = page.waitForRequest((request) =>
       request.url().includes("/api/deriv/sell") && request.method() === "POST",
     );
@@ -1454,6 +1454,8 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
       ["/api/deriv/buy", "/api/deriv/sell"],
       "Stop should wait for the in-flight buy acknowledgement, close its confirmed contract, and send no duplicate buy.",
     );
+    assert.equal(state.tradeRequests[0].body.auto_knockout, true, "The confirmed trade should retain Auto Knockout.");
+    assert.equal(state.tradeRequests[0].body.auto_knockout_target, 5, "The confirmed trade should use its completed knockout target.");
     assert.equal(state.history[0].status, "closed", "The acknowledged Money Bank contract should be closed after Stop.");
 
     assert.deepEqual(pageErrors, [], "The app should render without browser exceptions.");
@@ -1821,22 +1823,25 @@ async function mockApiRequest(route, state, pathname, method) {
     if (input.action === "start") state.knockoutScanTickSequence = 0;
     else if (input.action === "poll") state.knockoutScanTickSequence += 1;
     const tickSequence = state.knockoutScanTickSequence;
+    const readyToTrade = state.knockoutScanReady === true;
     await fulfillJson(route, {
       ok: true,
-      message: "Watching the selected market for a live scanner knockout.",
-      phase: "waiting_for_knockout",
+      message: readyToTrade
+        ? "The required knockout sample is complete."
+        : "Watching the selected market for a live scanner knockout.",
+      phase: readyToTrade ? "ready" : "waiting_for_knockout",
       symbol: input.symbol,
-      qualified_knockouts: 0,
+      qualified_knockouts: readyToTrade ? input.required_knockouts : 0,
       required_knockouts: input.required_knockouts,
       tick_sequence: tickSequence,
-      ready_to_trade: false,
+      ready_to_trade: readyToTrade,
       market_matches: true,
     });
     return;
   }
   if (pathname === "/api/deriv/buy" && method === "POST" && state.allowFixtureTrades) {
-    state.tradeRequests.push({ path: pathname, method });
     const order = request.postDataJSON();
+    state.tradeRequests.push({ path: pathname, method, body: order });
     if (state.buyResponseDelayMs) {
       await new Promise((resolve) => setTimeout(resolve, state.buyResponseDelayMs));
     }

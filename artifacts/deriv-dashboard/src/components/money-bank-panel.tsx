@@ -46,28 +46,6 @@ export type MoneyBankTrade = DerivHistoryRow & {
   current_value: number;
 };
 
-export type MoneyBankObservedSetup = {
-  symbol: string;
-  growthRate: number;
-  takeProfitTicks: number;
-  score: number;
-  sampleCount: number;
-  observedBalance: number;
-  estimatedLosses: number;
-};
-
-export type MoneyBankJdyDecision = MoneyBankObservedSetup & {
-  safe: boolean;
-  holdReason: string | null;
-  stake: number;
-  predictedWinRate: number;
-  estimatedLossStreak: number;
-  suggestedSymbol: string | null;
-  suggestedGrowthRate: number | null;
-  suggestedTakeProfitTicks: number | null;
-  suggestedStake: number | null;
-};
-
 type MoneyBankPanelProps = {
   isConnected: boolean;
   tradeSlotBlocked: boolean;
@@ -332,7 +310,7 @@ export function MoneyBankPanel({
                           ? `${qualifiedKnockouts} of ${requiredKnockouts} knockouts counted. Watching for the next live move.`
                           : `Watching live ${selectedMarket} ticks for scanner knockouts.`
                       : autoKnockoutScan?.phase === "ready"
-                            ? "Knockout sample complete. Money Bank AI is reviewing the selected market, percentage, stake, and Take Ticks before entry."
+                            ? "Knockout sample complete. Checking trade readiness."
                             : running
                               ? `Watching live ${selectedMarket} ticks for scanner knockouts.`
                               : "Start Accumulator to begin checking live scanner knockouts."}
@@ -355,7 +333,7 @@ export function MoneyBankPanel({
                   A knockout counts as soon as price reaches the proposal barrier. The scanner re-arms for another move; Take Ticks applies only to the actual Accumulator trade.
                 </small>
                 <small className="money-bank-knockout-footnote">
-                  At the target, Money Bank AI reviews the selected market, percentage, stake, and Take Ticks before entry. Manual losses do not count; this does not guarantee a win.
+                  Manual losses do not count; a completed knockout sample does not guarantee a win.
                 </small>
               </div>
             )}
