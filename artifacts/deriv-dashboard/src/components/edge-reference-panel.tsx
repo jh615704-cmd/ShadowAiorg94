@@ -451,9 +451,6 @@ export default function EdgeReferencePanel({
         </div>
       </label>
       <section className="edge-ref-ai-scanner">
-        <div>
-          <b>LIVE MARKET SCANNER</b>
-        </div>
         <AiScannerAction
           onScan={onAiScan}
           disabled={!canRunAiScanner}
