@@ -837,33 +837,56 @@ export const RequestDerivProposalResponse = zod.object({
 
 
 /**
- * @summary Scan an Accumulator market for ten seconds before entry
+ * @summary Start or check the live Money Bank knockout scanner
  */
 export const scanDerivAccumulatorKnockoutBodyAmountExclusiveMin = 0;
 
-export const scanDerivAccumulatorKnockoutBodyDurationMax = 1000;
-
-export const scanDerivAccumulatorKnockoutBodyBarrierMin = 0;
-export const scanDerivAccumulatorKnockoutBodyBarrierMax = 9;
+export const scanDerivAccumulatorKnockoutBodyDurationMin = 5;
+export const scanDerivAccumulatorKnockoutBodyDurationMax = 50;
 
 export const scanDerivAccumulatorKnockoutBodyGrowthRateMin = 0.01;
 export const scanDerivAccumulatorKnockoutBodyGrowthRateMax = 0.05;
 
+export const scanDerivAccumulatorKnockoutBodyRequiredKnockoutsMax = 20;
+
 
 
 export const ScanDerivAccumulatorKnockoutBody = zod.object({
+  "action": zod.enum(['start', 'poll', 'reset']),
   "amount": zod.number().gt(scanDerivAccumulatorKnockoutBodyAmountExclusiveMin),
-  "duration": zod.number().int().min(1).max(scanDerivAccumulatorKnockoutBodyDurationMax),
-  "duration_unit": zod.enum(['t', 's', 'm']),
-  "contract_type": zod.enum(['DIGITEVEN', 'DIGITODD', 'DIGITOVER', 'DIGITUNDER', 'DIGITDIFF', 'CALL', 'PUT', 'ACCU']),
-  "barrier": zod.number().int().min(scanDerivAccumulatorKnockoutBodyBarrierMin).max(scanDerivAccumulatorKnockoutBodyBarrierMax).optional(),
-  "growth_rate": zod.number().min(scanDerivAccumulatorKnockoutBodyGrowthRateMin).max(scanDerivAccumulatorKnockoutBodyGrowthRateMax).optional(),
-  "symbol": zod.string().optional()
+  "duration": zod.number().int().min(scanDerivAccumulatorKnockoutBodyDurationMin).max(scanDerivAccumulatorKnockoutBodyDurationMax).describe('Selected Money Bank take-profit tick threshold for virtual scanner contracts.'),
+  "duration_unit": zod.enum(['t']),
+  "contract_type": zod.enum(['ACCU']),
+  "growth_rate": zod.number().min(scanDerivAccumulatorKnockoutBodyGrowthRateMin).max(scanDerivAccumulatorKnockoutBodyGrowthRateMax),
+  "symbol": zod.string(),
+  "required_knockouts": zod.number().int().min(1).max(scanDerivAccumulatorKnockoutBodyRequiredKnockoutsMax)
 })
+
+export const scanDerivAccumulatorKnockoutResponseQualifiedKnockoutsMin = 0;
+
+export const scanDerivAccumulatorKnockoutResponseRequiredKnockoutsMax = 20;
+
+export const scanDerivAccumulatorKnockoutResponseTickProgressMin = 0;
+
+export const scanDerivAccumulatorKnockoutResponseTakeProfitTicksMin = 5;
+export const scanDerivAccumulatorKnockoutResponseTakeProfitTicksMax = 50;
+
+export const scanDerivAccumulatorKnockoutResponseTickSequenceMin = 0;
+
+
 
 export const ScanDerivAccumulatorKnockoutResponse = zod.object({
   "ok": zod.boolean(),
-  "message": zod.string()
+  "message": zod.string(),
+  "phase": zod.enum(['idle', 'waiting_for_market', 'waiting_for_quote', 'waiting_for_take_ticks', 'waiting_for_knockout', 'waiting_for_clear', 'ready']),
+  "symbol": zod.string(),
+  "qualified_knockouts": zod.number().int().min(scanDerivAccumulatorKnockoutResponseQualifiedKnockoutsMin),
+  "required_knockouts": zod.number().int().min(1).max(scanDerivAccumulatorKnockoutResponseRequiredKnockoutsMax),
+  "tick_progress": zod.number().int().min(scanDerivAccumulatorKnockoutResponseTickProgressMin),
+  "take_profit_ticks": zod.number().int().min(scanDerivAccumulatorKnockoutResponseTakeProfitTicksMin).max(scanDerivAccumulatorKnockoutResponseTakeProfitTicksMax),
+  "tick_sequence": zod.number().int().min(scanDerivAccumulatorKnockoutResponseTickSequenceMin),
+  "ready_to_trade": zod.boolean(),
+  "market_matches": zod.boolean()
 })
 
 
@@ -1195,6 +1218,8 @@ export const buyDerivContractBodyBarrierMax = 9;
 export const buyDerivContractBodyGrowthRateMin = 0.01;
 export const buyDerivContractBodyGrowthRateMax = 0.05;
 
+export const buyDerivContractBodyAutoKnockoutTargetMax = 20;
+
 
 
 export const BuyDerivContractBody = zod.object({
@@ -1207,7 +1232,8 @@ export const BuyDerivContractBody = zod.object({
   "growth_rate": zod.number().min(buyDerivContractBodyGrowthRateMin).max(buyDerivContractBodyGrowthRateMax).optional(),
   "symbol": zod.string().optional(),
   "automated": zod.boolean().optional(),
-  "auto_knockout": zod.boolean().optional().describe('When true for ACCU, the server checks recent ticks against Deriv\'s proposal-specific knockout barrier before sending a buy.')
+  "auto_knockout": zod.boolean().optional().describe('When true for Money Bank, the server requires a completed live knockout scan before buying.'),
+  "auto_knockout_target": zod.number().int().min(1).max(buyDerivContractBodyAutoKnockoutTargetMax).optional()
 })
 
 export const BuyDerivContractResponse = zod.object({

@@ -59,6 +59,8 @@ import type {
   DiagnosticReportResponse,
   ErrorResponse,
   HealthStatus,
+  MoneyBankKnockoutScannerInput,
+  MoneyBankKnockoutScannerResponse,
   StreamDerivTradeUpdatesParams,
   SuccessResponse,
   TokenDeleteResponse,
@@ -2105,16 +2107,16 @@ export const getScanDerivAccumulatorKnockoutUrl = () => {
 }
 
 /**
- * @summary Scan an Accumulator market for ten seconds before entry
+ * @summary Start or check the live Money Bank knockout scanner
  */
-export const scanDerivAccumulatorKnockout = async (derivProposalInput: DerivProposalInput, options?: Parameters<typeof customFetch>[1]): Promise<DerivProposalRequest> => {
+export const scanDerivAccumulatorKnockout = async (moneyBankKnockoutScannerInput: MoneyBankKnockoutScannerInput, options?: Parameters<typeof customFetch>[1]): Promise<MoneyBankKnockoutScannerResponse> => {
 
-  return customFetch<DerivProposalRequest>(getScanDerivAccumulatorKnockoutUrl(),
+  return customFetch<MoneyBankKnockoutScannerResponse>(getScanDerivAccumulatorKnockoutUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(derivProposalInput)
+    body: JSON.stringify(moneyBankKnockoutScannerInput)
   }
 );}
 
@@ -2123,8 +2125,8 @@ export const scanDerivAccumulatorKnockout = async (derivProposalInput: DerivProp
 
 
 export const getScanDerivAccumulatorKnockoutMutationOptions = <TError = ErrorType<ErrorResponse>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof scanDerivAccumulatorKnockout>>, TError,{data: BodyType<DerivProposalInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof scanDerivAccumulatorKnockout>>, TError,{data: BodyType<DerivProposalInput>}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof scanDerivAccumulatorKnockout>>, TError,{data: BodyType<MoneyBankKnockoutScannerInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof scanDerivAccumulatorKnockout>>, TError,{data: BodyType<MoneyBankKnockoutScannerInput>}, TContext> => {
 
 const mutationKey = ['scanDerivAccumulatorKnockout'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -2136,7 +2138,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof scanDerivAccumulatorKnockout>>, {data: BodyType<DerivProposalInput>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof scanDerivAccumulatorKnockout>>, {data: BodyType<MoneyBankKnockoutScannerInput>}> = (props) => {
           const {data} = props ?? {};
 
           return  scanDerivAccumulatorKnockout(data,requestOptions)
@@ -2150,18 +2152,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type ScanDerivAccumulatorKnockoutMutationResult = NonNullable<Awaited<ReturnType<typeof scanDerivAccumulatorKnockout>>>
-    export type ScanDerivAccumulatorKnockoutMutationBody = BodyType<DerivProposalInput>
+    export type ScanDerivAccumulatorKnockoutMutationBody = BodyType<MoneyBankKnockoutScannerInput>
     export type ScanDerivAccumulatorKnockoutMutationError = ErrorType<ErrorResponse>
 
     /**
- * @summary Scan an Accumulator market for ten seconds before entry
+ * @summary Start or check the live Money Bank knockout scanner
  */
 export const useScanDerivAccumulatorKnockout = <TError = ErrorType<ErrorResponse>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof scanDerivAccumulatorKnockout>>, TError,{data: BodyType<DerivProposalInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof scanDerivAccumulatorKnockout>>, TError,{data: BodyType<MoneyBankKnockoutScannerInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof scanDerivAccumulatorKnockout>>,
         TError,
-        {data: BodyType<DerivProposalInput>},
+        {data: BodyType<MoneyBankKnockoutScannerInput>},
         TContext
       > => {
       return useMutation(getScanDerivAccumulatorKnockoutMutationOptions(options));

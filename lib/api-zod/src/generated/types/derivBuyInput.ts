@@ -32,6 +32,11 @@ export interface DerivBuyInput {
   growth_rate?: number;
   symbol?: string;
   automated?: boolean;
-  /** When true for ACCU, the server checks recent ticks against Deriv's proposal-specific knockout barrier before sending a buy. */
+  /** When true for Money Bank, the server requires a completed live knockout scan before buying. */
   auto_knockout?: boolean;
+  /**
+     * @minimum 1
+     * @maximum 20
+     */
+  auto_knockout_target?: number;
 }

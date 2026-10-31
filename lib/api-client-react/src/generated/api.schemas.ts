@@ -618,6 +618,92 @@ export interface DerivProposalInput {
   symbol?: string;
 }
 
+export type MoneyBankKnockoutScannerInputAction = typeof MoneyBankKnockoutScannerInputAction[keyof typeof MoneyBankKnockoutScannerInputAction];
+
+
+export const MoneyBankKnockoutScannerInputAction = {
+  start: 'start',
+  poll: 'poll',
+  reset: 'reset',
+} as const;
+
+export type MoneyBankKnockoutScannerInputDurationUnit = typeof MoneyBankKnockoutScannerInputDurationUnit[keyof typeof MoneyBankKnockoutScannerInputDurationUnit];
+
+
+export const MoneyBankKnockoutScannerInputDurationUnit = {
+  t: 't',
+} as const;
+
+export type MoneyBankKnockoutScannerInputContractType = typeof MoneyBankKnockoutScannerInputContractType[keyof typeof MoneyBankKnockoutScannerInputContractType];
+
+
+export const MoneyBankKnockoutScannerInputContractType = {
+  ACCU: 'ACCU',
+} as const;
+
+export interface MoneyBankKnockoutScannerInput {
+  action: MoneyBankKnockoutScannerInputAction;
+  /** @exclusiveMinimum 0 */
+  amount: number;
+  /**
+     * Selected Money Bank take-profit tick threshold for virtual scanner contracts.
+     * @minimum 5
+     * @maximum 50
+     */
+  duration: number;
+  duration_unit: MoneyBankKnockoutScannerInputDurationUnit;
+  contract_type: MoneyBankKnockoutScannerInputContractType;
+  /**
+     * @minimum 0.01
+     * @maximum 0.05
+     */
+  growth_rate: number;
+  symbol: string;
+  /**
+     * @minimum 1
+     * @maximum 20
+     */
+  required_knockouts: number;
+}
+
+export type MoneyBankKnockoutScannerResponsePhase = typeof MoneyBankKnockoutScannerResponsePhase[keyof typeof MoneyBankKnockoutScannerResponsePhase];
+
+
+export const MoneyBankKnockoutScannerResponsePhase = {
+  idle: 'idle',
+  waiting_for_market: 'waiting_for_market',
+  waiting_for_quote: 'waiting_for_quote',
+  waiting_for_take_ticks: 'waiting_for_take_ticks',
+  waiting_for_knockout: 'waiting_for_knockout',
+  waiting_for_clear: 'waiting_for_clear',
+  ready: 'ready',
+} as const;
+
+export interface MoneyBankKnockoutScannerResponse {
+  ok: boolean;
+  message: string;
+  phase: MoneyBankKnockoutScannerResponsePhase;
+  symbol: string;
+  /** @minimum 0 */
+  qualified_knockouts: number;
+  /**
+     * @minimum 1
+     * @maximum 20
+     */
+  required_knockouts: number;
+  /** @minimum 0 */
+  tick_progress: number;
+  /**
+     * @minimum 5
+     * @maximum 50
+     */
+  take_profit_ticks: number;
+  /** @minimum 0 */
+  tick_sequence: number;
+  ready_to_trade: boolean;
+  market_matches: boolean;
+}
+
 export interface DerivProposalRequest {
   ok: boolean;
   message: string;
@@ -693,8 +779,13 @@ export interface DerivBuyInput {
   growth_rate?: number;
   symbol?: string;
   automated?: boolean;
-  /** When true for ACCU, the server checks recent ticks against Deriv's proposal-specific knockout barrier before sending a buy. */
+  /** When true for Money Bank, the server requires a completed live knockout scan before buying. */
   auto_knockout?: boolean;
+  /**
+     * @minimum 1
+     * @maximum 20
+     */
+  auto_knockout_target?: number;
 }
 
 export type DerivBulkBuyInputAccessFeature = typeof DerivBulkBuyInputAccessFeature[keyof typeof DerivBulkBuyInputAccessFeature];

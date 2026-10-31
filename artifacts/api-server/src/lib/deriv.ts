@@ -128,6 +128,57 @@ export type DerivStatus = {
   }>;
 };
 
+type MoneyBankKnockoutPhase =
+  | "idle"
+  | "waiting_for_market"
+  | "waiting_for_quote"
+  | "waiting_for_take_ticks"
+  | "waiting_for_knockout"
+  | "waiting_for_clear"
+  | "ready";
+
+type MoneyBankKnockoutScanInput = {
+  action: "start" | "poll" | "reset";
+  amount: number;
+  duration: number;
+  duration_unit: "t";
+  contract_type: "ACCU";
+  growth_rate: number;
+  symbol: string;
+  required_knockouts: number;
+};
+
+type MoneyBankKnockoutScanResponse = {
+  ok: boolean;
+  message: string;
+  phase: MoneyBankKnockoutPhase;
+  symbol: string;
+  qualified_knockouts: number;
+  required_knockouts: number;
+  tick_progress: number;
+  take_profit_ticks: number;
+  tick_sequence: number;
+  ready_to_trade: boolean;
+  market_matches: boolean;
+};
+
+type MoneyBankKnockoutScannerState = {
+  accountId: string;
+  symbol: string;
+  growthRate: number;
+  takeProfitTicks: number;
+  requiredKnockouts: number;
+  qualifiedKnockouts: number;
+  barrier: number;
+  phase: Exclude<MoneyBankKnockoutPhase, "idle" | "waiting_for_market" | "waiting_for_quote">;
+  lastSequence: number;
+  cycleStartSequence: number;
+  cycleStartQuote: number;
+  clearCandidateIsQualified: boolean;
+  readyQuote: number | null;
+  tickProgress: number;
+};
+
 export type DerivMarketTickUpdate = {
   symbol: string;
   tick_sequence: number;
@@ -153,8 +204,9 @@ type BuyInput = {
   barrier?: number;
   growth_rate?: number;
   symbol?: string;
-  /** Legacy Money Bank UI field. It must never gate an otherwise valid buy. */
+  /** Require server-confirmed live knockout progress for a Money Bank buy. */
   auto_knockout?: boolean;
+  auto_knockout_target?: number;
 };
 
 export type SellResult = {
@@ -310,6 +362,7 @@ return {
     movementHistory: Array<"rise" | "fall" | "flat">;
     quoteHistory: Array<{ quote: number; epoch: number; sequence?: number }>;
   }>(),
+  moneyBankKnockoutScanner: null as MoneyBankKnockoutScannerState | null,
   selectedSymbol: defaultSymbol,
   hiddenHistoryIds: new Set<string>(),
   selectedAccountId: configuredAccountId ?? null as string | null,
@@ -681,6 +734,155 @@ function digitStreaksFor(history: number[]) {
   });
 }
 
+function moneyBankKnockoutResponse(
+  input: MoneyBankKnockoutScanInput,
+  scanner: MoneyBankKnockoutScannerState | null,
+  phaseOverride?: MoneyBankKnockoutPhase,
+): MoneyBankKnockoutScanResponse {
+  const symbol = input.symbol;
+  const runtime = getState();
+  const market = runtime.marketHistory.get(symbol);
+  const now = Math.floor(Date.now() / 1000);
+  const marketMatches = runtime.selectedSymbol === symbol;
+  const freshQuote = Boolean(
+    market
+    && Number.isFinite(market.quote)
+    && market.quote! > 0
+    && Math.abs(now - market.epoch) <= 3,
+  );
+  let phase = phaseOverride ?? scanner?.phase ?? "idle";
+  if (!phaseOverride && !marketMatches) phase = "waiting_for_market";
+  else if (!phaseOverride && !freshQuote && scanner) phase = "waiting_for_quote";
+
+  let message: string;
+  switch (phase) {
+    case "waiting_for_market":
+      message = `Money Bank is re-confirming ${symbol}. No trade will be sent on another market.`;
+      break;
+    case "waiting_for_quote":
+      message = `Waiting for a fresh live ${symbol} quote before scanning.`;
+      break;
+    case "waiting_for_take_ticks":
+      message = `Waiting for the virtual Accumulator to survive Take Ticks ${input.duration}.`;
+      break;
+    case "waiting_for_knockout":
+      message = `Take Ticks ${input.duration} survived. Waiting for the live scanner knockout.`;
+      break;
+    case "waiting_for_clear":
+      message = "A scanner knockout was detected; waiting for that market move to clear.";
+      break;
+    case "ready":
+      message = "The knockout target is complete and the qualifying move has cleared. Checking a fresh entry quote.";
+      break;
+    default:
+      message = "The live Money Bank scanner is ready to start.";
+  }
+
+  const readyToTrade = Boolean(
+    phase === "ready"
+    && scanner
+    && scanner.qualifiedKnockouts >= scanner.requiredKnockouts
+    && marketMatches
+    && freshQuote
+    && market?.tickSequence === scanner.lastSequence,
+  );
+  return {
+    ok: true,
+    message,
+    phase,
+    symbol,
+    qualified_knockouts: scanner?.qualifiedKnockouts ?? 0,
+    required_knockouts: scanner?.requiredKnockouts ?? input.required_knockouts,
+    tick_progress: scanner?.tickProgress ?? 0,
+    take_profit_ticks: input.duration,
+    tick_sequence: market?.tickSequence ?? 0,
+    ready_to_trade: readyToTrade,
+    market_matches: marketMatches,
+  };
+}
+
+function advanceMoneyBankKnockoutScanner(
+  symbol: string,
+  sequence: number,
+  quote: number,
+  epoch: number,
+) {
+  const runtime = getState();
+  const scanner = runtime.moneyBankKnockoutScanner;
+  if (!scanner || scanner.symbol !== symbol || sequence <= scanner.lastSequence) return;
+
+  const previousSequence = scanner.lastSequence;
+  scanner.lastSequence = sequence;
+  if (runtime.selectedSymbol !== symbol) {
+    scanner.phase = scanner.qualifiedKnockouts >= scanner.requiredKnockouts ? "ready" : "waiting_for_take_ticks";
+    scanner.cycleStartSequence = sequence;
+    scanner.cycleStartQuote = quote;
+    scanner.clearCandidateIsQualified = false;
+    scanner.readyQuote = scanner.phase === "ready" ? quote : null;
+    scanner.tickProgress = 0;
+    return;
+  }
+
+  if (sequence !== previousSequence + 1) {
+    scanner.phase = scanner.qualifiedKnockouts >= scanner.requiredKnockouts ? "ready" : "waiting_for_take_ticks";
+    scanner.cycleStartSequence = sequence;
+    scanner.cycleStartQuote = quote;
+    scanner.clearCandidateIsQualified = false;
+    scanner.readyQuote = scanner.phase === "ready" ? quote : null;
+    scanner.tickProgress = 0;
+    return;
+  }
+
+  if (scanner.phase === "ready") {
+    const readyQuote = scanner.readyQuote ?? scanner.cycleStartQuote;
+    if (Math.abs(quote - readyQuote) >= scanner.barrier) {
+      scanner.phase = "waiting_for_clear";
+      scanner.cycleStartSequence = sequence - 1;
+      scanner.cycleStartQuote = readyQuote;
+      scanner.clearCandidateIsQualified = false;
+      scanner.readyQuote = null;
+    }
+    scanner.tickProgress = scanner.takeProfitTicks;
+    return;
+  }
+
+  if (scanner.phase === "waiting_for_clear") {
+    if (Math.abs(quote - scanner.cycleStartQuote) < scanner.barrier) {
+      if (
+        scanner.clearCandidateIsQualified
+        && scanner.qualifiedKnockouts < scanner.requiredKnockouts
+      ) {
+        scanner.qualifiedKnockouts += 1;
+      }
+      scanner.cycleStartSequence = sequence;
+      scanner.cycleStartQuote = quote;
+      scanner.clearCandidateIsQualified = false;
+      scanner.tickProgress = 0;
+      if (scanner.qualifiedKnockouts >= scanner.requiredKnockouts) {
+        scanner.phase = "ready";
+        scanner.readyQuote = quote;
+      } else {
+        scanner.phase = "waiting_for_take_ticks";
+        scanner.readyQuote = null;
+      }
+    }
+    return;
+  }
+
+  const elapsedTicks = Math.max(0, sequence - scanner.cycleStartSequence);
+  scanner.tickProgress = Math.min(scanner.takeProfitTicks, elapsedTicks);
+  if (Math.abs(quote - scanner.cycleStartQuote) >= scanner.barrier) {
+    scanner.phase = "waiting_for_clear";
+    scanner.clearCandidateIsQualified = elapsedTicks > scanner.takeProfitTicks;
+    scanner.readyQuote = null;
+    return;
+  }
+  scanner.phase = elapsedTicks >= scanner.takeProfitTicks
+    ? "waiting_for_knockout"
+    : "waiting_for_take_ticks";
+  void epoch;
+}
+
 function recordMarketTick(symbol: string, quote: unknown, epoch: number, pipSize: unknown) {
   const runtime = getState();
   // Deriv sends quotes as JSON numbers, so a trailing decimal zero is lost
@@ -715,6 +917,7 @@ function recordMarketTick(symbol: string, quote: unknown, epoch: number, pipSize
   if (lastDigit !== undefined) market.digitHistory.push(Number(lastDigit));
   market.digitHistory = market.digitHistory.slice(-1000);
   runtime.marketHistory.set(symbol, market);
+  advanceMoneyBankKnockoutScanner(symbol, nextSequence, nextQuote, epoch);
   const tickUpdate: DerivMarketTickUpdate = {
     symbol,
     tick_sequence: market.tickSequence,
@@ -1196,132 +1399,169 @@ function proposalFromMessage(raw: unknown): DerivProposal | null {
   };
 }
 
-function assertAccumulatorKnockoutClear(input: BuyInput, proposal: DerivProposal) {
-  if (!input.auto_knockout) return;
-  if (input.contract_type !== "ACCU") {
-    throw new Error("Auto Knockout is only supported for Accumulator contracts.");
-  }
-
-  const symbol = input.symbol ?? defaultSymbol;
-  const market = getState().marketHistory.get(symbol);
-  const barrier = proposal.contract_details?.tick_size_barrier;
-  const now = Math.floor(Date.now() / 1000);
-  const proposalEpoch = proposal.spot_time;
-  const proposalSpot = proposal.spot;
-  if (
-    !market
-    || !Number.isFinite(barrier)
-    || barrier! <= 0
-    || !Number.isFinite(proposalEpoch)
-    || Math.abs(now - proposalEpoch!) > 3
-    || Math.abs(now - market.epoch) > 3
-    || !Number.isFinite(proposalSpot)
-    || proposalSpot <= 0
-  ) {
-    throw new Error("Money Bank Auto Knockout is waiting for a fresh Deriv proposal and quote sample. No contract was sent.");
-  }
-
-  const samples = market.quoteHistory.filter((tick: { quote: number; epoch: number }) => tick.epoch <= proposalEpoch!);
-  const latest = samples.at(-1);
-  if (!latest || proposalEpoch! - latest.epoch > 1) {
-    throw new Error("Money Bank Auto Knockout is waiting for a matching quote sample. No contract was sent.");
-  }
-
-  const requiredQuotes = input.duration + 1;
-  if (samples.slice(-requiredQuotes).length !== requiredQuotes) {
-    throw new Error("Money Bank Auto Knockout is waiting for enough ticks to scan this contract window. No contract was sent.");
-  }
-
-  // An Accumulator's barrier is measured from its contract's entry spot, not
-  // from the preceding tick. Same-second ticks are ambiguous, so check them
-  // conservatively against the proposal spot too.
-  const afterProposal = market.quoteHistory.filter((tick: { quote: number; epoch: number }) => tick.epoch >= proposalEpoch!);
-  for (const tick of afterProposal) {
-    if (Math.abs(tick.quote - proposalSpot!) >= barrier!) {
-      throw new Error("Money Bank Auto Knockout blocked this entry after a new tick reached Deriv's contract barrier. No contract was sent.");
-    }
-  }
+function scannerSetupMatches(
+  scanner: MoneyBankKnockoutScannerState,
+  input: MoneyBankKnockoutScanInput,
+  accountId: string | undefined,
+) {
+  return Boolean(
+    accountId
+    && scanner.accountId === accountId
+    && scanner.symbol === input.symbol
+    && scanner.growthRate === input.growth_rate
+    && scanner.takeProfitTicks === input.duration
+    && scanner.requiredKnockouts === input.required_knockouts,
+  );
 }
 
-async function observeAccumulatorMarketForKnockouts(
-  input: BuyInput,
-  proposal: DerivProposal,
-  observationMs: number,
-) {
+function isFreshMoneyBankQuote(market: { quote: number | null; epoch: number } | undefined) {
+  const now = Math.floor(Date.now() / 1000);
+  return Boolean(
+    market
+    && Number.isFinite(market.quote)
+    && market.quote! > 0
+    && Math.abs(now - market.epoch) <= 3,
+  );
+}
+
+function assertMoneyBankKnockoutReady(input: BuyInput) {
+  if (!input.auto_knockout) return;
+  if (input.contract_type !== "ACCU") {
+    throw new Error("Money Bank Auto Knockout is only supported for Accumulator contracts. No contract was sent.");
+  }
+
+  const runtime = getState();
   const symbol = input.symbol ?? defaultSymbol;
-  const market = getState().marketHistory.get(symbol);
-  const barrier = proposal.contract_details?.tick_size_barrier;
-  if (!market || !Number.isFinite(barrier) || barrier! <= 0) {
-    throw new Error("Money Bank Auto Knockout cannot start without the selected market's Deriv barrier and live ticks.");
+  const scanner = runtime.moneyBankKnockoutScanner as MoneyBankKnockoutScannerState | null;
+  const market = runtime.marketHistory.get(symbol);
+  const target = input.auto_knockout_target;
+  if (!Number.isInteger(target) || target! < 1 || target! > 20) {
+    throw new Error("Money Bank Auto Knockout is waiting for a valid knockout target. No contract was sent.");
   }
-
-  let lastSequence = market.tickSequence;
-  const entrySpot = proposal.spot;
-  let observedTicks = 0;
-  const deadline = Date.now() + observationMs;
-
-  while (Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, Math.min(100, deadline - Date.now())));
-    const current = getState().marketHistory.get(symbol);
-    const nowEpoch = Math.floor(Date.now() / 1000);
-    if (!current || nowEpoch - current.epoch > 3 || current.epoch - nowEpoch > 3) {
-      throw new Error("Money Bank Auto Knockout did not receive fresh ticks for the selected market during its scan. No contract was sent.");
-    }
-
-    const newTickCount = current.tickSequence - lastSequence;
-    if (newTickCount <= 0) continue;
-    const newTicks = current.quoteHistory.filter((tick: { quote: number; epoch: number; sequence?: number }) =>
-      tick.sequence != null
-      && tick.sequence > lastSequence
-      && tick.sequence <= current.tickSequence,
-    );
-    if (newTicks.length !== newTickCount) {
-      throw new Error("Money Bank Auto Knockout could not verify every tick in the selected market's scan. No contract was sent.");
-    }
-    for (const tick of newTicks) {
-      if (Math.abs(tick.quote - entrySpot) >= barrier!) {
-        throw new Error("Money Bank Auto Knockout blocked this entry after detecting a knockout-sized move during its 10-second scan. No contract was sent.");
-      }
-      observedTicks += 1;
-    }
-    lastSequence = current.tickSequence;
+  if (
+    !scanner
+    || scanner.phase !== "ready"
+    || scanner.qualifiedKnockouts < target!
+    || scanner.requiredKnockouts !== target
+    || scanner.symbol !== symbol
+    || scanner.growthRate !== input.growth_rate
+    || scanner.takeProfitTicks !== input.duration
+  ) {
+    throw new Error("Money Bank Auto Knockout is waiting for the required live scanner knockouts and clear move. No contract was sent.");
   }
-
-  if (observedTicks === 0) {
-    throw new Error("Money Bank Auto Knockout did not observe any new ticks during its 10-second scan. No contract was sent.");
+  if (scanner.accountId !== runtime.account?.id) {
+    throw new Error("Money Bank Auto Knockout account changed during the run. No contract was sent.");
+  }
+  if (runtime.selectedSymbol !== symbol) {
+    throw new Error(`Money Bank is re-confirming ${symbol}; the selected Deriv market changed. No contract was sent.`);
+  }
+  if (!isFreshMoneyBankQuote(market) || market?.tickSequence !== scanner.lastSequence) {
+    throw new Error("Money Bank Auto Knockout is waiting for a fresh quote from the selected market. No contract was sent.");
   }
 }
 
 export async function scanAccumulatorKnockout(
-  input: ProposalInput,
-  observationMs = 10_000,
-) {
+  input: MoneyBankKnockoutScanInput,
+): Promise<MoneyBankKnockoutScanResponse> {
   if (input.contract_type !== "ACCU") {
     throw new Error("Money Bank Auto Knockout is only supported for Accumulator contracts.");
   }
-  validateProposalInput(input);
-  validateAccumulatorInput(input);
+  if (
+    input.duration_unit !== "t"
+    || !Number.isInteger(input.required_knockouts)
+    || input.required_knockouts < 1
+    || input.required_knockouts > 20
+  ) {
+    throw new Error("Money Bank Auto Knockout needs a valid take-ticks window and a knockout target from 1 to 20.");
+  }
 
-  const scanInput: BuyInput = {
-    ...input,
-    barrier: typeof input.barrier === "number" ? input.barrier : undefined,
+  const proposalInput: ProposalInput = {
+    amount: input.amount,
+    duration: input.duration,
     duration_unit: "t",
-    auto_knockout: true,
+    contract_type: "ACCU",
+    growth_rate: input.growth_rate,
+    symbol: input.symbol,
   };
-  const initialProposal = await requestFreshProposal(input);
-  assertAccumulatorKnockoutClear(scanInput, initialProposal);
-  await observeAccumulatorMarketForKnockouts(scanInput, initialProposal, observationMs);
+  validateProposalInput(proposalInput);
+  validateAccumulatorInput(proposalInput);
 
-  // The proposal used to start the scan is stale by the time the observation
-  // finishes. Requote and validate the selected exit-tick window immediately
-  // before reporting success; buyContract repeats this check on its own quote.
-  const finalProposal = await requestFreshProposal(input);
-  assertAccumulatorKnockoutClear(scanInput, finalProposal);
+  const runtime = getState();
+  if (input.action === "reset") {
+    runtime.moneyBankKnockoutScanner = null;
+    return moneyBankKnockoutResponse(input, null, "idle");
+  }
 
-  return {
-    ok: true,
-    message: "The 10-second Auto Knockout scan passed for the selected market, growth rate, and exit-tick window. The buy will run one final fresh-quote check.",
+  const selectedAccountId = runtime.account?.id;
+  let scanner = runtime.moneyBankKnockoutScanner as MoneyBankKnockoutScannerState | null;
+  if (input.action === "poll") {
+    if (!scanner || !scannerSetupMatches(scanner, input, selectedAccountId)) {
+      if (scanner && scanner.accountId !== selectedAccountId) {
+        throw new Error("Money Bank stopped because the selected Deriv account changed during the run.");
+      }
+      return moneyBankKnockoutResponse(input, null, "idle");
+    }
+    if (runtime.selectedSymbol !== input.symbol) {
+      return moneyBankKnockoutResponse(input, scanner, "waiting_for_market");
+    }
+    return moneyBankKnockoutResponse(input, scanner);
+  }
+
+  runtime.moneyBankKnockoutScanner = null;
+  if (!selectedAccountId) {
+    throw new Error("Select a Deriv account before starting Money Bank Auto Knockout.");
+  }
+  if (runtime.selectedSymbol !== input.symbol) {
+    return moneyBankKnockoutResponse(input, null, "waiting_for_market");
+  }
+  let market = runtime.marketHistory.get(input.symbol);
+  if (!isFreshMoneyBankQuote(market)) {
+    return moneyBankKnockoutResponse(input, null, "waiting_for_quote");
+  }
+
+  const proposal = await requestFreshProposal(proposalInput);
+  market = runtime.marketHistory.get(input.symbol);
+  if (runtime.account?.id !== selectedAccountId) {
+    throw new Error("Money Bank stopped because the selected Deriv account changed during the run.");
+  }
+  if (runtime.selectedSymbol !== input.symbol) {
+    return moneyBankKnockoutResponse(input, null, "waiting_for_market");
+  }
+  const barrier = proposal.contract_details?.tick_size_barrier;
+  const proposalEpoch = proposal.spot_time;
+  const now = Math.floor(Date.now() / 1000);
+  if (
+    !isFreshMoneyBankQuote(market)
+    || !Number.isFinite(barrier)
+    || barrier! <= 0
+    || !Number.isFinite(proposalEpoch)
+    || Math.abs(now - proposalEpoch!) > 3
+  ) {
+    return moneyBankKnockoutResponse(input, null, "waiting_for_quote");
+  }
+
+  scanner = {
+    accountId: selectedAccountId,
+    symbol: input.symbol,
+    growthRate: input.growth_rate,
+    takeProfitTicks: input.duration,
+    requiredKnockouts: input.required_knockouts,
+    qualifiedKnockouts: 0,
+    barrier: barrier!,
+    phase: "waiting_for_take_ticks",
+    lastSequence: market!.tickSequence,
+    cycleStartSequence: market!.tickSequence,
+    cycleStartQuote: market!.quote!,
+    clearCandidateIsQualified: false,
+    readyQuote: null,
+    tickProgress: 0,
   };
+  if (Math.abs(market!.quote! - proposal.spot) >= barrier!) {
+    scanner.phase = "waiting_for_clear";
+    scanner.cycleStartQuote = proposal.spot;
+  }
+  runtime.moneyBankKnockoutScanner = scanner;
+  return moneyBankKnockoutResponse(input, scanner);
 }
 
 function scheduleReconnect() {

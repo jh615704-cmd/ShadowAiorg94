@@ -687,28 +687,34 @@ paths:
     post:
       operationId: scanDerivAccumulatorKnockout
       tags: [deriv]
-      summary: Scan an Accumulator market for ten seconds before entry
+      summary: Start or check the live Money Bank knockout scanner
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/DerivProposalInput"
+              $ref: "#/components/schemas/MoneyBankKnockoutScannerInput"
       responses:
         "200":
-          description: Ten-second scan passed and the selected exit-tick window is clear
+          description: Current live scanner progress for the selected Money Bank setup
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/DerivProposalRequest"
+                $ref: "#/components/schemas/MoneyBankKnockoutScannerResponse"
         "400":
           description: Invalid Accumulator scan input
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Money Bank feature access is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "409":
-          description: The scan found knockout risk or incomplete market evidence
+          description: The scanner could not verify the selected market or quote
           content:
             application/json:
               schema:
@@ -1545,6 +1551,71 @@ components:
           maximum: 0.05
         symbol:
           type: string
+    MoneyBankKnockoutScannerInput:
+      type: object
+      required: [action, amount, duration, duration_unit, contract_type, growth_rate, symbol, required_knockouts]
+      properties:
+        action:
+          type: string
+          enum: [start, poll, reset]
+        amount:
+          type: number
+          exclusiveMinimum: 0
+        duration:
+          type: integer
+          minimum: 5
+          maximum: 50
+          description: Selected Money Bank take-profit tick threshold for virtual scanner contracts.
+        duration_unit:
+          type: string
+          enum: [t]
+        contract_type:
+          type: string
+          enum: [ACCU]
+        growth_rate:
+          type: number
+          minimum: 0.01
+          maximum: 0.05
+        symbol:
+          type: string
+        required_knockouts:
+          type: integer
+          minimum: 1
+          maximum: 20
+    MoneyBankKnockoutScannerResponse:
+      type: object
+      required: [ok, message, phase, symbol, qualified_knockouts, required_knockouts, tick_progress, take_profit_ticks, tick_sequence, ready_to_trade, market_matches]
+      properties:
+        ok:
+          type: boolean
+        message:
+          type: string
+        phase:
+          type: string
+          enum: [idle, waiting_for_market, waiting_for_quote, waiting_for_take_ticks, waiting_for_knockout, waiting_for_clear, ready]
+        symbol:
+          type: string
+        qualified_knockouts:
+          type: integer
+          minimum: 0
+        required_knockouts:
+          type: integer
+          minimum: 1
+          maximum: 20
+        tick_progress:
+          type: integer
+          minimum: 0
+        take_profit_ticks:
+          type: integer
+          minimum: 5
+          maximum: 50
+        tick_sequence:
+          type: integer
+          minimum: 0
+        ready_to_trade:
+          type: boolean
+        market_matches:
+          type: boolean
     DerivProposalRequest:
       type: object
       required: [ok, message]
@@ -1601,7 +1672,11 @@ components:
           type: boolean
         auto_knockout:
           type: boolean
-          description: When true for ACCU, the server checks recent ticks against Deriv's proposal-specific knockout barrier before sending a buy.
+          description: When true for Money Bank, the server requires a completed live knockout scan before buying.
+        auto_knockout_target:
+          type: integer
+          minimum: 1
+          maximum: 20
     DerivBulkBuyInput:
       type: object
       required: [amount, duration, duration_unit, contract_type, count, access_feature]
