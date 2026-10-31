@@ -1409,10 +1409,10 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
     const autoKnockoutStatus = page.locator(".money-bank-knockout-scan");
     await autoKnockoutStatus.waitFor({ state: "visible" });
     assert.match(await autoKnockoutStatus.innerText(), /Waiting for knockouts 0\/5/);
-    assert.match(await autoKnockoutStatus.innerText(), /Scanner cycle: 0\/5 cleared knockouts/);
+    assert.match(await autoKnockoutStatus.innerText(), /Scanner cycle: 0\/5 knockouts counted/);
     assert.match(await autoKnockoutStatus.innerText(), /Qualified knockouts required/);
-    assert.match(await autoKnockoutStatus.innerText(), /Take Ticks applies to the actual Accumulator trade, not the scanner/);
-    assert.doesNotMatch(await autoKnockoutStatus.innerText(), /Current virtual contract|exit tick progress|survive beyond Take Ticks/);
+    assert.match(await autoKnockoutStatus.innerText(), /Take Ticks applies only to the actual Accumulator trade/);
+    assert.doesNotMatch(await autoKnockoutStatus.innerText(), /Current virtual contract|exit tick progress|survive beyond Take Ticks|waiting for the market move to clear/i);
     assert.match(await autoKnockoutStatus.innerText(), /Money Bank AI reviews the selected market/);
     await page.getByRole("button", { name: "Start Accumulator" }).click();
     await page.getByText(/Watching live .* ticks for scanner knockouts/).waitFor({ timeout: 5_000 });

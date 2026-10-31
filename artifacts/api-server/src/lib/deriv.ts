@@ -133,7 +133,6 @@ type MoneyBankKnockoutPhase =
   | "waiting_for_market"
   | "waiting_for_quote"
   | "waiting_for_knockout"
-  | "waiting_for_clear"
   | "ready";
 
 type MoneyBankKnockoutScanInput = {
@@ -170,6 +169,7 @@ type MoneyBankKnockoutScannerState = {
   phase: Exclude<MoneyBankKnockoutPhase, "idle" | "waiting_for_market" | "waiting_for_quote">;
   lastSequence: number;
   cycleStartQuote: number;
+  knockoutArmed: boolean;
 };
 
 export type DerivMarketTickUpdate = {
@@ -758,9 +758,6 @@ function moneyBankKnockoutResponse(
     case "waiting_for_knockout":
       message = `Watching ${symbol} for a live scanner knockout.`;
       break;
-    case "waiting_for_clear":
-      message = "A scanner knockout was detected; waiting for price to return inside the barrier.";
-      break;
     case "ready":
       message = "The knockout target is complete. Checking a fresh entry quote.";
       break;
@@ -804,37 +801,33 @@ function advanceMoneyBankKnockoutScanner(
   if (runtime.selectedSymbol !== symbol) {
     scanner.phase = scanner.qualifiedKnockouts >= scanner.requiredKnockouts ? "ready" : "waiting_for_knockout";
     scanner.cycleStartQuote = quote;
+    scanner.knockoutArmed = true;
     return;
   }
 
   if (sequence !== previousSequence + 1) {
     scanner.phase = scanner.qualifiedKnockouts >= scanner.requiredKnockouts ? "ready" : "waiting_for_knockout";
     scanner.cycleStartQuote = quote;
+    scanner.knockoutArmed = true;
     return;
   }
 
   if (scanner.phase === "ready") return;
 
-  if (scanner.phase === "waiting_for_clear") {
+  if (!scanner.knockoutArmed) {
     if (Math.abs(quote - scanner.cycleStartQuote) < scanner.barrier) {
-      if (scanner.qualifiedKnockouts < scanner.requiredKnockouts) {
-        scanner.qualifiedKnockouts += 1;
-      }
       scanner.cycleStartQuote = quote;
-      if (scanner.qualifiedKnockouts >= scanner.requiredKnockouts) {
-        scanner.phase = "ready";
-      } else {
-        scanner.phase = "waiting_for_knockout";
-      }
+      scanner.knockoutArmed = true;
     }
     return;
   }
 
   if (Math.abs(quote - scanner.cycleStartQuote) >= scanner.barrier) {
-    scanner.phase = "waiting_for_clear";
-    return;
+    scanner.qualifiedKnockouts = Math.min(scanner.requiredKnockouts, scanner.qualifiedKnockouts + 1);
+    scanner.cycleStartQuote = quote;
+    scanner.knockoutArmed = false;
+    scanner.phase = scanner.qualifiedKnockouts >= scanner.requiredKnockouts ? "ready" : "waiting_for_knockout";
   }
-  scanner.phase = "waiting_for_knockout";
   void epoch;
 }
 
@@ -1404,7 +1397,7 @@ function assertMoneyBankKnockoutReady(input: BuyInput) {
     || scanner.growthRate !== input.growth_rate
     || scanner.duration !== input.duration
   ) {
-    throw new Error("Money Bank Auto Knockout is waiting for the required live scanner knockouts and clear move. No contract was sent.");
+    throw new Error("Money Bank Auto Knockout is waiting for the required live scanner knockouts. No contract was sent.");
   }
   if (scanner.accountId !== runtime.account?.id) {
     throw new Error("Money Bank Auto Knockout account changed during the run. No contract was sent.");
@@ -1508,10 +1501,11 @@ export async function scanAccumulatorKnockout(
     phase: "waiting_for_knockout",
     lastSequence: market!.tickSequence,
     cycleStartQuote: market!.quote!,
+    knockoutArmed: true,
   };
   if (Math.abs(market!.quote! - proposal.spot) >= barrier!) {
-    scanner.phase = "waiting_for_clear";
     scanner.cycleStartQuote = proposal.spot;
+    scanner.knockoutArmed = false;
   }
   runtime.moneyBankKnockoutScanner = scanner;
   return moneyBankKnockoutResponse(input, scanner);

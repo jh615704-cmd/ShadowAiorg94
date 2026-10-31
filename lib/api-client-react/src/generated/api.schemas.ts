@@ -674,7 +674,6 @@ export const MoneyBankKnockoutScannerResponsePhase = {
   waiting_for_market: 'waiting_for_market',
   waiting_for_quote: 'waiting_for_quote',
   waiting_for_knockout: 'waiting_for_knockout',
-  waiting_for_clear: 'waiting_for_clear',
   ready: 'ready',
 } as const;
 

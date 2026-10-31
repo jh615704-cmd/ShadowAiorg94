@@ -320,17 +320,17 @@ export function MoneyBankPanel({
               <div className="money-bank-knockout-scan" role="status" aria-live="polite">
                 <div className="money-bank-knockout-heading">
                   <b>{knockoutReady ? "Knockout sample complete" : `Waiting for knockouts ${qualifiedKnockouts}/${requiredKnockouts}`}</b>
-                  <span>Scanner cycle: {qualifiedKnockouts}/{requiredKnockouts} cleared knockouts</span>
+                  <span>Scanner cycle: {qualifiedKnockouts}/{requiredKnockouts} knockouts counted</span>
                 </div>
                 <p>
                   {autoKnockoutScan?.phase === "waiting_for_market"
                     ? `Re-confirming the selected ${selectedMarket} market before scanning.`
                     : autoKnockoutScan?.phase === "waiting_for_quote"
                       ? `Waiting for a fresh live ${selectedMarket} quote.`
-                      : autoKnockoutScan?.phase === "waiting_for_clear"
-                        ? "Knockout observed. Waiting for the market move to clear before counting it."
-                        : autoKnockoutScan?.phase === "waiting_for_knockout"
-                          ? `Watching live ${selectedMarket} ticks for the next scanner knockout.`
+                      : autoKnockoutScan?.phase === "waiting_for_knockout"
+                        ? qualifiedKnockouts > 0
+                          ? `${qualifiedKnockouts} of ${requiredKnockouts} knockouts counted. Watching for the next live move.`
+                          : `Watching live ${selectedMarket} ticks for scanner knockouts.`
                       : autoKnockoutScan?.phase === "ready"
                             ? "Knockout sample complete. Money Bank AI is reviewing the selected market, percentage, stake, and Take Ticks before entry."
                             : running
@@ -352,7 +352,7 @@ export function MoneyBankPanel({
                   />
                 </div>
                 <small className="money-bank-knockout-footnote">
-                  Each knockout counts when price moves beyond the proposal barrier and returns inside it. Take Ticks applies to the actual Accumulator trade, not the scanner.
+                  A knockout counts as soon as price reaches the proposal barrier. The scanner re-arms for another move; Take Ticks applies only to the actual Accumulator trade.
                 </small>
                 <small className="money-bank-knockout-footnote">
                   At the target, Money Bank AI reviews the selected market, percentage, stake, and Take Ticks before entry. Manual losses do not count; this does not guarantee a win.

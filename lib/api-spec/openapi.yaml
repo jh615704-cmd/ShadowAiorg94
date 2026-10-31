@@ -1592,7 +1592,7 @@ components:
           type: string
         phase:
           type: string
-          enum: [idle, waiting_for_market, waiting_for_quote, waiting_for_knockout, waiting_for_clear, ready]
+          enum: [idle, waiting_for_market, waiting_for_quote, waiting_for_knockout, ready]
         symbol:
           type: string
         qualified_knockouts:

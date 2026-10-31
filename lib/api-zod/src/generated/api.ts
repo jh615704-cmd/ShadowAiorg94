@@ -873,7 +873,7 @@ export const scanDerivAccumulatorKnockoutResponseTickSequenceMin = 0;
 export const ScanDerivAccumulatorKnockoutResponse = zod.object({
   "ok": zod.boolean(),
   "message": zod.string(),
-  "phase": zod.enum(['idle', 'waiting_for_market', 'waiting_for_quote', 'waiting_for_knockout', 'waiting_for_clear', 'ready']),
+  "phase": zod.enum(['idle', 'waiting_for_market', 'waiting_for_quote', 'waiting_for_knockout', 'ready']),
   "symbol": zod.string(),
   "qualified_knockouts": zod.number().int().min(scanDerivAccumulatorKnockoutResponseQualifiedKnockoutsMin),
   "required_knockouts": zod.number().int().min(1).max(scanDerivAccumulatorKnockoutResponseRequiredKnockoutsMax),
