@@ -308,10 +308,6 @@ export default function EdgeReferencePanel({
         >
           <span className="edge-sniper-copy">
             <b>Sniper over/under</b>
-            <small>
-              Waits for two fresh matching ticks; a short streak does not
-              predict or guarantee the contract result.
-            </small>
           </span>
           <span className="edge-sniper-control">
             <span
@@ -457,10 +453,6 @@ export default function EdgeReferencePanel({
       <section className="edge-ref-ai-scanner">
         <div>
           <b>LIVE MARKET SCANNER</b>
-          <small>
-            Uses fresh Deriv samples for the selected digit. If its checks pass,
-            scanning places one contract; observed rates are not guarantees.
-          </small>
         </div>
         <AiScannerAction
           onScan={onAiScan}
