@@ -2327,6 +2327,16 @@ body { overflow-x: hidden; }
   font-size: 10px;
   line-height: 1.5;
   overflow-wrap: anywhere;
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity .32s ease, transform .32s ease;
+}
+.ai-scanner-message.is-fading {
+  opacity: 0;
+  transform: translateY(-3px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-scanner-message { transition-duration: 1ms; }
 }
 
 /* Keep the trading surfaces readable at dashboard scale. */
