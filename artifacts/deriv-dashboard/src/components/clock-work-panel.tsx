@@ -138,7 +138,6 @@ export default function ClockWorkPanel({
           <div className="cw-duration" data-testid="clock-work-fixed-duration">
             <span>TRADE DURATION</span>
             <strong>5 ticks</strong>
-            <small>Every Clock Work contract uses five ticks.</small>
           </div>
 
           <label className="cw-stake" htmlFor="cw-stake">
@@ -246,9 +245,6 @@ export default function ClockWorkPanel({
             <i aria-hidden="true" />
             <span>{statusMessage || aiStatus}</span>
           </div>
-          <p className="cw-ai-note">
-            Manual selection uses one completed five-tick sample. Auto Best needs at least 15 fresh five-tick samples to choose a market. One fresh quote confirms each new entry after a setup qualifies. Past results do not guarantee future outcomes.
-          </p>
         </section>
 
         <button
