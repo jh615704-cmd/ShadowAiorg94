@@ -540,9 +540,9 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
         assert.equal(await panel.getByTestId("select-clock-duration").count(), 0, "Clock Work should not expose other contract durations.");
 
         const threshold = panel.getByTestId("select-ai-clock-rate");
-        assert.equal(await threshold.inputValue(), "55");
-        assert.deepEqual(await threshold.locator("option").allTextContents(), ["55%", "65%", "70%"]);
-        for (const rate of ["55", "65", "70"]) {
+        assert.equal(await threshold.inputValue(), "50");
+        assert.deepEqual(await threshold.locator("option").allTextContents(), ["50%", "55%", "65%", "70%"]);
+        for (const rate of ["50", "55", "65", "70"]) {
           await threshold.selectOption(rate);
           assert.equal(await threshold.inputValue(), rate);
         }
@@ -1473,6 +1473,49 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
   }
 });
 
+test("Trade X sends the selected Digit Differs order exactly once", async () => {
+  const state = createState(userSession(["trade-x"]));
+  state.hasToken = true;
+  state.allowFixtureTrades = true;
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/app`);
+    await page.getByRole("heading", { name: "Trading Strategies" }).waitFor();
+    await page.locator(".xt-feature-card-trade-x .xt-switch").click();
+
+    const panel = page.getByTestId("trade-x-panel");
+    await panel.waitFor();
+    await panel.getByTestId("input-trade-x-stake").fill("1.25");
+    await panel.getByTestId("button-trade-x-digit-4").click();
+    await panel.getByTestId("button-trade-x-duration-2").click();
+
+    const responsePromise = page.waitForResponse((response) =>
+      response.url().endsWith("/api/deriv/bulk-buy") && response.request().method() === "POST");
+    await panel.getByTestId("button-place-trade-x").click();
+    const response = await responsePromise;
+
+    assert.equal(response.status(), 202);
+    assert.deepEqual(state.tradeRequests, [{
+      path: "/api/deriv/bulk-buy",
+      method: "POST",
+      body: {
+        access_feature: "trade-x",
+        amount: 1.25,
+        duration: 2,
+        duration_unit: "t",
+        contract_type: "DIGITDIFF",
+        barrier: 4,
+        symbol: "R_75",
+        count: 1,
+      },
+    }]);
+    assert.deepEqual(state.unhandledApis, []);
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+});
+
 test("Bulk Trader digits match Trade X pill styling and fit phone, tablet, laptop, and 4K widths", async () => {
   const state = createState(userSession(["bulk-trader"]));
   state.hasToken = true;
@@ -1858,6 +1901,34 @@ async function mockApiRequest(route, state, pathname, method) {
       proposal: { id: "fixture-proposal", ask_price: order.amount, payout: order.amount * 2, spot: 100_000 },
       buy: { contract_id: buy.contract_id, buy_price: order.amount, payout: order.amount * 2 },
     });
+    return;
+  }
+  if (pathname === "/api/deriv/bulk-buy" && method === "POST" && state.allowFixtureTrades) {
+    const order = request.postDataJSON();
+    state.tradeRequests.push({ path: pathname, method, body: order });
+    if (state.buyResponseDelayMs) {
+      await new Promise((resolve) => setTimeout(resolve, state.buyResponseDelayMs));
+    }
+    const buy = fixtureBuy(state, order);
+    await fulfillJson(route, {
+      ok: true,
+      count: 1,
+      message: "Fixture buy confirmed.",
+      proposals: [{
+        id: "fixture-proposal",
+        ask_price: order.amount,
+        payout: order.amount * 2,
+        spot: 100_000,
+        longcode: "Fixture quote",
+      }],
+      buys: [{
+        contract_id: buy.contract_id,
+        buy_price: order.amount,
+        payout: order.amount * 2,
+        start_time: buy.buy_time,
+      }],
+      failed: [],
+    }, 202);
     return;
   }
   if (pathname === "/api/deriv/sell" && method === "POST" && state.allowFixtureTrades) {

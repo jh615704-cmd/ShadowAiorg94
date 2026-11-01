@@ -47,7 +47,7 @@ test("Clock Work does not select a direction below the 70% cutoff", () => {
   assert.equal(chooseClockWorkAiCandidate(historyForOutcomes(outcomes), { minimumWinRate: 70 }), null);
 });
 
-test("Clock Work accepts the selected 55%, 65%, or 70% entry threshold", () => {
+test("Clock Work accepts the selected 50%, 55%, 65%, or 70% entry threshold", () => {
   const outcomes = [...Array.from({ length: 65 }, () => true), ...Array.from({ length: 35 }, () => false)];
   const quotes = historyForOutcomes(outcomes);
 
@@ -62,6 +62,14 @@ test("Clock Work accepts the selected 55%, 65%, or 70% entry threshold", () => {
   const minimumRateCandidate = chooseClockWorkAiCandidate(minimumRateQuotes, { minimumWinRate: 55 });
   assert.ok(Math.abs((minimumRateCandidate?.observedRate ?? 0) - 55) < 1e-9,
     "The selected 55% threshold must not be silently overridden by an additional confidence gate.");
+});
+
+test("Clock Work accepts the 50% default with the full evidence sample", () => {
+  const outcomes = [...Array.from({ length: 10 }, () => true), ...Array.from({ length: 10 }, () => false)];
+  const candidate = chooseClockWorkAiCandidate(historyForOutcomes(outcomes));
+
+  assert.equal(candidate?.observedRate, 50);
+  assert.equal(candidate?.sampleCount, 20);
 });
 
 test("Clock Work auto-best ranks fresh markets by stable five-tick evidence", () => {

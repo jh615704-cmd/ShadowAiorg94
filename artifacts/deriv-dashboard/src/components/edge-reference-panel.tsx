@@ -67,7 +67,7 @@ type EdgeReferencePanelProps = {
   onClearHistory: () => void | Promise<void>;
 };
 
-const EDGE_PERCENTAGE_SCAN_FLOOR = 90;
+const EDGE_PERCENTAGE_SCAN_FLOOR = 50;
 
 export default function EdgeReferencePanel({
   isConnected,

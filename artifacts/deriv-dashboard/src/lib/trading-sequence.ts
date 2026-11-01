@@ -202,7 +202,7 @@ export function chooseBestEdgeSignal(
 
 export function rankBestEdgeTradeSignals(
   signals: readonly MarketSignal[],
-  minimumObservedRate = 95,
+  minimumObservedRate = 50,
   minimumSampleCount = 20,
 ): BestEdgeDirectionSignal[] {
   if (
@@ -266,7 +266,7 @@ export function rankBestEdgeTradeSignals(
 
 export function chooseBestEdgeTradeSignal(
   signals: readonly MarketSignal[],
-  minimumObservedRate = 95,
+  minimumObservedRate = 50,
   minimumSampleCount = 20,
 ): BestEdgeDirectionSignal | null {
   return rankBestEdgeTradeSignals(signals, minimumObservedRate, minimumSampleCount)[0] ?? null;
@@ -280,7 +280,7 @@ export function chooseEdgeDurationByWinRate(
   supportedDurations: readonly number[],
   preferredDuration: number,
   minimumSamples = 20,
-  minimumWinRate = 95,
+  minimumWinRate = 50,
 ): number | null {
   const availableDurations = [...new Set(supportedDurations)]
     .filter((duration) => Number.isInteger(duration) && duration >= 1 && duration <= 5)

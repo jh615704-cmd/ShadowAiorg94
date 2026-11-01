@@ -1,7 +1,8 @@
 export const AI_SCANNER_MIN_SAMPLE = 20;
 export const DIGIT_FLIP_SCANNER_MIN_SAMPLE = 100;
-export const DIGIT_FLIP_SIGNAL_FLOOR = 55;
-export const TRADE_X_SCANNER_MIN_OBSERVED_RATE = 95;
+export const BULK_TRADER_SIGNAL_FLOOR = 50;
+export const DIGIT_FLIP_SIGNAL_FLOOR = 50;
+export const TRADE_X_SCANNER_MIN_OBSERVED_RATE = 50;
 export const CASH_GRAB_MIN_DURATION_SAMPLE = 20;
 
 export type AiScannerMarketSignal = {
@@ -122,8 +123,16 @@ export function chooseBulkScannerCandidate(
   type: "over-under" | "differs",
   prediction: number,
   minimumSample = AI_SCANNER_MIN_SAMPLE,
+  minimumObservedRate = BULK_TRADER_SIGNAL_FLOOR,
 ): BulkScannerCandidate | null {
-  if (!Number.isInteger(prediction) || prediction < 0 || prediction > 9) return null;
+  if (
+    !Number.isInteger(prediction)
+    || prediction < 0
+    || prediction > 9
+    || !Number.isFinite(minimumObservedRate)
+    || minimumObservedRate < 0
+    || minimumObservedRate > 100
+  ) return null;
   const candidates: BulkScannerCandidate[] = [];
 
   for (const signal of eligibleSignals(signals, symbols, minimumSample)) {
@@ -135,7 +144,7 @@ export function chooseBulkScannerCandidate(
 
     if (type === "differs") {
       const observedRate = digitDiffersRateFromPercentages(overRate, underRate);
-      if (observedRate == null) continue;
+      if (observedRate == null || observedRate < minimumObservedRate) continue;
       candidates.push({
         symbol: signal.symbol,
         contractType: "DIGITDIFF",
@@ -146,7 +155,7 @@ export function chooseBulkScannerCandidate(
       continue;
     }
 
-    if (prediction < 9) {
+    if (prediction < 9 && overRate >= minimumObservedRate) {
       candidates.push({
         symbol: signal.symbol,
         contractType: "DIGITOVER",
@@ -155,7 +164,7 @@ export function chooseBulkScannerCandidate(
         sampleCount: signal.sample_count,
       });
     }
-    if (prediction > 0) {
+    if (prediction > 0 && underRate >= minimumObservedRate) {
       candidates.push({
         symbol: signal.symbol,
         contractType: "DIGITUNDER",
@@ -192,7 +201,7 @@ export function chooseCashGrabDirectionalMarket(
       };
     })
     .filter((candidate): candidate is NonNullable<typeof candidate> =>
-      candidate != null && candidate.conservativeRate > 50,
+      candidate != null && candidate.conservativeRate >= 50,
     )
     .sort((left, right) =>
       right.conservativeRate - left.conservativeRate
@@ -399,6 +408,6 @@ export function chooseCashGrabHistoricalDirection(
   const conservativeRate = contractType === "CALL"
     ? evidence.callConservativeRate
     : evidence.putConservativeRate;
-  if (conservativeRate <= 50) return null;
+  if (conservativeRate < 50) return null;
   return { contractType, observedRate, conservativeRate, sampleCount: evidence.sampleCount };
 }

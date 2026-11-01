@@ -250,30 +250,31 @@ describe("Percentage evidence selection", () => {
     );
   });
 
-  it("does not turn an observed sample below the floor into a trade signal", () => {
+  it("does not turn an observed sample below the 50% floor into a trade signal", () => {
     assert.equal(
       chooseBestEdgeTradeSignal([{
         symbol: "R_75",
         quote: 75.5,
         sample_count: 100,
         digit_streaks: [],
-        digit_outcomes: [{ digit: 5, over_percentage: 94.9, under_percentage: 5.1 }],
+        digit_outcomes: [{ digit: 5, over_percentage: 49.9, under_percentage: 49.8 }],
       }]),
       null,
     );
   });
 
-  it("accepts EDGE signals at the configured 55% observed-frequency threshold", () => {
+  it("accepts EDGE signals at the 50% observed-frequency threshold", () => {
     const sample = {
       symbol: "R_75",
       quote: 75.5,
       sample_count: 20,
       digit_streaks: [],
-      digit_outcomes: [{ digit: 5, over_percentage: 55, under_percentage: 45 }],
+      digit_outcomes: [{ digit: 5, over_percentage: 50, under_percentage: 49 }],
     };
 
-    assert.equal(chooseBestEdgeTradeSignal([sample], 55, 20)?.score, 55);
-    assert.equal(chooseBestEdgeTradeSignal([sample], 56, 20), null);
+    assert.equal(chooseBestEdgeTradeSignal([sample])?.score, 50);
+    assert.equal(chooseBestEdgeTradeSignal([sample], 50, 20)?.score, 50);
+    assert.equal(chooseBestEdgeTradeSignal([sample], 51, 20), null);
   });
 
   it("ranks alternate EDGE markets so unsupported quotes can fall through", () => {
@@ -292,7 +293,7 @@ describe("Percentage evidence selection", () => {
         digit_streaks: [],
         digit_outcomes: [{ digit: 5, over_percentage: 58, under_percentage: 42 }],
       },
-    ], 55, 20);
+    ], 50, 20);
 
     assert.deepEqual(
       ranked.map(({ symbol, direction, digit }) => ({ symbol, direction, digit })),

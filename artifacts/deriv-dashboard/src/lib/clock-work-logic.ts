@@ -1,7 +1,7 @@
 export type ClockWorkDirection = "HIGHER" | "LOWER";
 
-export const CLOCK_WORK_AI_MIN_WIN_RATE = 55;
-export const CLOCK_WORK_AI_MIN_WIN_RATE_OPTIONS = [55, 65, 70] as const;
+export const CLOCK_WORK_AI_MIN_WIN_RATE = 50;
+export const CLOCK_WORK_AI_MIN_WIN_RATE_OPTIONS = [50, 55, 65, 70] as const;
 export type ClockWorkAiMinimumWinRate = typeof CLOCK_WORK_AI_MIN_WIN_RATE_OPTIONS[number];
 export const CLOCK_WORK_AI_MIN_SAMPLE_COUNT = 20;
 export const CLOCK_WORK_AUTO_BEST_MARKET_MIN_SAMPLE_COUNT = 20;

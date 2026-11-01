@@ -99,6 +99,16 @@ test("Bulk Trader scanner rejects invalid barriers and rates but tolerates perce
   assert.equal(isValidObservedPercentage(Number.NaN), false);
 });
 
+test("Bulk Trader accepts the 50% observed-rate floor", () => {
+  const candidate = chooseBulkScannerCandidate([
+    signal("R_10", 20, [{ digit: 5, over_percentage: 50, under_percentage: 49.9 }]),
+    signal("JD25", 20, [{ digit: 5, over_percentage: 49.9, under_percentage: 49.8 }]),
+  ], ["R_10", "JD25"], "over-under", 5);
+
+  assert.equal(candidate?.symbol, "R_10");
+  assert.equal(candidate?.observedRate, 50);
+});
+
 test("DigitFlip ranks a sufficiently sampled parity after shrinking toward an even baseline", () => {
   const candidate = chooseDigitFlipScannerCandidate([
     signal("R_10", 100, [], 96, 4),
@@ -111,7 +121,7 @@ test("DigitFlip ranks a sufficiently sampled parity after shrinking toward an ev
   assert.equal(getDigitFlipAdjustedRate(60, 100), 58.333333333333336);
 });
 
-test("DigitFlip scanner ignores malformed, undersampled, and weak adjusted parity rates", () => {
+test("DigitFlip scanner ignores malformed and undersampled rates while ranking valid parity evidence", () => {
   const candidate = chooseDigitFlipScannerCandidate([
     signal("R_10", 40, [], 140, -40),
     signal("JD25", 100, [], 55, Number.NaN),
@@ -127,11 +137,20 @@ test("DigitFlip scanner ignores malformed, undersampled, and weak adjusted parit
   assert.equal(isValidDigitFlipParityRates(Number.POSITIVE_INFINITY, 0), false);
 });
 
-test("DigitFlip does not scan a setup below the adjusted-rate or sample gate", () => {
+test("DigitFlip accepts the 50% parity floor at its minimum sample count", () => {
+  const candidate = chooseDigitFlipScannerCandidate([
+    signal("R_10", 100, [], 50, 50),
+  ], ["R_10"]);
+
+  assert.equal(candidate?.symbol, "R_10");
+  assert.equal(candidate?.observedRate, 50);
+});
+
+test("DigitFlip does not scan a setup below its minimum sample count", () => {
   assert.equal(
     chooseDigitFlipScannerCandidate([
       signal("R_10", 99, [], 100, 0),
-      signal("JD25", 200, [], 54, 46),
+      signal("JD25", 99, [], 54, 46),
     ], ["R_10", "JD25"]),
     null,
   );
@@ -169,7 +188,7 @@ test("Trade X ranks the least frequent observed digit across eligible markets", 
   assert.equal(candidate?.observedRate, 96);
 });
 
-test("Trade X AI scanner only returns a valid digit with at least 95% observed differs rate", () => {
+test("Trade X AI scanner only returns a valid, sufficiently observed digit", () => {
   const candidate = chooseTradeXScannerCandidate([
     signal("R_10", 80, [
       { digit: 2, over_percentage: 84, under_percentage: 12 },
@@ -190,10 +209,22 @@ test("Trade X AI scanner only returns a valid digit with at least 95% observed d
   });
 });
 
+test("Trade X accepts the 50% observed-rate floor and rejects lower rates", () => {
+  const candidate = chooseTradeXScannerCandidate([
+    signal("R_10", 100, [
+      { digit: 2, over_percentage: 25, under_percentage: 25 },
+      { digit: 3, over_percentage: 24.9, under_percentage: 25 },
+    ]),
+  ], ["R_10"]);
+
+  assert.equal(candidate?.digit, 2);
+  assert.equal(candidate?.observedRate, 50);
+});
+
 test("Trade X AI scanner skips candidates below its observed-rate gate", () => {
   assert.equal(
     chooseTradeXScannerCandidate([
-      signal("R_75", 200, [{ digit: 5, over_percentage: 47, under_percentage: 47 }]),
+      signal("R_75", 200, [{ digit: 5, over_percentage: 24.9, under_percentage: 25 }]),
     ], ["R_75"]),
     null,
   );

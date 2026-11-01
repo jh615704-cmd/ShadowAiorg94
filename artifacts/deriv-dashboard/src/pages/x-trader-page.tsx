@@ -351,12 +351,12 @@ const tradeXSymbols: readonly TradeXSymbolOption[] = markets.map(([value, label]
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 const DIGIT_FLIP_MARKET_SCAN_INTERVAL_MS = 10_000;
 const DIGIT_FLIP_NO_SETUP_RETRY_MS = 1_000;
-const EDGE_PERCENTAGE_SCAN_FLOOR = 90;
+const EDGE_PERCENTAGE_SCAN_FLOOR = 50;
 const EDGE_NO_SETUP_RETRY_MS = 500;
 const CASH_GRAB_AUTO_SWITCH_RETRY_MS = 5_000;
 const CASH_GRAB_AUTO_SWITCH_INTERVAL_MS = 20_000;
 const EDGE_MIN_MARKET_SAMPLE = 20;
-const EDGE_AI_SCANNER_MIN_OBSERVED_RATE = 55;
+const EDGE_AI_SCANNER_MIN_OBSERVED_RATE = 50;
 // The trading calendar is deliberately internal. "all-days" keeps the
 // strategy available on both weekdays and weekends without adding another
 // user-facing switch that could be mistaken for a market prediction.
@@ -2550,7 +2550,7 @@ export default function XTraderPage() {
           const conservativeRate = direction === "CALL"
             ? evidence.callConservativeRate
             : evidence.putConservativeRate;
-          if (!isValidObservedPercentage(observedWinRate) || currentStake > balance || conservativeRate <= 50) continue;
+          if (!isValidObservedPercentage(observedWinRate) || currentStake > balance || conservativeRate < 50) continue;
           candidates.push({
             symbol: signal.symbol,
             direction,
@@ -2576,7 +2576,7 @@ export default function XTraderPage() {
         });
       } else {
         setCashGrabAutoSwitchSafestPairStatus("quiet");
-        setConnectionMessage({ kind: "info", text: "Auto-switch is waiting for a supported market with enough duration-matched samples, a conservative signal above 50%, and room for the current stake." });
+        setConnectionMessage({ kind: "info", text: "Auto-switch is waiting for a supported market with enough duration-matched samples, a conservative signal of at least 50%, and room for the current stake." });
       }
       return recommendation;
     } catch (error) {
@@ -3762,7 +3762,7 @@ export default function XTraderPage() {
         cashGrabDuration,
       );
       if (!candidate) {
-        throw new Error(`Cash Grab needs at least ${CASH_GRAB_MIN_DURATION_SAMPLE} qualifying non-overlapping ${cashGrabDuration}-tick samples with a conservative signal above 50%.`);
+        throw new Error(`Cash Grab needs at least ${CASH_GRAB_MIN_DURATION_SAMPLE} qualifying non-overlapping ${cashGrabDuration}-tick samples with a conservative signal of at least 50%.`);
       }
       if (!await selectMarket(candidate.symbol)) throw new Error("Deriv could not select the scanned market. No contract was sent.");
       const historySnapshot = await readHistorySnapshot();
@@ -4027,7 +4027,7 @@ export default function XTraderPage() {
         || selectedRate > 100
       )
     ) {
-      setConnectionMessage({ kind: "info", text: "DigitFlip is waiting for a sufficiently strong, adequately sampled parity signal. No trade was sent." });
+      setConnectionMessage({ kind: "info", text: `DigitFlip is waiting for at least ${DIGIT_FLIP_SCANNER_MIN_SAMPLE} market samples. No trade was sent.` });
       return false;
     }
     const watch = digitFlipMartingaleWatchRef.current;
@@ -4175,7 +4175,7 @@ export default function XTraderPage() {
         if (selection !== "selected") {
           setConnectionMessage(selection === "market-selection-failed"
             ? { kind: "error", text: "DigitFlip could not switch to the scanned market. No trade was sent." }
-            : { kind: "info", text: "DigitFlip is waiting for a market with a qualifying parity sample. No trade was sent." });
+            : { kind: "info", text: `DigitFlip is waiting for at least ${DIGIT_FLIP_SCANNER_MIN_SAMPLE} market samples. No trade was sent.` });
           digitFlipNextMarketScanAtRef.current = Date.now() + (
             selection === "no-candidate"
               ? DIGIT_FLIP_NO_SETUP_RETRY_MS
@@ -4550,7 +4550,7 @@ export default function XTraderPage() {
       bulkTraderPrediction,
     );
     if (!candidate) {
-      throw new Error(`No eligible setup has at least ${AI_SCANNER_MIN_SAMPLE} observed moves for the selected contract type and barrier.`);
+      throw new Error(`No eligible setup reached the 50% observed-rate threshold with at least ${AI_SCANNER_MIN_SAMPLE} moves for the selected contract type and barrier.`);
     }
     const nextType = candidate.contractType === "DIGITDIFF" ? "differs" : "over-under";
     setBulkTraderAutoSelectBest(false);
