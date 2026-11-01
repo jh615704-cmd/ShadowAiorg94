@@ -49,6 +49,28 @@ test("notification history validates fields and caps the saved list", () => {
   assert.equal(parsed.at(-1)?.id, `notice-${MAX_ACCOUNT_NOTIFICATIONS - 1}`);
 });
 
+test("notification history removes the open-contract waiting message", () => {
+  const singular = {
+    ...makeNotification(1),
+    title: "Trade entry paused",
+    message: "Waiting for 1 open Deriv contract to settle before another trade can start.",
+  };
+  const plural = {
+    ...makeNotification(2),
+    title: "Trade entry paused",
+    message: "Waiting for 2 open Deriv contracts to settle before another trade can start.",
+  };
+  const retained = {
+    ...makeNotification(3),
+    message: "Deriv is reconnecting. Trade entry remains paused.",
+  };
+
+  assert.deepEqual(
+    parseAccountNotifications(JSON.stringify([singular, plural, retained])),
+    [retained],
+  );
+});
+
 test("notification storage is isolated by access-key session", () => {
   assert.notEqual(
     accountNotificationsStorageKey("session-a"),

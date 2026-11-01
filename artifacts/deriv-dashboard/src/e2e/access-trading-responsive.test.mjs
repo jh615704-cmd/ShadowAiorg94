@@ -1495,6 +1495,19 @@ test("Trade X sends the selected Digit Differs order exactly once", async () => 
     const response = await responsePromise;
 
     assert.equal(response.status(), 202);
+    await page.getByTestId("button-notifications").click();
+    const notificationPanel = page.getByRole("dialog", {
+      name: "Account, connection, and workspace notifications",
+    });
+    await notificationPanel.waitFor({ state: "visible" });
+    assert.equal(
+      await notificationPanel.getByText(
+        "Waiting for 1 open Deriv contract to settle before another trade can start.",
+        { exact: true },
+      ).count(),
+      0,
+      "A successful order must not add the open-contract waiting notification.",
+    );
     assert.deepEqual(state.tradeRequests, [{
       path: "/api/deriv/bulk-buy",
       method: "POST",

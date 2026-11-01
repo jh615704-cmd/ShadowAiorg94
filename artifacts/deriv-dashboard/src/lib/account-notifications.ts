@@ -15,6 +15,12 @@ export function accountNotificationsStorageKey(accessKeyId: string) {
   return `shadow-ai:account-notifications:${accessKeyId}`;
 }
 
+export function isOpenContractSettlementWaitMessage(message: string) {
+  return /^Waiting for \d+ open Deriv contracts? to settle before another trade can start\.$/.test(
+    message.trim(),
+  );
+}
+
 function isAccountNotification(value: unknown): value is AccountNotification {
   if (!value || typeof value !== "object") return false;
   const notification = value as Partial<AccountNotification>;
@@ -43,6 +49,7 @@ export function parseAccountNotifications(
     if (!Array.isArray(parsed)) return [];
     return parsed
       .filter(isAccountNotification)
+      .filter((notification) => !isOpenContractSettlementWaitMessage(notification.message))
       .slice(0, MAX_ACCOUNT_NOTIFICATIONS);
   } catch {
     return [];

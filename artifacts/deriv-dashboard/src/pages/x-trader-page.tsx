@@ -39,6 +39,7 @@ import { GlobalFeatureAnnouncement } from "@/components/layout/global-feature-an
 import { NotificationCenter } from "@/components/notification-center";
 import { useAccessSessionLogout } from "@/hooks/use-access-session-logout";
 import { useAccountNotifications } from "@/hooks/use-account-notifications";
+import { isOpenContractSettlementWaitMessage } from "@/lib/account-notifications";
 import {
   Activity, BookOpen, Bot, ChevronDown, ChevronLeft, ChevronRight, Gauge, Loader2, LockKeyhole,
   Clock3, LogOut, Pause, Play, Power, RefreshCw, RotateCcw, Settings, ShieldAlert, ShieldCheck, X, Zap,
@@ -752,6 +753,7 @@ export default function XTraderPage() {
       if (!message) return;
       const text = message.text.trim().slice(0, 500);
       if (!text) return;
+      if (isOpenContractSettlementWaitMessage(text)) return;
       if (message.kind === "info") {
         if (text.startsWith("Deriv connected.")) {
           addNotificationRef.current("connection", "Deriv connected", text);
@@ -806,12 +808,6 @@ export default function XTraderPage() {
       );
     }
   }, [derivCapacityError, upsertNotification]);
-
-  useEffect(() => {
-    if (tradeSlotMessage && openContractsReady) {
-      upsertNotification("connection", "Trade entry paused", tradeSlotMessage);
-    }
-  }, [openContractsReady, tradeSlotMessage, upsertNotification]);
 
   useEffect(() => {
     if (realAccountTradingDisabled) {
