@@ -1473,7 +1473,7 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
   }
 });
 
-test("Trade X sends the selected Digit Differs order exactly once", async () => {
+test("Trade X history appears at acknowledgement, survives a stale snapshot, and reconciles", async () => {
   const state = createState(userSession(["trade-x"]));
   state.hasToken = true;
   state.allowFixtureTrades = true;
@@ -1489,25 +1489,48 @@ test("Trade X sends the selected Digit Differs order exactly once", async () => 
     await panel.getByTestId("button-trade-x-digit-4").click();
     await panel.getByTestId("button-trade-x-duration-2").click();
 
+    state.historyResponseOverride = [];
+    state.holdHistoryResponses = true;
     const responsePromise = page.waitForResponse((response) =>
       response.url().endsWith("/api/deriv/bulk-buy") && response.request().method() === "POST");
     await panel.getByTestId("button-place-trade-x").click();
     const response = await responsePromise;
 
     assert.equal(response.status(), 202);
+
+    const historyRow = page.getByTestId("deriv-history-VRTC12345-fixture-contract-1");
+    await historyRow.waitFor({ state: "visible" });
+    await waitForHeldHistoryResponse(state);
+    const currentValue = historyRow.locator(".deriv-history-details span")
+      .filter({ hasText: "CURRENT VALUE" })
+      .locator("b");
+    assert.equal(await currentValue.innerText(), "US$1.25", "The acknowledged buy should appear immediately as an open row before history catches up.");
+    assert.match(await historyRow.locator(".deriv-history-profit").innerText(), /US\$0\.00/);
+    assert.equal(await page.getByTestId("deriv-history-VRTC12345-fixture-contract-1").count(), 1, "Trade X history must not duplicate the pending row.");
+
+    state.history = [{
+      ...state.history[0],
+      current_value: 1.68,
+      profit: 0.43,
+    }, ...state.history.slice(1)];
+    state.holdHistoryResponses = false;
+    await releaseHeldHistoryResponses(state);
+    assert.equal(await currentValue.innerText(), "US$1.25", "A stale empty history response must not remove the acknowledged row.");
+
+    state.historyResponseOverride = undefined;
+    await currentValue.getByText("US$1.68", { exact: true }).waitFor({ timeout: 10_000 });
+    assert.match(await historyRow.locator(".deriv-history-profit").innerText(), /US\$0\.43/);
+    assert.equal(await page.getByTestId("deriv-history-VRTC12345-fixture-contract-1").count(), 1, "The authoritative row should replace, not duplicate, the local pending row.");
+
+    await page.locator(".xt-feature-card-trade-x .xt-switch").click();
     await page.getByTestId("button-notifications").click();
     const notificationPanel = page.getByRole("dialog", {
       name: "Account, connection, and workspace notifications",
     });
     await notificationPanel.waitFor({ state: "visible" });
-    assert.equal(
-      await notificationPanel.getByText(
-        "Waiting for 1 open Deriv contract to settle before another trade can start.",
-        { exact: true },
-      ).count(),
-      0,
-      "A successful order must not add the open-contract waiting notification.",
-    );
+    const notificationText = await notificationPanel.innerText();
+    assert.doesNotMatch(notificationText, /Waiting for \d+ open Deriv contracts? to settle before another trade can start\.?/i);
+    assert.doesNotMatch(notificationText, /Trade X paused/i, "Turning off Trade X must not add a misleading pause notification.");
     assert.deepEqual(state.tradeRequests, [{
       path: "/api/deriv/bulk-buy",
       method: "POST",
@@ -1525,6 +1548,8 @@ test("Trade X sends the selected Digit Differs order exactly once", async () => 
     assert.deepEqual(state.unhandledApis, []);
     assert.deepEqual(pageErrors, []);
   } finally {
+    state.holdHistoryResponses = false;
+    await releaseHeldHistoryResponses(state);
     await context.close();
   }
 });
@@ -1653,6 +1678,9 @@ function createState(session) {
     unhandledApis: [],
     logoutCount: 0,
     tradeRequests: [],
+    historyResponseOverride: undefined,
+    holdHistoryResponses: false,
+    heldHistoryResponses: [],
     createdKeyBody: null,
     statusVersion: 0,
     activeContractCount: 0,
@@ -1864,7 +1892,18 @@ async function mockApiRequest(route, state, pathname, method) {
     return;
   }
   if (pathname === "/api/deriv/history" && method === "GET") {
-    await fulfillJson(route, state.history ?? []);
+    const historyResponse = state.historyResponseOverride ?? state.history ?? [];
+    if (state.holdHistoryResponses) {
+      let release;
+      const gate = new Promise((resolve) => {
+        release = resolve;
+      });
+      const completion = gate.then(() => fulfillJson(route, historyResponse));
+      state.heldHistoryResponses.push({ release, completion });
+      await completion;
+      return;
+    }
+    await fulfillJson(route, historyResponse);
     return;
   }
   if (pathname === "/api/deriv/clock-work/quotes" && method === "POST") {
@@ -2053,6 +2092,22 @@ function fixtureBuy(state, order) {
   state.history = [row, ...(state.history ?? [])];
   state.activeContractCount = 1;
   return row;
+}
+
+async function waitForHeldHistoryResponse(state, timeoutMs = 5_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (state.heldHistoryResponses.length === 0) {
+    if (Date.now() >= deadline) {
+      throw new Error("Trade X did not issue a history refresh after the confirmed buy.");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
+
+async function releaseHeldHistoryResponses(state) {
+  const heldResponses = state.heldHistoryResponses.splice(0);
+  heldResponses.forEach(({ release }) => release());
+  await Promise.all(heldResponses.map(({ completion }) => completion));
 }
 
 async function fulfillJson(route, body, status = 200) {
