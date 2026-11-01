@@ -17,7 +17,7 @@ const minimumProfitTableRefreshIntervalMs = 5_000;
 const profitTableRateLimitBackoffMs = 10_000;
 const maxBulkCount = 6;
 const supportedSymbols = new Set([
-  "R_10", "R_25", "R_50", "R_75", "R_100", "R_150", "R_250",
+  "R_10", "R_25", "R_50", "R_75", "R_100",
   "1HZ10V", "1HZ15V", "1HZ25V", "1HZ30V", "1HZ50V", "1HZ75V", "1HZ90V", "1HZ100V",
   "JD10", "JD25", "JD50", "JD75", "JD100",
 ]);
@@ -1762,8 +1762,17 @@ async function connectInternal() {
             buyWaiter.reject(derivError);
           }
         }
+        const echoedSymbol = typeof message.echo_req?.ticks === "string"
+          ? message.echo_req.ticks
+          : typeof message.echo_req?.symbol === "string"
+            ? message.echo_req.symbol
+            : undefined;
         logger.warn(
-          { code: message.error.code, message: errorMessage },
+          {
+            code: message.error.code,
+            message: errorMessage,
+            ...(echoedSymbol ? { symbol: echoedSymbol } : {}),
+          },
           "Deriv WebSocket returned an error",
         );
         return;
@@ -2068,11 +2077,14 @@ export function getStatus(): DerivStatus {
 }
 
 export async function getLiveStatus() {
-  await refreshSelectedBalance();
   if (getState().socket?.readyState !== WebSocket.OPEN) {
     await connect();
   }
-  return getStatus();
+  const status = getStatus();
+  // Balance subscription updates are live; keep the REST request as a fallback
+  // without making every status refresh wait on Deriv's slower accounts endpoint.
+  void refreshSelectedBalance();
+  return status;
 }
 
 export async function refreshDerivHistory() {

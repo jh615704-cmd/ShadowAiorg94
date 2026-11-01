@@ -437,7 +437,12 @@ test("global announcement reaches existing and new users, stays dismissed until 
 test("DigitFlip history stays visible after switching the feature off", async () => {
   const state = createState(userSession(["digit-flip"]));
   state.hasToken = true;
-  state.statusVersion = 30;
+  // Supply a qualified candidate: DigitFlip requires 100 samples and an
+  // adjusted parity rate above its 55% evidence floor.
+  state.statusVersion = 120;
+  state.marketSignalOverrides = {
+    R_10: { digit_even_percentage: 70, digit_odd_percentage: 30 },
+  };
   state.allowFixtureTrades = true;
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {

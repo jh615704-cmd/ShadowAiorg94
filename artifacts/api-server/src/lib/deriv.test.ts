@@ -17,6 +17,7 @@ let rejectBuyResponsesRemaining = 0;
 let portfolioErrorsRemaining = 0;
 let malformedPortfolioResponsesRemaining = 0;
 let portfolioResponseDelayMs = 0;
+let accountsResponseDelayMs = 0;
 let proposalNumber = 0;
 let proposalPayoutOverride: number | null = null;
 let buyPayoutOverride: number | null = null;
@@ -319,6 +320,9 @@ function mockDerivRest() {
   mock.method(globalThis, "fetch", async (input: URL | string | Request) => {
     const url = String(input);
     if (url.endsWith("/trading/v1/options/accounts")) {
+      if (accountsResponseDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, accountsResponseDelayMs));
+      }
       return Response.json({
         data: [
           {
@@ -399,6 +403,7 @@ beforeEach(() => {
   portfolioErrorsRemaining = 0;
   malformedPortfolioResponsesRemaining = 0;
   portfolioResponseDelayMs = 0;
+  accountsResponseDelayMs = 0;
   proposalNumber = 0;
   proposalPayoutOverride = null;
   buyPayoutOverride = null;
@@ -522,6 +527,40 @@ describe("Deriv real-account trading capability", { concurrency: false }, () => 
 });
 
 describe("Deriv market subscriptions", { concurrency: false }, () => {
+  test("subscribes only to the markets exposed by the dashboard", async () => {
+    const expectedSymbols = [
+      "R_10", "R_25", "R_50", "R_75", "R_100",
+      "1HZ10V", "1HZ15V", "1HZ25V", "1HZ30V", "1HZ50V", "1HZ75V", "1HZ90V", "1HZ100V",
+      "JD10", "JD25", "JD50", "JD75", "JD100",
+    ].sort();
+
+    await withSelectedAccount("dashboard-market-subscription-user", async () => {
+      const subscribedSymbols = latestSocket().sent
+        .filter((message) => typeof message.ticks === "string" && message.subscribe === 1)
+        .map((message) => message.ticks as string)
+        .sort();
+
+      assert.deepEqual(subscribedSymbols, expectedSymbols);
+    });
+  });
+
+  test("returns live status without waiting for the REST balance fallback", async () => {
+    await withSelectedAccount("status-balance-fallback-user", async () => {
+      accountsResponseDelayMs = 200;
+      try {
+        const startedAt = performance.now();
+        const status = await deriv.getLiveStatus();
+        const elapsedMs = performance.now() - startedAt;
+
+        assert.equal(status.connected, true);
+        assert.ok(elapsedMs < 100, `status waited ${Math.round(elapsedMs)}ms for the REST balance fallback`);
+      } finally {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        accountsResponseDelayMs = 0;
+      }
+    });
+  });
+
   test("recovers from a failed portfolio check without unblocking before confirmation", async () => {
     const userId = "portfolio-check-retry-user";
     portfolioErrorsRemaining = 1;
