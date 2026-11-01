@@ -1,3 +1,5 @@
+import type { DerivHistoryRow } from "./deriv-history.ts";
+
 export type TradeXActionLock = { current: boolean };
 
 export type TradeXOrderData = {
@@ -26,6 +28,38 @@ export function buildTradeXOrderData(input: {
     barrier: input.digit,
     symbol: input.symbol,
     count: 1,
+  };
+}
+
+export function buildTradeXPendingHistoryRow(input: {
+  buy: {
+    contract_id: string;
+    buy_price: number;
+    payout: number;
+    start_time?: number | null;
+  };
+  account: { id: string; type: string; currency: string };
+  symbol: string;
+  digit: number;
+  duration: number;
+  nowEpoch: number;
+}): DerivHistoryRow {
+  return {
+    contract_id: String(input.buy.contract_id),
+    account_id: input.account.id,
+    account_type: input.account.type,
+    currency: input.account.currency,
+    contract_type: "DIGITDIFF",
+    barrier: input.digit,
+    symbol: input.symbol,
+    duration: input.duration,
+    duration_unit: "t",
+    buy_price: input.buy.buy_price,
+    current_value: input.buy.buy_price,
+    payout: input.buy.payout,
+    profit: 0,
+    status: "open",
+    buy_time: input.buy.start_time ?? input.nowEpoch,
   };
 }
 

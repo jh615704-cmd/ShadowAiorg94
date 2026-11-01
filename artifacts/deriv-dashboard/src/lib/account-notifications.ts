@@ -11,14 +11,24 @@ export type AccountNotification = {
 
 export const MAX_ACCOUNT_NOTIFICATIONS = 40;
 
+const OPEN_CONTRACT_SETTLEMENT_WAIT_MESSAGE =
+  /Waiting for \d+ open Deriv contracts? to settle before another trade can start\.?/gi;
+
 export function accountNotificationsStorageKey(accessKeyId: string) {
   return `shadow-ai:account-notifications:${accessKeyId}`;
 }
 
+export function removeOpenContractSettlementWaitMessages(message: string) {
+  return message
+    .replace(OPEN_CONTRACT_SETTLEMENT_WAIT_MESSAGE, "")
+    .replace(/\s+/g, " ")
+    .replace(/\s+([,;:])/g, "$1")
+    .replace(/^[\s,;:—-]+|[\s,;:—-]+$/g, "")
+    .trim();
+}
+
 export function isOpenContractSettlementWaitMessage(message: string) {
-  return /^Waiting for \d+ open Deriv contracts? to settle before another trade can start\.$/.test(
-    message.trim(),
-  );
+  return removeOpenContractSettlementWaitMessages(message).length === 0;
 }
 
 function isAccountNotification(value: unknown): value is AccountNotification {
@@ -49,7 +59,11 @@ export function parseAccountNotifications(
     if (!Array.isArray(parsed)) return [];
     return parsed
       .filter(isAccountNotification)
-      .filter((notification) => !isOpenContractSettlementWaitMessage(notification.message))
+      .map((notification) => ({
+        ...notification,
+        message: removeOpenContractSettlementWaitMessages(notification.message),
+      }))
+      .filter((notification) => notification.message.length > 0)
       .slice(0, MAX_ACCOUNT_NOTIFICATIONS);
   } catch {
     return [];

@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   accountNotificationsStorageKey,
+  isOpenContractSettlementWaitMessage,
   MAX_ACCOUNT_NOTIFICATIONS,
   parseAccountNotifications,
+  removeOpenContractSettlementWaitMessages,
   type AccountNotification,
 } from "./account-notifications.ts";
 
@@ -68,6 +70,25 @@ test("notification history removes the open-contract waiting message", () => {
   assert.deepEqual(
     parseAccountNotifications(JSON.stringify([singular, plural, retained])),
     [retained],
+  );
+});
+
+test("notification messages remove the settlement-wait sentence even when embedded", () => {
+  const sentence = "Waiting for 1 open Deriv contract to settle before another trade can start.";
+  assert.equal(removeOpenContractSettlementWaitMessages(sentence), "");
+  assert.equal(isOpenContractSettlementWaitMessage(sentence), true);
+  assert.equal(
+    removeOpenContractSettlementWaitMessages(`Another order is blocked. ${sentence} Check the Deriv account.`),
+    "Another order is blocked. Check the Deriv account.",
+  );
+
+  const notification = {
+    ...makeNotification(8),
+    message: `The order is confirmed. ${sentence}`,
+  };
+  assert.equal(
+    parseAccountNotifications(JSON.stringify([notification]))[0]?.message,
+    "The order is confirmed.",
   );
 });
 

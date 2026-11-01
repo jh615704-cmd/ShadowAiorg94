@@ -123,6 +123,7 @@ import CashGrabPanel, {
 } from "../components/cash-grab-panel";
 import ClockWorkPanel from "../components/clock-work-panel";
 import DerivHistory from "../components/deriv-history";
+import type { DerivHistoryRow } from "../lib/deriv-history";
 import { getAccountBalance } from "../lib/account-balance";
 import {
   readMoneyBankHistoryClaims,
@@ -172,6 +173,7 @@ import {
 } from "../lib/deriv-history";
 import {
   acquireTradeXActionLock,
+  buildTradeXPendingHistoryRow,
   buildTradeXOrderData,
   releaseTradeXActionLock,
 } from "../lib/trade-x-execution";
@@ -584,9 +586,10 @@ export default function XTraderPage() {
   const [edgeHiddenHistoryIds, setEdgeHiddenHistoryIds] = useState<Set<string>>(new Set());
   const [digitFlipHiddenHistoryIds, setDigitFlipHiddenHistoryIds] = useState<Set<string>>(new Set());
   const [digitFlipPendingHistoryIds, setDigitFlipPendingHistoryIds] = useState<Set<string>>(new Set());
-  const [edgeMinWinRate, setEdgeMinWinRate] = useState(90);
+  const [edgeMinWinRate, setEdgeMinWinRate] = useState(EDGE_PERCENTAGE_SCAN_FLOOR);
   const [tradeXTradesSent, setTradeXTradesSent] = useState(0);
   const [tradeXSubmitting, setTradeXSubmitting] = useState(false);
+  const [tradeXPendingHistoryRows, setTradeXPendingHistoryRows] = useState<DerivHistoryRow[]>([]);
   const [running, setRunning] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [guidePage, setGuidePage] = useState(0);
@@ -954,8 +957,28 @@ export default function XTraderPage() {
     || trade.contract_type === "ACCU"
   ));
   const edgeRows = edgeAllRows.filter((trade) => edgeClaimedHistoryIdsRef.current.has(trade.contract_id) && !edgeHiddenHistoryIds.has(trade.contract_id));
-  const tradeXRows = tradeXAllRows.filter((trade) => tradeXClaimedHistoryIdsRef.current.has(trade.contract_id) && !tradeXHiddenHistoryIds.has(trade.contract_id));
-  const tradeXSessionRows = tradeXAllRows.filter((trade) => tradeXClaimedHistoryIdsRef.current.has(trade.contract_id));
+  const tradeXPendingRowsForAccount = tradeXPendingHistoryRows.filter((pending) =>
+    pending.account_id === currentAccount?.id
+    && !tradeXAllRows.some((trade) => String(trade.contract_id) === pending.contract_id),
+  );
+  useEffect(() => {
+    if (!tradeXPendingHistoryRows.length || !tradeXAllRows.length) return;
+    const authoritativeRows = new Map(
+      tradeXAllRows.map((trade) => [String(trade.contract_id), trade]),
+    );
+    let changed = false;
+    const reconciledRows = tradeXPendingHistoryRows.map((pending) => {
+      if (pending.account_id !== currentAccount?.id) return pending;
+      const authoritative = authoritativeRows.get(pending.contract_id);
+      if (!authoritative || authoritative === pending) return pending;
+      changed = true;
+      return authoritative;
+    });
+    if (changed) setTradeXPendingHistoryRows(reconciledRows);
+  }, [currentAccount?.id, tradeXAllRows, tradeXPendingHistoryRows]);
+  const tradeXHistoryRows = [...tradeXPendingRowsForAccount, ...tradeXAllRows];
+  const tradeXRows = tradeXHistoryRows.filter((trade) => tradeXClaimedHistoryIdsRef.current.has(String(trade.contract_id)) && !tradeXHiddenHistoryIds.has(String(trade.contract_id)));
+  const tradeXSessionRows = tradeXHistoryRows.filter((trade) => tradeXClaimedHistoryIdsRef.current.has(String(trade.contract_id)));
   const tradeXVisibleSessionRows = tradeXSessionRows.filter((trade) => !tradeXHiddenHistoryIds.has(trade.contract_id));
   const digitFlipOwnedRows = digitFlipAllRows.filter((trade) => digitFlipClaimedHistoryIdsRef.current.has(String(trade.contract_id)));
   const digitFlipRows = digitFlipOwnedRows.filter((trade) => !digitFlipHiddenHistoryIds.has(String(trade.contract_id)));
@@ -1192,6 +1215,7 @@ export default function XTraderPage() {
     setDigitFlipPendingHistoryIds(new Set());
     setEdgeHiddenHistoryIds(new Set());
     setTradeXHiddenHistoryIds(new Set());
+    setTradeXPendingHistoryRows([]);
     setDigitFlipHiddenHistoryIds(new Set());
     setBulkTraderHiddenHistoryIds(new Set());
     setCashGrabHiddenHistoryIds(new Set());
@@ -1738,7 +1762,7 @@ export default function XTraderPage() {
     const side = config.direction === "DIGITOVER" ? "Over" : "Under";
     setConnectionMessage({
       kind: "info",
-      text: `Sniper ${side} ${config.barrier} is working. Waiting for two fresh matching ticks before entry.`,
+      text: `Sniper ${side} ${config.barrier} is checking the ${edgeMinWinRate}% observed side-share threshold and waiting for two fresh matching ticks.`,
     });
 
     let initial = await status.refetch();
@@ -1762,6 +1786,18 @@ export default function XTraderPage() {
       lastEpoch = tick.epoch;
       const digit = fresh.data?.last_digit;
       if (digit == null || digit < 0 || digit > 9) continue;
+      const evidence = edgeAnalysisRef.current;
+      const observedSideShare = config.direction === "DIGITOVER"
+        ? evidence.overPercent
+        : evidence.underPercent;
+      if (
+        evidence.sample < EDGE_MIN_MARKET_SAMPLE
+        || !isValidObservedPercentage(observedSideShare)
+        || observedSideShare < edgeMinWinRate
+      ) {
+        streak = 0;
+        continue;
+      }
       const matches = config.direction === "DIGITOVER" ? digit > config.barrier : digit < config.barrier;
       streak = matches ? streak + 1 : 0;
       if (streak >= 2) {
@@ -3521,13 +3557,29 @@ export default function XTraderPage() {
       });
       if (result.buys.length) {
         claimFeatureRows("trade-x", tradeXClaimedHistoryIdsRef.current, result.buys.map((buy) => buy.contract_id));
+        setTradeXTradesSent((value) => value + result.buys.length);
+        const acknowledgedAccount = freshData.account;
+        if (acknowledgedAccount) {
+          const pendingRows = result.buys.map((buy) => buildTradeXPendingHistoryRow({
+            buy,
+            account: acknowledgedAccount,
+            symbol,
+            digit: entryDigit,
+            duration: durationOverride,
+            nowEpoch: Math.floor(Date.now() / 1_000),
+          }));
+          setTradeXPendingHistoryRows((current) => {
+            const byContractId = new Map(current.map((row) => [row.contract_id, row]));
+            pendingRows.forEach((row) => byContractId.set(row.contract_id, row));
+            return [...byContractId.values()];
+          });
+        }
       }
       if (!result.ok || result.buys.length !== count) {
         notifyTradeX(result.message || `Deriv confirmed ${result.buys.length} of ${count} Trade X contracts. Check account history before resubmitting.`);
         refreshTradeResults();
         return false;
       }
-      setTradeXTradesSent((value) => value + result.buys.length);
       notifyTradeX(`Deriv confirmed ${result.buys.length} Trade X contract${result.buys.length === 1 ? "" : "s"}. Waiting for settlement.`);
       setConnectionMessage(null);
       refreshTradeResults();
@@ -4326,7 +4378,6 @@ export default function XTraderPage() {
       void selectMarket(tradeXSymbol);
       return;
     }
-    notifyTradeX("Trade X paused.");
   };
 
   const toggleClockWork = (enabled: boolean) => {
@@ -5450,7 +5501,7 @@ export default function XTraderPage() {
               <label><small>MARTINGALE MULTIPLIER</small><input type="number" min="1" max="10" step=".1" value={martingale} onChange={(event) => setMartingale(Number(event.target.value))} disabled={running || strategy === "flat"} /></label>
               <label><small>TAKE PROFIT</small><input type="number" min=".01" step=".01" value={takeProfit} onChange={(event) => setTakeProfit(Number(event.target.value))} disabled={running} /></label>
               <label><small>STOP LOSS</small><input type="number" min=".01" step=".01" value={stopLoss} onChange={(event) => setStopLoss(Number(event.target.value))} disabled={running} /></label>
-                 <label><small>MIN OBSERVED SIDE SHARE · {edgeMinWinRate}%</small><input type="range" min="90" max="99" step="1" value={edgeMinWinRate} onChange={(event) => setEdgeMinWinRate(Number(event.target.value))} disabled={running} /></label>
+                 <label><small>MIN OBSERVED SIDE SHARE · {edgeMinWinRate}%</small><input type="range" min={EDGE_PERCENTAGE_SCAN_FLOOR} max="99" step="1" value={edgeMinWinRate} onChange={(event) => setEdgeMinWinRate(Number(event.target.value))} disabled={running} /></label>
               <label className="xt-auto-row"><span><small>AUTO BEST DIGIT</small></span><span className="xt-switch"><input type="checkbox" checked={autoSwitch} onChange={(event) => toggleAutoBestDigit(event.target.checked)} disabled={!isConnected} /><span /></span></label>
                <label className="xt-auto-row"><span><small>PERCENTAGE SCAN · {EDGE_PERCENTAGE_SCAN_FLOOR}% FLOOR</small><b>Scan every market and gate Over, Under, or Dual by observed outcomes</b></span><span className="xt-switch"><input type="checkbox" checked={edgePercentageMode} onChange={(event) => toggleEdgePercentageMode(event.target.checked)} disabled={!isConnected} /><span /></span></label>
                {edgePercentageMode && <div className={`xt-percentage-recommendation ${edgeRecommendation ? "ready" : "waiting"}`}>

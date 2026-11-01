@@ -3,6 +3,7 @@ import {
   accountNotificationsStorageKey,
   MAX_ACCOUNT_NOTIFICATIONS,
   parseAccountNotifications,
+  removeOpenContractSettlementWaitMessages,
   type AccountNotification,
   type AccountNotificationCategory,
 } from "@/lib/account-notifications";
@@ -63,7 +64,8 @@ export function useAccountNotifications(accessKeyId?: string) {
     (category: AccountNotificationCategory, title: string, message: string) => {
       if (!accessKeyId || loadedForAccessKeyId !== accessKeyId) return;
       const safeTitle = title.slice(0, 120);
-      const safeMessage = message.slice(0, 500);
+      const safeMessage = removeOpenContractSettlementWaitMessages(message).slice(0, 500);
+      if (!safeMessage) return;
       const createdAt = Date.now();
       const notification: AccountNotification = {
         id: createNotificationId(),
@@ -93,7 +95,8 @@ export function useAccountNotifications(accessKeyId?: string) {
     (category: AccountNotificationCategory, title: string, message: string) => {
       if (!accessKeyId || loadedForAccessKeyId !== accessKeyId) return;
       const safeTitle = title.slice(0, 120);
-      const safeMessage = message.slice(0, 500);
+      const safeMessage = removeOpenContractSettlementWaitMessages(message).slice(0, 500);
+      if (!safeMessage) return;
       const createdAt = Date.now();
       setNotifications((current) => {
         const existing = current.find(

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   acquireTradeXActionLock,
+  buildTradeXPendingHistoryRow,
   buildTradeXOrderData,
   releaseTradeXActionLock,
 } from "./trade-x-execution.ts";
@@ -33,6 +34,38 @@ test("Trade X rounds its stake to the same cents checked against balance", () =>
     digit: 4,
     symbol: "R_75",
   }).amount, 0.36);
+});
+
+test("Trade X shows an acknowledged buy immediately as an open history row", () => {
+  assert.deepEqual(buildTradeXPendingHistoryRow({
+    buy: {
+      contract_id: "contract-42",
+      buy_price: 1.25,
+      payout: 2.13,
+      start_time: 1_800_000_000,
+    },
+    account: { id: "demo-1", type: "demo", currency: "USD" },
+    symbol: "R_75",
+    digit: 4,
+    duration: 2,
+    nowEpoch: 1_800_000_010,
+  }), {
+    contract_id: "contract-42",
+    account_id: "demo-1",
+    account_type: "demo",
+    currency: "USD",
+    contract_type: "DIGITDIFF",
+    barrier: 4,
+    symbol: "R_75",
+    duration: 2,
+    duration_unit: "t",
+    buy_price: 1.25,
+    current_value: 1.25,
+    payout: 2.13,
+    profit: 0,
+    status: "open",
+    buy_time: 1_800_000_000,
+  });
 });
 
 test("Trade X cannot acquire a second local action or overlap another shared buy", () => {
