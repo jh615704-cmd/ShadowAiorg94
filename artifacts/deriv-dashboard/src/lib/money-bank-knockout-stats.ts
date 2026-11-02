@@ -46,6 +46,7 @@ export type MoneyBankExitTickStats = {
 export type MoneyBankStatsRate = number | "all";
 
 export const MONEY_BANK_EXIT_TICK_MINIMUM_SAMPLES = 20;
+export const MONEY_BANK_STATS_TICK_LIMIT = 20;
 
 function growthRatePercent(value: number | null | undefined) {
   if (value == null || !Number.isFinite(value)) return null;

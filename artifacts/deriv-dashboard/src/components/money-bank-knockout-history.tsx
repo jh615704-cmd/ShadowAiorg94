@@ -38,12 +38,6 @@ function formatTicks(value: number | null) {
   return value == null ? "—" : value.toLocaleString();
 }
 
-function rateCaption(item: Props["rateStats"][number]) {
-  return item.trackedRuns
-    ? `${item.knockouts} KO · ${item.trackedRuns} runs`
-    : "No history";
-}
-
 export function MoneyBankKnockoutHistory({
   symbol,
   connected,
@@ -107,26 +101,6 @@ export function MoneyBankKnockoutHistory({
         </div>
       </div>
 
-      <div className="mbkh-rate-chips" aria-label="Historical rate summaries">
-        {rateOptions.map((rate) => {
-          const item = rateStats.find((stat) => stat.growthRate === rate);
-          return (
-            <div
-              key={rate}
-              className={`mbkh-rate-chip ${growthRate === rate ? "is-current" : ""}`}
-              aria-label={item
-                ? `${rate}% growth: ${rateCaption(item)}, ${item.completed} completed`
-                : `${rate}% growth: no history`}
-            >
-              <strong>{rate}%</strong>
-              {item
-                ? <span>{item.knockouts}<small> / {item.trackedRuns}</small></span>
-                : <span className="mbkh-rate-empty">—</span>}
-            </div>
-          );
-        })}
-      </div>
-
       <div className="mbkh-filter-row">
         <div className="mbkh-rate-selector" role="group" aria-label="Filter historical outcomes by growth rate">
           <button
@@ -149,16 +123,7 @@ export function MoneyBankKnockoutHistory({
             </button>
           ))}
         </div>
-        <div className="mbkh-max-ticks">
-          Max ticks: <strong>{maxExitTicks.toLocaleString()}</strong>
-        </div>
       </div>
-
-      <p className="mbkh-run-status" role="status">
-        <span>Exit ticks shown: <strong>1–{maxExitTicks.toLocaleString()}</strong></span>
-        <span className="mbkh-status-separator" aria-hidden="true">|</span>
-        <span>Showing {selectedRate === "all" ? "all rates" : `${selectedRate}% rate`} · Historical outcomes for {symbol}</span>
-      </p>
 
       <div className="mbkh-summary" aria-label="Historical summary metrics">
         <div><small>KNOCKOUTS</small><strong>{summary.knockouts.toLocaleString()}</strong></div>

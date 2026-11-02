@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  MONEY_BANK_STATS_TICK_LIMIT,
   summarizeMoneyBankExitTicks,
   summarizeMoneyBankKnockoutStats,
   summarizeMoneyBankOutcomeStats,
@@ -139,4 +140,19 @@ test("Money Bank keeps undersampled exit ticks neutral and caps the grid at 30",
   assert.equal(ticks.length, 30);
   assert.equal(ticks[0].band, "yellow");
   assert.equal(ticks[1].band, "no-data");
+});
+
+test("Money Bank stats limit the historical tick grid to ticks 1 through 20", () => {
+  const ticks = summarizeMoneyBankExitTicks(
+    [{ symbol: "1HZ90V", growth_rate: 0.01, duration: 21, tick_passed: 21, status: "lost" }],
+    "1HZ90V",
+    1,
+    MONEY_BANK_STATS_TICK_LIMIT,
+  );
+
+  assert.equal(MONEY_BANK_STATS_TICK_LIMIT, 20);
+  assert.equal(ticks.length, 20);
+  assert.equal(ticks[0].ticks, 1);
+  assert.equal(ticks[19].ticks, 20);
+  assert.equal(ticks[19].trackedRuns, 0);
 });

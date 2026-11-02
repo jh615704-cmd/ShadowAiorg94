@@ -6,6 +6,7 @@ import {
   type MoneyBankStrategy,
 } from "../lib/money-bank-math";
 import {
+  MONEY_BANK_STATS_TICK_LIMIT,
   summarizeMoneyBankExitTicks,
   summarizeMoneyBankKnockoutStats,
   summarizeMoneyBankOutcomeStats,
@@ -160,8 +161,18 @@ export function MoneyBankPanel({
   const visibleTrades = recentTrades.filter((trade) => !historyHidden.has(trade.contract_id));
   const visibleSessionRows = sessionRows.filter((trade) => !historyHidden.has(trade.contract_id));
   const rateStats = summarizeMoneyBankKnockoutStats(recentTrades, symbol, GROWTH_RATES);
-  const statsSummary = summarizeMoneyBankOutcomeStats(recentTrades, symbol, selectedStatsRate, takeProfitTicks);
-  const exitTickStats = summarizeMoneyBankExitTicks(recentTrades, symbol, selectedStatsRate, takeProfitTicks);
+  const statsSummary = summarizeMoneyBankOutcomeStats(
+    recentTrades,
+    symbol,
+    selectedStatsRate,
+    MONEY_BANK_STATS_TICK_LIMIT,
+  );
+  const exitTickStats = summarizeMoneyBankExitTicks(
+    recentTrades,
+    symbol,
+    selectedStatsRate,
+    MONEY_BANK_STATS_TICK_LIMIT,
+  );
 
   useEffect(() => {
     const sequence = marketSignal?.tick_sequence;
@@ -458,7 +469,7 @@ export function MoneyBankPanel({
             connected={isConnected}
             liveTicks={statsLiveTicks}
             onResetTicks={resetStatsTicks}
-            maxExitTicks={takeProfitTicks}
+            maxExitTicks={MONEY_BANK_STATS_TICK_LIMIT}
             growthRate={growthRate}
             selectedRate={selectedStatsRate}
             onSelectedRateChange={setSelectedStatsRate}
