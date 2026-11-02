@@ -3,10 +3,10 @@ name: Money Bank live knockouts
 description: Rules for the read-only, rate-specific live quote knockout monitor.
 ---
 
-Money Bank's Live Knockouts area is separate from account statistics and historical quote replay. Use the currently selected market's live quotes and each rate's current Deriv proposal barrier. Start each rate from the live quote snapshot, record the exact market quote when its absolute move reaches the barrier, reset its reference to that hit, and retain the newest eight hits oldest-to-newest. Selecting a rate changes only which queue is shown; track each available rate independently while connected. Display quote values to two decimal places.
+Money Bank's Live Knockouts area is read-only and separate from stats and trade outcomes. For each selected percentage, use its current Deriv barrier and the selected market's live tick movement to estimate ticks until a possible barrier crossing. Show only integer tick-count estimates, never full market prices. Keep an independent rolling queue of the newest eight estimates per percentage and remove the oldest when a new estimate arrives. These are uncertain forecasts, not guaranteed exit advice or trade instructions.
 
-The monitor is read-only: it must not submit orders or restore the Auto Knockout trading switch. Keep the market and volatility pair sourced from Money Bank's existing top market selection.
+Keep the selected volatility pair sourced from Money Bank's existing market selection. Do not submit orders, automatically alter exit ticks, or restore the Auto Knockout trading switch.
 
-**Why:** The user explicitly requested complete removal of Stats and a separate Live Knockouts display using live market prices, eight rolling barrier-hit values per rate, and no statistics-style layout.
+**Why:** The user clarified that values such as 5, 56, and 567 are predicted tick counts for the selected growth rate, not market quotes, and are used to avoid crossing those ticks.
 
-**How to apply:** Keep detection tied to live ticks and rate-specific Deriv barriers. When a ninth hit arrives, discard the oldest displayed hit. Never infer a knockout from settled trade summaries or historical simulation.
+**How to apply:** Keep each percentage's estimates independent and tied to current live movement plus its own Deriv barrier. Display the latest eight integer estimates in a clear line with a visible uncertainty note.

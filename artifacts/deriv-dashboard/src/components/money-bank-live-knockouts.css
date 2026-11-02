@@ -97,7 +97,7 @@
 .mbkl-barrier {
   flex: 0 0 auto;
   color: #7297aa;
-  font-size: .52rem;
+  font-size: .61rem;
   font-weight: 800;
   letter-spacing: .1em;
 }
@@ -151,9 +151,9 @@
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  margin: 12px 0 5px;
-  color: #61869a;
-  font-size: .48rem;
+  margin: 14px 0 7px;
+  color: #82a9bb;
+  font-size: .58rem;
   font-weight: 800;
   letter-spacing: .11em;
 }
@@ -173,42 +173,41 @@
 .mbkl-price-stream li {
   display: grid;
   min-width: 0;
-  min-height: 43px;
+  min-height: 56px;
   flex: 1 1 0;
   place-items: center;
-  padding: 7px 2px;
+  padding: 8px 2px;
   border-right: 1px solid rgba(83, 149, 177, .16);
-  color: #e4f4fb;
-  font-family: "DM Mono", "SFMono-Regular", Consolas, monospace;
-  font-size: clamp(.4rem, 1vw, .7rem);
-  font-weight: 720;
+  color: #f2fbff;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: clamp(1rem, 1.25vw, 1.2rem);
+  font-weight: 850;
   font-variant-numeric: tabular-nums;
-  line-height: 1;
+  line-height: 1.1;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: clip;
 }
 
 .mbkl-price-stream li:last-child { border-right: 0; }
-.mbkl-price-stream li.is-empty { color: #476d7e; letter-spacing: .08em; }
+.mbkl-price-stream li.is-empty { color: #63879a; letter-spacing: .04em; }
 .mbkl-price-stream li.has-price { background: linear-gradient(180deg, rgba(11, 51, 70, .28), rgba(6, 31, 46, .18)); }
 .mbkl-price-stream li.is-new {
-  color: #baf3ff;
+  color: #d6f8ff;
   background: linear-gradient(180deg, rgba(13, 113, 151, .45), rgba(9, 67, 102, .3));
   animation: mbkl-hit-arrive 850ms ease-out;
 }
 
 .mbkl-status {
-  margin: 9px 0 0;
-  color: #9eb9c7;
-  font-size: .61rem;
+  margin: 11px 0 0;
+  color: #bdd1dc;
+  font-size: .7rem;
   line-height: 1.4;
 }
 
 .mbkl-note {
-  margin: 5px 0 0;
-  color: #6e8c9b;
-  font-size: .53rem;
+  margin: 6px 0 0;
+  color: #8eabba;
+  font-size: .62rem;
   line-height: 1.4;
 }
 
@@ -222,7 +221,7 @@
   .mbkl-rate-row { flex-wrap: wrap; gap: 7px; }
   .mbkl-rate-label { width: 100%; }
   .mbkl-barrier { font-size: .47rem; }
-  .mbkl-price-stream li { min-height: 39px; font-size: clamp(.38rem, 1.6vw, .56rem); }
+  .mbkl-price-stream li { min-height: 49px; font-size: .9rem; }
 }
 
 @media (max-width: 360px) {
@@ -231,7 +230,7 @@
   .mbkl-rate-row { column-gap: 6px; }
   .mbkl-rates { gap: 1px; }
   .mbkl-rates button { min-width: 33px; padding: 0 5px; }
-  .mbkl-price-stream li { font-size: .37rem; }
+  .mbkl-price-stream li { font-size: .84rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
