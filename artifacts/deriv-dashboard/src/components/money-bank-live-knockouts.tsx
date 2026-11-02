@@ -10,6 +10,7 @@ import {
   estimateMoneyBankKnockoutTicks,
   MONEY_BANK_KNOCKOUT_GROWTH_RATES,
   MONEY_BANK_LIVE_KNOCKOUT_LIMIT,
+  normalizeMoneyBankKnockoutSamples,
   startMoneyBankKnockoutEvaluation,
   type MoneyBankKnockoutEvaluation,
   type MoneyBankKnockoutForecast,
@@ -183,9 +184,9 @@ export function MoneyBankLiveKnockouts({
         for (const result of response.rates as readonly BarrierResponseRate[]) {
           if (!isGrowthRate(result.growth_rate)) continue;
           nextBarriers[result.growth_rate] = result.barrier;
-          nextDurationSamples[result.growth_rate] = result.ticks_stayed_in
-            .filter((ticks) => Number.isSafeInteger(ticks) && ticks > 0)
-            .slice(-200);
+          nextDurationSamples[result.growth_rate] = normalizeMoneyBankKnockoutSamples(
+            result.ticks_stayed_in,
+          );
           nextMessages[result.growth_rate] = result.message;
         }
 
@@ -338,8 +339,8 @@ export function MoneyBankLiveKnockouts({
       for (const tick of newTicks) {
         observeEvaluationTick(tick.sequence, tick.quote);
         quoteWindow = [...quoteWindow, tick.quote].slice(-41);
-        let referenceQuote = referencesRef.current[rate];
-        let referenceSequence = referenceSequencesRef.current[rate];
+        let referenceQuote: number | null = referencesRef.current[rate];
+        let referenceSequence: number | null = referenceSequencesRef.current[rate];
         if (referenceQuote == null) {
           referenceQuote = tick.quote;
           referenceSequence = tick.sequence;
@@ -472,6 +473,31 @@ export function MoneyBankLiveKnockouts({
         </span>
       </div>
 
+      <div className="mbkl-history-heading">
+        <span>RECENT KNOCKOUT DURATIONS</span>
+        <span>{durationSamples[selectedRate].length} samples</span>
+      </div>
+      {durationSamples[selectedRate].length > 0 ? (
+        <ol
+          className="mbkl-history-stream"
+          aria-label={`${selectedRate}% historical ticks between knockouts`}
+          data-testid={`knockout-duration-history-${selectedRate}`}
+        >
+          {durationSamples[selectedRate].map((ticks, index) => (
+            <li key={`${selectedRate}-${index}-${ticks}`}>{ticks}</li>
+          ))}
+        </ol>
+      ) : (
+        <p className="mbkl-history-empty">
+          {connected
+            ? `No knockout-duration samples are available for ${selectedRate}% yet.`
+            : "Connect Deriv to load the historical knockout numbers for each percentage."}
+        </p>
+      )}
+      <p className="mbkl-history-note">
+        These are Deriv’s recorded tick counts between knockouts for {selectedRate}%. They are historical data, not prices or predictions.
+      </p>
+
       <div className="mbkl-feed-labels" aria-hidden="true">
         <span>OLDER ESTIMATES</span>
         <span>LATEST ESTIMATE</span>
@@ -498,7 +524,7 @@ export function MoneyBankLiveKnockouts({
           : selectedBarrier == null
             ? selectedMessage ?? (barrierRefreshFailed ? "Could not refresh the current Deriv barrier." : "Waiting for a current barrier.")
             : selectedForecasts.length
-              ? "Each number estimates remaining ticks from this rate’s Deriv barrier-duration history."
+              ? "The strip below estimates remaining ticks; the historical knockout durations are listed above."
               : durationSamples[selectedRate].length
                 ? "Waiting for the next live tick to update this rate’s estimate."
                 : "Waiting for Deriv’s tick-duration samples for this percentage."}

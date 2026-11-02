@@ -53,6 +53,12 @@ type AdvanceMoneyBankKnockoutEvaluationInput = {
   sequence: number;
 };
 
+export function normalizeMoneyBankKnockoutSamples(samples: readonly number[]): number[] {
+  return samples
+    .filter((ticks) => Number.isSafeInteger(ticks) && ticks > 0)
+    .slice(-DURATION_SAMPLE_LIMIT);
+}
+
 /**
  * Estimate remaining ticks from Deriv's per-rate historical durations between
  * Accumulator barriers. The estimate is empirical, informational, and not a
@@ -63,9 +69,7 @@ export function estimateMoneyBankKnockoutTicks({
   elapsedTicks,
 }: EstimateMoneyBankKnockoutTicksInput): number | null {
   if (!Number.isSafeInteger(elapsedTicks) || elapsedTicks < 0) return null;
-  const samples = ticksStayedIn
-    .filter((ticks) => Number.isSafeInteger(ticks) && ticks > 0)
-    .slice(-DURATION_SAMPLE_LIMIT);
+  const samples = normalizeMoneyBankKnockoutSamples(ticksStayedIn);
   if (!samples.length) return null;
 
   const averageDuration = samples.reduce((sum, ticks) => sum + ticks, 0) / samples.length;

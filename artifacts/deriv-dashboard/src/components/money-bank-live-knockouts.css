@@ -158,6 +158,62 @@
   letter-spacing: .11em;
 }
 
+.mbkl-history-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 15px 0 7px;
+  color: #82a9bb;
+  font-size: .58rem;
+  font-weight: 800;
+  letter-spacing: .11em;
+}
+
+.mbkl-history-heading span:last-child {
+  color: #9ac5d6;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .04em;
+  text-transform: none;
+}
+
+.mbkl-history-stream {
+  display: grid;
+  max-height: 138px;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  gap: 5px;
+  margin: 0;
+  padding: 1px 2px 6px 0;
+  overflow: auto;
+  list-style: none;
+  scrollbar-color: rgba(107, 171, 198, .48) rgba(3, 17, 27, .38);
+  scrollbar-width: thin;
+}
+
+.mbkl-history-stream li {
+  display: grid;
+  min-height: 31px;
+  place-items: center;
+  border: 1px solid rgba(91, 157, 190, .2);
+  border-radius: 7px;
+  background: rgba(3, 17, 27, .45);
+  color: #e5f6ff;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: .68rem;
+  font-weight: 760;
+  font-variant-numeric: tabular-nums;
+}
+
+.mbkl-history-empty,
+.mbkl-history-note {
+  margin: 0;
+  color: #9bb6c4;
+  font-size: .62rem;
+  line-height: 1.4;
+}
+
+.mbkl-history-empty { padding: 10px 0; }
+.mbkl-history-note { margin-top: 6px; }
+
 .mbkl-price-stream {
   display: flex;
   width: 100%;
@@ -332,6 +388,7 @@
   .mbkl-rate-row { flex-wrap: wrap; gap: 7px; }
   .mbkl-rate-label { width: 100%; }
   .mbkl-barrier { font-size: .47rem; }
+  .mbkl-history-stream { max-height: 122px; grid-template-columns: repeat(auto-fill, minmax(39px, 1fr)); }
   .mbkl-price-stream li { min-height: 49px; font-size: .9rem; }
   .mbkl-evaluation { padding: 9px; }
   .mbkl-evaluation-heading { align-items: flex-start; flex-direction: column; gap: 8px; }
