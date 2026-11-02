@@ -1,8 +1,7 @@
 export const MONEY_BANK_LIVE_KNOCKOUT_LIMIT = 8;
-export const MONEY_BANK_KNOCKOUT_FORECAST_MIN_QUOTES = 12;
 export const MONEY_BANK_KNOCKOUT_GROWTH_RATES = [1, 2, 3, 4, 5] as const;
 
-const FORECAST_WINDOW_SIZE = 41;
+const DURATION_SAMPLE_LIMIT = 200;
 
 export type MoneyBankKnockoutGrowthRate = typeof MONEY_BANK_KNOCKOUT_GROWTH_RATES[number];
 
@@ -12,8 +11,7 @@ export type MoneyBankKnockoutForecast = {
 };
 
 export type MoneyBankKnockoutEvaluationReason =
-  | "sparse-quotes"
-  | "flat-movement"
+  | "insufficient-duration-samples"
   | "invalid-model-input"
   | "barrier-already-crossed"
   | "tick-gap"
@@ -32,15 +30,16 @@ export type MoneyBankKnockoutEvaluation = {
 };
 
 type EstimateMoneyBankKnockoutTicksInput = {
-  quotes: readonly number[];
-  barrier: number | null;
-  referenceQuote: number | null;
+  ticksStayedIn: readonly number[];
+  elapsedTicks: number;
 };
 
 type MoneyBankKnockoutEvaluationRateInput = {
   growthRate: MoneyBankKnockoutGrowthRate;
   barrier: number | null;
   referenceQuote: number | null;
+  ticksStayedIn: readonly number[];
+  elapsedTicks: number;
 };
 
 type StartMoneyBankKnockoutEvaluationInput = {
@@ -54,61 +53,25 @@ type AdvanceMoneyBankKnockoutEvaluationInput = {
   sequence: number;
 };
 
-function getForecastInputsIssue({
-  quotes,
-  barrier,
-  referenceQuote,
-}: EstimateMoneyBankKnockoutTicksInput): MoneyBankKnockoutEvaluationReason | null {
-  if (!Number.isFinite(barrier) || barrier! <= 0
-    || !Number.isFinite(referenceQuote) || referenceQuote! <= 0) {
-    return "invalid-model-input";
-  }
-
-  const window = quotes
-    .filter((quote) => Number.isFinite(quote) && quote > 0)
-    .slice(-FORECAST_WINDOW_SIZE);
-  if (window.length < MONEY_BANK_KNOCKOUT_FORECAST_MIN_QUOTES) return "sparse-quotes";
-
-  const squaredMoves = window.slice(1).map((quote, index) => {
-    const move = quote - window[index]!;
-    return move * move;
-  });
-  const meanSquaredMove = squaredMoves.reduce((sum, move) => sum + move, 0) / squaredMoves.length;
-  if (!Number.isFinite(meanSquaredMove)) return "invalid-model-input";
-  if (meanSquaredMove <= Number.EPSILON) return "flat-movement";
-  return null;
-}
-
 /**
- * Estimate how many ticks remain before a rate-specific barrier is reached.
- * The estimate uses recent live quote movement as a simple first-passage
- * model; it is informational and is not a guarantee of a future market move.
+ * Estimate remaining ticks from Deriv's per-rate historical durations between
+ * Accumulator barriers. The estimate is empirical, informational, and not a
+ * guarantee of a future market move.
  */
 export function estimateMoneyBankKnockoutTicks({
-  quotes,
-  barrier,
-  referenceQuote,
+  ticksStayedIn,
+  elapsedTicks,
 }: EstimateMoneyBankKnockoutTicksInput): number | null {
-  if (getForecastInputsIssue({ quotes, barrier, referenceQuote }) != null) return null;
+  if (!Number.isSafeInteger(elapsedTicks) || elapsedTicks < 0) return null;
+  const samples = ticksStayedIn
+    .filter((ticks) => Number.isSafeInteger(ticks) && ticks > 0)
+    .slice(-DURATION_SAMPLE_LIMIT);
+  if (!samples.length) return null;
 
-  const window = quotes
-    .filter((quote) => Number.isFinite(quote) && quote > 0)
-    .slice(-FORECAST_WINDOW_SIZE);
+  const averageDuration = samples.reduce((sum, ticks) => sum + ticks, 0) / samples.length;
+  if (!Number.isFinite(averageDuration) || averageDuration <= 0) return null;
 
-  const squaredMoves = window.slice(1).map((quote, index) => {
-    const move = quote - window[index]!;
-    return move * move;
-  });
-  const meanSquaredMove = squaredMoves.reduce((sum, move) => sum + move, 0) / squaredMoves.length;
-
-  const currentQuote = window.at(-1)!;
-  const barrierDistance = Math.abs(currentQuote - referenceQuote!);
-  const remainingVariance = barrier! ** 2 - barrierDistance ** 2;
-  if (!Number.isFinite(remainingVariance)) return null;
-  if (remainingVariance <= 0) return 1;
-
-  const estimate = Math.ceil(remainingVariance / meanSquaredMove);
-  return Number.isSafeInteger(estimate) && estimate > 0 ? estimate : null;
+  return Math.max(1, Math.ceil(averageDuration) - elapsedTicks);
 }
 
 export function startMoneyBankKnockoutEvaluation({
@@ -118,29 +81,33 @@ export function startMoneyBankKnockoutEvaluation({
 }: StartMoneyBankKnockoutEvaluationInput): MoneyBankKnockoutEvaluation[] {
   if (!Number.isSafeInteger(sequence) || sequence < 0) return [];
 
-  return rates.map(({ growthRate, barrier, referenceQuote }) => {
+  return rates.map(({ growthRate, barrier, referenceQuote, ticksStayedIn, elapsedTicks }) => {
     const validQuotes = quotes.filter((quote) => Number.isFinite(quote) && quote > 0);
-    const issue = getForecastInputsIssue({ quotes: validQuotes, barrier, referenceQuote });
+    const barrierIsValid = Number.isFinite(barrier) && barrier! > 0
+      && Number.isFinite(referenceQuote) && referenceQuote! > 0;
+    const estimateTicks = barrierIsValid
+      ? estimateMoneyBankKnockoutTicks({ ticksStayedIn, elapsedTicks })
+      : null;
     const currentQuote = validQuotes.at(-1);
     const alreadyAtBarrier = barrier != null
       && referenceQuote != null
       && currentQuote != null
       && Math.abs(currentQuote - referenceQuote) >= barrier;
-    const startIssue = issue ?? (alreadyAtBarrier ? "barrier-already-crossed" : null);
-    const estimateTicks = startIssue == null
-      ? estimateMoneyBankKnockoutTicks({ quotes, barrier, referenceQuote })
-      : null;
-    const reason = startIssue ?? (estimateTicks == null ? "invalid-model-input" : null);
+    const reason = alreadyAtBarrier
+      ? "barrier-already-crossed"
+      : estimateTicks == null
+        ? barrierIsValid ? "insufficient-duration-samples" : "invalid-model-input"
+        : null;
 
     return {
       growthRate,
-      estimateTicks,
+      estimateTicks: alreadyAtBarrier ? null : estimateTicks,
       startSequence: sequence,
       lastSequence: sequence,
       referenceQuote: Number.isFinite(referenceQuote) && referenceQuote! > 0 ? referenceQuote : null,
       barrier: Number.isFinite(barrier) && barrier! > 0 ? barrier : null,
       actualTicks: null,
-      status: estimateTicks == null ? "unscorable" : "watching",
+      status: alreadyAtBarrier || estimateTicks == null ? "unscorable" : "watching",
       reason,
     };
   });

@@ -923,6 +923,9 @@ export const GetMoneyBankKnockoutBarriersBody = zod.object({
 
 export const getMoneyBankKnockoutBarriersResponseTickSequenceMin = 0;
 
+
+export const getMoneyBankKnockoutBarriersResponseRatesItemTicksStayedInMax = 200;
+
 export const getMoneyBankKnockoutBarriersResponseRatesMin = 5;
 export const getMoneyBankKnockoutBarriersResponseRatesMax = 5;
 
@@ -935,7 +938,8 @@ export const GetMoneyBankKnockoutBarriersResponse = zod.object({
   "rates": zod.array(zod.object({
   "growth_rate": zod.union([zod.literal(1),zod.literal(2),zod.literal(3),zod.literal(4),zod.literal(5)]),
   "barrier": zod.number().nullable(),
-  "message": zod.string().nullable()
+  "message": zod.string().nullable(),
+  "ticks_stayed_in": zod.array(zod.number().int().min(1)).max(getMoneyBankKnockoutBarriersResponseRatesItemTicksStayedInMax).describe('Recent Deriv tick durations between Accumulator barriers for this growth rate.')
 })).min(getMoneyBankKnockoutBarriersResponseRatesMin).max(getMoneyBankKnockoutBarriersResponseRatesMax)
 })
 

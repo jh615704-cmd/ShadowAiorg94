@@ -10,7 +10,6 @@ import {
   estimateMoneyBankKnockoutTicks,
   MONEY_BANK_KNOCKOUT_GROWTH_RATES,
   MONEY_BANK_LIVE_KNOCKOUT_LIMIT,
-  MONEY_BANK_KNOCKOUT_FORECAST_MIN_QUOTES,
   startMoneyBankKnockoutEvaluation,
   type MoneyBankKnockoutEvaluation,
   type MoneyBankKnockoutForecast,
@@ -44,10 +43,8 @@ function emptyRateRecord<T>(createValue: () => T): RateRecord<T> {
 
 function evaluationReasonLabel(reason: MoneyBankKnockoutEvaluation["reason"]): string {
   switch (reason) {
-    case "sparse-quotes":
-      return `Not scored: fewer than ${MONEY_BANK_KNOCKOUT_FORECAST_MIN_QUOTES} usable quotes.`;
-    case "flat-movement":
-      return "Not scored: recent quote movement is flat.";
+    case "insufficient-duration-samples":
+      return "Not scored: Deriv has not returned tick-duration samples for this rate.";
     case "barrier-already-crossed":
       return "Not scored: the barrier was already crossed at test start.";
     case "tick-gap":
@@ -95,6 +92,9 @@ export function MoneyBankLiveKnockouts({
   const [barriers, setBarriers] = useState<RateRecord<number | null>>(
     () => emptyRateRecord(() => null),
   );
+  const [durationSamples, setDurationSamples] = useState<RateRecord<number[]>>(
+    () => emptyRateRecord(() => []),
+  );
   const [barrierMessages, setBarrierMessages] = useState<RateRecord<string | null>>(
     () => emptyRateRecord(() => null),
   );
@@ -111,6 +111,7 @@ export function MoneyBankLiveKnockouts({
   requestBarriersRef.current = mutation.mutateAsync;
   const barriersRef = useRef(barriers);
   const referencesRef = useRef<RateRecord<number | null>>(emptyRateRecord(() => null));
+  const referenceSequencesRef = useRef<RateRecord<number | null>>(emptyRateRecord(() => null));
   const sequenceCursorsRef = useRef<RateRecord<number | null>>(emptyRateRecord(() => null));
   const forecastHistoryRef = useRef(forecastHistory);
   const lastSymbolRef = useRef(symbol);
@@ -129,13 +130,16 @@ export function MoneyBankLiveKnockouts({
     lastSymbolRef.current = symbol;
     const emptyForecasts = emptyRateRecord(() => [] as MoneyBankKnockoutForecast[]);
     const noBarriers = emptyRateRecord(() => null as number | null);
+    const noDurationSamples = emptyRateRecord(() => [] as number[]);
     const noMessages = emptyRateRecord(() => null as string | null);
     forecastHistoryRef.current = emptyForecasts;
     barriersRef.current = noBarriers;
+    referenceSequencesRef.current = emptyRateRecord(() => null);
     referencesRef.current = emptyRateRecord(() => null);
     sequenceCursorsRef.current = emptyRateRecord(() => null);
     setForecastHistory(emptyForecasts);
     setBarriers(noBarriers);
+    setDurationSamples(noDurationSamples);
     setBarrierMessages(noMessages);
     setBarrierRefreshFailed(false);
     resetKnockoutEvaluation();
@@ -154,6 +158,7 @@ export function MoneyBankLiveKnockouts({
       barriersRef.current = noBarriers;
       setBarriers(noBarriers);
       referencesRef.current = emptyRateRecord(() => null);
+      referenceSequencesRef.current = emptyRateRecord(() => null);
       sequenceCursorsRef.current = emptyRateRecord(() => null);
       setBarrierLoading(false);
       return;
@@ -173,10 +178,14 @@ export function MoneyBankLiveKnockouts({
         if (!active) return;
 
         const nextBarriers = emptyRateRecord(() => null as number | null);
+        const nextDurationSamples = emptyRateRecord(() => [] as number[]);
         const nextMessages = emptyRateRecord(() => null as string | null);
         for (const result of response.rates as readonly BarrierResponseRate[]) {
           if (!isGrowthRate(result.growth_rate)) continue;
           nextBarriers[result.growth_rate] = result.barrier;
+          nextDurationSamples[result.growth_rate] = result.ticks_stayed_in
+            .filter((ticks) => Number.isSafeInteger(ticks) && ticks > 0)
+            .slice(-200);
           nextMessages[result.growth_rate] = result.message;
         }
 
@@ -195,6 +204,7 @@ export function MoneyBankLiveKnockouts({
           const feedRestarted = snapshotSequence != null && cursor != null && snapshotSequence < cursor;
           if (previousBarrier !== nextBarrier || feedRestarted || cursor == null) {
             referencesRef.current[rate] = snapshotQuote;
+            referenceSequencesRef.current[rate] = snapshotSequence;
             sequenceCursorsRef.current[rate] = snapshotSequence;
             if (previousBarrier !== nextBarrier || feedRestarted) {
               nextForecastHistory[rate] = [];
@@ -209,6 +219,7 @@ export function MoneyBankLiveKnockouts({
         }
         barriersRef.current = nextBarriers;
         setBarriers(nextBarriers);
+        setDurationSamples(nextDurationSamples);
         setBarrierMessages(nextMessages);
         setBarrierRefreshFailed(false);
       } catch {
@@ -277,7 +288,19 @@ export function MoneyBankLiveKnockouts({
       if (unseenCount > nextQuotes.length) {
         observeEvaluationTick(sequence, latestQuote!);
         referencesRef.current[rate] = latestQuote!;
+        referenceSequencesRef.current[rate] = sequence;
         sequenceCursorsRef.current[rate] = sequence;
+        const estimate = estimateMoneyBankKnockoutTicks({
+          ticksStayedIn: durationSamples[rate],
+          elapsedTicks: 0,
+        });
+        if (estimate != null) {
+          nextForecastHistory[rate] = appendMoneyBankKnockoutForecast(
+            nextForecastHistory[rate],
+            { ticksToKnockout: estimate, sequence },
+          );
+          forecastsChanged = true;
+        }
         continue;
       }
 
@@ -285,7 +308,19 @@ export function MoneyBankLiveKnockouts({
       if (unseenQuotes.length !== unseenCount) {
         observeEvaluationTick(sequence, latestQuote!);
         referencesRef.current[rate] = latestQuote!;
+        referenceSequencesRef.current[rate] = sequence;
         sequenceCursorsRef.current[rate] = sequence;
+        const estimate = estimateMoneyBankKnockoutTicks({
+          ticksStayedIn: durationSamples[rate],
+          elapsedTicks: 0,
+        });
+        if (estimate != null) {
+          nextForecastHistory[rate] = appendMoneyBankKnockoutForecast(
+            nextForecastHistory[rate],
+            { ticksToKnockout: estimate, sequence },
+          );
+          forecastsChanged = true;
+        }
         continue;
       }
       const newTicks = unseenQuotes.map((newQuote, index) => ({
@@ -294,22 +329,33 @@ export function MoneyBankLiveKnockouts({
       }));
       let quoteWindow = nextQuotes.slice(0, -unseenCount);
       const barrier = barriersRef.current[rate];
+      if (referencesRef.current[rate] == null) {
+        referencesRef.current[rate] = quoteWindow.at(-1) ?? latestQuote!;
+      }
+      if (referenceSequencesRef.current[rate] == null) {
+        referenceSequencesRef.current[rate] = cursor;
+      }
       for (const tick of newTicks) {
         observeEvaluationTick(tick.sequence, tick.quote);
         quoteWindow = [...quoteWindow, tick.quote].slice(-41);
         let referenceQuote = referencesRef.current[rate];
+        let referenceSequence = referenceSequencesRef.current[rate];
         if (referenceQuote == null) {
           referenceQuote = tick.quote;
+          referenceSequence = tick.sequence;
         } else if (barrier != null && Math.abs(tick.quote - referenceQuote) >= barrier) {
           referenceQuote = tick.quote;
+          referenceSequence = tick.sequence;
         }
         referencesRef.current[rate] = referenceQuote;
+        referenceSequencesRef.current[rate] = referenceSequence;
 
-        const estimate = estimateMoneyBankKnockoutTicks({
-          quotes: quoteWindow,
-          barrier,
-          referenceQuote,
-        });
+        const estimate = barrier == null || referenceSequence == null
+          ? null
+          : estimateMoneyBankKnockoutTicks({
+            ticksStayedIn: durationSamples[rate],
+            elapsedTicks: Math.max(0, tick.sequence - referenceSequence),
+          });
         if (estimate != null) {
           nextForecastHistory[rate] = appendMoneyBankKnockoutForecast(
             nextForecastHistory[rate],
@@ -329,7 +375,7 @@ export function MoneyBankLiveKnockouts({
       knockoutEvaluationRef.current = nextEvaluation;
       setKnockoutEvaluation(nextEvaluation);
     }
-  }, [barriers, connected, quote, recentQuotes, tickSequence]);
+  }, [barriers, connected, durationSamples, quote, recentQuotes, tickSequence]);
 
   const latestQuote = Number.isFinite(quote) && quote! > 0 ? quote! : recentQuotes.at(-1);
   const canStartEvaluation = isDemoAccount
@@ -338,7 +384,7 @@ export function MoneyBankLiveKnockouts({
     && tickSequence! >= 0
     && Number.isFinite(latestQuote)
     && latestQuote! > 0
-    && RATE_OPTIONS.some((rate) => barriers[rate] != null);
+    && RATE_OPTIONS.some((rate) => barriers[rate] != null && durationSamples[rate].length > 0);
 
   const startDemoEvaluation = () => {
     if (!canStartEvaluation) return;
@@ -366,6 +412,11 @@ export function MoneyBankLiveKnockouts({
         growthRate: rate,
         barrier: barriers[rate],
         referenceQuote: referencesRef.current[rate] ?? quoteAtStart,
+        ticksStayedIn: durationSamples[rate],
+        elapsedTicks: Math.max(
+          0,
+          sequence - (referenceSequencesRef.current[rate] ?? sequence),
+        ),
       })),
     });
     knockoutEvaluationRef.current = nextEvaluation;
@@ -413,11 +464,11 @@ export function MoneyBankLiveKnockouts({
           ))}
         </div>
         <span className="mbkl-barrier">
-          {selectedBarrier != null
+          {selectedBarrier != null && durationSamples[selectedRate].length > 0
             ? "LIVE MODEL"
             : barrierLoading
               ? "CALCULATING"
-              : "MODEL UNAVAILABLE"}
+              : "WAITING FOR HISTORY"}
         </span>
       </div>
 
@@ -447,11 +498,13 @@ export function MoneyBankLiveKnockouts({
           : selectedBarrier == null
             ? selectedMessage ?? (barrierRefreshFailed ? "Could not refresh the current Deriv barrier." : "Waiting for a current barrier.")
             : selectedForecasts.length
-              ? "Each number estimates ticks until this rate’s barrier may be reached, based on recent live movement."
-              : `Gathering at least ${MONEY_BANK_KNOCKOUT_FORECAST_MIN_QUOTES} live quotes to estimate knockout timing.`}
+              ? "Each number estimates remaining ticks from this rate’s Deriv barrier-duration history."
+              : durationSamples[selectedRate].length
+                ? "Waiting for the next live tick to update this rate’s estimate."
+                : "Waiting for Deriv’s tick-duration samples for this percentage."}
       </p>
       <p className="mbkl-note">
-        Read-only estimate · Not a guaranteed timing or contract outcome; monitor live ticks.
+        Read-only history-based estimate · Not a guaranteed timing or contract outcome; monitor live ticks.
       </p>
       <section className="mbkl-evaluation" aria-label="Demo forecast evaluation" data-testid="panel-knockout-evaluation">
         <div className="mbkl-evaluation-heading">

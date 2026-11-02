@@ -1698,7 +1698,7 @@ components:
           minLength: 1
     MoneyBankKnockoutBarrierRate:
       type: object
-      required: [growth_rate, barrier, message]
+      required: [growth_rate, barrier, message, ticks_stayed_in]
       properties:
         growth_rate:
           type: integer
@@ -1707,6 +1707,13 @@ components:
           type: [number, "null"]
         message:
           type: [string, "null"]
+        ticks_stayed_in:
+          type: array
+          description: Recent Deriv tick durations between Accumulator barriers for this growth rate.
+          maxItems: 200
+          items:
+            type: integer
+            minimum: 1
     MoneyBankKnockoutBarriersResponse:
       type: object
       required: [symbol, tick_sequence, quote, rates]

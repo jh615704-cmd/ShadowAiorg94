@@ -746,6 +746,12 @@ export interface MoneyBankKnockoutBarrierRate {
   barrier: number | null;
   /** @nullable */
   message: string | null;
+  /**
+     * Recent Deriv tick durations between Accumulator barriers for this growth rate.
+     * @maxItems 200
+     * @items.minimum 1
+     */
+  ticks_stayed_in: number[];
 }
 
 export interface MoneyBankKnockoutBarriersResponse {

@@ -233,6 +233,7 @@ mock.module("../lib/deriv", {
           growth_rate,
           barrier: 1.25,
           message: null,
+          ticks_stayed_in: [8, 12, 16],
         })),
       };
     },

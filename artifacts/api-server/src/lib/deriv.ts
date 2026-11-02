@@ -46,6 +46,7 @@ export type DerivProposal = {
   spot_time?: number;
   contract_details?: {
     tick_size_barrier?: number;
+    ticks_stayed_in?: number[];
   };
 };
 
@@ -1367,6 +1368,16 @@ function proposalFromMessage(raw: unknown): DerivProposal | null {
     ? proposal.contract_details as Record<string, unknown>
     : null;
   const rawBarrier = Number(rawDetails?.tick_size_barrier);
+  const ticksStayedIn = Array.isArray(rawDetails?.ticks_stayed_in)
+    ? rawDetails.ticks_stayed_in
+      .map(Number)
+      .filter((ticks) => Number.isSafeInteger(ticks) && ticks > 0)
+      .slice(-200)
+    : [];
+  const contractDetails = {
+    ...(Number.isFinite(rawBarrier) && rawBarrier > 0 ? { tick_size_barrier: rawBarrier } : {}),
+    ...(ticksStayedIn.length > 0 ? { ticks_stayed_in: ticksStayedIn } : {}),
+  };
   return {
     id,
     ask_price: Number(proposal.ask_price ?? 0),
@@ -1374,9 +1385,7 @@ function proposalFromMessage(raw: unknown): DerivProposal | null {
     spot: Number(proposal.spot ?? 0),
     longcode: typeof proposal.longcode === "string" ? proposal.longcode : null,
     ...(Number.isFinite(Number(proposal.spot_time)) ? { spot_time: Number(proposal.spot_time) } : {}),
-    ...(Number.isFinite(rawBarrier) && rawBarrier > 0
-      ? { contract_details: { tick_size_barrier: rawBarrier } }
-      : {}),
+    ...(Object.keys(contractDetails).length ? { contract_details: contractDetails } : {}),
   };
 }
 
@@ -1553,6 +1562,7 @@ export async function getMoneyBankKnockoutBarriers(symbol: string) {
         growth_rate: growthRate,
         barrier: null,
         message: "Waiting for a live quote from this market.",
+        ticks_stayed_in: [],
       };
     }
 
@@ -1571,15 +1581,22 @@ export async function getMoneyBankKnockoutBarriers(symbol: string) {
           growth_rate: growthRate,
           barrier: null,
           message: "Deriv did not return a current barrier for this rate.",
+          ticks_stayed_in: proposal.contract_details?.ticks_stayed_in ?? [],
         };
       }
-      return { growth_rate: growthRate, barrier: barrier!, message: null };
+      return {
+        growth_rate: growthRate,
+        barrier: barrier!,
+        message: null,
+        ticks_stayed_in: proposal.contract_details?.ticks_stayed_in ?? [],
+      };
     } catch (error) {
       logger.warn({ err: error, symbol, growthRate }, "Money Bank live knockout barrier could not be refreshed");
       return {
         growth_rate: growthRate,
         barrier: null,
         message: "The current Deriv barrier is unavailable for this rate.",
+        ticks_stayed_in: [],
       };
     }
   }));
