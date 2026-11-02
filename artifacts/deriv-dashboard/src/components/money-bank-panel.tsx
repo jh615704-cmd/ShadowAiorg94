@@ -84,6 +84,7 @@ type MoneyBankPanelProps = {
 export const MONEY_BANK_AUTO_SYMBOLS = ["1HZ10V", "1HZ15V", "1HZ25V", "1HZ30V", "1HZ50V", "1HZ75V", "1HZ90V", "1HZ100V"] as const;
 
 const ACCUMULATOR_MIN_STAKE = 1;
+const GROWTH_RATES = [1, 2, 3, 4, 5] as const;
 const roundCents = (value: number) => Number((Math.round((value + Number.EPSILON) * 100) / 100).toFixed(2));
 
 const money = (value: number, currency = "USD") =>
@@ -238,6 +239,15 @@ export function MoneyBankPanel({
           connected={isConnected}
           quote={quote}
           quotes={marketSignal?.recent_quotes ?? []}
+          tickSequence={marketSignal?.tick_sequence}
+        />
+        <MoneyBankLiveKnockouts
+          symbol={symbol}
+          marketLabel={selectedMarket}
+          connected={isConnected}
+          growthRate={growthRate}
+          quote={marketSignal?.quote ?? quote}
+          recentQuotes={marketSignal?.recent_quotes}
           tickSequence={marketSignal?.tick_sequence}
         />
         <div className="money-bank-main">
@@ -409,16 +419,6 @@ export function MoneyBankPanel({
             </div>
           </section>
 
-          <MoneyBankLiveKnockouts
-            symbol={symbol}
-            marketLabel={selectedMarket}
-            connected={isConnected}
-            growthRate={growthRate}
-            quote={marketSignal?.quote ?? quote}
-            recentQuotes={marketSignal?.recent_quotes}
-            tickSequence={marketSignal?.tick_sequence}
-          />
-
         </aside>
       </div>
 
@@ -434,6 +434,7 @@ export function MoneyBankPanel({
           rows={visibleTrades}
           sessionRows={visibleSessionRows}
           currency={currency}
+          summaryMode="hidden"
           clearArmed={historyClearArmed}
           fading={historyFading}
           onClear={clearHistory}
