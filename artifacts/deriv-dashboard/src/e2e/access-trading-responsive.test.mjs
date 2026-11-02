@@ -1432,6 +1432,32 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await assertNoHorizontalOverflow(page, viewport, "Money Bank Stats");
       await assertWithinViewport(page, ".money-bank-knockout-card", viewport.width, "Money Bank Stats");
+      const statsLayout = await page.locator(".money-bank-knockout-card").evaluate((stats) => {
+        const side = stats.parentElement;
+        const grid = stats.querySelector(".mbkh-tick-grid");
+        const columns = grid ? getComputedStyle(grid).gridTemplateColumns.trim().split(/\s+/).length : 0;
+        const tiles = [...stats.querySelectorAll(".mbkh-tick")].map((tile) => {
+          const { width, height } = tile.getBoundingClientRect();
+          return { width, height };
+        });
+        return {
+          statsWidth: stats.getBoundingClientRect().width,
+          sideWidth: side?.getBoundingClientRect().width ?? 0,
+          columns,
+          tiles,
+        };
+      });
+      assert.ok(
+        Math.abs(statsLayout.statsWidth - statsLayout.sideWidth) <= 2,
+        `Money Bank Stats should use the full available panel width at ${viewport.name}.`,
+      );
+      assert.equal(statsLayout.columns, 7, `Money Bank tick boxes should form three rows at ${viewport.name}.`);
+      for (const tile of statsLayout.tiles) {
+        assert.ok(
+          Math.abs(tile.width - tile.height) <= 1,
+          `Money Bank tick boxes should stay square at ${viewport.name}.`,
+        );
+      }
     }
 
     assert.deepEqual(state.unhandledApis, [], `Unexpected API requests: ${JSON.stringify(state.unhandledApis)}`);

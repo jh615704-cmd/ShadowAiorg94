@@ -139,6 +139,15 @@
   gap: 14px;
 }
 
+.money-bank-side {
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.money-bank-side > .mbkh-panel {
+  grid-column: 1 / -1;
+}
+
 .money-bank-card,
 .money-bank-return-card {
   border: 1px solid var(--mb-line);
@@ -2019,15 +2028,18 @@
 
 .mbkh-tick-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 34px), 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 5px;
+  width: min(100%, 620px);
   min-width: 0;
 }
 
 .mbkh-tick {
   display: grid;
+  width: 100%;
+  aspect-ratio: 1 / 1;
   min-width: 0;
-  min-height: 36px;
+  min-height: 0;
   place-items: center;
   border: 1px solid transparent;
   border-radius: 6px;
@@ -2151,7 +2163,7 @@
   .mbkh-summary small { font-size: .53rem; }
   .mbkh-summary strong { font-size: .82rem; }
   .mbkh-tick-grid { gap: 5px; }
-  .mbkh-tick { min-height: 35px; }
+  .mbkh-tick { min-height: 0; }
   .mbkh-footer { align-items: flex-start; }
   .mbkh-legend { gap: 8px; }
 }
@@ -2177,7 +2189,7 @@
   .mbkh-summary small { font-size: .59rem; }
   .mbkh-summary strong { font-size: 1rem; }
   .mbkh-tick-grid { gap: 7px; }
-  .mbkh-tick { min-height: 40px; font-size: .88rem; }
+  .mbkh-tick { min-height: 0; font-size: .88rem; }
   .mbkh-footer { gap: 12px 20px; margin-top: 14px; padding-top: 10px; }
   .mbkh-legend { gap: 12px; font-size: .69rem; }
   .mbkh-footer p { font-size: .65rem; }
