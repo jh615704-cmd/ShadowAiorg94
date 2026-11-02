@@ -301,33 +301,50 @@
 .at2-check-row + .at2-check-row { border-top: 1px solid rgba(129, 170, 215, .12); }
 .at2-check-row input {
   position: absolute;
-  width: 20px;
-  height: 20px;
+  inset: 0 auto 0 0;
+  z-index: 2;
+  width: 38px;
+  height: 100%;
   margin: 0;
   opacity: 0;
   cursor: pointer;
 }
 .at2-check-row input:disabled { cursor: not-allowed; }
-.at2-checkmark {
-  display: grid;
-  flex: 0 0 16px;
-  width: 16px;
-  height: 16px;
-  place-items: center;
-  border: 1px solid #48637f;
-  border-radius: 4px;
-  background: #091d33;
+.at2-flip-switch {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 20px;
+  border: 1px solid #755d25;
+  border-radius: 999px;
+  background: #644f23;
+  transition: .2s ease;
 }
-.at2-check-row input:checked + .at2-checkmark { border-color: #61c783; background: #247247; }
-.at2-check-row input:checked + .at2-checkmark::after {
-  width: 7px;
-  height: 4px;
-  border-bottom: 1.5px solid #edfff0;
-  border-left: 1.5px solid #edfff0;
+.at2-flip-switch::after {
+  display: block;
+  width: 14px;
+  height: 14px;
+  margin: 2px;
+  border-radius: 50%;
+  background: #aa812b;
   content: "";
-  transform: translateY(-1px) rotate(-45deg);
+  transition: .2s ease;
 }
-.at2-check-row input:focus-visible + .at2-checkmark { outline: 2px solid #84e5a1; outline-offset: 2px; }
+.at2-check-row input:checked + .at2-flip-switch {
+  border-color: #1fd5b8;
+  background: #08aa91;
+  box-shadow: 0 0 13px rgba(32, 213, 189, .3);
+}
+.at2-check-row input:checked + .at2-flip-switch::after {
+  transform: translateX(14px);
+  background: #42f1d4;
+}
+.at2-check-row input:focus-visible + .at2-flip-switch {
+  outline: 2px solid #65d8c7;
+  outline-offset: 2px;
+}
+.at2-check-row input:disabled + .at2-flip-switch { opacity: .55; }
 .at2-check-copy { display: grid; flex: 1; gap: 3px; min-width: 0; }
 .at2-check-copy > strong { color: #dbe8f6; font-size: 10px; }
 .at2-check-copy > strong small { margin-left: 5px; color: #8fa7c1; font: 800 7px "DM Mono", monospace; letter-spacing: .055em; }

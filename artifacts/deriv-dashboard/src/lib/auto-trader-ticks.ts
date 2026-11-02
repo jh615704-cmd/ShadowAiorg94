@@ -5,6 +5,21 @@ export type AutoTraderMarketTickSignal = {
   tick_epoch: number;
 };
 
+export type AutoTraderOppositeDigitGroup = {
+  minDigit: 0 | 5;
+  maxDigit: 4 | 9;
+  label: "0–4" | "5–9";
+};
+
+export function getAutoTraderOppositeDigitGroup(
+  lastDigit: number | null | undefined,
+): AutoTraderOppositeDigitGroup | null {
+  if (!Number.isInteger(lastDigit) || lastDigit! < 0 || lastDigit! > 9) return null;
+  return lastDigit! <= 4
+    ? { minDigit: 5, maxDigit: 9, label: "5–9" }
+    : { minDigit: 0, maxDigit: 4, label: "0–4" };
+}
+
 export function collectAutoTraderTickChanges(
   signals: readonly AutoTraderMarketTickSignal[],
   seenTicks: Record<string, number>,

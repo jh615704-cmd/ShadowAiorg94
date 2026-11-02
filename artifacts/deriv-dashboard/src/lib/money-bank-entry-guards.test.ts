@@ -10,8 +10,6 @@ const validConfig: MoneyBankStartConfig = {
   symbol: "1HZ10V",
   growthRate: 4,
   takeProfitTicks: 5,
-  autoKnockout: true,
-  knockoutsBeforeTrade: 5,
   strategy: "budget",
   budget: 2.2,
   manualBase: 1,
@@ -33,21 +31,32 @@ describe("Money Bank entry safeguards", () => {
     );
   });
 
-  it("rejects malformed settings and inconsistent ladder totals", () => {
+  it("accepts the 1- and 30-tick boundaries and rejects values outside them", () => {
+    assert.equal(
+      getMoneyBankStartConfigError({ ...validConfig, takeProfitTicks: 1 }, 10, ["1HZ10V"]),
+      null,
+    );
+    assert.equal(
+      getMoneyBankStartConfigError({ ...validConfig, takeProfitTicks: 30 }, 10, ["1HZ10V"]),
+      null,
+    );
     assert.match(
-      getMoneyBankStartConfigError({ ...validConfig, takeProfitTicks: 4 }, 10, ["1HZ10V"]) ?? "",
+      getMoneyBankStartConfigError({ ...validConfig, takeProfitTicks: 0 }, 10, ["1HZ10V"]) ?? "",
       /duration/,
     );
+    assert.match(
+      getMoneyBankStartConfigError({ ...validConfig, takeProfitTicks: 31 }, 10, ["1HZ10V"]) ?? "",
+      /duration/,
+    );
+  });
+
+  it("rejects inconsistent ladder totals", () => {
     assert.match(
       getMoneyBankStartConfigError({
         ...validConfig,
         ladder: [{ ...validConfig.ladder[0], cumulative: 1.5 }],
       }, 10, ["1HZ10V"]) ?? "",
       /totals/,
-    );
-    assert.match(
-      getMoneyBankStartConfigError({ ...validConfig, knockoutsBeforeTrade: 0 }, 10, ["1HZ10V"]) ?? "",
-      /1 to 20 qualifying knockouts/,
     );
   });
 

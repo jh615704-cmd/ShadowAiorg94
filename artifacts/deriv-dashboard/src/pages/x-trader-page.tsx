@@ -24,8 +24,6 @@ import {
   useTestDerivToken,
   useRequestDerivProposal,
   useGetEdgeAvailableDurations,
-  useScanDerivAccumulatorKnockout,
-  type MoneyBankKnockoutScannerResponse,
   getGetDerivTokenStatusQueryKey,
   getGetDerivAccountsQueryKey,
   getGetDerivStatusQueryKey,
@@ -305,7 +303,8 @@ const moneyBankGuidePages = [
   { title: "Connect your Deriv account", body: "Connect your own PAT and select the account that Money Bank should use. The server validates the credential and the account balance before every entry.", points: ["Use a demo account first.", "Selecting a real account routes Accumulator contracts to it when live trading is enabled.", "Keep your PAT private."] },
   { title: "Choose a Volatility pair", body: "The market selector contains Volatility indices only, including 1-second V10, V15, V25, V30, V50, V75, V90, and V100 streams.", points: ["Switch markets before starting.", "Live quotes show the selected stream.", "Changing markets does not change the recovery ladder."] },
   { title: "Growth rate", body: "Growth rate is the Accumulator growth applied to each tick. Higher rates can increase the theoretical return while also changing the contract risk.", points: ["Available rates are 1% through 5%.", "The exact decimal rate is sent to Deriv.", "The rate is not a win probability."] },
-  { title: "Take-profit ticks", body: "Take Profit ticks is the exact contract duration target used by Money Bank. The panel keeps it between 5 and 50 ticks because Deriv Accumulator contracts require at least five ticks.", points: ["Shorter contracts settle sooner.", "Longer contracts expose the position for more ticks.", "The selected tick target is sent unchanged to Deriv."] },
+  { title: "Take-profit ticks", body: "Take Profit ticks is the exact Accumulator duration target. Choose a whole number from 1 to 30; the selected value is sent to Deriv unchanged.", points: ["Shorter contracts settle sooner.", "Longer contracts remain open for more ticks.", "Deriv can still reject a contract if its market rules do not allow the requested duration."] },
+  { title: "Stats and Knockout History", body: "Stats counts new live market ticks separately from settled account history. Knockout History filters real settled outcomes by market and growth rate, then summarizes observed survival through each available exit tick.", points: ["Reset restarts only the Stats tick counter; it does not change the chart or trades.", "Red, yellow, and green show historical observations, with small samples left uncertain.", "Past results are not a prediction or a guaranteed win rate."] },
   { title: "Auto Budget BASE", body: "Auto Budget keeps the planned cumulative stakes within the selected amount, using as many of the seven levels as the minimum stake allows.", points: ["The planned total stays within the entered budget.", "A loss on the final affordable level stops the run.", "This risk limit does not guarantee recovery or profit."] },
   { title: "Manual BASE", body: "Manual BASE lets you choose the first stake directly. Each recovery level is calculated from that BASE and the selected growth and tick settings.", points: ["Use a small stake while testing.", "The next level can be larger after a loss.", "Keep enough balance for the full ladder."] },
   { title: "Recovery ladder", body: "BASE through L6 are explicit recovery levels. A losing settlement advances one level; a profitable settlement resets the level.", points: ["L6 is the final level.", "Money Bank stops instead of silently extending the ladder.", "The ladder is always visible before entry."] },
@@ -320,7 +319,7 @@ const moneyBankGuidePages = [
   { title: "Trade history", body: "Money Bank history lists each returned Accumulator contract with its market, account, barrier, price, current value, payout, profit, status, and timestamps.", points: ["Open rows update with current value and profit.", "Rows update as Deriv settles or closes them.", "History is scoped visually to Accumulator contracts."] },
   { title: "Download and Reset", body: "Download exports the visible Money Bank rows as a CSV file. Reset uses a two-tap confirmation and fades the visible rows before clearing them from this panel.", points: ["Download does not alter account records.", "Reset does not cancel open contracts.", "A fresh run can add new rows again."] },
   { title: "Live-money protection", body: "Selecting a real account routes Accumulator contracts to real funds. Server permission, balance, and settlement checks remain active. Never treat the snapshot as a guarantee.", points: ["Demo testing is strongly recommended.", "A disabled action means a required server or account guard is missing.", "Keep an acceptable reserve in the account."] },
-  { title: "Final checklist", body: "Money Bank is ready when the account, Volatility pair, growth rate, ticks, BASE strategy, optional limits, reinvest state, and auto-switch state are intentional.", points: ["Start small.", "Watch every settlement.", "Stop if the session no longer matches your plan."] },
+  { title: "Final checklist", body: "Money Bank is ready when the account, Volatility pair, growth rate, duration, BASE strategy, optional limits, and reinvest setting are intentional.", points: ["Start small.", "Watch every settlement.", "Stop if the session no longer matches your plan."] },
 ] as const;
 
 const cashGrabGuidePages = [
@@ -453,7 +452,6 @@ export default function XTraderPage() {
   const dualBuyMutation = useDualBuyDerivContracts();
   const digitFlipBuyMutation = useBuyDerivContract();
   const moneyBankBuyMutation = useBuyDerivContract();
-  const moneyBankKnockoutScanMutation = useScanDerivAccumulatorKnockout();
   const moneyBankSellMutation = useSellDerivContract();
   const cashGrabSellMutation = useSellDerivContract();
   const clockWorkBuyMutation = useBuyClockWorkContracts();
@@ -495,8 +493,6 @@ export default function XTraderPage() {
   const [moneyBankSymbol, setMoneyBankSymbol] = useState("1HZ90V");
   const [moneyBankGrowthRate, setMoneyBankGrowthRate] = useState(4);
   const [moneyBankTakeProfitTicks, setMoneyBankTakeProfitTicks] = useState(5);
-  const [moneyBankAutoKnockout, setMoneyBankAutoKnockout] = useState(false);
-  const [moneyBankKnockoutsBeforeTrade, setMoneyBankKnockoutsBeforeTrade] = useState(5);
   const [moneyBankStrategy, setMoneyBankStrategy] = useState<MoneyBankStrategy>("budget");
   const [moneyBankBudget, setMoneyBankBudget] = useState(500);
   const [moneyBankManualBase, setMoneyBankManualBase] = useState(1);
@@ -506,7 +502,6 @@ export default function XTraderPage() {
   const [moneyBankLossLimit, setMoneyBankLossLimit] = useState<number | null>(null);
   const [moneyBankRunning, setMoneyBankRunning] = useState(false);
   const [moneyBankStarting, setMoneyBankStarting] = useState(false);
-  const [moneyBankAutoKnockoutScan, setMoneyBankAutoKnockoutScan] = useState<MoneyBankKnockoutScannerResponse | null>(null);
   const [moneyBankClosing, setMoneyBankClosing] = useState(false);
   const [moneyBankSessionPnl, setMoneyBankSessionPnl] = useState(0);
   const [moneyBankLastSettledProfit, setMoneyBankLastSettledProfit] = useState<number | null>(null);
@@ -626,7 +621,6 @@ export default function XTraderPage() {
   const aiScannerActionLockRef = useRef(false);
   const digitFlipRunningRef = useRef(false);
   const moneyBankRunningRef = useRef(false);
-  const moneyBankKnockoutScanRef = useRef<MoneyBankKnockoutScannerResponse | null>(null);
   const moneyBankStartingRef = useRef(false);
   const moneyBankActionLockRef = useRef(false);
   const moneyBankBudgetExhaustedRef = useRef(false);
@@ -2058,8 +2052,6 @@ export default function XTraderPage() {
     moneyBankRunningRef.current = false;
     moneyBankAccountIdRef.current = null;
     setMoneyBankRunning(false);
-    moneyBankKnockoutScanRef.current = null;
-    setMoneyBankAutoKnockoutScan(null);
     if (actionInFlight) {
       setMoneyBankClosing(true);
       return;
@@ -2140,10 +2132,6 @@ export default function XTraderPage() {
     );
     if (settledAccumulator) {
       moneyBankProcessedSettlementIdsRef.current.add(settledAccumulator.contract_id);
-      if (config.autoKnockout) {
-        moneyBankKnockoutScanRef.current = null;
-        setMoneyBankAutoKnockoutScan(null);
-      }
       const nextSessionPnl = moneyBankSessionPnlRef.current + settledAccumulator.profit;
       moneyBankSessionPnlRef.current = nextSessionPnl;
       setMoneyBankSessionPnl(nextSessionPnl);
@@ -2212,50 +2200,6 @@ export default function XTraderPage() {
     if (!moneyBankRunningRef.current) return;
     moneyBankActionLockRef.current = true;
     try {
-      if (currentConfig.autoKnockout) {
-        const scannerStatus = await status.refetch();
-        if (!moneyBankRunningRef.current) return;
-        if (!scannerStatus.isSuccess || !scannerStatus.data?.connected || !scannerStatus.data.authorized) {
-          setConnectionMessage({ kind: "info", text: "Money Bank is waiting for a fresh Deriv connection before scanning knockouts." });
-          await sleep(1_000);
-          return;
-        }
-        if (scannerStatus.data.symbol !== tradeSymbol) {
-          setConnectionMessage({
-            kind: "info",
-            text: `Money Bank is re-confirming ${tradeSymbol}. No trade will be sent while Deriv is on another market.`,
-          });
-          const marketRestored = await selectMarket(tradeSymbol);
-          if (marketRestored) {
-            moneyBankKnockoutScanRef.current = null;
-            setMoneyBankAutoKnockoutScan(null);
-          }
-          await sleep(1_000);
-          return;
-        }
-
-        const previousScan = moneyBankKnockoutScanRef.current;
-        const scanAction = !previousScan || previousScan.phase === "idle" ? "start" : "poll";
-        const scan = await moneyBankKnockoutScanMutation.mutateAsync({
-          data: {
-            action: scanAction,
-            amount: Number(level.stake.toFixed(2)),
-            duration: currentConfig.takeProfitTicks,
-            duration_unit: "t",
-            contract_type: "ACCU",
-            growth_rate: currentConfig.growthRate / 100,
-            symbol: tradeSymbol,
-            required_knockouts: currentConfig.knockoutsBeforeTrade,
-          },
-        });
-        moneyBankKnockoutScanRef.current = scan;
-        setMoneyBankAutoKnockoutScan(scan);
-        if (!scan.ready_to_trade) {
-          await sleep(900);
-          return;
-        }
-      }
-
       const freshStatus = await status.refetch();
       if (!moneyBankRunningRef.current) return;
       if (!freshStatus.isSuccess || !freshStatus.data?.connected || !freshStatus.data.authorized) {
@@ -2272,11 +2216,7 @@ export default function XTraderPage() {
           kind: "info",
           text: `Money Bank is re-confirming ${tradeSymbol}. No trade was sent on the changed market.`,
         });
-        const marketRestored = await selectMarket(tradeSymbol);
-        if (marketRestored) {
-          moneyBankKnockoutScanRef.current = null;
-          setMoneyBankAutoKnockoutScan(null);
-        }
+        await selectMarket(tradeSymbol);
         await sleep(1_000);
         return;
       }
@@ -2304,10 +2244,6 @@ export default function XTraderPage() {
           contract_type: "ACCU",
           growth_rate: currentConfig.growthRate / 100,
           symbol: tradeSymbol,
-          auto_knockout: currentConfig.autoKnockout,
-          ...(currentConfig.autoKnockout
-            ? { auto_knockout_target: currentConfig.knockoutsBeforeTrade }
-            : {}),
         },
       });
       const contractId = result.buy?.contract_id;
@@ -2365,7 +2301,7 @@ export default function XTraderPage() {
         }
         if (
           (error instanceof ApiTransportError && !error.tradeOutcomeUncertain)
-          || /balance|account balance|fresh deriv history|deriv connection|Money Bank Auto Knockout is waiting/i.test(message)
+          || /balance|account balance|fresh deriv history|deriv connection/i.test(message)
         ) {
           setConnectionMessage({
             kind: "info",
@@ -2440,8 +2376,6 @@ export default function XTraderPage() {
        moneyBankBudgetExhaustedRef.current = false;
       moneyBankConfigRef.current = config;
       moneyBankAccountIdRef.current = currentAccount.id;
-        moneyBankKnockoutScanRef.current = null;
-        setMoneyBankAutoKnockoutScan(null);
       moneyBankSessionPnlRef.current = 0;
       setMoneyBankSessionPnl(0);
       setMoneyBankLastSettledProfit(null);
@@ -5601,15 +5535,6 @@ export default function XTraderPage() {
           onGrowthRateChange={setMoneyBankGrowthRate}
           takeProfitTicks={moneyBankTakeProfitTicks}
           onTakeProfitTicksChange={setMoneyBankTakeProfitTicks}
-          autoKnockout={moneyBankAutoKnockout}
-          knockoutsBeforeTrade={moneyBankKnockoutsBeforeTrade}
-          autoKnockoutScan={moneyBankAutoKnockoutScan}
-          onAutoKnockoutChange={(enabled) => {
-            setMoneyBankAutoKnockout(enabled);
-            moneyBankKnockoutScanRef.current = null;
-            setMoneyBankAutoKnockoutScan(null);
-          }}
-          onKnockoutsBeforeTradeChange={setMoneyBankKnockoutsBeforeTrade}
           strategy={moneyBankStrategy}
           onStrategyChange={setMoneyBankStrategy}
           budget={moneyBankBudget}

@@ -19,8 +19,8 @@ export function getMoneyBankStartConfigError(
   if (!Number.isInteger(config.growthRate) || config.growthRate < 1 || config.growthRate > 5) {
     return "Money Bank growth rate must be a whole number from 1% to 5%.";
   }
-  if (!Number.isInteger(config.takeProfitTicks) || config.takeProfitTicks < 5 || config.takeProfitTicks > 50) {
-    return "Money Bank duration must be a whole number from 5 to 50 ticks.";
+  if (!Number.isInteger(config.takeProfitTicks) || config.takeProfitTicks < 1 || config.takeProfitTicks > 30) {
+    return "Money Bank duration must be a whole number from 1 to 30 ticks.";
   }
   if (config.strategy !== "budget" && config.strategy !== "manual") {
     return "Choose a valid Money Bank stake strategy.";
@@ -30,12 +30,6 @@ export function getMoneyBankStartConfigError(
   }
   if (config.strategy === "manual" && (!Number.isFinite(config.manualBase) || config.manualBase < MIN_STAKE)) {
     return "Manual BASE must be at least the minimum Accumulator stake.";
-  }
-  if (typeof config.autoKnockout !== "boolean") {
-    return "Money Bank Auto Knockout setting is invalid.";
-  }
-  if (!Number.isInteger(config.knockoutsBeforeTrade) || config.knockoutsBeforeTrade < 1 || config.knockoutsBeforeTrade > 20) {
-    return "Money Bank requires 1 to 20 qualifying knockouts before a trade.";
   }
   if (
     typeof config.reinvestProfit !== "boolean"

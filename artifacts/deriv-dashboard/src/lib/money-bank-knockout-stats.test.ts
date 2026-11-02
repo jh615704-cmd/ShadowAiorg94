@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { summarizeMoneyBankKnockoutStats } from "./money-bank-knockout-stats.ts";
+import {
+  summarizeMoneyBankExitTicks,
+  summarizeMoneyBankKnockoutStats,
+  summarizeMoneyBankOutcomeStats,
+} from "./money-bank-knockout-stats.ts";
 
 test("Money Bank stats use actual Deriv outcomes and tick_passed by market and growth rate", () => {
   const rows = [
@@ -68,4 +72,71 @@ test("top five knockout ticks are ranked by frequency with stable tie ordering",
     { ticks: 5, count: 1, percentageOfKnockouts: 11.1 },
     { ticks: 6, count: 1, percentageOfKnockouts: 11.1 },
   ]);
+});
+
+test("Money Bank stats group actual settled results by market, rate, and exact duration", () => {
+  const rows = [
+    ...Array.from({ length: 20 }, () => ({
+      symbol: "1HZ30V",
+      growth_rate: 0.01,
+      duration: 2,
+      duration_unit: "t",
+      tick_passed: 1,
+      status: "lost",
+    })),
+    ...Array.from({ length: 20 }, () => ({
+      symbol: "1HZ30V",
+      growth_rate: 0.02,
+      duration: 2,
+      duration_unit: "t",
+      tick_passed: 2,
+      status: "won",
+    })),
+    {
+      symbol: "1HZ90V",
+      growth_rate: 0.01,
+      duration: 2,
+      duration_unit: "t",
+      tick_passed: 2,
+      status: "won",
+    },
+  ];
+
+  const [onePercent, twoPercent, threePercent] = [
+    summarizeMoneyBankExitTicks(rows, "1HZ30V", 1, 2),
+    summarizeMoneyBankExitTicks(rows, "1HZ30V", 2, 2),
+    summarizeMoneyBankExitTicks(rows, "1HZ30V", 3, 2),
+  ];
+  assert.equal(onePercent[0].band, "no-data");
+  assert.equal(onePercent[1].band, "red");
+  assert.equal(onePercent[1].winRate, 0);
+  assert.equal(twoPercent[1].band, "green");
+  assert.equal(twoPercent[1].winRate, 100);
+  assert.equal(threePercent[0].band, "no-data");
+
+  const allRates = summarizeMoneyBankExitTicks(rows, "1HZ30V", "all", 2);
+  assert.equal(allRates[1].trackedRuns, 40);
+  assert.equal(allRates[1].knockouts, 20);
+  assert.equal(allRates[1].completed, 20);
+  assert.equal(allRates[1].winRate, 50);
+  assert.equal(allRates[1].band, "yellow");
+
+  const summary = summarizeMoneyBankOutcomeStats(rows, "1HZ30V", "all", 2);
+  assert.equal(summary.trackedRuns, 40);
+  assert.equal(summary.knockouts, 20);
+  assert.equal(summary.completed, 20);
+  assert.equal(summary.longestTicks, 2);
+  assert.equal(summary.averageTicks, 1.5);
+  assert.equal(summary.shortestTicks, 1);
+});
+
+test("Money Bank keeps undersampled exit ticks neutral and caps the grid at 30", () => {
+  const rows = [
+    { symbol: "1HZ90V", growth_rate: 0.04, duration: 1, tick_passed: 1, status: "won" },
+  ];
+  const ticks = summarizeMoneyBankExitTicks(rows, "1HZ90V", "all", 90);
+
+  assert.equal(ticks.length, 30);
+  assert.equal(ticks[0].band, "yellow");
+  assert.equal(ticks[1].band, "no-data");
 });

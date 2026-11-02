@@ -394,7 +394,7 @@ export default function AutoTrader2Panel({
             aria-label="Automatically select a market"
             data-testid="at2-auto-select"
           />
-          <span className="at2-checkmark" aria-hidden="true" />
+          <span className="at2-flip-switch" aria-hidden="true" />
           <span className="at2-check-copy"><strong>Auto-select market</strong><small>Picks the strongest observed market for your selected contract or Auto choice.</small></span>
           <b className="at2-status-tag">{autoSelect ? "ON" : "OFF"}</b>
         </label>
@@ -407,8 +407,8 @@ export default function AutoTrader2Panel({
             aria-label="Enable AI 2 observed-data filtering"
             data-testid="at2-ai-enabled"
           />
-          <span className="at2-checkmark" aria-hidden="true" />
-          <span className="at2-check-copy"><strong>AI 2 <small>OBSERVED-DATA FILTER</small></strong><small>Uses stronger evidence, switches to the paired opposite after a loss, and pauses repeated losers.</small></span>
+          <span className="at2-flip-switch" aria-hidden="true" />
+          <span className="at2-check-copy"><strong>AI 2 <small>OBSERVED-DATA FILTER</small></strong><small>Requires 50 observations and a 55% historical-rate floor; pauses after repeated losses.</small></span>
           <b className={`at2-status-tag ${aiEnabled && aiLabel === "WORKING" ? "working" : ""}`} data-testid="at2-ai-status">{aiLabel}</b>
         </label>
         <p className="at2-truth-note" data-testid="at2-loss-runway">{lossRunwayMessage}</p>

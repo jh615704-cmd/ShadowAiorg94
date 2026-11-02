@@ -1,12 +1,17 @@
-import { useState } from "react";
-import { Activity, ChevronDown, Download, Play, RefreshCw, ShieldCheck, Square, TrendingUp } from "lucide-react";
-import type { MoneyBankKnockoutScannerResponse } from "@workspace/api-client-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronDown, Download, Play, RefreshCw, ShieldCheck, Square, TrendingUp } from "lucide-react";
 import {
   calculateRecoveryLadder,
-  estimateAccumulatorReturnRate,
   type MoneyBankLadderLevel,
   type MoneyBankStrategy,
 } from "../lib/money-bank-math";
+import {
+  summarizeMoneyBankExitTicks,
+  summarizeMoneyBankKnockoutStats,
+  summarizeMoneyBankOutcomeStats,
+  type MoneyBankStatsRate,
+} from "../lib/money-bank-knockout-stats";
+import { MoneyBankKnockoutHistory } from "./money-bank-knockout-history";
 import { MoneyBankMarketChart } from "./money-bank-market-chart";
 import DerivHistory, { type DerivHistoryRow } from "./deriv-history";
 import "./money-bank-panel.css";
@@ -18,8 +23,6 @@ export type MoneyBankStartConfig = {
   symbol: string;
   growthRate: number;
   takeProfitTicks: number;
-  autoKnockout: boolean;
-  knockoutsBeforeTrade: number;
   strategy: MoneyBankStrategy;
   budget: number;
   manualBase: number;
@@ -62,11 +65,6 @@ type MoneyBankPanelProps = {
   onGrowthRateChange: (value: number) => void;
   takeProfitTicks: number;
   onTakeProfitTicksChange: (value: number) => void;
-  autoKnockout: boolean;
-  knockoutsBeforeTrade: number;
-  autoKnockoutScan: MoneyBankKnockoutScannerResponse | null;
-  onAutoKnockoutChange: (enabled: boolean) => void;
-  onKnockoutsBeforeTradeChange: (value: number) => void;
   strategy: MoneyBankStrategy;
   onStrategyChange: (strategy: MoneyBankStrategy) => void;
   budget: number;
@@ -114,11 +112,6 @@ export function MoneyBankPanel({
   onGrowthRateChange,
   takeProfitTicks,
   onTakeProfitTicksChange,
-  autoKnockout,
-  knockoutsBeforeTrade,
-  autoKnockoutScan,
-  onAutoKnockoutChange,
-  onKnockoutsBeforeTradeChange,
   strategy,
   onStrategyChange,
   budget,
@@ -141,6 +134,12 @@ export function MoneyBankPanel({
   onStop,
 }: MoneyBankPanelProps) {
   const controlsDisabled = running || starting;
+  const [selectedStatsRate, setSelectedStatsRate] = useState<MoneyBankStatsRate>("all");
+  const [statsLiveTicks, setStatsLiveTicks] = useState(0);
+  const statsSymbolRef = useRef(symbol);
+  const statsSequenceRef = useRef(
+    Number.isSafeInteger(marketSignal?.tick_sequence) ? marketSignal?.tick_sequence ?? null : null,
+  );
   const ladder = calculateRecoveryLadder({
     strategy,
     budget,
@@ -148,8 +147,6 @@ export function MoneyBankPanel({
     growthRate,
     takeProfitTicks,
   });
-  const estimatedReturn = estimateAccumulatorReturnRate(growthRate, takeProfitTicks) * 100;
-  const recoveryStart = Math.max(5, Math.round(takeProfitTicks * 0.16));
   const selectedMarket = markets.find(([market]) => market === symbol)?.[1] ?? symbol;
   const totalCycleRisk = ladder.at(-1)?.cumulative ?? 0;
   const selectedStake = ladder[0]?.stake ?? 0;
@@ -157,14 +154,42 @@ export function MoneyBankPanel({
   const profitBasis = lastSettledProfit != null && lastSettledProfit > 0 ? lastSettledProfit : projectedProfit;
   const reinvestedProfit = roundCents(profitBasis * reinvestPercent / 100);
   const retainedProfit = roundCents(Math.max(0, profitBasis - reinvestedProfit));
-  const requiredKnockouts = autoKnockoutScan?.required_knockouts ?? knockoutsBeforeTrade;
-  const qualifiedKnockouts = autoKnockoutScan?.qualified_knockouts ?? 0;
-  const knockoutReady = autoKnockoutScan?.ready_to_trade === true;
   const [historyHidden, setHistoryHidden] = useState<Set<string>>(new Set());
   const [historyClearArmed, setHistoryClearArmed] = useState(false);
   const [historyFading, setHistoryFading] = useState(false);
   const visibleTrades = recentTrades.filter((trade) => !historyHidden.has(trade.contract_id));
   const visibleSessionRows = sessionRows.filter((trade) => !historyHidden.has(trade.contract_id));
+  const rateStats = summarizeMoneyBankKnockoutStats(recentTrades, symbol, GROWTH_RATES);
+  const statsSummary = summarizeMoneyBankOutcomeStats(recentTrades, symbol, selectedStatsRate, takeProfitTicks);
+  const exitTickStats = summarizeMoneyBankExitTicks(recentTrades, symbol, selectedStatsRate, takeProfitTicks);
+
+  useEffect(() => {
+    const sequence = marketSignal?.tick_sequence;
+    if (statsSymbolRef.current !== symbol) {
+      statsSymbolRef.current = symbol;
+      statsSequenceRef.current = Number.isSafeInteger(sequence) ? sequence! : null;
+      setStatsLiveTicks(0);
+      setSelectedStatsRate("all");
+      return;
+    }
+    if (!Number.isSafeInteger(sequence)) return;
+    const previous = statsSequenceRef.current;
+    statsSequenceRef.current = sequence!;
+    if (previous == null) return;
+    if (sequence! < previous) {
+      setStatsLiveTicks(0);
+      return;
+    }
+    if (sequence! > previous) {
+      setStatsLiveTicks((current) => current + sequence! - previous);
+    }
+  }, [marketSignal?.tick_sequence, symbol]);
+
+  const resetStatsTicks = () => {
+    const sequence = marketSignal?.tick_sequence;
+    statsSequenceRef.current = Number.isSafeInteger(sequence) ? sequence! : null;
+    setStatsLiveTicks(0);
+  };
 
   const submitStart = () => {
     if (starting || closing) return;
@@ -177,8 +202,6 @@ export function MoneyBankPanel({
       symbol,
       growthRate,
       takeProfitTicks,
-      autoKnockout,
-      knockoutsBeforeTrade,
       strategy,
       budget,
       manualBase,
@@ -287,56 +310,6 @@ export function MoneyBankPanel({
             <div className="money-bank-market-meta">
               <span><i /> {isConnected ? "Live market available" : "Connect Deriv to stream quotes"}</span>
             </div>
-            <div className="money-bank-toggle-list money-bank-market-toggle">
-              <label>
-                <span><b>Auto Knockout</b>{autoKnockout && <small>{knockoutReady ? "Sample complete" : "Waiting for knockouts"}</small>}</span>
-                <input type="checkbox" checked={autoKnockout} onChange={(event) => onAutoKnockoutChange(event.target.checked)} disabled={controlsDisabled} aria-label="Toggle Money Bank Auto Knockout" />
-                <i />
-              </label>
-            </div>
-            {autoKnockout && (
-              <div className="money-bank-knockout-scan" role="status" aria-live="polite">
-                <div className="money-bank-knockout-heading">
-                  <b>{knockoutReady ? "Knockout sample complete" : `Waiting for knockouts ${qualifiedKnockouts}/${requiredKnockouts}`}</b>
-                  <span>Scanner cycle: {qualifiedKnockouts}/{requiredKnockouts} knockouts counted</span>
-                </div>
-                <p>
-                  {autoKnockoutScan?.phase === "waiting_for_market"
-                    ? `Re-confirming the selected ${selectedMarket} market before scanning.`
-                    : autoKnockoutScan?.phase === "waiting_for_quote"
-                      ? `Waiting for a fresh live ${selectedMarket} quote.`
-                      : autoKnockoutScan?.phase === "waiting_for_knockout"
-                        ? qualifiedKnockouts > 0
-                          ? `${qualifiedKnockouts} of ${requiredKnockouts} knockouts counted. Watching for the next live move.`
-                          : `Watching live ${selectedMarket} ticks for scanner knockouts.`
-                      : autoKnockoutScan?.phase === "ready"
-                            ? "Knockout sample complete. Checking trade readiness."
-                            : running
-                              ? `Watching live ${selectedMarket} ticks for scanner knockouts.`
-                              : "Start Accumulator to begin checking live scanner knockouts."}
-                </p>
-                <div className="money-bank-knockout-settings">
-                  <label htmlFor="money-bank-knockouts-before-trade">Qualified knockouts required</label>
-                  <input
-                    id="money-bank-knockouts-before-trade"
-                    aria-label="Qualified knockouts required"
-                    type="number"
-                    min={1}
-                    max={20}
-                    step={1}
-                    value={knockoutsBeforeTrade}
-                    onChange={(event) => onKnockoutsBeforeTradeChange(Math.min(20, Math.max(1, Number(event.target.value) || 1)))}
-                    disabled={controlsDisabled}
-                  />
-                </div>
-                <small className="money-bank-knockout-footnote">
-                  A knockout counts as soon as price reaches the proposal barrier. The scanner re-arms for another move; Take Ticks applies only to the actual Accumulator trade.
-                </small>
-                <small className="money-bank-knockout-footnote">
-                  Manual losses do not count; a completed knockout sample does not guarantee a win.
-                </small>
-              </div>
-            )}
           </section>
 
           <section className="money-bank-card">
@@ -373,8 +346,8 @@ export function MoneyBankPanel({
             <input
               className="money-bank-range"
               type="range"
-               min="5"
-              max="50"
+              min="1"
+              max="30"
               step="1"
               value={takeProfitTicks}
               onChange={(event) => onTakeProfitTicksChange(Number(event.target.value))}
@@ -382,7 +355,7 @@ export function MoneyBankPanel({
               aria-label="Take Profit ticks"
             />
             <div className="money-bank-tick-quick" role="group" aria-label="Quick Accumulator tick targets">
-              {[5, 6].map((ticks) => (
+              {[1, 5].map((ticks) => (
                 <button
                   type="button"
                   key={ticks}
@@ -395,7 +368,7 @@ export function MoneyBankPanel({
                 </button>
               ))}
             </div>
-            <div className="money-bank-range-track-label">Take profit target updates the return and every recovery level.</div>
+              <div className="money-bank-range-track-label">Choose an Accumulator duration from 1 to 30 ticks.</div>
           </section>
 
           <section className="money-bank-card money-bank-strategy-card">
@@ -438,15 +411,6 @@ export function MoneyBankPanel({
         </div>
 
         <aside className="money-bank-side">
-          <section className="money-bank-return-card">
-            <div className="money-bank-return-top">
-              <span>THEORETICAL CONTRACT RETURN</span>
-              <span className="money-bank-return-icon"><TrendingUp size={16} /></span>
-            </div>
-            <strong>+{estimatedReturn.toFixed(1)}%</strong>
-            <p>Contract estimate · {recoveryStart}–{takeProfitTicks} ticks @ {growthRate}%</p>
-          </section>
-
           <section className="money-bank-card money-bank-ladder-card">
             <div className="money-bank-card-head">
               <div>
@@ -460,7 +424,7 @@ export function MoneyBankPanel({
                 <div className={`money-bank-level ${index === 0 ? "base" : ""}`} key={level.name}>
                   <span><b>{level.name}</b>{index === 0 ? "First stake" : `After ${index} loss${index === 1 ? "" : "es"}`}</span>
                   <strong>{money(level.stake, currency)}</strong>
-                  <small>theoretical +{money(level.profit, currency)}</small>
+                   <small>projected +{money(level.profit, currency)}</small>
                 </div>
               ))}
             </div>
@@ -488,6 +452,20 @@ export function MoneyBankPanel({
                 )}
             </div>
           </section>
+
+          <MoneyBankKnockoutHistory
+            symbol={symbol}
+            connected={isConnected}
+            liveTicks={statsLiveTicks}
+            onResetTicks={resetStatsTicks}
+            maxExitTicks={takeProfitTicks}
+            growthRate={growthRate}
+            selectedRate={selectedStatsRate}
+            onSelectedRateChange={setSelectedStatsRate}
+            rateStats={rateStats}
+            summary={statsSummary}
+            exitTicks={exitTickStats}
+          />
 
         </aside>
       </div>

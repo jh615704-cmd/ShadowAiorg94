@@ -394,7 +394,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
       body: JSON.stringify({
         access_feature: "money-bank",
         amount: 1,
-        duration: 4,
+        duration: 0,
         duration_unit: "t",
         contract_type: "ACCU",
         growth_rate: 0.04,
@@ -402,7 +402,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
       }),
     });
     assert.equal(invalidMoneyBankDurationResponse.status, 400);
-    assert.match(String((await readJson(invalidMoneyBankDurationResponse)).error), /5 to 50 ticks/);
+    assert.match(String((await readJson(invalidMoneyBankDurationResponse)).error), /Invalid trade request/);
 
     const invalidMoneyBankContractResponse = await fetch(`${baseUrl}/deriv/buy`, {
       method: "POST",
@@ -418,7 +418,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
       }),
     });
     assert.equal(invalidMoneyBankContractResponse.status, 400);
-    assert.match(String((await readJson(invalidMoneyBankContractResponse)).error), /Accumulator contracts from 5 to 50 ticks/);
+    assert.match(String((await readJson(invalidMoneyBankContractResponse)).error), /Accumulator contracts from 1 to 30 ticks/);
 
     const invalidMoneyBankUpperDurationResponse = await fetch(`${baseUrl}/deriv/buy`, {
       method: "POST",
@@ -426,7 +426,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
       body: JSON.stringify({
         access_feature: "money-bank",
         amount: 1,
-        duration: 51,
+        duration: 31,
         duration_unit: "t",
         contract_type: "ACCU",
         growth_rate: 0.04,
@@ -441,7 +441,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
       body: JSON.stringify({
         access_feature: "money-bank",
         amount: 1,
-        duration: 50,
+        duration: 1,
         duration_unit: "t",
         contract_type: "ACCU",
         growth_rate: 0.04,
@@ -449,6 +449,21 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
       }),
     });
     assert.equal(validMoneyBankBuyResponse.status, 202, JSON.stringify(await readJson(validMoneyBankBuyResponse)));
+
+    const validMoneyBankMaxDurationResponse = await fetch(`${baseUrl}/deriv/buy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        access_feature: "money-bank",
+        amount: 1,
+        duration: 30,
+        duration_unit: "t",
+        contract_type: "ACCU",
+        growth_rate: 0.04,
+        symbol: "1HZ90V",
+      }),
+    });
+    assert.equal(validMoneyBankMaxDurationResponse.status, 202, JSON.stringify(await readJson(validMoneyBankMaxDurationResponse)));
 
     const buyResponse = await fetch(`${baseUrl}/deriv/buy`, {
       method: "POST",
@@ -626,7 +641,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
     });
     assert.equal(outOfRangeAutoTraderResponse.status, 400);
     assert.match(String((await readJson(outOfRangeAutoTraderResponse)).error), /1 to 5 ticks/);
-    assert.deepEqual(observedPats, Array.from({ length: 30 }, () => enteredPat));
+    assert.deepEqual(observedPats, Array.from({ length: 31 }, () => enteredPat));
 
     const priorBuyInvocations = buyInvocations;
     const priorBulkBuyInvocations = bulkBuyInvocations;

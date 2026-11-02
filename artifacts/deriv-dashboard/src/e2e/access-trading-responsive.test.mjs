@@ -1391,8 +1391,17 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
       await page.screenshot({ path: path.join(screenshotsDir, `auto-trader-${viewport.name}.png`) });
     }
 
-    await page.getByTestId("button-filter-jump").click();
-    assert.equal(await page.locator(".at-market-grid .at-market-card").count(), 5);
+    await page.getByTestId("button-filter-all").click();
+    assert.equal(await page.locator(".at-market-grid .at-market-card").count(), 15);
+    assert.equal(await page.getByTestId("button-filter-all").getAttribute("aria-selected"), "true");
+    await page.getByTestId("button-rescan").click();
+    await page.getByTestId("button-rescan").waitFor({ state: "visible" });
+    await page.waitForFunction(() => {
+      const rescan = document.querySelector('[data-testid="button-rescan"]');
+      return rescan instanceof HTMLButtonElement && !rescan.disabled;
+    });
+    assert.equal(await page.getByTestId("button-filter-all").getAttribute("aria-selected"), "true");
+    assert.equal(await page.locator(".at-market-grid .at-market-card").count(), 15);
     await page.getByTestId("button-stop-scan").click();
     assert.equal(await page.getByTestId("button-go-live").isVisible(), true);
 
@@ -1402,7 +1411,7 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
     await page.locator(".xt-feature-card-edge2 .xt-switch").click();
     assert.equal(await moneyBankToggle.isChecked(), true);
     await page.getByRole("heading", { name: "Money Bank" }).waitFor();
-    assert.equal(await page.locator(".money-bank-knockout-card").count(), 0, "Money Bank stats should be hidden.");
+    assert.equal(await page.locator(".money-bank-knockout-card").count(), 1, "Money Bank stats should be visible.");
     assert.equal(await page.locator(".money-bank-chart-reset").count(), 0, "The chart refresh control should be hidden.");
     assert.equal(await page.getByText(/ticks since reset/).count(), 0, "The chart tick counter should be hidden.");
     assert.equal(await page.getByText(/BASE is the first stake|Auto Budget includes only levels affordable/).count(), 0, "The requested Money Bank helper copy should be hidden.");
@@ -1411,29 +1420,18 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
     await marketSelect.selectOption("1HZ15V");
     await marketSelect.selectOption("1HZ90V");
 
-    const autoKnockoutSwitch = page.getByRole("checkbox", { name: "Toggle Money Bank Auto Knockout" });
-    await autoKnockoutSwitch.waitFor();
-    await page.locator(".money-bank-market-toggle label").click();
-    assert.equal(await autoKnockoutSwitch.isChecked(), true);
-    const autoKnockoutStatus = page.locator(".money-bank-knockout-scan");
-    await autoKnockoutStatus.waitFor({ state: "visible" });
-    assert.match(await autoKnockoutStatus.innerText(), /Waiting for knockouts 0\/5/);
-    assert.match(await autoKnockoutStatus.innerText(), /Scanner cycle: 0\/5 knockouts counted/);
-    assert.match(await autoKnockoutStatus.innerText(), /Qualified knockouts required/);
-    assert.match(await autoKnockoutStatus.innerText(), /Take Ticks applies only to the actual Accumulator trade/);
-    assert.doesNotMatch(await autoKnockoutStatus.innerText(), /Current virtual contract|exit tick progress|survive beyond Take Ticks|waiting for the market move to clear/i);
-    assert.doesNotMatch(await autoKnockoutStatus.innerText(), /AI reviews|Shadows|estimated \d+-loss streak risk/i);
-    await page.getByRole("button", { name: "Start Accumulator" }).click();
-    await page.getByText(/Watching live .* ticks for scanner knockouts/).waitFor({ timeout: 5_000 });
-    assert.equal(await page.getByRole("progressbar", { name: "Money Bank exit tick progress" }).count(), 0);
-    await page.waitForTimeout(1_200);
-    assert.equal(await autoKnockoutStatus.isVisible(), true, "The scanner status must remain visible while Money Bank waits for knockouts.");
-    await page.getByRole("button", { name: "Stop Accumulator" }).click();
-    assert.equal(await autoKnockoutStatus.isVisible(), true, "Stopping Money Bank should leave the enabled scanner panel visible.");
+    assert.equal(await page.getByRole("checkbox", { name: "Toggle Money Bank Auto Knockout" }).count(), 0);
+    const takeProfitInput = page.locator('input[aria-label="Take Profit ticks"]');
+    assert.equal(await takeProfitInput.getAttribute("min"), "1");
+    assert.equal(await takeProfitInput.getAttribute("max"), "30");
+    assert.equal(await page.getByRole("button", { name: "Reset live tick count" }).count(), 1);
+    await takeProfitInput.focus();
+    await takeProfitInput.press("Home");
+    assert.equal(await takeProfitInput.inputValue(), "1");
     for (const viewport of viewports) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await assertNoHorizontalOverflow(page, viewport, "Money Bank Auto Knockout");
-      await assertWithinViewport(page, ".money-bank-market-toggle", viewport.width, "Auto Knockout switch");
+      await assertNoHorizontalOverflow(page, viewport, "Money Bank Stats");
+      await assertWithinViewport(page, ".money-bank-knockout-card", viewport.width, "Money Bank Stats");
     }
 
     assert.deepEqual(state.unhandledApis, [], `Unexpected API requests: ${JSON.stringify(state.unhandledApis)}`);
@@ -1448,7 +1446,6 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
     );
     await page.getByRole("button", { name: "Start Accumulator" }).click();
     await pendingBuyRequest;
-    assert.equal(await autoKnockoutSwitch.isChecked(), true, "The tested Money Bank trade must still use Auto Knockout.");
     const sellRequest = page.waitForRequest((request) =>
       request.url().includes("/api/deriv/sell") && request.method() === "POST",
     );
@@ -1463,8 +1460,8 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
       ["/api/deriv/buy", "/api/deriv/sell"],
       "Stop should wait for the in-flight buy acknowledgement, close its confirmed contract, and send no duplicate buy.",
     );
-    assert.equal(state.tradeRequests[0].body.auto_knockout, true, "The confirmed trade should retain Auto Knockout.");
-    assert.equal(state.tradeRequests[0].body.auto_knockout_target, 5, "The confirmed trade should use its completed knockout target.");
+    assert.equal(state.tradeRequests[0].body.duration, 1, "Money Bank should send the selected minimum duration.");
+    assert.equal(state.tradeRequests[0].body.auto_knockout, undefined, "Money Bank should not request Auto Knockout.");
     assert.equal(state.history[0].status, "closed", "The acknowledged Money Bank contract should be closed after Stop.");
 
     assert.deepEqual(pageErrors, [], "The app should render without browser exceptions.");

@@ -22,7 +22,7 @@ import {
 } from "@workspace/api-client-react";
 import type { DerivHistoryItem } from "@workspace/api-client-react";
 import { mergeDerivTradeUpdate } from "@/lib/deriv-trade-feed";
-import { collectAutoTraderTickChanges, type AutoTraderMarketTickSignal } from "@/lib/auto-trader-ticks";
+import { collectAutoTraderTickChanges, getAutoTraderOppositeDigitGroup, type AutoTraderMarketTickSignal } from "@/lib/auto-trader-ticks";
 import { AppShell } from "@/components/layout/app-shell";
 import { DerivAccountSwitcher } from "@/components/deriv-account-switcher";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -65,15 +65,16 @@ const filterOptions: Array<[FilterKey, string, number]> = [
 ];
 const storagePrefix = "deriv-auto-trader-contracts:";
 const guideCopy = [
-  ["What this page does", "Auto Trader displays live last-digit counts and lets you manually place Digit Differs contracts.", "Orders go to Deriv immediately when you press a 3× or 6× button."],
-  ["Choose an account", "The header shows the selected account, account type, connection status, and balance.", "Real-account orders use real funds. Check the account badge before ordering."],
-  ["Start the scanner", "Select Go Live to count actual Deriv ticks. Rescan starts a fresh count baseline; Stop pauses updates.", "A stopped scan does not cancel contracts already accepted by Deriv."],
-  ["Find a market", "Filter the 15 instruments by Volatility, Jump, or Volatility 1s. Each market has its own tick counter.", "Counts begin with new live ticks; the scanner does not fill in sample data."],
-  ["Read digit counts", "The number under each digit is how many times that final digit appeared during this scan.", "Zero means it has not appeared in the observed scan. It does not predict the next digit or guarantee a win."],
-  ["Place a Digit Differs order", "Choose a digit and press 3× or 6× to send that many separate contracts using the stake and duration in Settings.", "Buttons are available after the first live tick for that market; no larger sample threshold is required. Each contract can settle differently."],
-  ["Set stake and duration", "Stake is per contract. Tick 0 is the entry spot; a 1-tick contract settles on the next price update, and 2–5 tick contracts settle on their matching numbered update.", "A 6× order requests six times the per-contract stake. Take-profit and stop-loss fields are reference targets only; they do not automatically close trades."],
-  ["Review and clear history", "Today's trades and daily totals include only contracts placed from this page on the selected account.", "Clear removes them from this page's account-scoped view. Deriv's account history is not deleted."],
-  ["Check the outcome", "A Digit Differs contract is settled by Deriv at expiry; it wins only if the final digit differs from its barrier.", "A zero count, a short sample, or waiting for another tick cannot guarantee the result. If an order response is uncertain, check Deriv history before retrying."],
+  ["Auto Trader overview", "This workspace shows live last-digit counts for supported Deriv markets and lets you choose when to place Digit Differs contracts.", "Neither the scanner nor its highlighted advisory sends an order; each trade requires your confirmation."],
+  ["Confirm your account", "Check the account name, account type, connection, and balance in the header before using the controls.", "A real account uses real funds. Demo trading is recommended while you learn."],
+  ["Start and rescan", "Go Live counts new market ticks. Rescan resets the counts to a fresh live baseline while keeping your selected market filter and visible market list in place.", "Stop pauses the scan; it does not cancel contracts already accepted by Deriv."],
+  ["Filter the market list", "Use All Markets, Volatility, Jump, or Volatility 1s to narrow the instruments shown. Each market keeps its own count during a scan.", "Rescanning does not change the selected filter."],
+  ["Read the live digit advisory", "The advisory highlights digits in the opposite half from the latest observed digit on that market. You can still review and select any digit manually.", "It describes a recent observation only; it does not predict the next digit or guarantee a win."],
+  ["Read digit counts", "Each count is the number of times a final digit appeared since this scan began. Counts increase only when new Deriv ticks arrive.", "A low or zero count is not evidence that a digit is due to appear."],
+  ["Place a Digit Differs order", "Choose a barrier digit and press 3× or 6× to request that many separate contracts using the stake and duration in Settings.", "Orders are sent only after you press a trade button. Each contract can settle differently."],
+  ["Manage stake and duration", "Stake is per contract. Tick 0 is the entry spot; a 1-tick contract settles on the next price update, and 2–5 tick contracts settle on their matching numbered update.", "A 6× order requests six times the per-contract stake. Take-profit and stop-loss are reference targets, not automatic close instructions."],
+  ["Review history", "Today's trades and daily totals include only contracts placed from this page on the selected account.", "Clear removes them from this account-scoped view only. Deriv's account history is not deleted."],
+  ["Verify outcomes", "Deriv settles each Digit Differs contract at expiry. It wins only if the final digit differs from its barrier.", "If an order response is uncertain, check Deriv history before retrying it."],
 ] as const;
 
 type LocalContract = {
@@ -144,8 +145,10 @@ function AutoTraderContent() {
   const clearHistoryTimer = useRef<number | null>(null);
   const [frequencies, setFrequencies] = useState<Frequencies>({});
   const [marketTicks, setMarketTicks] = useState<TickMap>({});
+  const [latestDigits, setLatestDigits] = useState<Record<string, number>>({});
   const seenTicks = useRef<TickMap>({});
   const baselineTicks = useRef<TickMap>({});
+  const scanResetPendingRef = useRef(false);
   const account = status.data?.account ?? null;
   const accountId = account?.id ?? "";
   const currentSignals = status.data?.market_signals ?? [];
@@ -198,6 +201,7 @@ function AutoTraderContent() {
     }
     setFrequencies({});
     setMarketTicks({});
+    setLatestDigits({});
     seenTicks.current = {};
     baselineTicks.current = {};
   }, [accountId]);
@@ -214,7 +218,17 @@ function AutoTraderContent() {
       : "/api/deriv/events";
     const source = new EventSource(eventUrl, { withCredentials: true });
     const applySignals = (signals: AutoTraderMarketTickSignal[]) => {
-      if (!scanning || !Array.isArray(signals)) return;
+      if (!scanning || scanResetPendingRef.current || !Array.isArray(signals)) return;
+      setLatestDigits((current) => {
+        let next = current;
+        for (const signal of signals) {
+          const latest = signal.recent_digits.at(-1);
+          if (!Number.isInteger(latest) || latest! < 0 || latest! > 9 || current[signal.symbol] === latest) continue;
+          if (next === current) next = { ...current };
+          next[signal.symbol] = latest!;
+        }
+        return next;
+      });
       const { arrivals, progress } = collectAutoTraderTickChanges(
         signals,
         seenTicks.current,
@@ -303,8 +317,8 @@ function AutoTraderContent() {
     }
     if (scanRestartLockRef.current) return;
     scanRestartLockRef.current = true;
+    scanResetPendingRef.current = true;
     setScanResetPending(true);
-    setScanning(false);
     setMessage(null);
     try {
       const result = await status.refetch();
@@ -317,10 +331,19 @@ function AutoTraderContent() {
       }
       const startingSignals = result.data.market_signals ?? [];
       const baseline = Object.fromEntries(startingSignals.map((signal) => [signal.symbol, signal.tick_sequence]));
+      const startingDigits = Object.fromEntries(
+        startingSignals.flatMap((signal) => {
+          const digit = signal.recent_digits.at(-1);
+          return Number.isInteger(digit) && digit! >= 0 && digit! <= 9
+            ? [[signal.symbol, digit!] as const]
+            : [];
+        }),
+      );
       seenTicks.current = { ...baseline };
       baselineTicks.current = { ...baseline };
       setFrequencies(Object.fromEntries(markets.map((market) => [market.symbol, Array(10).fill(0)])));
       setMarketTicks(Object.fromEntries(markets.map((market) => [market.symbol, 0])));
+      setLatestDigits(startingDigits);
       setScanning(true);
       setMessage({ tone: "info", text: "Scanner live. Counts begin with the next real tick observed from Deriv." });
     } catch (error) {
@@ -330,6 +353,7 @@ function AutoTraderContent() {
       });
     } finally {
       scanRestartLockRef.current = false;
+      scanResetPendingRef.current = false;
       setScanResetPending(false);
     }
   };
@@ -522,6 +546,8 @@ function AutoTraderContent() {
     const digits = frequencies[market.symbol] ?? Array(10).fill(0);
     const ticks = marketTicks[market.symbol] ?? 0;
     const hasMarketTicksThisScan = digits.some((count) => count > 0);
+    const latestDigit = latestDigits[market.symbol] ?? null;
+    const oppositeGroup = getAutoTraderOppositeDigitGroup(latestDigit);
     return (
       <article
         key={market.symbol}
@@ -532,9 +558,14 @@ function AutoTraderContent() {
           <span className="at-market-name">{market.name.replace("Volatility ", "V").replace(" · 1s", " 1s")}</span>
           <span className="at-market-tick-count">{ticks} {ticks === 1 ? "tick" : "ticks"}</span>
         </div>
+        <div className="at-opposite-guidance" data-testid={`advisory-${market.symbol}`}>
+          {oppositeGroup
+            ? <><span>LIVE ADVISORY</span><strong>Latest {latestDigit} · review {oppositeGroup.label}</strong></>
+            : <span>Waiting for a live digit</span>}
+        </div>
         <div className="at-frequencies" aria-label={`Digit frequency and trade controls for ${market.name}`}>
           {digits.map((count, digit) => (
-            <div className="at-digit-column" key={digit}>
+            <div className={`at-digit-column${oppositeGroup && digit >= oppositeGroup.minDigit && digit <= oppositeGroup.maxDigit ? " recommended" : ""}`} key={digit}>
               <span className="at-digit-label">{digit}</span>
               <span className={`at-digit-count${count === 0 ? " zero" : ""}`} aria-label={`${count} observations`}>{count}</span>
               <div className="at-digit-trades">

@@ -22,8 +22,7 @@ export type AutoTrader2Candidate = {
 };
 
 export const AUTO_TRADER_2_MIN_SAMPLE = 50;
-export const AUTO_TRADER_2_MIN_EDGE = 8;
-export const AUTO_TRADER_2_MIN_CONFIDENCE_EDGE = 0;
+export const AUTO_TRADER_2_MIN_OBSERVED_RATE = 55;
 export const AUTO_TRADER_2_MAX_LOSSES_PER_TYPE = 2;
 
 export function getAutoTrader2OppositeType(
@@ -119,8 +118,7 @@ function candidatesForSignal(
   barrier: number,
   duration: number,
   minimumSample: number,
-  minimumEdge: number,
-  minimumConfidenceEdge: number,
+  minimumObservedRate: number,
 ): AutoTrader2Candidate[] {
   const digits = signal.recent_digits.filter((digit) => Number.isInteger(digit) && digit >= 0 && digit <= 9);
   const digitSampleCount = Math.min(signal.sample_count, digits.length);
@@ -148,7 +146,7 @@ function candidatesForSignal(
         const edgeOverBaseline = observedRate - 90;
         const confidenceLowerRate = wilsonLowerBoundPercent(wins, expiryDigitSampleCount);
         const confidenceEdgeOverBaseline = confidenceLowerRate - 90;
-        if (edgeOverBaseline >= minimumEdge && confidenceEdgeOverBaseline >= minimumConfidenceEdge) {
+        if (observedRate >= minimumObservedRate) {
           candidates.push({
             symbol: signal.symbol,
             contractType,
@@ -191,7 +189,7 @@ function candidatesForSignal(
     );
     const edgeOverBaseline = observedRate - baseline;
     const confidenceEdgeOverBaseline = confidenceLowerRate - baseline;
-    if (edgeOverBaseline >= minimumEdge && confidenceEdgeOverBaseline >= minimumConfidenceEdge) {
+    if (observedRate >= minimumObservedRate) {
       candidates.push({
         symbol: signal.symbol,
         contractType,
@@ -220,12 +218,8 @@ export function chooseAutoTrader2Candidate(input: {
   requiredBarrier?: number | null;
   prioritizeObservedRate?: boolean;
   minimumSample?: number;
-  minimumEdge?: number;
-  minimumConfidenceEdge?: number;
 }): AutoTrader2Candidate | null {
   const minimumSample = input.minimumSample ?? AUTO_TRADER_2_MIN_SAMPLE;
-  const minimumEdge = input.minimumEdge ?? AUTO_TRADER_2_MIN_EDGE;
-  const minimumConfidenceEdge = input.minimumConfidenceEdge ?? AUTO_TRADER_2_MIN_CONFIDENCE_EDGE;
   const duration = Number.isInteger(input.duration) && (input.duration ?? 0) > 0
     ? input.duration!
     : 1;
@@ -237,8 +231,7 @@ export function chooseAutoTrader2Candidate(input: {
     input.barrier,
     duration,
     minimumSample,
-    minimumEdge,
-    minimumConfidenceEdge,
+    AUTO_TRADER_2_MIN_OBSERVED_RATE,
   )).filter((candidate) =>
     !excludedContractTypes.has(candidate.contractType)
     && (!input.requiredContractType || candidate.contractType === input.requiredContractType)

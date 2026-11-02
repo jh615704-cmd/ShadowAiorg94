@@ -27,7 +27,7 @@ const quotesFromSteps = (count: number, steps: number[]) => {
   return quotes;
 };
 
-test("AI 2 rejects undersized samples and edges without confidence support", () => {
+test("AI 2 requires 50 observations and a 55% observed win rate", () => {
   const candidate = chooseAutoTrader2Candidate({
     signals: [signal("R_10", Array(50).fill(2))],
     family: "even-odd",
@@ -38,15 +38,26 @@ test("AI 2 rejects undersized samples and edges without confidence support", () 
   });
   assert.equal(candidate, null);
 
-  const rawEdgeOnly = chooseAutoTrader2Candidate({
-    signals: [signal("R_10", [0, ...Array(29).fill(2), ...Array(21).fill(1)])],
+  const belowFloor = chooseAutoTrader2Candidate({
+    signals: [signal("R_10", [0, ...Array(27).fill(2), ...Array(23).fill(1)])],
     family: "even-odd",
     preferredType: "DIGITEVEN",
     barrier: 0,
     selectedMarket: "R_10",
     autoSelect: false,
   });
-  assert.equal(rawEdgeOnly, null);
+  assert.equal(belowFloor, null);
+
+  const aboveFloor = chooseAutoTrader2Candidate({
+    signals: [signal("R_10", [0, ...Array(28).fill(2), ...Array(22).fill(1)])],
+    family: "even-odd",
+    preferredType: "DIGITEVEN",
+    barrier: 0,
+    selectedMarket: "R_10",
+    autoSelect: false,
+  });
+  assert.equal(aboveFloor?.contractType, "DIGITEVEN");
+  assert.equal(Number(aboveFloor?.observedRate.toFixed(1)), 56);
 });
 
 test("AI 2 ranks the strongest even/odd observation for the selected market", () => {
@@ -150,21 +161,31 @@ test("AI 2 pauses a direction after a third loss and retains the pause for the s
   assert.equal(afterWin.lossStreaks.PUT, 0);
 });
 
-test("AI 2 waits when the alternate direction is below its observed-rate threshold", () => {
+test("AI 2 applies the 55% floor to Rise/Fall expiry observations", () => {
   const candidate = chooseAutoTrader2Candidate({
     signals: [signal("R_10", Array(51).fill(2), {
-      rise_percentage: 70,
-      fall_percentage: 30,
-      recent_quotes: quotesFromSteps(50, [1]),
+      recent_quotes: quotesFromSteps(50, [...Array(28).fill(1), ...Array(22).fill(-1)]),
     })],
     family: "rise-fall",
     preferredType: "CALL",
     barrier: 0,
     selectedMarket: "R_10",
     autoSelect: false,
-    excludedContractTypes: ["CALL"],
   });
-  assert.equal(candidate, null);
+  assert.equal(candidate?.contractType, "CALL");
+  assert.equal(Number(candidate?.observedRate.toFixed(1)), 56);
+
+  const belowFloor = chooseAutoTrader2Candidate({
+    signals: [signal("R_10", Array(51).fill(2), {
+      recent_quotes: quotesFromSteps(50, [...Array(27).fill(1), ...Array(23).fill(-1)]),
+    })],
+    family: "rise-fall",
+    preferredType: "CALL",
+    barrier: 0,
+    selectedMarket: "R_10",
+    autoSelect: false,
+  });
+  assert.equal(belowFloor, null);
 });
 
 test("Auto-select chooses the strongest eligible alternate direction and market", () => {
@@ -295,8 +316,6 @@ test("AI 2 Auto prioritizes the highest observed rate among qualifying Rise/Fall
     duration: 1,
     prioritizeObservedRate: true,
     minimumSample: 20,
-    minimumEdge: 0,
-    minimumConfidenceEdge: 0,
   });
   assert.equal(candidate?.symbol, "R_25");
   assert.equal(candidate?.contractType, "CALL");
@@ -317,8 +336,6 @@ test("AI 2 Auto prioritizes the highest observed rate among qualifying Even/Odd 
     duration: 1,
     prioritizeObservedRate: true,
     minimumSample: 20,
-    minimumEdge: 0,
-    minimumConfidenceEdge: 0,
   });
   assert.equal(candidate?.symbol, "R_25");
   assert.equal(candidate?.contractType, "DIGITEVEN");
@@ -343,8 +360,6 @@ test("AI 2 Auto uses exact observed rates when candidates display the same round
     duration: 1,
     prioritizeObservedRate: true,
     minimumSample: 5,
-    minimumEdge: -50,
-    minimumConfidenceEdge: -100,
   });
   assert.equal(candidate?.symbol, "R_10");
   assert.equal(candidate?.contractType, "CALL");

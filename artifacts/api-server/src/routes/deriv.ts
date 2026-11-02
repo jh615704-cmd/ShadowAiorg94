@@ -491,11 +491,11 @@ router.post("/deriv/buy", requireTradeAccessFeature, async (req, res) => {
     && (
       parsed.data.contract_type !== "ACCU"
       || !Number.isInteger(parsed.data.duration)
-      || parsed.data.duration < 5
-      || parsed.data.duration > 50
+      || parsed.data.duration < 1
+      || parsed.data.duration > 30
     )
   ) {
-    return res.status(400).json({ error: "Money Bank supports Accumulator contracts from 5 to 50 ticks." });
+    return res.status(400).json({ error: "Money Bank supports Accumulator contracts from 1 to 30 ticks." });
   }
 
   try {
