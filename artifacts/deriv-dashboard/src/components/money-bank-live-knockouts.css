@@ -211,6 +211,117 @@
   line-height: 1.4;
 }
 
+.mbkl-evaluation {
+  margin-top: 13px;
+  padding: 11px 12px;
+  border: 1px solid rgba(86, 162, 196, .24);
+  border-radius: 10px;
+  background: rgba(3, 17, 27, .38);
+}
+
+.mbkl-evaluation-heading,
+.mbkl-evaluation-heading > div,
+.mbkl-evaluation-actions {
+  display: flex;
+  align-items: center;
+}
+
+.mbkl-evaluation-heading {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mbkl-evaluation-heading > div:first-child {
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mbkl-evaluation-heading h4 {
+  margin: 0;
+  color: #e7f6ff;
+  font-size: .72rem;
+  font-weight: 800;
+}
+
+.mbkl-evaluation-heading span {
+  color: #70d8b8;
+  font-size: .51rem;
+  font-weight: 800;
+  letter-spacing: .09em;
+}
+
+.mbkl-evaluation-actions { gap: 6px; }
+
+.mbkl-evaluation-actions button {
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid rgba(102, 197, 228, .35);
+  border-radius: 7px;
+  background: rgba(16, 91, 126, .38);
+  color: #d7f3ff;
+  cursor: pointer;
+  font: inherit;
+  font-size: .61rem;
+  font-weight: 750;
+}
+
+.mbkl-evaluation-actions button:disabled {
+  border-color: rgba(111, 139, 153, .2);
+  background: rgba(21, 37, 47, .55);
+  color: #748d9a;
+  cursor: not-allowed;
+}
+
+.mbkl-evaluation-actions button:focus-visible {
+  outline: 2px solid #8be1ff;
+  outline-offset: 2px;
+}
+
+.mbkl-evaluation-actions .mbkl-clear-evaluation {
+  border-color: rgba(146, 171, 190, .2);
+  background: transparent;
+  color: #9db4c0;
+}
+
+.mbkl-evaluation-description,
+.mbkl-evaluation-guard {
+  margin: 7px 0 0;
+  color: #9bb6c4;
+  font-size: .61rem;
+  line-height: 1.4;
+}
+
+.mbkl-evaluation-guard { color: #f0c67b; }
+
+.mbkl-evaluation-results {
+  display: grid;
+  gap: 5px;
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mbkl-evaluation-results li {
+  display: grid;
+  grid-template-columns: 42px minmax(115px, .75fr) minmax(0, 1.5fr);
+  gap: 8px;
+  align-items: baseline;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(17, 55, 72, .34);
+  color: #aec3cd;
+  font-size: .6rem;
+  line-height: 1.35;
+}
+
+.mbkl-evaluation-results strong {
+  color: #d9f3ff;
+  font-variant-numeric: tabular-nums;
+}
+
+.mbkl-evaluation-results .is-scored { color: #73e0b9; }
+
 @keyframes mbkl-hit-arrive {
   0% { color: #fff; background-color: rgba(43, 178, 219, .68); }
   100% { color: #baf3ff; background-color: rgba(9, 67, 102, .3); }
@@ -222,6 +333,10 @@
   .mbkl-rate-label { width: 100%; }
   .mbkl-barrier { font-size: .47rem; }
   .mbkl-price-stream li { min-height: 49px; font-size: .9rem; }
+  .mbkl-evaluation { padding: 9px; }
+  .mbkl-evaluation-heading { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .mbkl-evaluation-results li { grid-template-columns: 34px minmax(0, 1fr); gap: 4px 7px; }
+  .mbkl-evaluation-results li span:last-child { grid-column: 2; }
 }
 
 @media (max-width: 360px) {

@@ -45,6 +45,8 @@ export type MoneyBankTrade = DerivHistoryRow & {
 
 type MoneyBankPanelProps = {
   isConnected: boolean;
+  isDemoAccount: boolean;
+  demoAccountId?: string | null;
   tradeSlotBlocked: boolean;
   running: boolean;
   starting?: boolean;
@@ -92,6 +94,8 @@ const money = (value: number, currency = "USD") =>
 
 export function MoneyBankPanel({
   isConnected,
+  isDemoAccount,
+  demoAccountId,
   tradeSlotBlocked,
   running,
   starting = false,
@@ -245,6 +249,8 @@ export function MoneyBankPanel({
           symbol={symbol}
           marketLabel={selectedMarket}
           connected={isConnected}
+          isDemoAccount={isDemoAccount}
+          demoAccountId={demoAccountId}
           growthRate={growthRate}
           quote={marketSignal?.quote ?? quote}
           recentQuotes={marketSignal?.recent_quotes}

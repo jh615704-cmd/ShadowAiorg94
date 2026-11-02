@@ -5,21 +5,22 @@ import {
   type MoneyBankKnockoutBarriersResponse,
 } from "@workspace/api-client-react";
 import {
+  advanceMoneyBankKnockoutEvaluation,
   appendMoneyBankKnockoutForecast,
   estimateMoneyBankKnockoutTicks,
+  MONEY_BANK_KNOCKOUT_GROWTH_RATES,
   MONEY_BANK_LIVE_KNOCKOUT_LIMIT,
   MONEY_BANK_KNOCKOUT_FORECAST_MIN_QUOTES,
+  startMoneyBankKnockoutEvaluation,
+  type MoneyBankKnockoutEvaluation,
   type MoneyBankKnockoutForecast,
 } from "../lib/money-bank-live-knockouts";
 import "./money-bank-live-knockouts.css";
 
-const RATE_OPTIONS = [1, 2, 3, 4, 5] as const;
-type GrowthRate = typeof RATE_OPTIONS[number];
-type BarrierResponseRate = MoneyBankKnockoutBarriersResponse["rates"][number];
-type RateRecord<T> = Record<GrowthRate, T>;
-
 type Props = {
   connected: boolean;
+  isDemoAccount: boolean;
+  demoAccountId?: string | null;
   symbol: string;
   marketLabel: string;
   growthRate: number;
@@ -28,16 +29,59 @@ type Props = {
   tickSequence?: number;
 };
 
-function emptyRateRecord<T>(createValue: () => T): RateRecord<T> {
-  return Object.fromEntries(RATE_OPTIONS.map((rate) => [rate, createValue()])) as RateRecord<T>;
-}
+const RATE_OPTIONS = MONEY_BANK_KNOCKOUT_GROWTH_RATES;
+type GrowthRate = typeof RATE_OPTIONS[number];
+type BarrierResponseRate = MoneyBankKnockoutBarriersResponse["rates"][number];
+type RateRecord<T> = Record<GrowthRate, T>;
 
 function isGrowthRate(value: number): value is GrowthRate {
   return RATE_OPTIONS.some((rate) => rate === value);
 }
 
+function emptyRateRecord<T>(createValue: () => T): RateRecord<T> {
+  return Object.fromEntries(RATE_OPTIONS.map((rate) => [rate, createValue()])) as RateRecord<T>;
+}
+
+function evaluationReasonLabel(reason: MoneyBankKnockoutEvaluation["reason"]): string {
+  switch (reason) {
+    case "sparse-quotes":
+      return `Not scored: fewer than ${MONEY_BANK_KNOCKOUT_FORECAST_MIN_QUOTES} usable quotes.`;
+    case "flat-movement":
+      return "Not scored: recent quote movement is flat.";
+    case "barrier-already-crossed":
+      return "Not scored: the barrier was already crossed at test start.";
+    case "tick-gap":
+      return "Not scored: ticks were missing, so the hit count is unknown.";
+    case "feed-restarted":
+      return "Not scored: the demo feed restarted before the barrier hit.";
+    case "invalid-model-input":
+      return "Not scored: a valid barrier and forecast were unavailable.";
+    default:
+      return "Not scored.";
+  }
+}
+
+function evaluationResultLabel(evaluation: MoneyBankKnockoutEvaluation): string {
+  if (evaluation.status === "hit" && evaluation.actualTicks != null && evaluation.estimateTicks != null) {
+    const difference = evaluation.actualTicks - evaluation.estimateTicks;
+    const comparison = difference === 0
+      ? "matched"
+      : difference < 0
+        ? `${Math.abs(difference)} ${Math.abs(difference) === 1 ? "tick" : "ticks"} early`
+        : `${difference} ${difference === 1 ? "tick" : "ticks"} late`;
+    return `Barrier hit in ${evaluation.actualTicks} ticks · ${comparison}`;
+  }
+  if (evaluation.status === "watching") {
+    const observedTicks = evaluation.lastSequence - evaluation.startSequence;
+    return `${observedTicks} ${observedTicks === 1 ? "tick" : "ticks"} observed · waiting for a barrier hit`;
+  }
+  return evaluationReasonLabel(evaluation.reason);
+}
+
 export function MoneyBankLiveKnockouts({
   connected,
+  isDemoAccount,
+  demoAccountId,
   symbol,
   marketLabel,
   growthRate,
@@ -57,6 +101,8 @@ export function MoneyBankLiveKnockouts({
   const [forecastHistory, setForecastHistory] = useState<RateRecord<MoneyBankKnockoutForecast[]>>(
     () => emptyRateRecord(() => []),
   );
+  const [knockoutEvaluation, setKnockoutEvaluation] = useState<MoneyBankKnockoutEvaluation[]>([]);
+  const [knockoutEvaluationScope, setKnockoutEvaluationScope] = useState<string | null>(null);
   const [barrierLoading, setBarrierLoading] = useState(false);
   const [barrierRefreshFailed, setBarrierRefreshFailed] = useState(false);
 
@@ -68,6 +114,15 @@ export function MoneyBankLiveKnockouts({
   const sequenceCursorsRef = useRef<RateRecord<number | null>>(emptyRateRecord(() => null));
   const forecastHistoryRef = useRef(forecastHistory);
   const lastSymbolRef = useRef(symbol);
+  const knockoutEvaluationRef = useRef(knockoutEvaluation);
+  const evaluationScope = isDemoAccount ? `${symbol}:${demoAccountId ?? "demo-account"}` : null;
+  const lastEvaluationScopeRef = useRef(evaluationScope);
+
+  const resetKnockoutEvaluation = () => {
+    knockoutEvaluationRef.current = [];
+    setKnockoutEvaluation([]);
+    setKnockoutEvaluationScope(null);
+  };
 
   useEffect(() => {
     if (lastSymbolRef.current === symbol) return;
@@ -83,8 +138,15 @@ export function MoneyBankLiveKnockouts({
     setBarriers(noBarriers);
     setBarrierMessages(noMessages);
     setBarrierRefreshFailed(false);
+    resetKnockoutEvaluation();
     setSelectedRate(isGrowthRate(growthRate) ? growthRate : 1);
   }, [growthRate, symbol]);
+
+  useEffect(() => {
+    if (lastEvaluationScopeRef.current === evaluationScope) return;
+    lastEvaluationScopeRef.current = evaluationScope;
+    resetKnockoutEvaluation();
+  }, [evaluationScope]);
 
   useEffect(() => {
     if (!connected) {
@@ -179,6 +241,27 @@ export function MoneyBankLiveKnockouts({
 
     const nextForecastHistory = { ...forecastHistoryRef.current };
     let forecastsChanged = false;
+    let nextEvaluation = knockoutEvaluationRef.current;
+    let evaluationChanged = false;
+    const evaluationSequencesHandled = new Set<number>();
+    const observeEvaluationTick = (tickSequence: number, tickQuote: number) => {
+      if (evaluationSequencesHandled.has(tickSequence)) return;
+      evaluationSequencesHandled.add(tickSequence);
+      const updated = advanceMoneyBankKnockoutEvaluation(nextEvaluation, {
+        quote: tickQuote,
+        sequence: tickSequence,
+      });
+      if (updated.some((evaluation, index) => evaluation !== nextEvaluation[index])) {
+        nextEvaluation = updated;
+        evaluationChanged = true;
+      }
+    };
+    if (RATE_OPTIONS.some((rate) => {
+      const cursor = sequenceCursorsRef.current[rate];
+      return cursor != null && sequence < cursor;
+    })) {
+      observeEvaluationTick(sequence, latestQuote!);
+    }
     const nextQuotes = recentQuotes;
 
     for (const rate of RATE_OPTIONS) {
@@ -192,6 +275,7 @@ export function MoneyBankLiveKnockouts({
 
       const unseenCount = sequence - cursor;
       if (unseenCount > nextQuotes.length) {
+        observeEvaluationTick(sequence, latestQuote!);
         referencesRef.current[rate] = latestQuote!;
         sequenceCursorsRef.current[rate] = sequence;
         continue;
@@ -199,6 +283,7 @@ export function MoneyBankLiveKnockouts({
 
       const unseenQuotes = nextQuotes.slice(-unseenCount);
       if (unseenQuotes.length !== unseenCount) {
+        observeEvaluationTick(sequence, latestQuote!);
         referencesRef.current[rate] = latestQuote!;
         sequenceCursorsRef.current[rate] = sequence;
         continue;
@@ -210,6 +295,7 @@ export function MoneyBankLiveKnockouts({
       let quoteWindow = nextQuotes.slice(0, -unseenCount);
       const barrier = barriersRef.current[rate];
       for (const tick of newTicks) {
+        observeEvaluationTick(tick.sequence, tick.quote);
         quoteWindow = [...quoteWindow, tick.quote].slice(-41);
         let referenceQuote = referencesRef.current[rate];
         if (referenceQuote == null) {
@@ -239,11 +325,62 @@ export function MoneyBankLiveKnockouts({
       forecastHistoryRef.current = nextForecastHistory;
       setForecastHistory(nextForecastHistory);
     }
+    if (evaluationChanged) {
+      knockoutEvaluationRef.current = nextEvaluation;
+      setKnockoutEvaluation(nextEvaluation);
+    }
   }, [barriers, connected, quote, recentQuotes, tickSequence]);
+
+  const latestQuote = Number.isFinite(quote) && quote! > 0 ? quote! : recentQuotes.at(-1);
+  const canStartEvaluation = isDemoAccount
+    && connected
+    && Number.isSafeInteger(tickSequence)
+    && tickSequence! >= 0
+    && Number.isFinite(latestQuote)
+    && latestQuote! > 0
+    && RATE_OPTIONS.some((rate) => barriers[rate] != null);
+
+  const startDemoEvaluation = () => {
+    if (!canStartEvaluation) return;
+    const sequence = tickSequence!;
+    const quoteAtStart = latestQuote!;
+    for (const rate of RATE_OPTIONS) {
+      if (sequenceCursorsRef.current[rate] == null) {
+        sequenceCursorsRef.current[rate] = sequence;
+      }
+      if (referencesRef.current[rate] == null) {
+        referencesRef.current[rate] = quoteAtStart;
+      }
+    }
+    const quotes = recentQuotes
+      .filter((item) => Number.isFinite(item) && item > 0)
+      .slice(-41);
+    if (quotes.at(-1) !== quoteAtStart) {
+      quotes.push(quoteAtStart);
+      quotes.splice(0, Math.max(0, quotes.length - 41));
+    }
+    const nextEvaluation = startMoneyBankKnockoutEvaluation({
+      quotes,
+      sequence,
+      rates: RATE_OPTIONS.map((rate) => ({
+        growthRate: rate,
+        barrier: barriers[rate],
+        referenceQuote: referencesRef.current[rate] ?? quoteAtStart,
+      })),
+    });
+    knockoutEvaluationRef.current = nextEvaluation;
+    setKnockoutEvaluation(nextEvaluation);
+    setKnockoutEvaluationScope(evaluationScope);
+  };
+
+  const clearDemoEvaluation = () => resetKnockoutEvaluation();
 
   const selectedBarrier = barriers[selectedRate];
   const selectedMessage = barrierMessages[selectedRate];
   const selectedForecasts = forecastHistory[selectedRate];
+  const visibleEvaluation = isDemoAccount && knockoutEvaluationScope === evaluationScope
+    ? knockoutEvaluation
+    : [];
 
   return (
     <section className="money-bank-live-knockouts" aria-label="Live Knockouts">
@@ -316,6 +453,64 @@ export function MoneyBankLiveKnockouts({
       <p className="mbkl-note">
         Read-only estimate · Not a guaranteed timing or contract outcome; monitor live ticks.
       </p>
+      <section className="mbkl-evaluation" aria-label="Demo forecast evaluation" data-testid="panel-knockout-evaluation">
+        <div className="mbkl-evaluation-heading">
+          <div>
+            <h4>Forecast check</h4>
+            <span>DEMO-ONLY TEST · NO ORDERS</span>
+          </div>
+          <div className="mbkl-evaluation-actions">
+            <button
+              type="button"
+              onClick={startDemoEvaluation}
+              disabled={!canStartEvaluation}
+              data-testid="button-start-knockout-evaluation"
+            >
+              {visibleEvaluation.length ? "Restart test" : "Start test"}
+            </button>
+            {visibleEvaluation.length > 0 && (
+              <button
+                type="button"
+                className="mbkl-clear-evaluation"
+                onClick={clearDemoEvaluation}
+                data-testid="button-clear-knockout-evaluation"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+        <p className="mbkl-evaluation-description">
+          Captures one estimate per growth rate, then counts later demo ticks until that rate’s barrier is crossed. Sparse or flat starts are not scored; gather more quotes or movement, then restart.
+        </p>
+        {!isDemoAccount ? (
+          <p className="mbkl-evaluation-guard" data-testid="status-knockout-evaluation-guard">
+            Select a demo account to evaluate. Real-account ticks are never recorded in this test.
+          </p>
+        ) : !connected ? (
+          <p className="mbkl-evaluation-guard" data-testid="status-knockout-evaluation-guard">
+            Connect a demo account to start a read-only evaluation.
+          </p>
+        ) : null}
+        {visibleEvaluation.length > 0 && (
+          <ol className="mbkl-evaluation-results" aria-label="Demo forecast results by growth rate">
+            {visibleEvaluation.map((evaluation) => (
+              <li
+                key={evaluation.growthRate}
+                data-testid={`row-knockout-evaluation-${evaluation.growthRate}`}
+              >
+                <strong>{evaluation.growthRate}%</strong>
+                <span>
+                  Estimate: {evaluation.estimateTicks == null ? "not available" : `${evaluation.estimateTicks} ticks`}
+                </span>
+                <span className={evaluation.status === "hit" ? "is-scored" : ""}>
+                  {evaluationResultLabel(evaluation)}
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
     </section>
   );
 }

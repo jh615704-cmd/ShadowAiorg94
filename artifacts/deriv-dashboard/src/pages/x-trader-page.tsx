@@ -5517,6 +5517,8 @@ export default function XTraderPage() {
        {edge2Enabled && canUseMoneyBank && (
         <MoneyBankPanel
           isConnected={isConnected}
+          isDemoAccount={currentAccountType === "demo"}
+          demoAccountId={currentAccountType === "demo" ? currentAccountId : null}
           tradeSlotBlocked={tradeSlotBlocked}
           running={moneyBankRunning}
           starting={moneyBankStarting}
