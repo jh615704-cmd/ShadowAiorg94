@@ -22,7 +22,7 @@
 - [Deriv Accumulator contract](deriv-accumulator-contract.md) — Accumulator trades use ACCU with decimal growth_rate in both proposal and buy payloads.
 - [Money Bank JDY gate](money-bank-jdy-gate.md) — evaluate the user-selected setup at entry; alternatives are advisory and must never be auto-applied.
 - [Money Bank Auto Knockout compatibility](money-bank-auto-knockout.md) — keep the switch and scanner out of Money Bank while preserving legacy API compatibility.
-- [Money Bank historical exit stats](money-bank-knockout-stats.md) — color only settled same-market/rate/duration outcomes; require 20+ runs for red/green.
+- [Money Bank live stats](money-bank-knockout-stats.md) — hide empty ticks and scope active progress and outcomes to the selected market and growth rate.
 - [Money Bank chart session](money-bank-chart-session.md) — switching volatility or pressing refresh resets only the top chart’s local tick count and line to zero.
 - [Money Bank budget cap](money-bank-budget-cap.md) — Auto Budget caps cumulative planned stakes, with fewer steps when the minimum stake leaves insufficient budget.
 - [Automation stop and retry policy](automation-stop-retry-policy.md) — keep runs active during recoverable waits; never replay uncertain orders or bypass account protections.

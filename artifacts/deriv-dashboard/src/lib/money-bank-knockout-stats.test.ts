@@ -46,6 +46,34 @@ test("Money Bank live tick count is separate from settled outcome statistics", (
   assert.equal(stats.knockouts, 0);
 });
 
+test("selected-rate summary includes active live progress without mixing rates", () => {
+  const rows = [
+    { symbol: "1HZ90V", growth_rate: 0.01, tick_passed: 6, status: "open" },
+    { symbol: "1HZ90V", growth_rate: 0.01, tick_passed: 4, status: "lost" },
+    { symbol: "1HZ90V", growth_rate: 0.02, tick_passed: 2, status: "active" },
+  ];
+
+  const onePercent = summarizeMoneyBankOutcomeStats(rows, "1HZ90V", 1, 20);
+  const twoPercent = summarizeMoneyBankOutcomeStats(rows, "1HZ90V", 2, 20);
+
+  assert.deepEqual(onePercent, {
+    trackedRuns: 2,
+    knockouts: 1,
+    completed: 0,
+    longestTicks: 6,
+    averageTicks: 5,
+    shortestTicks: 4,
+  });
+  assert.deepEqual(twoPercent, {
+    trackedRuns: 1,
+    knockouts: 0,
+    completed: 0,
+    longestTicks: 2,
+    averageTicks: 2,
+    shortestTicks: 2,
+  });
+});
+
 test("top five knockout ticks are ranked by frequency with stable tie ordering", () => {
   const rows = [
     ...Array.from({ length: 3 }, () => ({

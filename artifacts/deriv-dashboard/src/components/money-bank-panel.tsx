@@ -161,6 +161,13 @@ export function MoneyBankPanel({
   const visibleTrades = recentTrades.filter((trade) => !historyHidden.has(trade.contract_id));
   const visibleSessionRows = sessionRows.filter((trade) => !historyHidden.has(trade.contract_id));
   const rateStats = summarizeMoneyBankKnockoutStats(recentTrades, symbol, GROWTH_RATES);
+  const selectedRateStats = selectedStatsRate === "all"
+    ? rateStats
+    : rateStats.filter((item) => item.growthRate === selectedStatsRate);
+  const liveContractTicks = selectedRateStats.reduce<number | null>((current, item) => {
+    if (item.liveTicks == null || item.liveTicks < 1) return current;
+    return current == null ? item.liveTicks : Math.max(current, item.liveTicks);
+  }, null);
   const statsSummary = summarizeMoneyBankOutcomeStats(
     recentTrades,
     symbol,
@@ -470,10 +477,9 @@ export function MoneyBankPanel({
             liveTicks={statsLiveTicks}
             onResetTicks={resetStatsTicks}
             maxExitTicks={MONEY_BANK_STATS_TICK_LIMIT}
-            growthRate={growthRate}
+            liveContractTicks={liveContractTicks}
             selectedRate={selectedStatsRate}
             onSelectedRateChange={setSelectedStatsRate}
-            rateStats={rateStats}
             summary={statsSummary}
             exitTicks={exitTickStats}
           />

@@ -13,16 +13,11 @@ type Props = {
   liveTicks: number;
   onResetTicks: () => void;
   maxExitTicks: number;
-  growthRate: number;
+  liveContractTicks: number | null;
   selectedRate: number | "all";
   onSelectedRateChange: (value: number | "all") => void;
-  rateStats: Array<{
-    growthRate: number;
-    trackedRuns: number;
-    knockouts: number;
-    completed: number;
-  }>;
   summary: {
+    trackedRuns: number;
     knockouts: number;
     completed: number;
     longestTicks: number | null;
@@ -44,21 +39,43 @@ export function MoneyBankKnockoutHistory({
   liveTicks,
   onResetTicks,
   maxExitTicks,
-  growthRate,
+  liveContractTicks,
   selectedRate,
   onSelectedRateChange,
-  rateStats,
   summary,
   exitTicks,
 }: Props) {
-  const visibleTicks = exitTicks.filter(
-    (item) => Number.isInteger(item.ticks) && item.ticks >= 1 && item.ticks <= maxExitTicks,
-  );
-  const validLiveTick =
-    Number.isInteger(liveTicks) && liveTicks >= 1 && liveTicks <= maxExitTicks;
-  const hasLiveTile = validLiveTick && !visibleTicks.some((item) => item.ticks === liveTicks);
-  const trackedRuns = rateStats.reduce((total, item) => total + item.trackedRuns, 0);
-  const knockouts = rateStats.reduce((total, item) => total + item.knockouts, 0);
+  const hasLiveMarket = connected && liveTicks > 0;
+  const visibleTicks = hasLiveMarket
+    ? exitTicks.filter(
+      (item) => item.trackedRuns > 0
+        && Number.isInteger(item.ticks)
+        && item.ticks >= 1
+        && item.ticks <= maxExitTicks,
+    )
+    : [];
+  const marketTickPosition = liveTicks > 0
+    ? ((liveTicks - 1) % maxExitTicks) + 1
+    : null;
+  const currentLiveTick = selectedRate === "all"
+    ? liveContractTicks != null && liveContractTicks >= 1 && liveContractTicks <= maxExitTicks
+      ? liveContractTicks
+      : marketTickPosition
+    : liveContractTicks != null && liveContractTicks >= 1 && liveContractTicks <= maxExitTicks
+      ? liveContractTicks
+      : null;
+  const validLiveTick = hasLiveMarket
+    && Number.isInteger(currentLiveTick)
+    && currentLiveTick! >= 1
+    && currentLiveTick! <= maxExitTicks;
+  const displayedTicks = visibleTicks.map((item) => (
+    validLiveTick && item.ticks === currentLiveTick
+      ? { ...item, band: "live" as const }
+      : item
+  ));
+  const hasLiveTile = validLiveTick && !displayedTicks.some((item) => item.ticks === currentLiveTick);
+  const rateLabel = selectedRate === "all" ? "All rates" : `${selectedRate}%`;
+  const hasSummary = hasLiveMarket && summary.trackedRuns > 0;
 
   return (
     <section className="money-bank-knockout-card mbkh-panel" aria-label="Money Bank stats">
@@ -69,8 +86,8 @@ export function MoneyBankKnockoutHistory({
             <i aria-hidden="true" />
             {connected ? "LIVE" : "OFFLINE"}
           </span>
-          <span className="mbkh-live-count" aria-label={`Current tick count ${liveTicks}`}>
-            {liveTicks.toLocaleString()} <small>ticks</small>
+          <span className="mbkh-live-count" aria-label={`Live market tick count ${liveTicks}`}>
+            {liveTicks.toLocaleString()} <small>market ticks</small>
           </span>
           <button
             className="mbkh-reset"
@@ -89,20 +106,24 @@ export function MoneyBankKnockoutHistory({
 
       <div className="mbkh-history-head">
         <div className="mbkh-history-title">
-          <h3>Knockout History</h3>
+          <h3>Knockout Stats</h3>
           <i aria-hidden="true" />
           <span>
-            {knockouts.toLocaleString()} knockouts · {trackedRuns.toLocaleString()} runs tracked
+            {!hasLiveMarket
+              ? "Waiting for live market data"
+              : summary.trackedRuns
+                ? `${summary.knockouts.toLocaleString()} knockouts · ${summary.trackedRuns.toLocaleString()} runs`
+                : `No ${rateLabel} runs for this market yet`}
           </span>
         </div>
         <div className="mbkh-market-meta">
           <span>{symbol}</span>
-          <span>Rate {growthRate}%</span>
+          <span>{rateLabel}</span>
         </div>
       </div>
 
       <div className="mbkh-filter-row">
-        <div className="mbkh-rate-selector" role="group" aria-label="Filter historical outcomes by growth rate">
+        <div className="mbkh-rate-selector" role="group" aria-label="Filter live Money Bank stats by growth rate">
           <button
             type="button"
             className={selectedRate === "all" ? "is-selected" : ""}
@@ -125,51 +146,59 @@ export function MoneyBankKnockoutHistory({
         </div>
       </div>
 
-      <div className="mbkh-summary" aria-label="Historical summary metrics">
-        <div><small>KNOCKOUTS</small><strong>{summary.knockouts.toLocaleString()}</strong></div>
-        <div><small>COMPLETED</small><strong>{summary.completed.toLocaleString()}</strong></div>
-        <div><small>LONGEST</small><strong>{formatTicks(summary.longestTicks)}</strong></div>
-        <div><small>AVERAGE</small><strong>{summary.averageTicks == null ? "—" : summary.averageTicks.toFixed(1)}</strong></div>
-        <div><small>SHORTEST</small><strong>{formatTicks(summary.shortestTicks)}</strong></div>
+      <div className="mbkh-summary" aria-label={`${rateLabel} live market summary metrics`}>
+        <div><small>KNOCKOUTS</small><strong>{hasSummary ? summary.knockouts.toLocaleString() : "—"}</strong></div>
+        <div><small>COMPLETED</small><strong>{hasSummary ? summary.completed.toLocaleString() : "—"}</strong></div>
+        <div><small>LONGEST</small><strong>{hasSummary ? formatTicks(summary.longestTicks) : "—"}</strong></div>
+        <div><small>AVERAGE</small><strong>{hasSummary && summary.averageTicks != null ? summary.averageTicks.toFixed(1) : "—"}</strong></div>
+        <div><small>SHORTEST</small><strong>{hasSummary ? formatTicks(summary.shortestTicks) : "—"}</strong></div>
       </div>
 
-      <div className="mbkh-tick-grid" role="list" aria-label="Historical observed exit ticks">
-        {visibleTicks.map((item) => (
+      <div className="mbkh-tick-grid" role="list" aria-label="Live market and selected-rate outcome ticks">
+        {displayedTicks.map((item) => (
           <div
             className={`mbkh-tick mbkh-band-${item.band}`}
             key={item.ticks}
             role="listitem"
-            title={`${item.ticks} ticks · ${item.trackedRuns} tracked runs · ${item.knockouts} knockouts · ${item.completed} completed · ${item.winRate == null ? "win rate unavailable" : `${item.winRate}% observed win rate`}`}
-            aria-label={`${item.ticks} ticks, ${item.band === "no-data" ? "no data" : `${item.band} historical band`}, ${item.trackedRuns} tracked runs`}
+            title={item.band === "live"
+              ? `${item.ticks} ticks · live market`
+              : `${item.ticks} ticks · ${item.trackedRuns} tracked runs · ${item.knockouts} knockouts · ${item.completed} completed · ${item.winRate == null ? "win rate unavailable" : `${item.winRate}% observed win rate`}`}
+            aria-label={item.band === "live"
+              ? `${item.ticks} ticks, current live market tick`
+              : `${item.ticks} ticks, ${item.band === "no-data" ? "no data" : `${item.band} historical band`}, ${item.trackedRuns} tracked runs`}
           >
             {item.ticks}
           </div>
         ))}
-        {hasLiveTile && (
+        {hasLiveTile && currentLiveTick != null && (
           <div
             className="mbkh-tick mbkh-band-live"
             role="listitem"
-            aria-label={`Current live run at ${liveTicks} ticks`}
+            aria-label={`${liveContractTicks == null ? "Current live market" : `${rateLabel} live contract`} at tick ${currentLiveTick}`}
           >
-            {liveTicks}
+            {currentLiveTick}
           </div>
         )}
-        {!visibleTicks.length && !hasLiveTile && (
+        {!hasLiveMarket && (
           <div className="mbkh-empty" role="listitem">
-            No historical exit ticks recorded for this selection.
+            {connected ? "Waiting for the first live market tick…" : "Connect Deriv to receive live market ticks."}
+          </div>
+        )}
+        {hasLiveMarket && !displayedTicks.length && !hasLiveTile && (
+          <div className="mbkh-empty" role="listitem">
+            No tick outcomes recorded for {rateLabel}.
           </div>
         )}
       </div>
 
       <footer className="mbkh-footer">
-        <div className="mbkh-legend" aria-label="Historical outcome band legend">
+        <div className="mbkh-legend" aria-label="Live and historical outcome legend">
           <span><i className="mbkh-band-red" />Red ≤30%</span>
           <span><i className="mbkh-band-yellow" />Yellow · limited / 31–89%</span>
           <span><i className="mbkh-band-green" />Green ≥90%</span>
-          <span><i className="mbkh-band-no-data" />No data</span>
-          <span><i className="mbkh-band-live" />Live</span>
+          <span><i className="mbkh-band-live" />Live tick</span>
         </div>
-        <p>Red and green require 20+ settled contracts at that exact duration. Colors describe past outcomes only, not future results.</p>
+        <p>Growth-rate filters isolate Money Bank runs for this market. Settled outcome colors use matching history; the live marker follows the current market tick.</p>
       </footer>
     </section>
   );

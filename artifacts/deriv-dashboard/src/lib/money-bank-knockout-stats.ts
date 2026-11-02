@@ -72,6 +72,19 @@ function settledOutcome(row: MoneyBankKnockoutRow) {
   return { status, ticks: ticks as number };
 }
 
+function liveOutcome(row: MoneyBankKnockoutRow) {
+  const status = row.status.trim().toLowerCase();
+  const ticks = row.tick_passed;
+  if (
+    !["open", "pending", "active"].includes(status)
+    || !Number.isSafeInteger(ticks)
+    || (ticks ?? 0) < 1
+  ) {
+    return null;
+  }
+  return { status: "active", ticks: ticks as number };
+}
+
 function getTopKnockoutTicks(knockoutTicks: number[]) {
   if (!knockoutTicks.length) return [];
   const counts = new Map<number, number>();
@@ -145,14 +158,15 @@ export function summarizeMoneyBankOutcomeStats(
   const boundedMax = Math.min(30, Math.max(1, Math.floor(maxTicks)));
   const outcomes = rows.flatMap((row) => {
     if (row.symbol !== symbol || !matchesRate(row, rate)) return [];
-    const outcome = settledOutcome(row);
+    const outcome = settledOutcome(row) ?? liveOutcome(row);
     return outcome && outcome.ticks <= boundedMax ? [outcome] : [];
   });
+  const settledOutcomes = outcomes.filter((outcome) => outcome.status !== "active");
   const durations = outcomes.map((outcome) => outcome.ticks);
   return {
     trackedRuns: outcomes.length,
-    knockouts: outcomes.filter((outcome) => outcome.status === "lost").length,
-    completed: outcomes.filter((outcome) => outcome.status === "won").length,
+    knockouts: settledOutcomes.filter((outcome) => outcome.status === "lost").length,
+    completed: settledOutcomes.filter((outcome) => outcome.status === "won").length,
     longestTicks: durations.length ? Math.max(...durations) : null,
     averageTicks: durations.length
       ? Number((durations.reduce((total, ticks) => total + ticks, 0) / durations.length).toFixed(1))

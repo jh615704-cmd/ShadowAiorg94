@@ -1,12 +1,16 @@
 ---
-name: Money Bank historical exit stats
-description: Data and labeling rules for the Money Bank tick and knockout statistics panel.
+name: Money Bank live statistics
+description: Rules for live Money Bank tick display and rate-scoped knockout summaries.
 ---
 
-Money Bank exit-tick bands must come from settled Money Bank outcomes scoped to the selected market, growth rate, and exact contract duration. Red (observed rate at or below 30%) and green (observed rate at or above 90%) require at least 20 settled contracts in that exact bucket. Use yellow for smaller samples or intermediate rates, and no-data when no matching outcomes exist. The live tick counter is separate from trade history and its reset must not reset the market chart or trading state.
+Keep the Money Bank Stats range fixed at ticks 1–20, independent of take-profit. Do not render empty tick placeholders before a live market tick arrives. The All Rates view may show the current market tick; a 1–5% view must show only that rate's active contract tick or matching outcome data.
 
-Keep the Stats tick range fixed at 1–20, independent of the selected trade take-profit. The 1–5% filters must scope both summary metrics and colored exit ticks to the selected growth rate; “All Rates” combines them.
+Scope summaries and outcome bands to the selected market and growth rate; All Rates combines rates. Include matching open, pending, or active contracts with a positive `tick_passed` in tracked runs and duration metrics so those values advance with the live contract. Count knockouts and completed runs only from settled Deriv outcomes; do not infer contract results from quote direction.
 
-**Why:** The user wants a consistent 1–20 stats view and accurate rate-specific knockout results; changing trade settings should not silently narrow the stats.
+Color historical exit ticks only from settled outcomes at the same market, growth rate, and exact duration. Red (observed rate at or below 30%) and green (at or above 90%) require at least 20 settled contracts in that exact bucket; use yellow for smaller samples or intermediate rates. The live marker is distinct from outcome colors, and historical colors are not predictions.
 
-**How to apply:** Keep metrics account-scoped and show sample counts. Describe colors as historical observations only; never claim they predict or guarantee future wins.
+The live tick counter and its reset are separate from trade history; resetting it must not reset the market chart or trading state.
+
+**Why:** The user wants stats to begin with live market ticks and each percentage selection to isolate its own Money Bank data. Contract outcomes must remain grounded in Deriv results rather than inferred from raw price movement.
+
+**How to apply:** Keep market, rate, duration, account, active-contract progress, and settled-outcome filters consistent across the Stats panel and its tests. Use an explicit empty state instead of zero-filled placeholder cells when a selected rate has no samples.
