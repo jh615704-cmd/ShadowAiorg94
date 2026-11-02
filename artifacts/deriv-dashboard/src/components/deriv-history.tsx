@@ -33,6 +33,10 @@ export default function DerivHistory({ title, strategy, className, rows, session
   const uniqueRows = useMemo(() => uniqueDerivHistoryRows(rows), [rows]);
   const uniqueSessionRows = useMemo(() => uniqueDerivHistoryRows(sessionRows), [sessionRows]);
   const summary = summarizeDerivHistorySession(uniqueSessionRows, sessionPnl, sessionTradeCount);
+  const currentRunIds = useMemo(
+    () => new Set(uniqueSessionRows.map((row) => `${row.account_id}:${row.contract_id}`)),
+    [uniqueSessionRows],
+  );
   const historyWins = uniqueRows.filter((row) => !isDerivHistoryOpen(row.status) && row.profit > 0).length;
   const historyLosses = uniqueRows.filter((row) => !isDerivHistoryOpen(row.status) && row.profit < 0).length;
   const visible = useMemo(() => uniqueRows.filter((row) => {
@@ -72,7 +76,7 @@ export default function DerivHistory({ title, strategy, className, rows, session
   return (
     <section className={`deriv-history ${className ?? ""} ${fading ? "is-fading" : ""}`} aria-label={`${title} Deriv history`}>
       <header className="deriv-history-head">
-        <div className="deriv-history-title"><Activity size={18} /><span><b>This session</b><small>{title} · {strategy}</small></span></div>
+        <div className="deriv-history-title"><Activity size={18} /><span><b>Feature history</b><small>{title} · {strategy}</small></span></div>
         <div className="deriv-history-actions">
           {actions}
           {onClear && <button type="button" onClick={onClear} disabled={(!uniqueRows.length && summary.trades === 0 && summary.pnl === 0) || fading} aria-label={clearArmed ? `Tap again to clear ${title} session` : `Clear ${title} session`}><Trash2 size={15} />{clearArmed ? "Tap again" : "Clear session"}</button>}
@@ -86,7 +90,7 @@ export default function DerivHistory({ title, strategy, className, rows, session
         {summaryMode === "full" && <div className="deriv-history-stat-grid">
           <div><small>TRADES</small><b>{summary.trades}</b></div>
           <div><small>WON / LOST</small><b><span className="positive">{summary.wins}</span><i> / </i><span className="negative">{summary.losses}</span></b></div>
-          <div><small>WIN RATE</small><b>{summary.winRate.toFixed(1)}%</b><small className="deriv-history-win-sample">n={summary.wins + summary.losses} settled</small></div>
+          <div><small>WIN RATE</small><b>{summary.winRate.toFixed(1)}%</b>{summary.wins + summary.losses > 0 && <small className="deriv-history-win-sample">n={summary.wins + summary.losses} settled</small>}</div>
           <div><small>STAKED</small><b>{money(summary.staked, currency)}</b></div>
         </div>}
       </div>}
@@ -96,8 +100,9 @@ export default function DerivHistory({ title, strategy, className, rows, session
       <div ref={listRef} className="deriv-history-list" style={listHeight == null ? undefined : { maxHeight: `${listHeight}px` }}>
         {!visible.length ? <div className="deriv-history-empty">{uniqueRows.length ? "No contracts match this filter." : "Deriv contracts will appear here when this feature trades."}</div> : visible.map((row) => {
           const view = createDerivHistoryRowView(row, currency);
-          return <article className="deriv-history-row" key={`${row.account_id}-${row.contract_id}`} data-testid={`deriv-history-${row.account_id}-${row.contract_id}`}>
-            <div className="deriv-history-rowtop"><span className="deriv-history-feature">{strategy}</span><div className="deriv-history-result"><small>{view.resultLabel}</small><b className={`deriv-history-profit ${view.profitClass}`}>{view.profit}</b></div></div>
+          const isCurrentRun = currentRunIds.has(`${row.account_id}:${row.contract_id}`);
+          return <article className={`deriv-history-row ${isCurrentRun ? "deriv-history-row-current" : "deriv-history-row-earlier"}`} key={`${row.account_id}-${row.contract_id}`} data-testid={`deriv-history-${row.account_id}-${row.contract_id}`}>
+            <div className="deriv-history-rowtop"><span className="deriv-history-feature">{strategy}<small className="deriv-history-run-label">{isCurrentRun ? "CURRENT RUN" : "EARLIER RUN"}</small></span><div className="deriv-history-result"><small>{view.resultLabel}</small><b className={`deriv-history-profit ${view.profitClass}`}>{view.profit}</b></div></div>
             <div className="deriv-history-market"><b>{view.symbol}</b><span className="deriv-history-account">{view.account}</span><small className="deriv-history-account-id">{view.accountId}</small><span className={`deriv-history-outcome ${view.outcomeClass}`}>{view.outcome}</span><strong>{view.contract}{view.barrier ? ` · ${view.barrier}` : ""}</strong></div>
             <div className="deriv-history-details">
               {view.details.map((detail) => <span key={detail.label}><small>{detail.label}</small><b>{detail.value}</b></span>)}

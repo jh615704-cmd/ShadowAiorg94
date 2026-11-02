@@ -883,6 +883,49 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /deriv/jackpot/buy:
+    post:
+      operationId: buyJackpotPairs
+      tags: [deriv]
+      summary: Buy a batch of Jackpot dual pairs
+      description: Requests fresh proposals for both legs of every pair before any buy is sent. A pair has one Rise/Fall contract and one Even/Odd contract. Partial acknowledgements are returned explicitly and must be checked in Deriv history before retrying.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JackpotPairBuyInput"
+      responses:
+        "202":
+          description: Jackpot pair buy requests accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DerivBulkBuyResponse"
+        "400":
+          description: Invalid Jackpot buy request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Live trading is disabled or the selected account is not allowed to buy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Another Deriv contract is still open
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Deriv could not return fresh proposals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /deriv/clock-work/quotes:
     post:
       operationId: quoteClockWorkContracts
@@ -1201,7 +1244,7 @@ components:
             $ref: "#/components/schemas/AccessFeature"
     AccessFeature:
       type: string
-      enum: [edge, digit-flip, trade-x, bulk-trader, clock-work, cash-grab, money-bank, jdy-ai-3, auto-trader, auto-trader-2, settings, history, admin]
+      enum: [edge, digit-flip, trade-x, bulk-trader, jackpot, clock-work, cash-grab, money-bank, jdy-ai-3, auto-trader, auto-trader-2, settings, history, admin]
     AccessSession:
       type: object
       required: [key_id, key_prefix, label, kind, is_admin, status, max_devices, features, online, last_seen_at]
@@ -1258,7 +1301,7 @@ components:
       properties:
         feature:
           type: string
-          enum: [edge, digit-flip, trade-x, bulk-trader, clock-work, cash-grab, money-bank, jdy-ai-3, auto-trader, auto-trader-2, settings, history]
+          enum: [edge, digit-flip, trade-x, bulk-trader, jackpot, clock-work, cash-grab, money-bank, jdy-ai-3, auto-trader, auto-trader-2, settings, history]
         mode:
           type: string
           enum: [available, restricted, coming_soon, under_construction]
@@ -1765,6 +1808,36 @@ components:
           type: integer
           minimum: 1
           maximum: 6
+    JackpotPairBuyInput:
+      type: object
+      required: [access_feature, amount, duration, duration_unit, symbol, rise_fall_type, parity_type, pair_count]
+      properties:
+        access_feature:
+          type: string
+          enum: [jackpot]
+        amount:
+          type: number
+          minimum: 0.35
+        duration:
+          type: integer
+          minimum: 1
+          maximum: 5
+        duration_unit:
+          type: string
+          enum: [t]
+        symbol:
+          type: string
+          minLength: 1
+        rise_fall_type:
+          type: string
+          enum: [CALL, PUT]
+        parity_type:
+          type: string
+          enum: [DIGITEVEN, DIGITODD]
+        pair_count:
+          type: integer
+          minimum: 1
+          maximum: 9
     ClockWorkContractOrder:
       type: object
       required: [key, amount, duration, duration_unit, contract_type, barrier, symbol]

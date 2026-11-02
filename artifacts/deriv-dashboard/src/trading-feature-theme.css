@@ -182,6 +182,8 @@
 .deriv-history-list { max-height: min(700px, 72vh); padding: 12px; gap: 9px; }
 .deriv-history-row { padding: 12px 14px; }
 .deriv-history-feature { color: #d2e3f2; font-size: 9px; }
+.deriv-history-run-label { color: #a9c5df; font-size: 8px; }
+.deriv-history-row-current .deriv-history-run-label { color: #8cf3c8; }
 .deriv-history-profit { font-size: 15px !important; }
 .deriv-history-market > b { color: #d9ebfb; font-size: 10px; }
 .deriv-history-account { color: #a7c2dc; font-size: 9px; }

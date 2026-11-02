@@ -20,6 +20,7 @@ const supportedSymbols = new Set([
   "R_10", "R_25", "R_50", "R_75", "R_100",
   "1HZ10V", "1HZ15V", "1HZ25V", "1HZ30V", "1HZ50V", "1HZ75V", "1HZ90V", "1HZ100V",
   "JD10", "JD25", "JD50", "JD75", "JD100",
+  "RDBEAR", "RDBEAR10", "RDBEAR25", "RDBULL", "RDBULL10", "RDBULL25",
 ]);
 type DigitContractType = "DIGITEVEN" | "DIGITODD" | "DIGITOVER" | "DIGITUNDER" | "DIGITDIFF" | "DIGITMATCH" | "CALL" | "PUT" | "HIGHER" | "LOWER" | "ACCU";
 
@@ -2491,6 +2492,109 @@ export async function bulkBuyContracts(input: {
     message: ok
       ? `${buys.length} ${getState().account.type} buy requests sent together. Each contract settles independently.`
       : `${buys.length} of ${proposals.length} contracts were confirmed. The remaining order status is uncertain or rejected; check Deriv history before resubmitting.`,
+    proposals,
+    buys,
+    failed,
+  };
+}
+
+export async function buyJackpotPairContracts(
+  input: {
+    amount: number;
+    duration: number;
+    duration_unit: "t";
+    symbol: string;
+    rise_fall_type: "CALL" | "PUT";
+    parity_type: "DIGITEVEN" | "DIGITODD";
+    pair_count: number;
+  },
+  assertAuthorized?: TradeAuthorizationCheck,
+) {
+  await assertAuthorized?.();
+  const amount = roundCents(input.amount);
+  if (!Number.isFinite(amount) || amount < 0.35) {
+    throw new Error("Jackpot stake must be at least 0.35 per contract.");
+  }
+  if (!Number.isInteger(input.pair_count) || input.pair_count < 1 || input.pair_count > 9) {
+    throw new Error("Jackpot supports 1 to 9 complete dual pairs.");
+  }
+  if (!Number.isInteger(input.duration) || input.duration < 1 || input.duration > 5) {
+    throw new Error("Jackpot supports whole-number durations from 1 to 5 ticks.");
+  }
+  const orders = Array.from({ length: input.pair_count }, () => [
+    input.rise_fall_type,
+    input.parity_type,
+  ] as const).flat();
+  const proposalInputs = orders.map((contract_type) => ({
+    amount,
+    duration: input.duration,
+    duration_unit: input.duration_unit,
+    contract_type,
+    symbol: input.symbol,
+  } satisfies ProposalInput));
+  proposalInputs.forEach(validateProposalInput);
+
+  const account = getState().account;
+  if (!account) throw new Error("Select an account before buying Jackpot pairs.");
+  if (account.type === "real" && !liveTradingEnabled) {
+    throw new Error("Live trading is disabled on this server.");
+  }
+  const totalStake = roundCents(amount * proposalInputs.length);
+  if (totalStake > account.balance) {
+    throw new Error("The total Jackpot pair stake exceeds the current account balance.");
+  }
+
+  const proposals = await runBeforeBuy(async () => {
+    const [protection] = await Promise.all([
+      getTradingProtectionSettings(),
+      refreshOpenContracts(),
+    ]);
+    for (const proposalInput of proposalInputs) {
+      assertTradingProtection(protection, getStatus(), proposalInput);
+    }
+    assertNoActiveContract(true);
+
+    // Quote every leg before any buy is sent. A missing or unsupported
+    // contract quote therefore leaves the whole batch unplaced.
+    const freshProposals = await Promise.all(
+      proposalInputs.map((proposalInput) => requestFreshProposal(proposalInput)),
+    );
+    await assertAuthorized?.();
+    if (!await connect()) throw new Error("Deriv WebSocket is not ready");
+    return freshProposals;
+  });
+
+  const quotedOrders = proposals.map((proposal, index) => ({
+    proposal,
+    input: proposalInputs[index],
+  }));
+  const buyResults = await sendBatchBuysTogether(
+    quotedOrders,
+    ({ proposal, input: proposalInput }) => sendDirectBuyWithRateLimitRetry(
+      proposal,
+      proposalInput,
+      async () => assertAuthorized?.(),
+    ),
+  );
+  const buys = buyResults.flatMap((result) =>
+    result.status === "fulfilled" ? [result.value] : [],
+  );
+  const failed = buyResults.flatMap((result, index) => {
+    if (result.status !== "rejected") return [];
+    return [{
+      index,
+      ...classifyBuyFailure(result.reason),
+      error: safeBuyFailureMessage(result.reason),
+    }];
+  });
+  const ok = failed.length === 0;
+
+  return {
+    ok,
+    count: buys.length,
+    message: ok
+      ? `${input.pair_count} Jackpot dual pairs sent together. Each contract settles independently.`
+      : `${buys.length} of ${proposalInputs.length} Jackpot contracts were confirmed. Check Deriv history before resubmitting any uncertain order.`,
     proposals,
     buys,
     failed,

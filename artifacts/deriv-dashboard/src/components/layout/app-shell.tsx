@@ -46,12 +46,13 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
   const canUseDigitFlip = isAdmin || features.includes("digit-flip");
   const canUseTradeX = isAdmin || features.includes("trade-x");
   const canUseBulkTrader = isAdmin || features.includes("bulk-trader");
+  const canUseJackpot = isAdmin || features.includes("jackpot");
   const canUseClockWork = isAdmin || features.includes("clock-work");
   const canUseCashGrab = isAdmin || features.includes("cash-grab");
   const canUseMoneyBank = isAdmin || features.includes("money-bank");
   const canUseAutoTrader = isAdmin || features.includes("auto-trader");
   const canUseAutoTrader2 = isAdmin || features.includes("auto-trader-2");
-  const canUseTrading = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseClockWork || canUseCashGrab || canUseMoneyBank || canUseAutoTrader || canUseAutoTrader2;
+  const canUseTrading = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseJackpot || canUseClockWork || canUseCashGrab || canUseMoneyBank || canUseAutoTrader || canUseAutoTrader2;
   const canUseSettings = isAdmin || features.includes("settings");
   const routeFeature = location === "/auto-trader"
     ? "auto-trader"

@@ -61,6 +61,7 @@ import type {
   EdgeDurationAvailabilityInput,
   ErrorResponse,
   HealthStatus,
+  JackpotPairBuyInput,
   MoneyBankKnockoutScannerInput,
   MoneyBankKnockoutScannerResponse,
   StreamDerivTradeUpdatesParams,
@@ -2526,6 +2527,78 @@ export const useBulkBuyDerivContracts = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getBulkBuyDerivContractsMutationOptions(options));
+    }
+
+export const getBuyJackpotPairsUrl = () => {
+
+
+
+
+  return `/api/deriv/jackpot/buy`
+}
+
+/**
+ * Requests fresh proposals for both legs of every pair before any buy is sent. A pair has one Rise/Fall contract and one Even/Odd contract. Partial acknowledgements are returned explicitly and must be checked in Deriv history before retrying.
+ * @summary Buy a batch of Jackpot dual pairs
+ */
+export const buyJackpotPairs = async (jackpotPairBuyInput: JackpotPairBuyInput, options?: Parameters<typeof customFetch>[1]): Promise<DerivBulkBuyResponse> => {
+
+  return customFetch<DerivBulkBuyResponse>(getBuyJackpotPairsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(jackpotPairBuyInput)
+  }
+);}
+
+
+
+
+
+export const getBuyJackpotPairsMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof buyJackpotPairs>>, TError,{data: BodyType<JackpotPairBuyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof buyJackpotPairs>>, TError,{data: BodyType<JackpotPairBuyInput>}, TContext> => {
+
+const mutationKey = ['buyJackpotPairs'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof buyJackpotPairs>>, {data: BodyType<JackpotPairBuyInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  buyJackpotPairs(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BuyJackpotPairsMutationResult = NonNullable<Awaited<ReturnType<typeof buyJackpotPairs>>>
+    export type BuyJackpotPairsMutationBody = BodyType<JackpotPairBuyInput>
+    export type BuyJackpotPairsMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Buy a batch of Jackpot dual pairs
+ */
+export const useBuyJackpotPairs = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof buyJackpotPairs>>, TError,{data: BodyType<JackpotPairBuyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof buyJackpotPairs>>,
+        TError,
+        {data: BodyType<JackpotPairBuyInput>},
+        TContext
+      > => {
+      return useMutation(getBuyJackpotPairsMutationOptions(options));
     }
 
 export const getQuoteClockWorkContractsUrl = () => {

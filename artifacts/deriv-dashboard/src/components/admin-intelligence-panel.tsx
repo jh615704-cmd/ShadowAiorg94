@@ -7,6 +7,7 @@ const featureLabels: Record<string, string> = {
   "digit-flip": "Digit Flip",
   "trade-x": "Trade X",
   "bulk-trader": "Bulk Trader",
+  jackpot: "Jackpot",
   "clock-work": "Clock Work",
   "cash-grab": "Cash Grab",
   "money-bank": "Money Bank",

@@ -532,6 +532,7 @@ describe("Deriv market subscriptions", { concurrency: false }, () => {
       "R_10", "R_25", "R_50", "R_75", "R_100",
       "1HZ10V", "1HZ15V", "1HZ25V", "1HZ30V", "1HZ50V", "1HZ75V", "1HZ90V", "1HZ100V",
       "JD10", "JD25", "JD50", "JD75", "JD100",
+      "RDBEAR", "RDBEAR10", "RDBEAR25", "RDBULL", "RDBULL10", "RDBULL25",
     ].sort();
 
     await withSelectedAccount("dashboard-market-subscription-user", async () => {
@@ -1415,6 +1416,34 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
         /still reports an open contract|previous contract is still settling/,
       );
     });
+  });
+
+  test("Jackpot quotes every contract before dispatching a complete dual-pair batch", async () => {
+    const result = await withSelectedAccount("jackpot-pair-buy-user", async () => {
+      const socket = latestSocket();
+      const firstActionIndex = socket.sent.length;
+      const response = await deriv.buyJackpotPairContracts({
+        amount: 0.5,
+        duration: 2,
+        duration_unit: "t",
+        symbol: "R_75",
+        rise_fall_type: "CALL",
+        parity_type: "DIGITEVEN",
+        pair_count: 2,
+      });
+      const actions = socket.sent.slice(firstActionIndex).filter((message) => message.proposal || message.buy);
+      const proposalIndexes = actions.flatMap((message, index) => message.proposal ? [index] : []);
+      const firstBuyIndex = actions.findIndex((message) => message.buy);
+
+      assert.equal(actions.filter((message) => message.proposal).length, 4);
+      assert.equal(actions.filter((message) => message.buy).length, 4);
+      assert.ok(firstBuyIndex > Math.max(...proposalIndexes), "all four fresh proposals precede every buy request");
+      return response;
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.count, 4);
+    assert.equal(result.message, "2 Jackpot dual pairs sent together. Each contract settles independently.");
   });
 
   test("Bulk Trader preserves exact 1–5 tick durations for every digit type and order size", async () => {

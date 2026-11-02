@@ -1,0 +1,248 @@
+.jackpot-panel {
+  --jp-bg: #091a30;
+  --jp-panel: #102743;
+  --jp-inset: #0a1d34;
+  --jp-line: rgba(105, 161, 222, .2);
+  --jp-line-strong: rgba(83, 164, 246, .48);
+  --jp-text: #edf5ff;
+  --jp-muted: #99aec7;
+  --jp-subtle: #7790ad;
+  --jp-blue: #55aaff;
+  --jp-blue-soft: rgba(57, 143, 224, .15);
+  --jp-mint: #54dda7;
+  margin: 18px 0 24px;
+  overflow: hidden;
+  border: 1px solid var(--jp-line);
+  border-radius: 19px;
+  background:
+    radial-gradient(ellipse at 92% 0%, rgba(48, 133, 223, .2), transparent 38%),
+    linear-gradient(135deg, #122d4e, #0a1b31 60%, #0b2039);
+  box-shadow: 0 20px 55px rgba(2, 13, 28, .25), inset 0 1px 0 rgba(255,255,255,.035);
+  color: var(--jp-text);
+}
+
+.jackpot-panel *,
+.jackpot-panel *::before,
+.jackpot-panel *::after { box-sizing: border-box; }
+
+.jackpot-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 21px 24px;
+  border-bottom: 1px solid var(--jp-line);
+  background: rgba(7, 23, 42, .54);
+}
+.jackpot-brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.jackpot-mark {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(105, 187, 255, .5);
+  border-radius: 12px;
+  background: linear-gradient(145deg, #2479bb, #123f70);
+  color: #def2ff;
+  box-shadow: inset 0 1px rgba(255,255,255,.12);
+}
+.jackpot-title-line { display: flex; align-items: center; gap: 10px; }
+.jackpot-title-line h2 { margin: 0; color: var(--jp-text); font-size: 1.2rem; font-weight: 800; letter-spacing: -.035em; }
+.jackpot-contract-tag {
+  padding: 4px 8px;
+  border: 1px solid rgba(83, 164, 246, .35);
+  border-radius: 999px;
+  background: rgba(43, 116, 184, .18);
+  color: #a7d7ff;
+  font-size: .59rem;
+  font-weight: 850;
+  letter-spacing: .12em;
+}
+.jackpot-brand p { margin: 4px 0 0; color: var(--jp-muted); font-size: .73rem; }
+.jackpot-status, .jackpot-connection { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.jackpot-status { color: #aac1d9; font: 800 .64rem/1 var(--app-font-mono, monospace); letter-spacing: .12em; }
+.jackpot-status i, .jackpot-connection i { width: 7px; height: 7px; border-radius: 50%; background: #6e86a1; box-shadow: 0 0 0 4px rgba(110,134,161,.11); }
+.jackpot-status.active { color: #75e9b9; }
+.jackpot-status.active i, .jackpot-connection.connected i { background: var(--jp-mint); box-shadow: 0 0 0 4px rgba(84,221,167,.12); }
+.jackpot-status.error { color: #ff9b9f; }
+.jackpot-status.error i { background: #ff777f; }
+.jackpot-content { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(250px, .7fr); gap: 14px; padding: 18px 22px 20px; }
+.jackpot-signal-card, .jackpot-guide, .jackpot-card, .jackpot-batch-state {
+  min-width: 0;
+  border: 1px solid var(--jp-line);
+  border-radius: 14px;
+  background: linear-gradient(140deg, rgba(16,39,67,.96), rgba(9,28,50,.95));
+}
+.jackpot-signal-card { padding: 15px 17px 13px; }
+.jackpot-signal-top, .jackpot-signal-market, .jackpot-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.jackpot-eyebrow, .jackpot-field-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #8ebde7;
+  font: 800 .59rem/1.2 var(--app-font-mono, monospace);
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+.jackpot-connection { color: var(--jp-muted); font: 800 .56rem/1 var(--app-font-mono, monospace); letter-spacing: .1em; }
+.jackpot-connection.connected { color: #82e9bb; }
+.jackpot-signal-market { align-items: end; margin: 15px 0 13px; }
+.jackpot-signal-market > div:first-child { display: grid; gap: 4px; min-width: 0; }
+.jackpot-signal-market small, .jackpot-sample-count small { color: var(--jp-subtle); font-size: .55rem; font-weight: 800; letter-spacing: .1em; }
+.jackpot-signal-market strong { overflow: hidden; color: #f1f7ff; font-size: 1.12rem; font-weight: 780; letter-spacing: -.03em; text-overflow: ellipsis; white-space: nowrap; }
+.jackpot-signal-market > div:first-child > span { color: #83b8e5; font: 700 .62rem/1.2 var(--app-font-mono, monospace); }
+.jackpot-sample-count { display: grid; gap: 3px; flex: 0 0 auto; text-align: right; }
+.jackpot-sample-count b { color: #d4eaff; font: 750 1rem/1 var(--app-font-mono, monospace); font-variant-numeric: tabular-nums; }
+.jackpot-rate-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+.jackpot-pair-rate-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 7px; }
+.jackpot-pair-rate { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; padding: 7px 9px; border: 1px solid rgba(106,158,210,.12); border-radius: 8px; background: rgba(6,23,42,.38); }
+.jackpot-pair-rate b { color: #d8eaff; font-size: .61rem; font-weight: 750; }
+.jackpot-pair-rate span { color: #9fc1df; font: 700 .58rem/1.3 var(--app-font-mono, monospace); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.jackpot-pair-rate span i { color: #6e8ba8; font-style: normal; }
+.jackpot-pair-rate-note { display: block; margin-top: 5px; color: #829bb5; font-size: .55rem; line-height: 1.35; }
+.jackpot-rate-item { display: grid; gap: 5px; padding: 9px 10px; border: 1px solid rgba(106,158,210,.13); border-radius: 9px; background: rgba(6,23,42,.55); }
+.jackpot-rate-item small { color: #96afc9; font: 800 .56rem/1 var(--app-font-mono, monospace); letter-spacing: .1em; }
+.jackpot-rate-item b { color: #e8f5ff; font: 800 .94rem/1 var(--app-font-mono, monospace); font-variant-numeric: tabular-nums; }
+.jackpot-rate-item.rise b { color: #7fc5ff; }
+.jackpot-rate-item.fall b { color: #b2baff; }
+.jackpot-rate-item.even b { color: #70e4bd; }
+.jackpot-rate-item.odd b { color: #ffd187; }
+.jackpot-signal-empty { display: flex; align-items: center; gap: 10px; min-height: 55px; padding: 9px 11px; border: 1px dashed rgba(111,163,214,.25); border-radius: 9px; color: #a2b9d1; font-size: .68rem; line-height: 1.45; }
+.jackpot-signal-empty.offline { border-color: rgba(255,151,151,.25); color: #d1aeb3; }
+.jackpot-empty-bars { display: flex; align-items: end; gap: 3px; height: 19px; flex: 0 0 auto; }
+.jackpot-empty-bars i { width: 3px; height: 30%; border-radius: 2px; background: #4c99d7; opacity: .65; }
+.jackpot-empty-bars i:nth-child(2) { height: 70%; }
+.jackpot-empty-bars i:nth-child(3) { height: 48%; }
+.jackpot-empty-bars i:nth-child(4) { height: 90%; }
+.jackpot-disclaimer { margin: 9px 0 0; color: #8da5bf; font-size: .61rem; line-height: 1.45; }
+.jackpot-guide { display: flex; gap: 11px; padding: 15px; border-color: rgba(81,155,226,.32); background: linear-gradient(140deg, rgba(25,74,117,.65), rgba(11,34,59,.9)); }
+.jackpot-guide-icon { display: grid; width: 31px; height: 31px; flex: 0 0 auto; place-items: center; border: 1px solid rgba(111,186,245,.32); border-radius: 9px; color: #9ed4ff; background: rgba(34,104,165,.2); }
+.jackpot-guide h3 { margin: 5px 0 5px; color: #f0f7ff; font-size: .88rem; letter-spacing: -.02em; }
+.jackpot-guide p { margin: 0; color: #b3c7dc; font-size: .65rem; line-height: 1.55; }
+.jackpot-guide-rule { display: flex; align-items: center; gap: 6px; margin-top: 10px; padding-top: 9px; border-top: 1px solid rgba(106,167,221,.16); color: #9bd4c2; font-size: .6rem; line-height: 1.4; }
+.jackpot-settings { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 12px; }
+.jackpot-card { padding: 15px; }
+.jackpot-card-heading { margin-bottom: 13px; }
+.jackpot-card-heading h3 { margin: 5px 0 0; color: var(--jp-text); font-size: .88rem; font-weight: 760; letter-spacing: -.02em; }
+.jackpot-card-heading > svg { color: #8bc8ff; }
+.jackpot-market-count, .jackpot-pair-total { color: #9bb4cd; font-size: .62rem; font-weight: 700; white-space: nowrap; }
+.jackpot-group-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 6px; margin-bottom: 12px; }
+.jackpot-group-grid button { display: grid; gap: 5px; min-width: 0; min-height: 51px; padding: 7px; border: 1px solid rgba(99,154,208,.19); border-radius: 9px; background: #0b2038; color: #a7bdd4; cursor: pointer; text-align: left; transition: border-color .15s ease, background-color .15s ease, color .15s ease, transform .15s ease; }
+.jackpot-group-grid button:hover:not(:disabled) { transform: translateY(-1px); border-color: var(--jp-line-strong); }
+.jackpot-group-grid button small { color: #7594b2; font: 800 .5rem/1 var(--app-font-mono, monospace); letter-spacing: .08em; }
+.jackpot-group-grid button b { overflow: hidden; font-size: .65rem; text-overflow: ellipsis; white-space: nowrap; }
+.jackpot-group-grid button.selected { border-color: rgba(88,174,249,.62); background: linear-gradient(145deg, rgba(31,112,181,.42), rgba(12,46,80,.75)); color: #f0f8ff; }
+.jackpot-group-grid button.selected small { color: #9dd3ff; }
+.jackpot-field { display: grid; gap: 6px; min-width: 0; color: #a8bdd2; font-size: .63rem; font-weight: 700; }
+.jackpot-field select, .jackpot-field input {
+  width: 100%;
+  min-width: 0;
+  height: 37px;
+  padding: 0 10px;
+  border: 1px solid rgba(103,161,216,.28);
+  border-radius: 8px;
+  outline: 0;
+  background: #091d34;
+  color: #eff7ff;
+  font: 700 .7rem/1 inherit;
+}
+.jackpot-field select { cursor: pointer; }
+.jackpot-field :is(select,input):focus-visible, .jackpot-group-grid button:focus-visible, .jackpot-segmented button:focus-visible, .jackpot-count-grid button:focus-visible, .jackpot-duration-grid button:focus-visible { outline: 2px solid #68bbff; outline-offset: 2px; }
+.jackpot-field select:disabled { cursor: not-allowed; opacity: .55; }
+.jackpot-switch-row { position: relative; display: flex; align-items: center; gap: 12px; min-height: 52px; margin-top: 10px; padding: 8px 0 0; border-top: 1px solid rgba(103,161,216,.13); cursor: pointer; }
+.jackpot-switch-row > span { display: grid; flex: 1; gap: 3px; }
+.jackpot-switch-row b { color: #d9e9f8; font-size: .67rem; }
+.jackpot-switch-row small { color: #8ea6bf; font-size: .59rem; line-height: 1.4; }
+.jackpot-switch-row input { position: absolute; right: 0; width: 38px; height: 24px; margin: 0; opacity: 0; cursor: pointer; }
+.jackpot-switch-row > i { position: relative; width: 37px; height: 21px; flex: 0 0 auto; border: 1px solid #385574; border-radius: 99px; background: #203b58; transition: background-color .15s ease, border-color .15s ease; }
+.jackpot-switch-row > i::after { position: absolute; top: 3px; left: 3px; width: 13px; height: 13px; border-radius: 50%; background: #a0b7ce; content: ""; transition: transform .15s ease, background-color .15s ease; }
+.jackpot-switch-row input:checked + i { border-color: #348fd2; background: #1767a6; }
+.jackpot-switch-row input:checked + i::after { background: #e3f5ff; transform: translateX(16px); }
+.jackpot-switch-row input:focus-visible + i { outline: 2px solid #68bbff; outline-offset: 3px; }
+.jackpot-side-control { display: grid; gap: 7px; margin-bottom: 12px; }
+.jackpot-side-control:last-of-type { margin-bottom: 0; }
+.jackpot-segmented { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 6px; }
+.jackpot-segmented button { min-height: 37px; border: 1px solid rgba(101,157,210,.2); border-radius: 8px; background: #0a1e35; color: #9cb4cc; cursor: pointer; font-size: .68rem; font-weight: 800; transition: background-color .15s ease, color .15s ease, border-color .15s ease; }
+.jackpot-segmented button.selected { border-color: rgba(88,174,249,.64); background: linear-gradient(145deg, #1c6eae, #124778); color: #f5fbff; }
+.jackpot-contract-note { display: flex; align-items: flex-start; gap: 7px; margin-top: 3px; padding-top: 10px; border-top: 1px solid rgba(103,161,216,.13); color: #8faac4; font-size: .6rem; line-height: 1.4; }
+.jackpot-contract-note svg { flex: 0 0 auto; color: #8fcfff; }
+.jackpot-pair-total { padding: 6px 8px; border: 1px solid rgba(84,168,238,.24); border-radius: 7px; background: rgba(42,111,171,.14); color: #add8fb; font: 700 .6rem/1 var(--app-font-mono, monospace); }
+.jackpot-pair-total b { color: #f3f9ff; font-size: .78rem; }
+.jackpot-pair-total i { padding: 0 3px; color: #6888a6; font-style: normal; }
+.jackpot-field-block { display: grid; gap: 7px; margin-top: 13px; }
+.jackpot-count-grid { display: grid; grid-template-columns: repeat(9, minmax(0,1fr)); gap: 5px; }
+.jackpot-count-grid button { min-width: 0; min-height: 34px; border: 1px solid rgba(102,158,211,.2); border-radius: 7px; background: #091d34; color: #a2bad2; cursor: pointer; font: 800 .7rem/1 var(--app-font-mono, monospace); transition: background-color .15s ease, border-color .15s ease, color .15s ease; }
+.jackpot-count-grid button.selected { border-color: #59aef2; background: rgba(35,116,183,.46); color: #f1f9ff; box-shadow: inset 0 0 0 1px rgba(104,190,255,.13); }
+.jackpot-helper { color: #8098b2; font-size: .58rem; line-height: 1.4; }
+.jackpot-duration-grid { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 6px; }
+.jackpot-duration-grid button { display: grid; place-items: center; gap: 4px; min-height: 46px; border: 1px solid rgba(102,158,211,.2); border-radius: 8px; background: #091d34; color: #d9e9f8; cursor: pointer; font: 800 .78rem/1 var(--app-font-mono, monospace); }
+.jackpot-duration-grid button small { color: #849db7; font: 600 .52rem/1 sans-serif; }
+.jackpot-duration-grid button.selected { border-color: rgba(83,210,164,.58); background: linear-gradient(145deg, rgba(14,109,94,.42), rgba(10,58,67,.76)); color: #e8fff7; }
+.jackpot-duration-grid button.selected small { color: #8ee3c5; }
+.jackpot-multiply { margin-top: 14px; }
+.jackpot-multiplier-field { margin-top: 10px; }
+.jackpot-number-suffix { display: flex; align-items: center; height: 37px; padding-left: 10px; border: 1px solid rgba(103,161,216,.28); border-radius: 8px; background: #091d34; }
+.jackpot-number-suffix b { color: #83bce9; font: 800 .75rem/1 var(--app-font-mono, monospace); }
+.jackpot-number-suffix input { height: 35px; border: 0; background: transparent; text-align: right; }
+.jackpot-limit-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; }
+.jackpot-limit-note { display: flex; align-items: flex-start; gap: 6px; margin: 10px 0 0; color: #879eb7; font-size: .58rem; line-height: 1.4; }
+.jackpot-limit-note svg { flex: 0 0 auto; color: #93bfe5; }
+.jackpot-batch-state { display: flex; grid-column: 1 / -1; align-items: center; gap: 11px; padding: 12px 14px; border-color: rgba(76,164,233,.31); background: linear-gradient(100deg, rgba(18,62,101,.58), rgba(9,29,51,.87)); }
+.jackpot-batch-state.blocked { border-color: rgba(255,169,123,.32); background: linear-gradient(100deg, rgba(91,55,43,.34), rgba(30,34,47,.8)); }
+.jackpot-batch-icon { display: grid; width: 31px; height: 31px; flex: 0 0 auto; place-items: center; border: 1px solid rgba(100,182,242,.25); border-radius: 9px; color: #9ed4ff; background: rgba(39,113,176,.2); }
+.jackpot-batch-state.blocked .jackpot-batch-icon { border-color: rgba(255,179,133,.28); color: #ffc298; background: rgba(139,77,44,.18); }
+.jackpot-batch-copy { display: grid; flex: 1; gap: 3px; min-width: 0; }
+.jackpot-batch-copy b { color: #e5f3ff; font-size: .68rem; }
+.jackpot-batch-copy small { color: #9bb2ca; font-size: .59rem; line-height: 1.4; }
+.jackpot-batch-count { padding: 6px 8px; border: 1px solid rgba(100,165,222,.17); border-radius: 7px; color: #b2cce4; font: 750 .62rem/1 var(--app-font-mono, monospace); white-space: nowrap; }
+.jackpot-place-row { display: flex; grid-column: 1 / -1; align-items: center; justify-content: flex-end; gap: 13px; }
+.jackpot-place-copy { flex: 1; min-width: 0; color: #a9bfd6; font-size: .65rem; line-height: 1.45; }
+.jackpot-place-copy [role="status"] { display: inline-block; padding: 7px 10px; border: 1px solid rgba(255,181,132,.25); border-radius: 8px; background: rgba(104,58,38,.2); color: #f0c09e; }
+.jackpot-history-review { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 9px; padding: 10px 12px; border: 1px solid rgba(255,181,92,.34); border-radius: 10px; color: #f0d9b8; background: rgba(93,57,24,.22); font-size: .63rem; line-height: 1.4; }
+.jackpot-history-review button { min-height: 34px; padding: 0 10px; border: 1px solid rgba(255,190,105,.45); border-radius: 8px; color: #ffe2b7; background: rgba(115,74,32,.35); font-size: .62rem; font-weight: 750; cursor: pointer; }
+.jackpot-place-button { display: inline-flex; min-width: 190px; min-height: 45px; align-items: center; justify-content: center; gap: 9px; padding: 0 20px; border: 1px solid rgba(164,215,255,.35); border-radius: 10px; background: linear-gradient(135deg, #2788d1, #14558f); box-shadow: 0 8px 20px rgba(14,91,152,.25), inset 0 1px rgba(255,255,255,.12); color: #f5fbff; cursor: pointer; font-size: .75rem; font-weight: 850; letter-spacing: .02em; transition: transform .15s ease, border-color .15s ease, background-color .15s ease; }
+.jackpot-place-button:hover:not(:disabled) { transform: translateY(-1px); border-color: rgba(184,226,255,.7); background: linear-gradient(135deg, #3298e5, #1765a5); }
+.jackpot-place-button:focus-visible { outline: 2px solid #8bd0ff; outline-offset: 3px; }
+.jackpot-place-button:disabled { border-color: rgba(110,148,181,.2); background: linear-gradient(135deg, #29445f, #1b3047); box-shadow: none; color: #91a7bc; cursor: not-allowed; opacity: .78; }
+.jackpot-history { margin: 0 22px 20px; overflow: hidden; border: 1px solid var(--jp-line); border-radius: 13px; background: #0d213a; }
+.jackpot-history .deriv-history { border: 0; background: transparent; }
+.jackpot-history .deriv-history-head, .jackpot-history .deriv-history-session, .jackpot-history .deriv-history-filters, .jackpot-history .deriv-history-row { border-color: rgba(112,163,218,.16); }
+.jackpot-history .deriv-history-head { background: #102743; }
+.jackpot-history .deriv-history-title { color: #91caff; }
+.jackpot-history .deriv-history-title b, .jackpot-history .deriv-history-stat-grid b, .jackpot-history .deriv-history-market b { color: #edf5ff; }
+.jackpot-history .deriv-history-title small, .jackpot-history .deriv-history-run small, .jackpot-history .deriv-history-stat-grid small, .jackpot-history .deriv-history-account, .jackpot-history .deriv-history-account-id { color: #95abc4; }
+.jackpot-history .deriv-history-filters button.active { border-color: #4b94d7; color: #a8d5ff; background: rgba(37,105,168,.25); }
+.jackpot-history .deriv-history-empty { color: #95abc4; }
+
+@media (max-width: 760px) {
+  .jackpot-content { grid-template-columns: 1fr; padding: 14px; }
+  .jackpot-settings { grid-template-columns: 1fr; }
+  .jackpot-header { padding: 17px; }
+  .jackpot-guide { min-height: 0; }
+  .jackpot-history { margin: 0 14px 14px; }
+}
+@media (max-width: 480px) {
+  .jackpot-header { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .jackpot-status { margin-left: 51px; }
+  .jackpot-title-line { flex-wrap: wrap; }
+  .jackpot-signal-card, .jackpot-card { padding: 12px; }
+  .jackpot-group-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .jackpot-group-grid button { min-height: 44px; }
+  .jackpot-rate-grid { gap: 5px; }
+  .jackpot-rate-item { padding: 8px 6px; }
+  .jackpot-rate-item b { font-size: .8rem; }
+  .jackpot-pair-total { font-size: .54rem; }
+  .jackpot-count-grid { gap: 4px; }
+  .jackpot-count-grid button { min-height: 36px; }
+  .jackpot-limit-grid { gap: 7px; }
+  .jackpot-batch-state { align-items: flex-start; }
+  .jackpot-batch-count { margin-left: auto; }
+  .jackpot-place-row { align-items: stretch; flex-direction: column; gap: 9px; }
+  .jackpot-place-button { width: 100%; }
+  .jackpot-history-review { align-items: stretch; flex-direction: column; }
+  .jackpot-history-review button { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jackpot-panel *, .jackpot-panel *::before, .jackpot-panel *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}

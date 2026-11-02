@@ -13,6 +13,7 @@ type DiagnosticFeature =
   | "digit-flip"
   | "trade-x"
   | "bulk-trader"
+  | "jackpot"
   | "clock-work"
   | "cash-grab"
   | "money-bank"
@@ -29,6 +30,7 @@ const allowedFeatures = new Set<DiagnosticFeature>([
   "digit-flip",
   "trade-x",
   "bulk-trader",
+  "jackpot",
   "clock-work",
   "cash-grab",
   "money-bank",

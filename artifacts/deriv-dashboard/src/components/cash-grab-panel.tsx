@@ -300,8 +300,8 @@ export default function CashGrabPanel({
               type="button"
               className={`df-market-option df-market-smart ${autoSelectBest ? "selected" : ""}`}
               onClick={() => { onAutoSelectBestChange(true); setMarketMenuOpen(false); }}
-              disabled={!bestSymbol || autoSwitchSafestPair}
-              aria-disabled={!bestSymbol || autoSwitchSafestPair}
+              disabled={autoSwitchSafestPair}
+              aria-disabled={autoSwitchSafestPair}
             >
               <span><small>{autoSwitchSafestPair ? "AUTO-SWITCH ACTIVE" : "AUTO BEST"}</small><b>{bestMarketLabel ?? "Waiting for market samples"}</b></span>
               <strong>{autoSwitchSafestPair ? "ON" : bestSymbol ?? "—"}</strong>
