@@ -722,6 +722,7 @@ test("clearing Auto Trader 2.0 resets run metrics and stake without deleting Der
     await page.getByTestId("auto-trader-2-panel").waitFor();
     const summary = page.locator(".deriv-history-session");
     await summary.getByText("50.0%", { exact: true }).waitFor();
+    assert.match(await summary.innerText(), /n=2 settled/);
     assert.match(await summary.innerText(), /0\.25/);
     assert.match(await summary.innerText(), /TRADES\s+2/);
     assert.match(await summary.innerText(), /WON \/ LOST\s+1\s*\/\s*1/);
@@ -978,6 +979,7 @@ test("Auto Trader shows daily stats and detailed deep-blue trading history", asy
     assert.match(await page.getByTestId("stat-daily-wins").innerText(), /1/);
     assert.match(await page.getByTestId("stat-daily-losses").innerText(), /1/);
     assert.match(await page.getByTestId("stat-daily-win-rate").innerText(), /50\.0%/);
+    assert.match(await page.getByTestId("stat-daily-win-sample").innerText(), /n=2 settled/);
     assert.equal(await page.getByText("Multi Differ (1/2)", { exact: true }).count(), 1);
     assert.equal(await page.getByText("Multi Differ (2/2)", { exact: true }).count(), 1);
     assert.equal(await page.getByText("DIFFERS 4 on V10", { exact: true }).count(), 2);
@@ -1411,7 +1413,10 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
     await page.locator(".xt-feature-card-edge2 .xt-switch").click();
     assert.equal(await moneyBankToggle.isChecked(), true);
     await page.getByRole("heading", { name: "Money Bank" }).waitFor();
-    assert.equal(await page.locator(".money-bank-knockout-card").count(), 1, "Money Bank stats should be visible.");
+    assert.equal(await page.locator(".money-bank-knockout-card").count(), 0, "The retired live knockout area should remain absent.");
+    const moneyBankHistory = page.locator(".money-bank-panel .deriv-history");
+    await moneyBankHistory.getByText("WIN RATE", { exact: true }).waitFor();
+    assert.match(await moneyBankHistory.innerText(), /n=0 settled/);
     assert.equal(await page.locator(".money-bank-chart-reset").count(), 0, "The chart refresh control should be hidden.");
     assert.equal(await page.getByText(/ticks since reset/).count(), 0, "The chart tick counter should be hidden.");
     assert.equal(await page.getByText(/BASE is the first stake|Auto Budget includes only levels affordable/).count(), 0, "The requested Money Bank helper copy should be hidden.");
@@ -1424,40 +1429,13 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
     const takeProfitInput = page.locator('input[aria-label="Take Profit ticks"]');
     assert.equal(await takeProfitInput.getAttribute("min"), "1");
     assert.equal(await takeProfitInput.getAttribute("max"), "30");
-    assert.equal(await page.getByRole("button", { name: "Reset live tick count" }).count(), 1);
+    assert.equal(await page.getByRole("button", { name: "Reset live tick count" }).count(), 0, "Live knockout controls should remain absent.");
     await takeProfitInput.focus();
     await takeProfitInput.press("Home");
     assert.equal(await takeProfitInput.inputValue(), "1");
     for (const viewport of viewports) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await assertNoHorizontalOverflow(page, viewport, "Money Bank Stats");
-      await assertWithinViewport(page, ".money-bank-knockout-card", viewport.width, "Money Bank Stats");
-      const statsLayout = await page.locator(".money-bank-knockout-card").evaluate((stats) => {
-        const side = stats.parentElement;
-        const grid = stats.querySelector(".mbkh-tick-grid");
-        const columns = grid ? getComputedStyle(grid).gridTemplateColumns.trim().split(/\s+/).length : 0;
-        const tiles = [...stats.querySelectorAll(".mbkh-tick")].map((tile) => {
-          const { width, height } = tile.getBoundingClientRect();
-          return { width, height };
-        });
-        return {
-          statsWidth: stats.getBoundingClientRect().width,
-          sideWidth: side?.getBoundingClientRect().width ?? 0,
-          columns,
-          tiles,
-        };
-      });
-      assert.ok(
-        Math.abs(statsLayout.statsWidth - statsLayout.sideWidth) <= 2,
-        `Money Bank Stats should use the full available panel width at ${viewport.name}.`,
-      );
-      assert.equal(statsLayout.columns, 7, `Money Bank tick boxes should form three rows at ${viewport.name}.`);
-      for (const tile of statsLayout.tiles) {
-        assert.ok(
-          Math.abs(tile.width - tile.height) <= 1,
-          `Money Bank tick boxes should stay square at ${viewport.name}.`,
-        );
-      }
+      await assertNoHorizontalOverflow(page, viewport, "Money Bank");
     }
 
     assert.deepEqual(state.unhandledApis, [], `Unexpected API requests: ${JSON.stringify(state.unhandledApis)}`);

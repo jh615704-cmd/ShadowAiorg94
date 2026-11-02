@@ -86,7 +86,7 @@ export default function DerivHistory({ title, strategy, className, rows, session
         {summaryMode === "full" && <div className="deriv-history-stat-grid">
           <div><small>TRADES</small><b>{summary.trades}</b></div>
           <div><small>WON / LOST</small><b><span className="positive">{summary.wins}</span><i> / </i><span className="negative">{summary.losses}</span></b></div>
-          <div><small>WIN RATE</small><b>{summary.winRate.toFixed(1)}%</b></div>
+          <div><small>WIN RATE</small><b>{summary.winRate.toFixed(1)}%</b><small className="deriv-history-win-sample">n={summary.wins + summary.losses} settled</small></div>
           <div><small>STAKED</small><b>{money(summary.staked, currency)}</b></div>
         </div>}
       </div>}

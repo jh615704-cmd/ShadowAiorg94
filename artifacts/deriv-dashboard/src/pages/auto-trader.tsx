@@ -27,7 +27,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { DerivAccountSwitcher } from "@/components/deriv-account-switcher";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getAccountBalance } from "@/lib/account-balance";
-import { formatSignedDerivProfit, getDerivOpenLiveProfit, isDerivHistoryOpen, uniqueDerivHistoryRows } from "@/lib/deriv-history";
+import { formatSignedDerivProfit, getDerivOpenLiveProfit, isDerivHistoryOpen, summarizeDerivWinLoss, uniqueDerivHistoryRows } from "@/lib/deriv-history";
 import { validateAutoTraderBatch } from "@/lib/trade-entry-guards";
 import "./auto-trader.css";
 
@@ -408,8 +408,9 @@ function AutoTraderContent() {
     ));
   }, [accountId, history.data, todayIds]);
   const settled = todaysHistory.filter((item) => !isDerivHistoryOpen(item.status));
-  const wins = settled.filter((item) => item.profit > 0).length;
-  const losses = settled.filter((item) => item.profit < 0).length;
+  const outcomeSummary = summarizeDerivWinLoss(todaysHistory);
+  const wins = outcomeSummary.wins;
+  const losses = outcomeSummary.losses;
   const dailyProfit = settled.reduce((total, item) => total + item.profit, 0);
   const currency = account?.currency ?? status.data?.currency ?? "USD";
   const accountBalance = getAccountBalance(account);
@@ -421,7 +422,7 @@ function AutoTraderContent() {
     .slice()
     .sort((a, b) => (b.buy_time ?? 0) - (a.buy_time ?? 0));
   const hasOpenTodayContract = todaysHistory.some((item) => isDerivHistoryOpen(item.status));
-  const winRate = settled.length > 0 ? `${((wins / settled.length) * 100).toFixed(1)}%` : "—";
+  const winRate = outcomeSummary.sampleSize > 0 ? `${outcomeSummary.winRate.toFixed(1)}%` : "—";
   const connected = Boolean(status.data?.connected && status.data?.authorized && hasToken);
 
   useEffect(() => {
@@ -693,7 +694,7 @@ function AutoTraderContent() {
                 <div className="at-daily-stat" data-testid="stat-daily-trades"><span>TRADES</span><strong>{todayIds.size}</strong></div>
                 <div className="at-daily-stat" data-testid="stat-daily-wins"><span>WINS</span><strong>{wins}</strong></div>
                 <div className="at-daily-stat" data-testid="stat-daily-losses"><span>LOSSES</span><strong>{losses}</strong></div>
-                <div className="at-daily-stat" data-testid="stat-daily-win-rate"><span>WIN RATE</span><strong>{winRate}</strong></div>
+                <div className="at-daily-stat" data-testid="stat-daily-win-rate"><span>WIN RATE</span><strong>{winRate}</strong><small data-testid="stat-daily-win-sample">n={outcomeSummary.sampleSize} settled</small></div>
               </div>
             </section>
 

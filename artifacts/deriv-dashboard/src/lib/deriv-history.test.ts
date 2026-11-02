@@ -9,6 +9,7 @@ import {
   isDerivHistoryOpen,
   removeSettledHistoryAcknowledgements,
   shouldShowFeatureHistoryWhenStopped,
+  summarizeDerivWinLoss,
   summarizeDerivHistorySession,
   uniqueDerivHistoryRows,
   type DerivHistoryFeature,
@@ -48,6 +49,20 @@ test("session summary totals wins, losses, open stakes, and realized profit", ()
     losses: 1,
     winRate: 50,
     staked: 4.1,
+  });
+});
+
+test("win rate sample counts settled wins and losses but excludes open and breakeven rows", () => {
+  assert.deepEqual(summarizeDerivWinLoss([
+    row({ contract_id: "win", profit: 1, status: "won" }),
+    row({ contract_id: "loss", profit: -1, status: "lost" }),
+    row({ contract_id: "even", profit: 0, status: "closed" }),
+    row({ contract_id: "open", profit: 0.5, status: "active" }),
+  ]), {
+    wins: 1,
+    losses: 1,
+    sampleSize: 2,
+    winRate: 50,
   });
 });
 

@@ -428,7 +428,6 @@ export function MoneyBankPanel({
           rows={visibleTrades}
           sessionRows={visibleSessionRows}
           currency={currency}
-          summaryMode="hidden"
           clearArmed={historyClearArmed}
           fading={historyFading}
           onClear={clearHistory}

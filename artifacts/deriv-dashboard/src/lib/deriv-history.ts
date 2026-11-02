@@ -50,6 +50,30 @@ export function isDerivHistoryOpen(status: string): boolean {
   return ["open", "pending", "active"].includes(status.trim().toLowerCase());
 }
 
+export type DerivWinLossSummary = {
+  wins: number;
+  losses: number;
+  sampleSize: number;
+  winRate: number;
+};
+
+export function summarizeDerivWinLoss(
+  rows: readonly Pick<DerivHistoryRow, "status" | "profit">[],
+): DerivWinLossSummary {
+  const settled = rows.filter((row) =>
+    !isDerivHistoryOpen(row.status) && Number.isFinite(row.profit),
+  );
+  const wins = settled.filter((row) => row.profit > 0).length;
+  const losses = settled.filter((row) => row.profit < 0).length;
+  const sampleSize = wins + losses;
+  return {
+    wins,
+    losses,
+    sampleSize,
+    winRate: sampleSize ? (wins / sampleSize) * 100 : 0,
+  };
+}
+
 export function shouldShowFeatureHistoryWhenStopped(
   enabled: boolean,
   ownedRows: readonly Pick<DerivHistoryRow, "status">[],
@@ -153,8 +177,7 @@ export function summarizeDerivHistorySession(
 ): DerivHistorySessionSummary {
   const uniqueRows = uniqueDerivHistoryRows(rows);
   const settled = uniqueRows.filter((row) => !isDerivHistoryOpen(row.status));
-  const wins = settled.filter((row) => row.profit > 0).length;
-  const losses = settled.filter((row) => row.profit < 0).length;
+  const outcomes = summarizeDerivWinLoss(settled);
   const allTradesHaveSettledRows = sessionTradeCount == null
     ? uniqueRows.length > 0 && settled.length === uniqueRows.length
     : settled.length >= sessionTradeCount;
@@ -162,9 +185,9 @@ export function summarizeDerivHistorySession(
   return {
     pnl: allTradesHaveSettledRows ? realizedRowsPnl : sessionPnl ?? realizedRowsPnl,
     trades: Math.max(uniqueRows.length, sessionTradeCount ?? 0),
-    wins,
-    losses,
-    winRate: wins + losses ? (wins / (wins + losses)) * 100 : 0,
+    wins: outcomes.wins,
+    losses: outcomes.losses,
+    winRate: outcomes.winRate,
     staked: Math.round(uniqueRows.reduce((total, row) => total + Math.max(0, row.buy_price), 0) * 100) / 100,
   };
 }
