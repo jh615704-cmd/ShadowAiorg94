@@ -20,8 +20,6 @@ import {
   BuyClockWorkContractsResponse,
   ScanDerivAccumulatorKnockoutBody,
   ScanDerivAccumulatorKnockoutResponse,
-  GetMoneyBankKnockoutBarriersBody,
-  GetMoneyBankKnockoutBarriersResponse,
   SelectDerivAccountBody,
   SelectDerivAccountResponse,
   SelectDerivSymbolBody,
@@ -41,7 +39,6 @@ import {
   requestProposal,
   getEdgeAvailableDurations,
   scanAccumulatorKnockout,
-  getMoneyBankKnockoutBarriers,
   buyContract,
   sellContract,
   bulkBuyContracts,
@@ -431,36 +428,6 @@ router.post("/deriv/accumulator-knockout-scan", async (req, res) => {
     req.log.warn({ err: error }, "Money Bank Auto Knockout scan did not pass");
     return res.status(409).json({
       error: error instanceof Error ? error.message : "Money Bank Auto Knockout could not verify the selected market.",
-    });
-  }
-});
-
-router.post("/deriv/accumulator-knockout-barriers", requireAccessFeature("money-bank"), async (req, res) => {
-  res.set("Cache-Control", "no-store");
-  const parsed = GetMoneyBankKnockoutBarriersBody.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid Money Bank barrier request" });
-  }
-
-  try {
-    const result = GetMoneyBankKnockoutBarriersResponse.parse(
-      await withCredential(
-        res.locals.userId,
-        () => getMoneyBankKnockoutBarriers(parsed.data.symbol),
-        true,
-      ),
-    );
-    return res.json(result);
-  } catch (error) {
-    if (isCapacityError(error)) {
-      return res.status(503).json({ error: error.message });
-    }
-    if (isCredentialError(error)) {
-      return res.status(credentialHttpStatus(error)).json({ error: error.message });
-    }
-    req.log.warn({ err: error }, "Money Bank live knockout barrier lookup failed");
-    return res.status(503).json({
-      error: "Money Bank could not load current Deriv barriers.",
     });
   }
 });

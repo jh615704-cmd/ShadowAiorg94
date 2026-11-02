@@ -912,39 +912,6 @@ export const ScanDerivAccumulatorKnockoutResponse = zod.object({
 
 
 /**
- * @summary Get current Money Bank knockout barriers
- */
-
-
-
-export const GetMoneyBankKnockoutBarriersBody = zod.object({
-  "symbol": zod.string().min(1)
-})
-
-export const getMoneyBankKnockoutBarriersResponseTickSequenceMin = 0;
-
-
-export const getMoneyBankKnockoutBarriersResponseRatesItemTicksStayedInMax = 200;
-
-export const getMoneyBankKnockoutBarriersResponseRatesMin = 5;
-export const getMoneyBankKnockoutBarriersResponseRatesMax = 5;
-
-
-
-export const GetMoneyBankKnockoutBarriersResponse = zod.object({
-  "symbol": zod.string(),
-  "tick_sequence": zod.number().int().min(getMoneyBankKnockoutBarriersResponseTickSequenceMin),
-  "quote": zod.number().nullable(),
-  "rates": zod.array(zod.object({
-  "growth_rate": zod.union([zod.literal(1),zod.literal(2),zod.literal(3),zod.literal(4),zod.literal(5)]),
-  "barrier": zod.number().nullable(),
-  "message": zod.string().nullable(),
-  "ticks_stayed_in": zod.array(zod.number().int().min(1)).max(getMoneyBankKnockoutBarriersResponseRatesItemTicksStayedInMax).describe('Recent Deriv tick durations between Accumulator barriers for this growth rate.')
-})).min(getMoneyBankKnockoutBarriersResponseRatesMin).max(getMoneyBankKnockoutBarriersResponseRatesMax)
-})
-
-
-/**
  * @summary Select the account used by the authenticated WebSocket
  */
 

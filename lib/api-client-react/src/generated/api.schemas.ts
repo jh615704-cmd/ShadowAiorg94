@@ -724,49 +724,6 @@ export interface MoneyBankKnockoutScannerResponse {
   market_matches: boolean;
 }
 
-export interface MoneyBankKnockoutBarriersInput {
-  /** @minLength 1 */
-  symbol: string;
-}
-
-export type MoneyBankKnockoutBarrierRateGrowthRate = typeof MoneyBankKnockoutBarrierRateGrowthRate[keyof typeof MoneyBankKnockoutBarrierRateGrowthRate];
-
-
-export const MoneyBankKnockoutBarrierRateGrowthRate = {
-  NUMBER_1: 1,
-  NUMBER_2: 2,
-  NUMBER_3: 3,
-  NUMBER_4: 4,
-  NUMBER_5: 5,
-} as const;
-
-export interface MoneyBankKnockoutBarrierRate {
-  growth_rate: MoneyBankKnockoutBarrierRateGrowthRate;
-  /** @nullable */
-  barrier: number | null;
-  /** @nullable */
-  message: string | null;
-  /**
-     * Recent Deriv tick durations between Accumulator barriers for this growth rate.
-     * @maxItems 200
-     * @items.minimum 1
-     */
-  ticks_stayed_in: number[];
-}
-
-export interface MoneyBankKnockoutBarriersResponse {
-  symbol: string;
-  /** @minimum 0 */
-  tick_sequence: number;
-  /** @nullable */
-  quote: number | null;
-  /**
-     * @minItems 5
-     * @maxItems 5
-     */
-  rates: MoneyBankKnockoutBarrierRate[];
-}
-
 export interface DerivProposalRequest {
   ok: boolean;
   message: string;

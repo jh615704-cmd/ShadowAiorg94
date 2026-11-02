@@ -6,7 +6,6 @@ import {
   type MoneyBankStrategy,
 } from "../lib/money-bank-math";
 import { MoneyBankMarketChart } from "./money-bank-market-chart";
-import { MoneyBankLiveKnockouts } from "./money-bank-live-knockouts";
 import DerivHistory, { type DerivHistoryRow } from "./deriv-history";
 import "./money-bank-panel.css";
 
@@ -243,17 +242,6 @@ export function MoneyBankPanel({
           connected={isConnected}
           quote={quote}
           quotes={marketSignal?.recent_quotes ?? []}
-          tickSequence={marketSignal?.tick_sequence}
-        />
-        <MoneyBankLiveKnockouts
-          symbol={symbol}
-          marketLabel={selectedMarket}
-          connected={isConnected}
-          isDemoAccount={isDemoAccount}
-          demoAccountId={demoAccountId}
-          growthRate={growthRate}
-          quote={marketSignal?.quote ?? quote}
-          recentQuotes={marketSignal?.recent_quotes}
           tickSequence={marketSignal?.tick_sequence}
         />
         <div className="money-bank-main">
