@@ -724,31 +724,15 @@ export interface MoneyBankKnockoutScannerResponse {
   market_matches: boolean;
 }
 
-export interface MoneyBankKnockoutSimulationInput {
+export interface MoneyBankKnockoutBarriersInput {
   /** @minLength 1 */
   symbol: string;
 }
 
-export interface MoneyBankKnockoutSimulationCell {
-  /**
-     * @minimum 1
-     * @maximum 20
-     */
-  ticks: number;
-  /** @minimum 0 */
-  sample_count: number;
-  /** @minimum 0 */
-  knockouts: number;
-  /** @minimum 0 */
-  survivors: number;
-  /** @nullable */
-  survival_rate: number | null;
-}
-
-export type MoneyBankKnockoutSimulationRateGrowthRate = typeof MoneyBankKnockoutSimulationRateGrowthRate[keyof typeof MoneyBankKnockoutSimulationRateGrowthRate];
+export type MoneyBankKnockoutBarrierRateGrowthRate = typeof MoneyBankKnockoutBarrierRateGrowthRate[keyof typeof MoneyBankKnockoutBarrierRateGrowthRate];
 
 
-export const MoneyBankKnockoutSimulationRateGrowthRate = {
+export const MoneyBankKnockoutBarrierRateGrowthRate = {
   NUMBER_1: 1,
   NUMBER_2: 2,
   NUMBER_3: 3,
@@ -756,26 +740,25 @@ export const MoneyBankKnockoutSimulationRateGrowthRate = {
   NUMBER_5: 5,
 } as const;
 
-export interface MoneyBankKnockoutSimulationRate {
-  growth_rate: MoneyBankKnockoutSimulationRateGrowthRate;
+export interface MoneyBankKnockoutBarrierRate {
+  growth_rate: MoneyBankKnockoutBarrierRateGrowthRate;
   /** @nullable */
   barrier: number | null;
   /** @nullable */
   message: string | null;
-  cells: MoneyBankKnockoutSimulationCell[];
 }
 
-export interface MoneyBankKnockoutSimulationResponse {
+export interface MoneyBankKnockoutBarriersResponse {
   symbol: string;
   /** @minimum 0 */
-  quote_count: number;
-  /** @minimum 0 */
   tick_sequence: number;
+  /** @nullable */
+  quote: number | null;
   /**
      * @minItems 5
      * @maxItems 5
      */
-  rates: MoneyBankKnockoutSimulationRate[];
+  rates: MoneyBankKnockoutBarrierRate[];
 }
 
 export interface DerivProposalRequest {

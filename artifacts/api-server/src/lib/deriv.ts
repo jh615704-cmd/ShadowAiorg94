@@ -2,7 +2,6 @@ import WebSocket from "ws";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { logger } from "./logger";
 import { assertTradingProtection, getTradingProtectionSettings } from "./trading-protection";
-import { simulateAccumulatorQuoteWindows } from "./money-bank-simulation";
 
 const API_BASE = "https://api.derivws.com";
 const appId = process.env.DERIV_APP_ID;
@@ -1543,22 +1542,17 @@ export async function scanAccumulatorKnockout(
   return moneyBankKnockoutResponse(input, scanner);
 }
 
-export async function simulateMoneyBankKnockoutHistory(symbol: string) {
+export async function getMoneyBankKnockoutBarriers(symbol: string) {
   const runtime = getState();
   const market = runtime.marketHistory.get(symbol);
-  const quotes = (market?.quoteHistory ?? [])
-    .slice(-200)
-    .map((tick: { quote: number }) => tick.quote)
-    .filter((quote: number) => Number.isFinite(quote) && quote > 0);
   const rates = [1, 2, 3, 4, 5];
 
   const results = await Promise.all(rates.map(async (growthRate) => {
-    if (quotes.length < 2) {
+    if (!market?.quote || !Number.isFinite(market.quote) || market.quote <= 0) {
       return {
         growth_rate: growthRate,
         barrier: null,
-        message: "Waiting for more live market quotes.",
-        cells: simulateAccumulatorQuoteWindows([], 0),
+        message: "Waiting for a live quote from this market.",
       };
     }
 
@@ -1576,31 +1570,26 @@ export async function simulateMoneyBankKnockoutHistory(symbol: string) {
         return {
           growth_rate: growthRate,
           barrier: null,
-          message: "Deriv did not return a current knockout barrier for this rate.",
-          cells: simulateAccumulatorQuoteWindows([], 0),
+          message: "Deriv did not return a current barrier for this rate.",
         };
       }
-      return {
-        growth_rate: growthRate,
-        barrier: barrier!,
-        message: null,
-        cells: simulateAccumulatorQuoteWindows(quotes, barrier!),
-      };
+      return { growth_rate: growthRate, barrier: barrier!, message: null };
     } catch (error) {
-      logger.warn({ err: error, symbol, growthRate }, "Money Bank market replay could not get a current proposal barrier");
+      logger.warn({ err: error, symbol, growthRate }, "Money Bank live knockout barrier could not be refreshed");
       return {
         growth_rate: growthRate,
         barrier: null,
         message: "The current Deriv barrier is unavailable for this rate.",
-        cells: simulateAccumulatorQuoteWindows([], 0),
       };
     }
   }));
 
+  const latestMarket = getState().marketHistory.get(symbol);
+
   return {
     symbol,
-    quote_count: quotes.length,
-    tick_sequence: Number.isSafeInteger(market?.tickSequence) ? market.tickSequence : 0,
+    tick_sequence: Number.isSafeInteger(latestMarket?.tickSequence) ? latestMarket.tickSequence : 0,
+    quote: Number.isFinite(latestMarket?.quote) ? latestMarket.quote : null,
     rates: results,
   };
 }

@@ -7,7 +7,7 @@
     "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
-    "test": "../../scripts/node_modules/.bin/tsx --test --experimental-test-module-mocks src/lib/deriv.test.ts src/lib/money-bank-simulation.test.ts src/lib/admin-intelligence.test.ts src/lib/trading-protection.test.ts src/lib/distributed-user-lock.test.ts src/routes/deriv.test.ts src/routes/access.test.ts src/routes/intelligence.test.ts src/middlewares/clerkProxyMiddleware.test.ts src/middlewares/access-feature.test.ts",
+    "test": "../../scripts/node_modules/.bin/tsx --test --experimental-test-module-mocks src/lib/deriv.test.ts src/lib/admin-intelligence.test.ts src/lib/trading-protection.test.ts src/lib/distributed-user-lock.test.ts src/routes/deriv.test.ts src/routes/access.test.ts src/routes/intelligence.test.ts src/middlewares/clerkProxyMiddleware.test.ts src/middlewares/access-feature.test.ts",
     "capacity:demo:smoke": "../../scripts/node_modules/.bin/tsx scripts/deriv-demo-capacity.ts",
     "capacity:api-db": "../../scripts/node_modules/.bin/tsx scripts/api-db-capacity.ts",
     "capacity:app-flow": "../../scripts/node_modules/.bin/tsx scripts/app-flow-capacity.ts",

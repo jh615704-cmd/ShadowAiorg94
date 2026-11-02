@@ -6,7 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface MoneyBankKnockoutSimulationInput {
+export interface MoneyBankKnockoutBarriersInput {
   /** @minLength 1 */
   symbol: string;
 }

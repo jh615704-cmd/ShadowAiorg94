@@ -1,23 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Download, Play, RefreshCw, ShieldCheck, Square, TrendingUp } from "lucide-react";
 import {
-  useSimulateMoneyBankKnockoutHistory,
-  type MoneyBankKnockoutSimulationResponse,
-} from "@workspace/api-client-react";
-import {
   calculateRecoveryLadder,
   type MoneyBankLadderLevel,
   type MoneyBankStrategy,
 } from "../lib/money-bank-math";
-import {
-  MONEY_BANK_STATS_TICK_LIMIT,
-  summarizeMoneyBankExitTicks,
-  summarizeMoneyBankKnockoutStats,
-  summarizeMoneyBankOutcomeStats,
-  type MoneyBankStatsRate,
-} from "../lib/money-bank-knockout-stats";
-import { MoneyBankKnockoutHistory } from "./money-bank-knockout-history";
 import { MoneyBankMarketChart } from "./money-bank-market-chart";
+import { MoneyBankLiveKnockouts } from "./money-bank-live-knockouts";
 import DerivHistory, { type DerivHistoryRow } from "./deriv-history";
 import "./money-bank-panel.css";
 
@@ -93,7 +82,6 @@ type MoneyBankPanelProps = {
 };
 
 export const MONEY_BANK_AUTO_SYMBOLS = ["1HZ10V", "1HZ15V", "1HZ25V", "1HZ30V", "1HZ50V", "1HZ75V", "1HZ90V", "1HZ100V"] as const;
-const GROWTH_RATES = [1, 2, 3, 4, 5];
 
 const ACCUMULATOR_MIN_STAKE = 1;
 const roundCents = (value: number) => Number((Math.round((value + Number.EPSILON) * 100) / 100).toFixed(2));
@@ -139,17 +127,6 @@ export function MoneyBankPanel({
   onStop,
 }: MoneyBankPanelProps) {
   const controlsDisabled = running || starting;
-  const [selectedStatsRate, setSelectedStatsRate] = useState<MoneyBankStatsRate>("all");
-  const [statsLiveTicks, setStatsLiveTicks] = useState(0);
-  const [knockoutSimulation, setKnockoutSimulation] = useState<MoneyBankKnockoutSimulationResponse | null>(null);
-  const [simulationUnavailable, setSimulationUnavailable] = useState(false);
-  const simulationMutation = useSimulateMoneyBankKnockoutHistory();
-  const requestSimulationRef = useRef(simulationMutation.mutateAsync);
-  requestSimulationRef.current = simulationMutation.mutateAsync;
-  const statsSymbolRef = useRef(symbol);
-  const statsSequenceRef = useRef(
-    Number.isSafeInteger(marketSignal?.tick_sequence) ? marketSignal?.tick_sequence ?? null : null,
-  );
   const ladder = calculateRecoveryLadder({
     strategy,
     budget,
@@ -169,90 +146,6 @@ export function MoneyBankPanel({
   const [historyFading, setHistoryFading] = useState(false);
   const visibleTrades = recentTrades.filter((trade) => !historyHidden.has(trade.contract_id));
   const visibleSessionRows = sessionRows.filter((trade) => !historyHidden.has(trade.contract_id));
-  const rateStats = summarizeMoneyBankKnockoutStats(recentTrades, symbol, GROWTH_RATES);
-  const selectedRateStats = selectedStatsRate === "all"
-    ? rateStats
-    : rateStats.filter((item) => item.growthRate === selectedStatsRate);
-  const liveContractTicks = selectedRateStats.reduce<number | null>((current, item) => {
-    if (item.liveTicks == null || item.liveTicks < 1) return current;
-    return current == null ? item.liveTicks : Math.max(current, item.liveTicks);
-  }, null);
-  const statsSummary = summarizeMoneyBankOutcomeStats(
-    recentTrades,
-    symbol,
-    selectedStatsRate,
-    MONEY_BANK_STATS_TICK_LIMIT,
-  );
-  const exitTickStats = summarizeMoneyBankExitTicks(
-    recentTrades,
-    symbol,
-    selectedStatsRate,
-    MONEY_BANK_STATS_TICK_LIMIT,
-  );
-
-  useEffect(() => {
-    if (!isConnected) {
-      setKnockoutSimulation(null);
-      setSimulationUnavailable(false);
-      return;
-    }
-
-    let active = true;
-    let inFlight = false;
-    setKnockoutSimulation(null);
-    setSimulationUnavailable(false);
-
-    const refreshSimulation = async () => {
-      if (inFlight) return;
-      inFlight = true;
-      try {
-        const response = await requestSimulationRef.current({ data: { symbol } });
-        if (active) {
-          setKnockoutSimulation(response);
-          setSimulationUnavailable(false);
-        }
-      } catch {
-        if (active) setSimulationUnavailable(true);
-      } finally {
-        inFlight = false;
-      }
-    };
-
-    void refreshSimulation();
-    const interval = window.setInterval(() => void refreshSimulation(), 60_000);
-    return () => {
-      active = false;
-      window.clearInterval(interval);
-    };
-  }, [isConnected, symbol]);
-
-  useEffect(() => {
-    const sequence = marketSignal?.tick_sequence;
-    if (statsSymbolRef.current !== symbol) {
-      statsSymbolRef.current = symbol;
-      statsSequenceRef.current = Number.isSafeInteger(sequence) ? sequence! : null;
-      setStatsLiveTicks(0);
-      setSelectedStatsRate("all");
-      return;
-    }
-    if (!Number.isSafeInteger(sequence)) return;
-    const previous = statsSequenceRef.current;
-    statsSequenceRef.current = sequence!;
-    if (previous == null) return;
-    if (sequence! < previous) {
-      setStatsLiveTicks(0);
-      return;
-    }
-    if (sequence! > previous) {
-      setStatsLiveTicks((current) => current + sequence! - previous);
-    }
-  }, [marketSignal?.tick_sequence, symbol]);
-
-  const resetStatsTicks = () => {
-    const sequence = marketSignal?.tick_sequence;
-    statsSequenceRef.current = Number.isSafeInteger(sequence) ? sequence! : null;
-    setStatsLiveTicks(0);
-  };
 
   const submitStart = () => {
     if (starting || closing) return;
@@ -516,19 +409,14 @@ export function MoneyBankPanel({
             </div>
           </section>
 
-          <MoneyBankKnockoutHistory
+          <MoneyBankLiveKnockouts
             symbol={symbol}
+            marketLabel={selectedMarket}
             connected={isConnected}
-            liveTicks={statsLiveTicks}
-            onResetTicks={resetStatsTicks}
-            maxExitTicks={MONEY_BANK_STATS_TICK_LIMIT}
-            liveContractTicks={liveContractTicks}
-            selectedRate={selectedStatsRate}
-            onSelectedRateChange={setSelectedStatsRate}
-            summary={statsSummary}
-            exitTicks={exitTickStats}
-            simulation={knockoutSimulation}
-            simulationUnavailable={simulationUnavailable}
+            growthRate={growthRate}
+            quote={marketSignal?.quote ?? quote}
+            recentQuotes={marketSignal?.recent_quotes}
+            tickSequence={marketSignal?.tick_sequence}
           />
 
         </aside>

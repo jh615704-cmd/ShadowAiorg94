@@ -20,8 +20,8 @@ import {
   BuyClockWorkContractsResponse,
   ScanDerivAccumulatorKnockoutBody,
   ScanDerivAccumulatorKnockoutResponse,
-  SimulateMoneyBankKnockoutHistoryBody,
-  SimulateMoneyBankKnockoutHistoryResponse,
+  GetMoneyBankKnockoutBarriersBody,
+  GetMoneyBankKnockoutBarriersResponse,
   SelectDerivAccountBody,
   SelectDerivAccountResponse,
   SelectDerivSymbolBody,
@@ -41,7 +41,7 @@ import {
   requestProposal,
   getEdgeAvailableDurations,
   scanAccumulatorKnockout,
-  simulateMoneyBankKnockoutHistory,
+  getMoneyBankKnockoutBarriers,
   buyContract,
   sellContract,
   bulkBuyContracts,
@@ -435,18 +435,18 @@ router.post("/deriv/accumulator-knockout-scan", async (req, res) => {
   }
 });
 
-router.post("/deriv/accumulator-knockout-simulation", requireAccessFeature("money-bank"), async (req, res) => {
+router.post("/deriv/accumulator-knockout-barriers", requireAccessFeature("money-bank"), async (req, res) => {
   res.set("Cache-Control", "no-store");
-  const parsed = SimulateMoneyBankKnockoutHistoryBody.safeParse(req.body);
+  const parsed = GetMoneyBankKnockoutBarriersBody.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid Money Bank simulation request" });
+    return res.status(400).json({ error: "Invalid Money Bank barrier request" });
   }
 
   try {
-    const result = SimulateMoneyBankKnockoutHistoryResponse.parse(
+    const result = GetMoneyBankKnockoutBarriersResponse.parse(
       await withCredential(
         res.locals.userId,
-        () => simulateMoneyBankKnockoutHistory(parsed.data.symbol),
+        () => getMoneyBankKnockoutBarriers(parsed.data.symbol),
         true,
       ),
     );
@@ -458,9 +458,9 @@ router.post("/deriv/accumulator-knockout-simulation", requireAccessFeature("mone
     if (isCredentialError(error)) {
       return res.status(credentialHttpStatus(error)).json({ error: error.message });
     }
-    req.log.warn({ err: error }, "Money Bank market replay simulation failed");
+    req.log.warn({ err: error }, "Money Bank live knockout barrier lookup failed");
     return res.status(503).json({
-      error: "Money Bank simulation could not load current Deriv market data.",
+      error: "Money Bank could not load current Deriv barriers.",
     });
   }
 });

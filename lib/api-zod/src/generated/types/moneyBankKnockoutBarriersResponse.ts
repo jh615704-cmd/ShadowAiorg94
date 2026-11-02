@@ -5,17 +5,17 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { MoneyBankKnockoutSimulationRate } from './moneyBankKnockoutSimulationRate';
+import type { MoneyBankKnockoutBarrierRate } from './moneyBankKnockoutBarrierRate';
 
-export interface MoneyBankKnockoutSimulationResponse {
+export interface MoneyBankKnockoutBarriersResponse {
   symbol: string;
   /** @minimum 0 */
-  quote_count: number;
-  /** @minimum 0 */
   tick_sequence: number;
+  /** @nullable */
+  quote: number | null;
   /**
      * @minItems 5
      * @maxItems 5
      */
-  rates: MoneyBankKnockoutSimulationRate[];
+  rates: MoneyBankKnockoutBarrierRate[];
 }

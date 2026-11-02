@@ -144,10 +144,6 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.money-bank-side > .mbkh-panel {
-  grid-column: 1 / -1;
-}
-
 .money-bank-card,
 .money-bank-return-card {
   border: 1px solid var(--mb-line);
