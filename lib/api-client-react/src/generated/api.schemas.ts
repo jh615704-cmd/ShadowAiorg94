@@ -724,6 +724,60 @@ export interface MoneyBankKnockoutScannerResponse {
   market_matches: boolean;
 }
 
+export interface MoneyBankKnockoutSimulationInput {
+  /** @minLength 1 */
+  symbol: string;
+}
+
+export interface MoneyBankKnockoutSimulationCell {
+  /**
+     * @minimum 1
+     * @maximum 20
+     */
+  ticks: number;
+  /** @minimum 0 */
+  sample_count: number;
+  /** @minimum 0 */
+  knockouts: number;
+  /** @minimum 0 */
+  survivors: number;
+  /** @nullable */
+  survival_rate: number | null;
+}
+
+export type MoneyBankKnockoutSimulationRateGrowthRate = typeof MoneyBankKnockoutSimulationRateGrowthRate[keyof typeof MoneyBankKnockoutSimulationRateGrowthRate];
+
+
+export const MoneyBankKnockoutSimulationRateGrowthRate = {
+  NUMBER_1: 1,
+  NUMBER_2: 2,
+  NUMBER_3: 3,
+  NUMBER_4: 4,
+  NUMBER_5: 5,
+} as const;
+
+export interface MoneyBankKnockoutSimulationRate {
+  growth_rate: MoneyBankKnockoutSimulationRateGrowthRate;
+  /** @nullable */
+  barrier: number | null;
+  /** @nullable */
+  message: string | null;
+  cells: MoneyBankKnockoutSimulationCell[];
+}
+
+export interface MoneyBankKnockoutSimulationResponse {
+  symbol: string;
+  /** @minimum 0 */
+  quote_count: number;
+  /** @minimum 0 */
+  tick_sequence: number;
+  /**
+     * @minItems 5
+     * @maxItems 5
+     */
+  rates: MoneyBankKnockoutSimulationRate[];
+}
+
 export interface DerivProposalRequest {
   ok: boolean;
   message: string;

@@ -30,6 +30,7 @@ let bulkBuyInvocations = 0;
 const bulkBuyDurations: number[] = [];
 let dualBuyInvocations = 0;
 let knockoutScanInvocations = 0;
+let knockoutSimulationInvocations = 0;
 const marketTickListeners = new Set<(tick: {
   symbol: string;
   tick_sequence: number;
@@ -221,6 +222,27 @@ mock.module("../lib/deriv", {
         market_matches: true,
       };
     },
+    simulateMoneyBankKnockoutHistory: async (symbol: string) => {
+      observePat();
+      knockoutSimulationInvocations += 1;
+      return {
+        symbol,
+        quote_count: 23,
+        tick_sequence: 23,
+        rates: [1, 2, 3, 4, 5].map((growth_rate) => ({
+          growth_rate,
+          barrier: 1.25,
+          message: null,
+          cells: Array.from({ length: 20 }, (_, index) => ({
+            ticks: index + 1,
+            sample_count: 20,
+            knockouts: 5,
+            survivors: 15,
+            survival_rate: 75,
+          })),
+        })),
+      };
+    },
     buyContract: async () => {
       observePat();
       buyInvocations += 1;
@@ -387,6 +409,17 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
     assert.equal(scanResponse.status, 200, JSON.stringify(scanResponseBody));
     assert.equal(scanResponseBody.required_knockouts, 5);
     assert.equal(knockoutScanInvocations, 1);
+
+    const simulationResponse = await fetch(`${baseUrl}/deriv/accumulator-knockout-simulation`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol: "1HZ90V" }),
+    });
+    const simulationResponseBody = await readJson(simulationResponse);
+    assert.equal(simulationResponse.status, 200, JSON.stringify(simulationResponseBody));
+    assert.equal(simulationResponseBody.quote_count, 23);
+    assert.equal((simulationResponseBody.rates as unknown[]).length, 5);
+    assert.equal(knockoutSimulationInvocations, 1);
 
     const invalidMoneyBankDurationResponse = await fetch(`${baseUrl}/deriv/buy`, {
       method: "POST",
@@ -641,7 +674,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
     });
     assert.equal(outOfRangeAutoTraderResponse.status, 400);
     assert.match(String((await readJson(outOfRangeAutoTraderResponse)).error), /1 to 5 ticks/);
-    assert.deepEqual(observedPats, Array.from({ length: 31 }, () => enteredPat));
+    assert.deepEqual(observedPats, Array.from({ length: 32 }, () => enteredPat));
 
     const priorBuyInvocations = buyInvocations;
     const priorBulkBuyInvocations = bulkBuyInvocations;

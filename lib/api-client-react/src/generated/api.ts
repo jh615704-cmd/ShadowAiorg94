@@ -63,6 +63,8 @@ import type {
   HealthStatus,
   MoneyBankKnockoutScannerInput,
   MoneyBankKnockoutScannerResponse,
+  MoneyBankKnockoutSimulationInput,
+  MoneyBankKnockoutSimulationResponse,
   StreamDerivTradeUpdatesParams,
   SuccessResponse,
   TokenDeleteResponse,
@@ -2240,6 +2242,77 @@ export const useScanDerivAccumulatorKnockout = <TError = ErrorType<ErrorResponse
         TContext
       > => {
       return useMutation(getScanDerivAccumulatorKnockoutMutationOptions(options));
+    }
+
+export const getSimulateMoneyBankKnockoutHistoryUrl = () => {
+
+
+
+
+  return `/api/deriv/accumulator-knockout-simulation`
+}
+
+/**
+ * @summary Replay recent market ticks against current Money Bank barriers
+ */
+export const simulateMoneyBankKnockoutHistory = async (moneyBankKnockoutSimulationInput: MoneyBankKnockoutSimulationInput, options?: Parameters<typeof customFetch>[1]): Promise<MoneyBankKnockoutSimulationResponse> => {
+
+  return customFetch<MoneyBankKnockoutSimulationResponse>(getSimulateMoneyBankKnockoutHistoryUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(moneyBankKnockoutSimulationInput)
+  }
+);}
+
+
+
+
+
+export const getSimulateMoneyBankKnockoutHistoryMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof simulateMoneyBankKnockoutHistory>>, TError,{data: BodyType<MoneyBankKnockoutSimulationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof simulateMoneyBankKnockoutHistory>>, TError,{data: BodyType<MoneyBankKnockoutSimulationInput>}, TContext> => {
+
+const mutationKey = ['simulateMoneyBankKnockoutHistory'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof simulateMoneyBankKnockoutHistory>>, {data: BodyType<MoneyBankKnockoutSimulationInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  simulateMoneyBankKnockoutHistory(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SimulateMoneyBankKnockoutHistoryMutationResult = NonNullable<Awaited<ReturnType<typeof simulateMoneyBankKnockoutHistory>>>
+    export type SimulateMoneyBankKnockoutHistoryMutationBody = BodyType<MoneyBankKnockoutSimulationInput>
+    export type SimulateMoneyBankKnockoutHistoryMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Replay recent market ticks against current Money Bank barriers
+ */
+export const useSimulateMoneyBankKnockoutHistory = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof simulateMoneyBankKnockoutHistory>>, TError,{data: BodyType<MoneyBankKnockoutSimulationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof simulateMoneyBankKnockoutHistory>>,
+        TError,
+        {data: BodyType<MoneyBankKnockoutSimulationInput>},
+        TContext
+      > => {
+      return useMutation(getSimulateMoneyBankKnockoutHistoryMutationOptions(options));
     }
 
 export const getSelectDerivAccountUrl = () => {

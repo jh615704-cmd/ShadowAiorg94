@@ -20,6 +20,8 @@ import {
   BuyClockWorkContractsResponse,
   ScanDerivAccumulatorKnockoutBody,
   ScanDerivAccumulatorKnockoutResponse,
+  SimulateMoneyBankKnockoutHistoryBody,
+  SimulateMoneyBankKnockoutHistoryResponse,
   SelectDerivAccountBody,
   SelectDerivAccountResponse,
   SelectDerivSymbolBody,
@@ -39,6 +41,7 @@ import {
   requestProposal,
   getEdgeAvailableDurations,
   scanAccumulatorKnockout,
+  simulateMoneyBankKnockoutHistory,
   buyContract,
   sellContract,
   bulkBuyContracts,
@@ -428,6 +431,36 @@ router.post("/deriv/accumulator-knockout-scan", async (req, res) => {
     req.log.warn({ err: error }, "Money Bank Auto Knockout scan did not pass");
     return res.status(409).json({
       error: error instanceof Error ? error.message : "Money Bank Auto Knockout could not verify the selected market.",
+    });
+  }
+});
+
+router.post("/deriv/accumulator-knockout-simulation", requireAccessFeature("money-bank"), async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const parsed = SimulateMoneyBankKnockoutHistoryBody.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid Money Bank simulation request" });
+  }
+
+  try {
+    const result = SimulateMoneyBankKnockoutHistoryResponse.parse(
+      await withCredential(
+        res.locals.userId,
+        () => simulateMoneyBankKnockoutHistory(parsed.data.symbol),
+        true,
+      ),
+    );
+    return res.json(result);
+  } catch (error) {
+    if (isCapacityError(error)) {
+      return res.status(503).json({ error: error.message });
+    }
+    if (isCredentialError(error)) {
+      return res.status(credentialHttpStatus(error)).json({ error: error.message });
+    }
+    req.log.warn({ err: error }, "Money Bank market replay simulation failed");
+    return res.status(503).json({
+      error: "Money Bank simulation could not load current Deriv market data.",
     });
   }
 });

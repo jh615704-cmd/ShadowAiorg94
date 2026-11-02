@@ -912,6 +912,52 @@ export const ScanDerivAccumulatorKnockoutResponse = zod.object({
 
 
 /**
+ * @summary Replay recent market ticks against current Money Bank barriers
+ */
+
+
+
+export const SimulateMoneyBankKnockoutHistoryBody = zod.object({
+  "symbol": zod.string().min(1)
+})
+
+export const simulateMoneyBankKnockoutHistoryResponseQuoteCountMin = 0;
+
+export const simulateMoneyBankKnockoutHistoryResponseTickSequenceMin = 0;
+
+export const simulateMoneyBankKnockoutHistoryResponseRatesItemCellsItemTicksMax = 20;
+
+export const simulateMoneyBankKnockoutHistoryResponseRatesItemCellsItemSampleCountMin = 0;
+
+export const simulateMoneyBankKnockoutHistoryResponseRatesItemCellsItemKnockoutsMin = 0;
+
+export const simulateMoneyBankKnockoutHistoryResponseRatesItemCellsItemSurvivorsMin = 0;
+
+export const simulateMoneyBankKnockoutHistoryResponseRatesMin = 5;
+export const simulateMoneyBankKnockoutHistoryResponseRatesMax = 5;
+
+
+
+export const SimulateMoneyBankKnockoutHistoryResponse = zod.object({
+  "symbol": zod.string(),
+  "quote_count": zod.number().int().min(simulateMoneyBankKnockoutHistoryResponseQuoteCountMin),
+  "tick_sequence": zod.number().int().min(simulateMoneyBankKnockoutHistoryResponseTickSequenceMin),
+  "rates": zod.array(zod.object({
+  "growth_rate": zod.union([zod.literal(1),zod.literal(2),zod.literal(3),zod.literal(4),zod.literal(5)]),
+  "barrier": zod.number().nullable(),
+  "message": zod.string().nullable(),
+  "cells": zod.array(zod.object({
+  "ticks": zod.number().int().min(1).max(simulateMoneyBankKnockoutHistoryResponseRatesItemCellsItemTicksMax),
+  "sample_count": zod.number().int().min(simulateMoneyBankKnockoutHistoryResponseRatesItemCellsItemSampleCountMin),
+  "knockouts": zod.number().int().min(simulateMoneyBankKnockoutHistoryResponseRatesItemCellsItemKnockoutsMin),
+  "survivors": zod.number().int().min(simulateMoneyBankKnockoutHistoryResponseRatesItemCellsItemSurvivorsMin),
+  "survival_rate": zod.number().nullable()
+}))
+})).min(simulateMoneyBankKnockoutHistoryResponseRatesMin).max(simulateMoneyBankKnockoutHistoryResponseRatesMax)
+})
+
+
+/**
  * @summary Select the account used by the authenticated WebSocket
  */
 

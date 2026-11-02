@@ -749,6 +749,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /deriv/accumulator-knockout-simulation:
+    post:
+      operationId: simulateMoneyBankKnockoutHistory
+      tags: [deriv]
+      summary: Replay recent market ticks against current Money Bank barriers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoneyBankKnockoutSimulationInput"
+      responses:
+        "200":
+          description: Hypothetical outcomes replayed across recent quotes for each growth rate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MoneyBankKnockoutSimulationResponse"
+        "403":
+          description: Money Bank feature access is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Deriv could not provide the required market data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /deriv/select-account:
     post:
       operationId: selectDerivAccount
@@ -1659,6 +1689,65 @@ components:
           type: boolean
         market_matches:
           type: boolean
+    MoneyBankKnockoutSimulationInput:
+      type: object
+      required: [symbol]
+      properties:
+        symbol:
+          type: string
+          minLength: 1
+    MoneyBankKnockoutSimulationCell:
+      type: object
+      required: [ticks, sample_count, knockouts, survivors, survival_rate]
+      properties:
+        ticks:
+          type: integer
+          minimum: 1
+          maximum: 20
+        sample_count:
+          type: integer
+          minimum: 0
+        knockouts:
+          type: integer
+          minimum: 0
+        survivors:
+          type: integer
+          minimum: 0
+        survival_rate:
+          type: [number, "null"]
+    MoneyBankKnockoutSimulationRate:
+      type: object
+      required: [growth_rate, barrier, message, cells]
+      properties:
+        growth_rate:
+          type: integer
+          enum: [1, 2, 3, 4, 5]
+        barrier:
+          type: [number, "null"]
+        message:
+          type: [string, "null"]
+        cells:
+          type: array
+          items:
+            $ref: "#/components/schemas/MoneyBankKnockoutSimulationCell"
+    MoneyBankKnockoutSimulationResponse:
+      type: object
+      required: [symbol, quote_count, tick_sequence, rates]
+      properties:
+        symbol:
+          type: string
+        quote_count:
+          type: integer
+          minimum: 0
+        tick_sequence:
+          type: integer
+          minimum: 0
+        rates:
+          type: array
+          minItems: 5
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/MoneyBankKnockoutSimulationRate"
     DerivProposalRequest:
       type: object
       required: [ok, message]

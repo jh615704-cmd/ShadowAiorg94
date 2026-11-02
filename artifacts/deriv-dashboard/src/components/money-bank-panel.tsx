@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Download, Play, RefreshCw, ShieldCheck, Square, TrendingUp } from "lucide-react";
 import {
+  useSimulateMoneyBankKnockoutHistory,
+  type MoneyBankKnockoutSimulationResponse,
+} from "@workspace/api-client-react";
+import {
   calculateRecoveryLadder,
   type MoneyBankLadderLevel,
   type MoneyBankStrategy,
@@ -137,6 +141,11 @@ export function MoneyBankPanel({
   const controlsDisabled = running || starting;
   const [selectedStatsRate, setSelectedStatsRate] = useState<MoneyBankStatsRate>("all");
   const [statsLiveTicks, setStatsLiveTicks] = useState(0);
+  const [knockoutSimulation, setKnockoutSimulation] = useState<MoneyBankKnockoutSimulationResponse | null>(null);
+  const [simulationUnavailable, setSimulationUnavailable] = useState(false);
+  const simulationMutation = useSimulateMoneyBankKnockoutHistory();
+  const requestSimulationRef = useRef(simulationMutation.mutateAsync);
+  requestSimulationRef.current = simulationMutation.mutateAsync;
   const statsSymbolRef = useRef(symbol);
   const statsSequenceRef = useRef(
     Number.isSafeInteger(marketSignal?.tick_sequence) ? marketSignal?.tick_sequence ?? null : null,
@@ -180,6 +189,42 @@ export function MoneyBankPanel({
     selectedStatsRate,
     MONEY_BANK_STATS_TICK_LIMIT,
   );
+
+  useEffect(() => {
+    if (!isConnected) {
+      setKnockoutSimulation(null);
+      setSimulationUnavailable(false);
+      return;
+    }
+
+    let active = true;
+    let inFlight = false;
+    setKnockoutSimulation(null);
+    setSimulationUnavailable(false);
+
+    const refreshSimulation = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const response = await requestSimulationRef.current({ data: { symbol } });
+        if (active) {
+          setKnockoutSimulation(response);
+          setSimulationUnavailable(false);
+        }
+      } catch {
+        if (active) setSimulationUnavailable(true);
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    void refreshSimulation();
+    const interval = window.setInterval(() => void refreshSimulation(), 60_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [isConnected, symbol]);
 
   useEffect(() => {
     const sequence = marketSignal?.tick_sequence;
@@ -482,6 +527,8 @@ export function MoneyBankPanel({
             onSelectedRateChange={setSelectedStatsRate}
             summary={statsSummary}
             exitTicks={exitTickStats}
+            simulation={knockoutSimulation}
+            simulationUnavailable={simulationUnavailable}
           />
 
         </aside>

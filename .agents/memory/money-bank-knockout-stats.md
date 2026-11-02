@@ -5,6 +5,8 @@ description: Rules for live Money Bank tick display and rate-scoped knockout sum
 
 Keep the Money Bank Stats range fixed at ticks 1–20, independent of take-profit. Do not render empty tick placeholders before a live market tick arrives. The All Rates view may show the current market tick; a 1–5% view must show only that rate's active contract tick or matching outcome data.
 
+Keep actual contract outcomes and hypothetical live-market replay in separate displays. Actual outcomes come only from settled Deriv contracts at the matching market, growth rate, and duration. The replay uses recent quote windows and the current Deriv barrier for each growth rate; never combine its counts with actual history or describe it as a forecast or guarantee.
+
 On every viewport, let Stats span the full available Money Bank body width. Keep the 20 tick positions in a seven-column grid (three rows) with square tiles that shrink to fit narrow screens.
 
 Scope summaries and outcome bands to the selected market and growth rate; All Rates combines rates. Include matching open, pending, or active contracts with a positive `tick_passed` in tracked runs and duration metrics so those values advance with the live contract. Count knockouts and completed runs only from settled Deriv outcomes; do not infer contract results from quote direction.
@@ -15,4 +17,6 @@ The live tick counter and its reset are separate from trade history; resetting i
 
 **Why:** The user wants stats to begin with live market ticks, each percentage selection to isolate its own Money Bank data, and the panel to prioritize width with three rows of square tick boxes on every device. Contract outcomes must remain grounded in Deriv results rather than inferred from raw price movement.
 
-**How to apply:** Keep market, rate, duration, account, active-contract progress, and settled-outcome filters consistent across the Stats panel and its tests. Use an explicit empty state instead of zero-filled placeholder cells when a selected rate has no samples.
+**Why:** The user selected both views: real contract outcomes and a separate hypothetical live-market simulation across growth rates.
+
+**How to apply:** Keep market, rate, duration, account, active-contract progress, and settled-outcome filters consistent across the Stats panel and its tests. Keep actual outcomes and replay metrics separate, and use an explicit empty state instead of zero-filled placeholders when there are no samples.
