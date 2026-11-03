@@ -5150,8 +5150,15 @@ export default function XTraderPage() {
     if (jackpotBuyMutation.isPending) return "Fresh quotes and order confirmations are in progress.";
     if (jackpotNeedsHistoryCheck) return "Check Deriv account history and confirm before continuing.";
     if (anyContractBuyPending) return "Wait for the other feature's order request to finish.";
-    if (tradeSlotBlocked) return "Wait for all open contracts to settle before starting another batch.";
-    if (jackpotBatchContractIds.length) return "Wait for the batch history to confirm settlement before continuing.";
+    if (tradeSlotBlocked) {
+      if (!openContractsReady) {
+        return "Deriv is checking open contracts. This button unlocks when settlement is confirmed.";
+      }
+      return `Waiting for ${activeContractCount} open account contract${activeContractCount === 1 ? "" : "s"} to settle. This button unlocks automatically when all are closed.`;
+    }
+    if (jackpotBatchContractIds.length) {
+      return "The batch is settled; its final results are syncing. This button unlocks when they are confirmed.";
+    }
     if (jackpotStopReason) return jackpotStopReason;
     if (!Number.isInteger(contractCount) || contractCount < 1 || contractCount > 20) return "Choose between 1 and 20 total contracts.";
     if (!jackpotRiseFallEnabled && !jackpotEvenOddEnabled) return "Enable at least one contract family.";

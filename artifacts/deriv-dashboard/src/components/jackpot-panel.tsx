@@ -323,7 +323,7 @@ export default function JackpotPanel({
 
         <section className={`jackpot-batch-state ${isBlocked ? "blocked" : ""}`} role="status" aria-live="polite" data-testid="status-jackpot-batch">
           <span className="jackpot-batch-icon">{isBlocked ? <CircleAlert size={16} /> : <Activity size={16} />}</span>
-          <span className="jackpot-batch-copy"><b>{batchLoading ? "Preparing your batch" : isBlocked ? "New batch unavailable" : batchStatus || "Batch standing by"}</b><small>{!isConnected ? "Connect Deriv before this feature can run." : tradeSlotBlocked ? "Wait for open contracts to settle before starting another batch." : batchLoading ? "Batch status will update when preparation is complete." : "Jackpot is configured here; execution remains controlled by the dashboard."}</small></span>
+          <span className="jackpot-batch-copy"><b>{batchLoading ? "Preparing your batch" : !isConnected ? "Connect Deriv" : tradeSlotBlocked ? "Waiting for settlement confirmation" : featureStatus === "paused" ? "Jackpot is paused" : featureStatus === "error" ? "Jackpot needs attention" : batchStatus || "Batch standing by"}</b><small>{!isConnected ? "Connect Deriv before this feature can run." : tradeSlotBlocked ? "New batches unlock automatically after Deriv confirms all open account contracts have settled." : batchLoading ? "Batch status will update when preparation is complete." : "Jackpot is configured here; execution remains controlled by the dashboard."}</small></span>
            <span className="jackpot-batch-count">{contractCount} orders</span>
         </section>
         <div className="jackpot-place-row">

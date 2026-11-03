@@ -555,6 +555,53 @@ test("Jackpot keeps a batch blocked after an unclear order confirmation", async 
   }
 });
 
+test("Jackpot place button re-enables after Deriv confirms settlement", async () => {
+  const state = createState(userSession(["jackpot"]));
+  state.hasToken = true;
+  state.allowFixtureTrades = true;
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/app`);
+    await page.getByRole("heading", { name: "Trading Strategies" }).waitFor();
+    await page.getByRole("checkbox", { name: "Toggle Jackpot" }).check();
+    const panel = page.getByTestId("jackpot-panel");
+    const placeButton = panel.getByTestId("button-jackpot-place-batch");
+
+    await placeButton.click();
+    await panel.locator(".deriv-history-row").first().waitFor({ timeout: 10_000 });
+    assert.equal(await placeButton.isDisabled(), true, "Do not allow another batch while Deriv reports an open contract.");
+
+    state.history = state.history.map((trade) => ({
+      ...trade,
+      current_value: trade.buy_price * 2,
+      payout: trade.buy_price * 2,
+      profit: trade.buy_price,
+      status: "won",
+      sell_time: Math.floor(Date.now() / 1_000),
+    }));
+    state.activeContractCount = 0;
+
+    await page.waitForFunction(() => {
+      const button = document.querySelector('[data-testid="button-jackpot-place-batch"]');
+      return button instanceof HTMLButtonElement && !button.disabled;
+    }, undefined, { timeout: 15_000 });
+    await placeButton.click();
+    await page.waitForFunction(() =>
+      document.querySelectorAll(".jackpot-history .deriv-history-row").length >= 2,
+    undefined, { timeout: 10_000 });
+    assert.equal(
+      state.tradeRequests.filter((request) => request.path === "/api/deriv/jackpot/buy").length,
+      2,
+      "The second batch must be accepted once the first is settled.",
+    );
+
+    assert.deepEqual(pageErrors, []);
+    assert.deepEqual(state.unhandledApis, []);
+  } finally {
+    await context.close();
+  }
+});
+
 test("Jackpot AI scans for five seconds, filters observed samples, and waits for settlement", async () => {
   const state = createState(userSession(["jackpot"]));
   state.hasToken = true;
