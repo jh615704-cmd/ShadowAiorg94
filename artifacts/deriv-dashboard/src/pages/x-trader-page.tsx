@@ -574,6 +574,7 @@ export default function XTraderPage() {
   const [jackpotAiCycle, setJackpotAiCycle] = useState(0);
   const [jackpotAiStatus, setJackpotAiStatus] = useState("Off. Use the manual button or enable Jackpot AI.");
   const jackpotAiAccountIdRef = useRef<string | null>(null);
+  const jackpotHadOpenContractsRef = useRef(false);
   const [jackpotMultiplyAfterLoss, setJackpotMultiplyAfterLoss] = useState(false);
   const [jackpotLossMultiplier, setJackpotLossMultiplier] = useState(2);
   const [jackpotTakeProfit, setJackpotTakeProfit] = useState(0);
@@ -1117,6 +1118,25 @@ export default function XTraderPage() {
     jackpotMultiplyAfterLoss,
     jackpotLossMultiplier,
   ]);
+  useEffect(() => {
+    if (!jackpotBatchContractIds.length) {
+      jackpotHadOpenContractsRef.current = false;
+      return;
+    }
+    if (tradeSlotBlocked) {
+      jackpotHadOpenContractsRef.current = true;
+      return;
+    }
+    if (!jackpotHadOpenContractsRef.current) return;
+
+    jackpotHadOpenContractsRef.current = false;
+    void queryClient.refetchQueries(
+      { queryKey: getGetDerivHistoryQueryKey(), type: "active" },
+      { cancelRefetch: false },
+    ).catch((error: unknown) => {
+      console.warn("Could not refresh Jackpot settlement history.", error);
+    });
+  }, [jackpotBatchContractIds.length, queryClient, tradeSlotBlocked]);
   const jackpotStopReason = getJackpotStopReason(
     jackpotSessionPnl,
     jackpotTakeProfit,

@@ -569,7 +569,33 @@ test("Jackpot place button re-enables after Deriv confirms settlement", async ()
 
     await placeButton.click();
     await panel.locator(".deriv-history-row").first().waitFor({ timeout: 10_000 });
+    await page.waitForFunction(() =>
+      document.querySelector(".jackpot-place-copy [role='status']")?.textContent
+        ?.includes("Waiting for 1 open account contract"),
+    undefined, { timeout: 10_000 });
     assert.equal(await placeButton.isDisabled(), true, "Do not allow another batch while Deriv reports an open contract.");
+
+    const historyCallsBeforeSettlement = state.apiCalls.filter(
+      (request) => request.path === "/api/deriv/history" && request.method === "GET",
+    ).length;
+    state.activeContractCount = 0;
+    await page.waitForFunction(() =>
+      document.querySelector(".jackpot-place-copy [role='status']")?.textContent
+        ?.includes("The batch is settled; its final results are syncing"),
+    undefined, { timeout: 10_000 });
+    const refreshDeadline = Date.now() + 3_000;
+    while (
+      state.apiCalls.filter((request) => request.path === "/api/deriv/history" && request.method === "GET").length
+        <= historyCallsBeforeSettlement
+      && Date.now() < refreshDeadline
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.ok(
+      state.apiCalls.filter((request) => request.path === "/api/deriv/history" && request.method === "GET").length
+        > historyCallsBeforeSettlement,
+      "Refresh settlement history immediately when Deriv reports no open contracts.",
+    );
 
     state.history = state.history.map((trade) => ({
       ...trade,
@@ -579,7 +605,6 @@ test("Jackpot place button re-enables after Deriv confirms settlement", async ()
       status: "won",
       sell_time: Math.floor(Date.now() / 1_000),
     }));
-    state.activeContractCount = 0;
 
     await page.waitForFunction(() => {
       const button = document.querySelector('[data-testid="button-jackpot-place-batch"]');

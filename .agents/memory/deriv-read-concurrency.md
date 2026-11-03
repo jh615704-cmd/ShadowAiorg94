@@ -23,6 +23,12 @@ After Deriv acknowledges a buy, claim its returned contract IDs locally and star
 
 **How to apply:** Keep the server's portfolio, balance, authorization, and settlement safeguards authoritative; make the browser responsive to the buy acknowledgement, then let one refresh and normal polling reconcile the full history row.
 
+For Jackpot, once an open-contract state has been observed and Deriv confirms the account has no open contracts, trigger one non-cancelling history-only refresh so the Place button does not wait for the next regular history poll. Keep the batch locked until settlement rows are confirmed; do not add repeated portfolio polling or a retry loop.
+
+**Why:** The normal history interval can add unnecessary delay after Deriv has already confirmed settlement. A single event-driven history refresh shortens that UI wait without weakening account-level overlap protection.
+
+**How to apply:** Track the transition from blocked to confirmed clear status for a pending Jackpot batch, refresh only history once, and keep the contract IDs until all settlement rows are present and closed.
+
 The entry-admission portfolio snapshot is a deliberate exception to ordinary read concurrency: correlate every request, keep `openContractsReady` false until Deriv returns a valid contracts array, and retry only this safe read with bounded backoff after an error or timeout. Keep the snapshot inside the serialized per-user buy path; never interpret a malformed response as an empty portfolio or replay a buy.
 
 **Why:** The initial uncorrelated portfolio request could fail without notifying readiness, leaving every feature paused indefinitely. Treating an invalid response as an empty portfolio could instead authorize overlapping trades.
