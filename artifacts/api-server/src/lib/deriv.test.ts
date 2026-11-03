@@ -1446,6 +1446,49 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
     assert.equal(result.message, "2 Jackpot dual pairs sent together. Each contract settles independently.");
   });
 
+  test("Jackpot requests fresh Rise/Fall and Even/Odd quotes for Bear and Bull symbols", async () => {
+    const cases = [
+      { symbol: "RDBEAR", riseFallType: "CALL" as const, parityType: "DIGITEVEN" as const },
+      { symbol: "RDBULL", riseFallType: "PUT" as const, parityType: "DIGITODD" as const },
+    ];
+
+    for (const [index, scenario] of cases.entries()) {
+      mockPortfolioContracts = [];
+      const result = await withSelectedAccount(`jackpot-market-quote-${index}`, async () => {
+        const socket = latestSocket();
+        const firstActionIndex = socket.sent.length;
+        const response = await deriv.buyJackpotPairContracts({
+          amount: 0.5,
+          duration: 2,
+          duration_unit: "t",
+          symbol: scenario.symbol,
+          rise_fall_type: scenario.riseFallType,
+          parity_type: scenario.parityType,
+          pair_count: 1,
+        });
+        const actions = socket.sent.slice(firstActionIndex).filter((message) => message.proposal || message.buy);
+        const proposalIndexes = actions.flatMap((message, actionIndex) => message.proposal ? [actionIndex] : []);
+        const firstBuyIndex = actions.findIndex((message) => message.buy);
+        return { response, actions, proposalIndexes, firstBuyIndex };
+      });
+
+      const proposals = result.actions.filter((message) => message.proposal);
+      assert.deepEqual(
+        proposals.map(({ underlying_symbol, contract_type }) => ({ underlying_symbol, contract_type })),
+        [
+          { underlying_symbol: scenario.symbol, contract_type: scenario.riseFallType },
+          { underlying_symbol: scenario.symbol, contract_type: scenario.parityType },
+        ],
+      );
+      assert.equal(result.actions.filter((message) => message.buy).length, 2);
+      assert.ok(
+        result.firstBuyIndex > Math.max(...result.proposalIndexes),
+        `${scenario.symbol} must have both fresh quotes before either buy`,
+      );
+      assert.equal(result.response.ok, true);
+    }
+  });
+
   test("Bulk Trader preserves exact 1–5 tick durations for every digit type and order size", async () => {
     const contractTypes = ["DIGITOVER", "DIGITUNDER", "DIGITDIFF"] as const;
     for (const count of [1, 3]) {

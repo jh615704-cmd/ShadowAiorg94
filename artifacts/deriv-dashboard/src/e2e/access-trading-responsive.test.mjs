@@ -492,6 +492,11 @@ test("Jackpot uses complete dual pairs, labels its run history, and excludes oth
     const panel = page.getByTestId("jackpot-panel");
     await panel.waitFor({ state: "visible" });
     assert.equal(await panel.getByTestId("button-jackpot-pairs-1").getAttribute("aria-pressed"), "true");
+    assert.equal(await panel.getByText("Each pair shows its two observed side rates, not a combined win probability.", { exact: true }).count(), 0);
+    assert.equal(await panel.getByText("Percentages describe observed sample context only; they do not predict or guarantee outcomes.", { exact: true }).count(), 0);
+    assert.equal(await panel.getByText("Limits are session thresholds, not a guarantee against losses.", { exact: true }).count(), 0);
+    const rateFontSize = await panel.locator(".jackpot-rate-item b").first().evaluate((element) => getComputedStyle(element).fontSize);
+    assert.ok(Number.parseFloat(rateFontSize) >= 16, "Jackpot market rates should be large enough to read clearly.");
     await panel.getByTestId("button-jackpot-place-batch").click();
     const history = panel.locator(".jackpot-history");
     await history.locator(".deriv-history-row").nth(1).waitFor({ timeout: 10_000 });
@@ -518,6 +523,30 @@ test("Jackpot uses complete dual pairs, labels its run history, and excludes oth
     await panel.waitFor({ state: "hidden" });
     await page.getByTestId("clock-work-panel").waitFor({ state: "visible" });
     assert.deepEqual(state.unhandledApis, []);
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+});
+
+test("Jackpot keeps a batch blocked after an unclear order confirmation", async () => {
+  const state = createState(userSession(["jackpot"]));
+  state.hasToken = true;
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/app`);
+    await page.getByRole("heading", { name: "Trading Strategies" }).waitFor();
+    await page.getByRole("checkbox", { name: "Toggle Jackpot" }).check();
+    const panel = page.getByTestId("jackpot-panel");
+    await panel.getByTestId("button-jackpot-place-batch").click();
+    await panel.getByTestId("button-jackpot-history-reviewed").waitFor({ state: "visible" });
+    assert.equal(await panel.getByTestId("button-jackpot-place-batch").isDisabled(), true);
+    await page.waitForTimeout(250);
+    assert.equal(
+      state.tradeRequests.filter(({ path }) => path === "/api/deriv/jackpot/buy").length,
+      1,
+      "An unclear confirmation must not automatically submit the batch again.",
+    );
     assert.deepEqual(pageErrors, []);
   } finally {
     await context.close();

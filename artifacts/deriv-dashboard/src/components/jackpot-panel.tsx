@@ -198,10 +198,8 @@ export default function JackpotPanel({
                   </div>
                 ))}
               </div>
-              <small className="jackpot-pair-rate-note">Each pair shows its two observed side rates, not a combined win probability.</small>
             </>
           )}
-          <p className="jackpot-disclaimer">Percentages describe observed sample context only; they do not predict or guarantee outcomes.</p>
         </section>
 
         <aside className="jackpot-guide" aria-label="Jackpot feature guide">
@@ -296,7 +294,6 @@ export default function JackpotPanel({
               <label className="jackpot-field"><span>Take profit · {currency}</span><input type="number" min="0" step="0.01" value={takeProfit} onChange={(event) => onTakeProfitChange(Number(event.target.value))} aria-label={`Jackpot session take-profit limit in ${currency}`} data-testid="input-jackpot-take-profit" /></label>
               <label className="jackpot-field"><span>Loss limit · {currency}</span><input type="number" min="0" step="0.01" value={lossLimit} onChange={(event) => onLossLimitChange(Number(event.target.value))} aria-label={`Jackpot session loss limit in ${currency}`} data-testid="input-jackpot-loss-limit" /></label>
             </div>
-            <p className="jackpot-limit-note"><CircleAlert size={13} />Limits are session thresholds, not a guarantee against losses.</p>
           </section>
         </div>
 
