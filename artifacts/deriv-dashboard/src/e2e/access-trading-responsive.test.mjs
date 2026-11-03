@@ -498,12 +498,14 @@ test("Jackpot supports one-sided bulk batches, labels its run history, and exclu
     const rateFontSize = await panel.locator(".jackpot-rate-item b").first().evaluate((element) => getComputedStyle(element).fontSize);
     assert.ok(Number.parseFloat(rateFontSize) >= 16, "Jackpot market rates should be large enough to read clearly.");
     await panel.getByTestId("switch-jackpot-even-odd").uncheck();
-    await panel.getByTestId("button-jackpot-count-3").click();
+    await panel.getByTestId("button-jackpot-direction-auto").click();
+    await panel.getByTestId("button-jackpot-count-20").click();
+    assert.equal(await panel.getByTestId("button-jackpot-count-20").getAttribute("aria-pressed"), "true");
     await panel.getByTestId("button-jackpot-place-batch").click();
     const history = panel.locator(".jackpot-history");
-    await history.locator(".deriv-history-row").nth(2).waitFor({ timeout: 10_000 });
-    assert.equal(await history.locator(".deriv-history-row").count(), 3);
-    assert.equal(await history.getByText("CURRENT RUN", { exact: true }).count(), 2);
+    await history.locator(".deriv-history-row").nth(19).waitFor({ timeout: 10_000 });
+    assert.equal(await history.locator(".deriv-history-row").count(), 20);
+    assert.equal(await history.getByText("CURRENT RUN", { exact: true }).count(), 20);
     assert.equal(await history.locator(".deriv-history-win-sample").count(), 0);
     assert.doesNotMatch(await history.innerText(), /n=0 settled/);
     assert.deepEqual(state.tradeRequests.map(({ path }) => path), ["/api/deriv/jackpot/buy"]);
@@ -513,7 +515,7 @@ test("Jackpot supports one-sided bulk batches, labels its run history, and exclu
       duration: 1,
       duration_unit: "t",
       symbol: "R_75",
-      contract_types: ["CALL", "CALL", "CALL"],
+      contract_types: Array(20).fill("CALL"),
     });
 
     const clockWorkToggle = page.getByRole("checkbox", { name: "Toggle Clock Work" });
@@ -572,7 +574,8 @@ test("Jackpot AI scans for five seconds, filters observed samples, and waits for
     await page.getByRole("heading", { name: "Trading Strategies" }).waitFor();
     await page.getByRole("checkbox", { name: "Toggle Jackpot" }).check();
     const panel = page.getByTestId("jackpot-panel");
-    await panel.getByTestId("switch-jackpot-ai").check();
+    await panel.locator("label.jackpot-ai-switch").click();
+    assert.equal(await panel.getByTestId("switch-jackpot-ai").isChecked(), true);
     await panel.locator(".deriv-history-row").first().waitFor({ timeout: 15_000 });
     assert.equal(state.tradeRequests.length, 1);
     assert.equal(state.tradeRequests[0].path, "/api/deriv/jackpot/buy");

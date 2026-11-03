@@ -67,6 +67,13 @@ test("allocates the selected count across enabled families with no extra orders"
   assert.deepEqual(buildJackpotContractTypes(selection, 21), []);
 });
 
+test("supports a 20-contract AUTO batch with only one enabled family", () => {
+  const selection = resolveJackpotSelection(signal(), "AUTO", "AUTO", false, true);
+  assert.ok(selection);
+  assert.deepEqual(selection.contractTypes, ["DIGITEVEN"]);
+  assert.deepEqual(buildJackpotContractTypes(selection, 20), Array(20).fill("DIGITEVEN"));
+});
+
 test("AI market ranking requires a live sample above its observed-rate threshold", () => {
   const selected = chooseJackpotBestMarket(
     [
