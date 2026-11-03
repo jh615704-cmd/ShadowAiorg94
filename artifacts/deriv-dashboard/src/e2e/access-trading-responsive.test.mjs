@@ -471,7 +471,7 @@ test("DigitFlip history stays visible after switching the feature off", async ()
   }
 });
 
-test("Jackpot uses complete dual pairs, labels its run history, and excludes other features", async () => {
+test("Jackpot supports one-sided bulk batches, labels its run history, and excludes other features", async () => {
   const state = createState(userSession(["jackpot", "clock-work"]));
   state.hasToken = true;
   state.allowFixtureTrades = true;
@@ -491,16 +491,18 @@ test("Jackpot uses complete dual pairs, labels its run history, and excludes oth
     await jackpotToggle.check();
     const panel = page.getByTestId("jackpot-panel");
     await panel.waitFor({ state: "visible" });
-    assert.equal(await panel.getByTestId("button-jackpot-pairs-1").getAttribute("aria-pressed"), "true");
+    assert.equal(await panel.getByTestId("button-jackpot-count-1").getAttribute("aria-pressed"), "true");
     assert.equal(await panel.getByText("Each pair shows its two observed side rates, not a combined win probability.", { exact: true }).count(), 0);
     assert.equal(await panel.getByText("Percentages describe observed sample context only; they do not predict or guarantee outcomes.", { exact: true }).count(), 0);
     assert.equal(await panel.getByText("Limits are session thresholds, not a guarantee against losses.", { exact: true }).count(), 0);
     const rateFontSize = await panel.locator(".jackpot-rate-item b").first().evaluate((element) => getComputedStyle(element).fontSize);
     assert.ok(Number.parseFloat(rateFontSize) >= 16, "Jackpot market rates should be large enough to read clearly.");
+    await panel.getByTestId("switch-jackpot-even-odd").uncheck();
+    await panel.getByTestId("button-jackpot-count-3").click();
     await panel.getByTestId("button-jackpot-place-batch").click();
     const history = panel.locator(".jackpot-history");
-    await history.locator(".deriv-history-row").nth(1).waitFor({ timeout: 10_000 });
-    assert.equal(await history.locator(".deriv-history-row").count(), 2);
+    await history.locator(".deriv-history-row").nth(2).waitFor({ timeout: 10_000 });
+    assert.equal(await history.locator(".deriv-history-row").count(), 3);
     assert.equal(await history.getByText("CURRENT RUN", { exact: true }).count(), 2);
     assert.equal(await history.locator(".deriv-history-win-sample").count(), 0);
     assert.doesNotMatch(await history.innerText(), /n=0 settled/);
@@ -511,9 +513,7 @@ test("Jackpot uses complete dual pairs, labels its run history, and excludes oth
       duration: 1,
       duration_unit: "t",
       symbol: "R_75",
-      rise_fall_type: "CALL",
-      parity_type: "DIGITEVEN",
-      pair_count: 1,
+      contract_types: ["CALL", "CALL", "CALL"],
     });
 
     const clockWorkToggle = page.getByRole("checkbox", { name: "Toggle Clock Work" });
@@ -547,6 +547,39 @@ test("Jackpot keeps a batch blocked after an unclear order confirmation", async 
       1,
       "An unclear confirmation must not automatically submit the batch again.",
     );
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+});
+
+test("Jackpot AI scans for five seconds, filters observed samples, and waits for settlement", async () => {
+  const state = createState(userSession(["jackpot"]));
+  state.hasToken = true;
+  state.allowFixtureTrades = true;
+  state.statusVersion = 50;
+  state.marketSignalOverrides = {
+    R_75: {
+      rise_percentage: 62,
+      fall_percentage: 38,
+      digit_even_percentage: 57,
+      digit_odd_percentage: 43,
+    },
+  };
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/app`);
+    await page.getByRole("heading", { name: "Trading Strategies" }).waitFor();
+    await page.getByRole("checkbox", { name: "Toggle Jackpot" }).check();
+    const panel = page.getByTestId("jackpot-panel");
+    await panel.getByTestId("switch-jackpot-ai").check();
+    await panel.locator(".deriv-history-row").first().waitFor({ timeout: 15_000 });
+    assert.equal(state.tradeRequests.length, 1);
+    assert.equal(state.tradeRequests[0].path, "/api/deriv/jackpot/buy");
+    assert.deepEqual(state.tradeRequests[0].body.contract_types, ["CALL"]);
+    assert.match(await panel.getByTestId("status-jackpot-ai").innerText(), /settle/i);
+    await page.waitForTimeout(250);
+    assert.equal(state.tradeRequests.length, 1, "AI must wait for settlement instead of replaying the batch.");
     assert.deepEqual(pageErrors, []);
   } finally {
     await context.close();
@@ -2081,7 +2114,7 @@ async function mockApiRequest(route, state, pathname, method) {
   if (pathname === "/api/deriv/jackpot/buy" && method === "POST" && state.allowFixtureTrades) {
     const order = request.postDataJSON();
     state.tradeRequests.push({ path: pathname, method, body: order });
-    const contractTypes = Array.from({ length: order.pair_count }, () => [
+    const contractTypes = order.contract_types ?? Array.from({ length: order.pair_count }, () => [
       order.rise_fall_type,
       order.parity_type,
     ]).flat();

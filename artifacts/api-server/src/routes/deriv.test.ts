@@ -34,9 +34,10 @@ const jackpotBuyInputs: Array<{
   amount: number;
   duration: number;
   symbol: string;
-  rise_fall_type: string;
-  parity_type: string;
-  pair_count: number;
+  rise_fall_type?: string;
+  parity_type?: string;
+  pair_count?: number;
+  contract_types?: string[];
 }> = [];
 let knockoutScanInvocations = 0;
 const marketTickListeners = new Set<(tick: {
@@ -257,17 +258,20 @@ mock.module("../lib/deriv", {
       amount: number;
       duration: number;
       symbol: string;
-      rise_fall_type: string;
-      parity_type: string;
-      pair_count: number;
+      rise_fall_type?: string;
+      parity_type?: string;
+      pair_count?: number;
+      contract_types?: string[];
     }) => {
       observePat();
       jackpotBuyInvocations += 1;
       jackpotBuyInputs.push(input);
       return {
         ok: true,
-        message: `${input.pair_count} Jackpot pairs sent`,
-        count: input.pair_count * 2,
+        message: input.contract_types
+          ? `${input.contract_types.length} Jackpot contracts sent`
+          : `${input.pair_count} Jackpot pairs sent`,
+        count: input.contract_types?.length ?? (input.pair_count ?? 0) * 2,
         proposals: [],
         buys: [],
         failed: [],
@@ -507,6 +511,29 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
       pair_count: 3,
     });
 
+    const jackpotBulkTypes = ["CALL", "DIGITEVEN", "PUT"] as const;
+    const jackpotBulkResponse = await fetch(`${baseUrl}/deriv/jackpot/buy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        access_feature: "jackpot",
+        amount: 0.5,
+        duration: 2,
+        duration_unit: "t",
+        symbol: "R_75",
+        contract_types: jackpotBulkTypes,
+      }),
+    });
+    assert.equal(jackpotBulkResponse.status, 202, JSON.stringify(await readJson(jackpotBulkResponse)));
+    assert.deepEqual(jackpotBuyInputs.at(-1), {
+      access_feature: "jackpot",
+      amount: 0.5,
+      duration: 2,
+      duration_unit: "t",
+      symbol: "R_75",
+      contract_types: jackpotBulkTypes,
+    });
+
     const validMoneyBankMaxDurationResponse = await fetch(`${baseUrl}/deriv/buy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -698,7 +725,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
     });
     assert.equal(outOfRangeAutoTraderResponse.status, 400);
     assert.match(String((await readJson(outOfRangeAutoTraderResponse)).error), /1 to 5 ticks/);
-    assert.deepEqual(observedPats, Array.from({ length: 32 }, () => enteredPat));
+    assert.deepEqual(observedPats, Array.from({ length: 33 }, () => enteredPat));
 
     const priorBuyInvocations = buyInvocations;
     const priorBulkBuyInvocations = bulkBuyInvocations;

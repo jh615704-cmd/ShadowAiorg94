@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { JackpotPairBuyInputAccessFeature } from './jackpotPairBuyInputAccessFeature';
+import type { JackpotPairBuyInputContractTypesItem } from './jackpotPairBuyInputContractTypesItem';
 import type { JackpotPairBuyInputDurationUnit } from './jackpotPairBuyInputDurationUnit';
 import type { JackpotPairBuyInputParityType } from './jackpotPairBuyInputParityType';
 import type { JackpotPairBuyInputRiseFallType } from './jackpotPairBuyInputRiseFallType';
@@ -22,11 +23,18 @@ export interface JackpotPairBuyInput {
   duration_unit: JackpotPairBuyInputDurationUnit;
   /** @minLength 1 */
   symbol: string;
-  rise_fall_type: JackpotPairBuyInputRiseFallType;
-  parity_type: JackpotPairBuyInputParityType;
+  rise_fall_type?: JackpotPairBuyInputRiseFallType;
+  parity_type?: JackpotPairBuyInputParityType;
   /**
+     * Legacy count of complete dual pairs.
      * @minimum 1
      * @maximum 9
      */
-  pair_count: number;
+  pair_count?: number;
+  /**
+     * Exact ordered contract list for the batch; array length is the total trade count.
+     * @minItems 1
+     * @maxItems 20
+     */
+  contract_types?: JackpotPairBuyInputContractTypesItem[];
 }

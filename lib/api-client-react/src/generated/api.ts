@@ -2538,8 +2538,8 @@ export const getBuyJackpotPairsUrl = () => {
 }
 
 /**
- * Requests fresh proposals for both legs of every pair before any buy is sent. A pair has one Rise/Fall contract and one Even/Odd contract. Partial acknowledgements are returned explicitly and must be checked in Deriv history before retrying.
- * @summary Buy a batch of Jackpot dual pairs
+ * Accepts a selected list of 1–20 Rise/Fall and/or Even/Odd contracts, or the legacy complete-pair request. Requests fresh proposals for every contract before any buy is sent. Partial acknowledgements are returned explicitly and uncertain orders must be checked in Deriv history before resubmitting.
+ * @summary Buy a Jackpot contract batch
  */
 export const buyJackpotPairs = async (jackpotPairBuyInput: JackpotPairBuyInput, options?: Parameters<typeof customFetch>[1]): Promise<DerivBulkBuyResponse> => {
 
@@ -2588,7 +2588,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type BuyJackpotPairsMutationError = ErrorType<ErrorResponse>
 
     /**
- * @summary Buy a batch of Jackpot dual pairs
+ * @summary Buy a Jackpot contract batch
  */
 export const useBuyJackpotPairs = <TError = ErrorType<ErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof buyJackpotPairs>>, TError,{data: BodyType<JackpotPairBuyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}

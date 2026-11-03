@@ -710,7 +710,7 @@ router.post("/deriv/dual-buy", requireTradeAccessFeature, async (req, res) => {
       ? 403
       : message.includes("still settling") || message.includes("account status is being refreshed") || message.includes("safety timeout") || message.toLowerCase().includes("global trading protection")
         ? 409
-       : message.includes("not available") || message.includes("balance") || message.includes("confirmation") || message.includes("offers no return")
+              : message.includes("Jackpot supports") || message.includes("not available") || message.includes("balance") || message.includes("confirmation") || message.includes("offers no return")
         ? 400
         : message.includes("did not return a proposal") || message.includes("WebSocket is not ready")
           ? 504
@@ -726,7 +726,22 @@ router.post("/deriv/dual-buy", requireTradeAccessFeature, async (req, res) => {
 router.post("/deriv/jackpot/buy", requireTradeAccessFeature, async (req, res) => {
   const parsed = BuyJackpotPairsBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: "Invalid Jackpot pair buy request" });
+    res.status(400).json({ error: "Invalid Jackpot batch buy request" });
+    return;
+  }
+  const {
+    contract_types: contractTypes,
+    pair_count: pairCount,
+    rise_fall_type: riseFallType,
+    parity_type: parityType,
+  } = parsed.data;
+  const hasLegacyPairInput = pairCount != null && riseFallType != null && parityType != null;
+  const hasLegacyPairFields = pairCount != null || riseFallType != null || parityType != null;
+  if (
+    (contractTypes && (hasLegacyPairFields || contractTypes.length < 1 || contractTypes.length > 20))
+    || (!contractTypes && !hasLegacyPairInput)
+  ) {
+    res.status(400).json({ error: "Choose either 1–20 contracts or a complete legacy pair request." });
     return;
   }
 

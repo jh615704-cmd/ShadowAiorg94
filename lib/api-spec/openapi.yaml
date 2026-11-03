@@ -887,8 +887,8 @@ paths:
     post:
       operationId: buyJackpotPairs
       tags: [deriv]
-      summary: Buy a batch of Jackpot dual pairs
-      description: Requests fresh proposals for both legs of every pair before any buy is sent. A pair has one Rise/Fall contract and one Even/Odd contract. Partial acknowledgements are returned explicitly and must be checked in Deriv history before retrying.
+      summary: Buy a Jackpot contract batch
+      description: Accepts a selected list of 1–20 Rise/Fall and/or Even/Odd contracts, or the legacy complete-pair request. Requests fresh proposals for every contract before any buy is sent. Partial acknowledgements are returned explicitly and uncertain orders must be checked in Deriv history before resubmitting.
       requestBody:
         required: true
         content:
@@ -1810,7 +1810,7 @@ components:
           maximum: 6
     JackpotPairBuyInput:
       type: object
-      required: [access_feature, amount, duration, duration_unit, symbol, rise_fall_type, parity_type, pair_count]
+      required: [access_feature, amount, duration, duration_unit, symbol]
       properties:
         access_feature:
           type: string
@@ -1838,6 +1838,15 @@ components:
           type: integer
           minimum: 1
           maximum: 9
+          description: Legacy count of complete dual pairs.
+        contract_types:
+          type: array
+          minItems: 1
+          maxItems: 20
+          description: Exact ordered contract list for the batch; array length is the total trade count.
+          items:
+            type: string
+            enum: [CALL, PUT, DIGITEVEN, DIGITODD]
     ClockWorkContractOrder:
       type: object
       required: [key, amount, duration, duration_unit, contract_type, barrier, symbol]

@@ -1,16 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildJackpotContractTypes,
+  chooseJackpotBestBatch,
   chooseJackpotBestMarket,
   getJackpotNextStake,
   getJackpotStopReason,
   resolveJackpotPair,
+  resolveJackpotSelection,
   type JackpotMarketSignal,
 } from "./jackpot-trading.ts";
 
 const signal = (values: Partial<JackpotMarketSignal> = {}): JackpotMarketSignal => ({
   symbol: "R_75",
   group: "volatility",
+  tickSequence: 10,
   risePercentage: 60,
   fallPercentage: 40,
   evenPercentage: 55,
@@ -41,7 +45,78 @@ test("manual side choices remain available before a sample is collected", () => 
   });
 });
 
-test("Auto Best ranks only the selected market group and sample-backed pairs", () => {
+test("resolves only the enabled Jackpot contract family", () => {
+  assert.deepEqual(
+    resolveJackpotSelection(signal(), "AUTO", "DIGITODD", true, false),
+    { contractTypes: ["CALL"], rates: [60] },
+  );
+  assert.equal(resolveJackpotSelection(signal(), "AUTO", "AUTO", false, false), null);
+});
+
+test("allocates the selected count across enabled families with no extra orders", () => {
+  const selection = resolveJackpotSelection(signal(), "CALL", "DIGITEVEN", true, true);
+  assert.ok(selection);
+  assert.deepEqual(buildJackpotContractTypes(selection, 5), [
+    "CALL",
+    "DIGITEVEN",
+    "CALL",
+    "DIGITEVEN",
+    "CALL",
+  ]);
+  assert.deepEqual(buildJackpotContractTypes(selection, 1), ["CALL"]);
+  assert.deepEqual(buildJackpotContractTypes(selection, 21), []);
+});
+
+test("AI market ranking requires a live sample above its observed-rate threshold", () => {
+  const selected = chooseJackpotBestMarket(
+    [
+      signal({ symbol: "R_25", risePercentage: 56, evenPercentage: 52 }),
+      signal({ symbol: "R_50", risePercentage: 55, evenPercentage: 59 }),
+      signal({ symbol: "R_10", risePercentage: 80, evenPercentage: 90, sampleCount: 19 }),
+    ],
+    "volatility",
+    "AUTO",
+    "AUTO",
+    true,
+    true,
+    null,
+    55,
+  );
+  assert.equal(selected?.symbol, "R_50");
+  assert.equal(selected?.contractType, "DIGITEVEN");
+  assert.equal(selected?.observedRate, 59);
+});
+
+test("AI bulk selection splits the total across qualifying enabled families only", () => {
+  const selected = chooseJackpotBestBatch(
+    [signal({ risePercentage: 60, evenPercentage: 57 })],
+    "volatility",
+    "AUTO",
+    "AUTO",
+    true,
+    true,
+    5,
+    "R_75",
+    55,
+  );
+  assert.deepEqual(selected?.contractTypes, ["CALL", "DIGITEVEN", "CALL", "DIGITEVEN", "CALL"]);
+  assert.equal(selected?.observedRate, 58.5);
+
+  const oneSideQualifies = chooseJackpotBestBatch(
+    [signal({ risePercentage: 62, evenPercentage: 55 })],
+    "volatility",
+    "AUTO",
+    "AUTO",
+    true,
+    true,
+    3,
+    "R_75",
+    55,
+  );
+  assert.deepEqual(oneSideQualifies?.contractTypes, ["CALL", "CALL", "CALL"]);
+});
+
+test("Auto Best ranks only the selected market group and sample-backed sides", () => {
   const best = chooseJackpotBestMarket([
     signal({ symbol: "R_25", risePercentage: 59, evenPercentage: 55 }),
     signal({ symbol: "RDBULL", group: "bull", risePercentage: 100, evenPercentage: 100 }),

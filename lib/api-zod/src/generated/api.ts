@@ -1337,8 +1337,8 @@ export const BulkBuyDerivContractsResponse = zod.object({
 
 
 /**
- * Requests fresh proposals for both legs of every pair before any buy is sent. A pair has one Rise/Fall contract and one Even/Odd contract. Partial acknowledgements are returned explicitly and must be checked in Deriv history before retrying.
- * @summary Buy a batch of Jackpot dual pairs
+ * Accepts a selected list of 1–20 Rise/Fall and/or Even/Odd contracts, or the legacy complete-pair request. Requests fresh proposals for every contract before any buy is sent. Partial acknowledgements are returned explicitly and uncertain orders must be checked in Deriv history before resubmitting.
+ * @summary Buy a Jackpot contract batch
  */
 export const buyJackpotPairsBodyAmountMin = 0.35;
 
@@ -1346,6 +1346,8 @@ export const buyJackpotPairsBodyDurationMax = 5;
 
 
 export const buyJackpotPairsBodyPairCountMax = 9;
+
+export const buyJackpotPairsBodyContractTypesMax = 20;
 
 
 
@@ -1355,9 +1357,10 @@ export const BuyJackpotPairsBody = zod.object({
   "duration": zod.number().int().min(1).max(buyJackpotPairsBodyDurationMax),
   "duration_unit": zod.enum(['t']),
   "symbol": zod.string().min(1),
-  "rise_fall_type": zod.enum(['CALL', 'PUT']),
-  "parity_type": zod.enum(['DIGITEVEN', 'DIGITODD']),
-  "pair_count": zod.number().int().min(1).max(buyJackpotPairsBodyPairCountMax)
+  "rise_fall_type": zod.enum(['CALL', 'PUT']).optional(),
+  "parity_type": zod.enum(['DIGITEVEN', 'DIGITODD']).optional(),
+  "pair_count": zod.number().int().min(1).max(buyJackpotPairsBodyPairCountMax).optional().describe('Legacy count of complete dual pairs.'),
+  "contract_types": zod.array(zod.enum(['CALL', 'PUT', 'DIGITEVEN', 'DIGITODD'])).min(1).max(buyJackpotPairsBodyContractTypesMax).optional().describe('Exact ordered contract list for the batch; array length is the total trade count.')
 })
 
 export const buyJackpotPairsResponseFailedItemIndexMin = 0;

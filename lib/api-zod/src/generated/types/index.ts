@@ -100,6 +100,7 @@ export * from './featureControlMode';
 export * from './healthStatus';
 export * from './jackpotPairBuyInput';
 export * from './jackpotPairBuyInputAccessFeature';
+export * from './jackpotPairBuyInputContractTypesItem';
 export * from './jackpotPairBuyInputDurationUnit';
 export * from './jackpotPairBuyInputParityType';
 export * from './jackpotPairBuyInputRiseFallType';

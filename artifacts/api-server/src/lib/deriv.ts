@@ -2504,9 +2504,10 @@ export async function buyJackpotPairContracts(
     duration: number;
     duration_unit: "t";
     symbol: string;
-    rise_fall_type: "CALL" | "PUT";
-    parity_type: "DIGITEVEN" | "DIGITODD";
-    pair_count: number;
+    rise_fall_type?: "CALL" | "PUT";
+    parity_type?: "DIGITEVEN" | "DIGITODD";
+    pair_count?: number;
+    contract_types?: Array<"CALL" | "PUT" | "DIGITEVEN" | "DIGITODD">;
   },
   assertAuthorized?: TradeAuthorizationCheck,
 ) {
@@ -2515,16 +2516,37 @@ export async function buyJackpotPairContracts(
   if (!Number.isFinite(amount) || amount < 0.35) {
     throw new Error("Jackpot stake must be at least 0.35 per contract.");
   }
-  if (!Number.isInteger(input.pair_count) || input.pair_count < 1 || input.pair_count > 9) {
+  const contractTypes = input.contract_types;
+  if (contractTypes) {
+    if (
+      contractTypes.length < 1
+      || contractTypes.length > 20
+      || contractTypes.some((contractType) =>
+        !["CALL", "PUT", "DIGITEVEN", "DIGITODD"].includes(contractType))
+      || input.pair_count != null
+      || input.rise_fall_type != null
+      || input.parity_type != null
+    ) {
+      throw new Error("Jackpot supports 1 to 20 selected contracts per batch.");
+    }
+  } else if (
+    !Number.isInteger(input.pair_count)
+    || input.pair_count! < 1
+    || input.pair_count! > 9
+    || !input.rise_fall_type
+    || !input.parity_type
+  ) {
     throw new Error("Jackpot supports 1 to 9 complete dual pairs.");
   }
   if (!Number.isInteger(input.duration) || input.duration < 1 || input.duration > 5) {
     throw new Error("Jackpot supports whole-number durations from 1 to 5 ticks.");
   }
-  const orders = Array.from({ length: input.pair_count }, () => [
-    input.rise_fall_type,
-    input.parity_type,
-  ] as const).flat();
+  const orders = contractTypes
+    ? [...contractTypes]
+    : Array.from({ length: input.pair_count! }, () => [
+        input.rise_fall_type!,
+        input.parity_type!,
+      ] as const).flat();
   const proposalInputs = orders.map((contract_type) => ({
     amount,
     duration: input.duration,
@@ -2535,13 +2557,13 @@ export async function buyJackpotPairContracts(
   proposalInputs.forEach(validateProposalInput);
 
   const account = getState().account;
-  if (!account) throw new Error("Select an account before buying Jackpot pairs.");
+  if (!account) throw new Error("Select an account before buying a Jackpot batch.");
   if (account.type === "real" && !liveTradingEnabled) {
     throw new Error("Live trading is disabled on this server.");
   }
   const totalStake = roundCents(amount * proposalInputs.length);
   if (totalStake > account.balance) {
-    throw new Error("The total Jackpot pair stake exceeds the current account balance.");
+    throw new Error("The total Jackpot batch stake exceeds the current account balance.");
   }
 
   const proposals = await runBeforeBuy(async () => {
@@ -2593,7 +2615,9 @@ export async function buyJackpotPairContracts(
     ok,
     count: buys.length,
     message: ok
-      ? `${input.pair_count} Jackpot dual pairs sent together. Each contract settles independently.`
+      ? contractTypes
+        ? `${contractTypes.length} Jackpot contracts sent together. Each contract settles independently.`
+        : `${input.pair_count} Jackpot dual pairs sent together. Each contract settles independently.`
       : `${buys.length} of ${proposalInputs.length} Jackpot contracts were confirmed. Check Deriv history before resubmitting any uncertain order.`,
     proposals,
     buys,

@@ -35,12 +35,16 @@ export interface JackpotPanelProps {
   signal: JackpotSignal | null;
   riseFallSide: JackpotRiseFallSide;
   onRiseFallSideChange: (side: JackpotRiseFallSide) => void;
+  riseFallEnabled: boolean;
+  onRiseFallEnabledChange: (enabled: boolean) => void;
   evenOddSide: JackpotEvenOddSide;
   onEvenOddSideChange: (side: JackpotEvenOddSide) => void;
+  evenOddEnabled: boolean;
+  onEvenOddEnabledChange: (enabled: boolean) => void;
   stake: number;
   onStakeChange: (value: number) => void;
-  pairCount: number;
-  onPairCountChange: (value: number) => void;
+  contractCount: number;
+  onContractCountChange: (value: number) => void;
   duration: number;
   onDurationChange: (value: number) => void;
   multiplyAfterLoss: boolean;
@@ -51,6 +55,9 @@ export interface JackpotPanelProps {
   onTakeProfitChange: (value: number) => void;
   lossLimit: number;
   onLossLimitChange: (value: number) => void;
+  aiEnabled: boolean;
+  onAiEnabledChange: (enabled: boolean) => void;
+  aiStatus: string;
   batchStatus: string;
   batchLoading: boolean;
   canPlaceBatch: boolean;
@@ -72,7 +79,7 @@ const marketGroups: { value: JackpotMarketGroup; label: string; mark: string }[]
   { value: "volatility", label: "Volatility", mark: "VOL" },
   { value: "jump", label: "Jump", mark: "JUMP" },
 ];
-const pairCounts = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
+const contractCounts = Array.from({ length: 20 }, (_, index) => index + 1);
 const durations = [1, 2, 3, 4, 5] as const;
 const percent = (value: number | null | undefined) => value == null ? "—" : `${value.toFixed(1)}%`;
 
@@ -90,12 +97,16 @@ export default function JackpotPanel({
   signal,
   riseFallSide,
   onRiseFallSideChange,
+  riseFallEnabled,
+  onRiseFallEnabledChange,
   evenOddSide,
   onEvenOddSideChange,
+  evenOddEnabled,
+  onEvenOddEnabledChange,
   stake,
   onStakeChange,
-  pairCount,
-  onPairCountChange,
+  contractCount,
+  onContractCountChange,
   duration,
   onDurationChange,
   multiplyAfterLoss,
@@ -106,6 +117,9 @@ export default function JackpotPanel({
   onTakeProfitChange,
   lossLimit,
   onLossLimitChange,
+  aiEnabled,
+  onAiEnabledChange,
+  aiStatus,
   batchStatus,
   batchLoading,
   canPlaceBatch,
@@ -127,8 +141,10 @@ export default function JackpotPanel({
     ? "CONNECT DERIV"
     : tradeSlotBlocked
       ? "TRADE SLOT BLOCKED"
-      : featureStatus === "active"
-        ? "BATCH ACTIVE"
+      : aiEnabled
+        ? "AI ACTIVE"
+        : featureStatus === "active"
+          ? "BATCH ACTIVE"
         : featureStatus === "paused"
           ? "PAUSED"
           : featureStatus === "error"
@@ -143,9 +159,9 @@ export default function JackpotPanel({
           <div>
             <div className="jackpot-title-line">
               <h2>Jackpot</h2>
-              <span className="jackpot-contract-tag">DUAL PAIR</span>
+               <span className="jackpot-contract-tag">BULK CONTRACTS</span>
             </div>
-            <p>One Rise/Fall contract paired with one Even/Odd contract.</p>
+             <p>Choose Rise/Fall, Even/Odd, or both for a batch.</p>
           </div>
         </div>
         <div className={`jackpot-status ${featureStatus}`} role="status" aria-live="polite" data-testid="status-jackpot-feature">
@@ -185,19 +201,6 @@ export default function JackpotPanel({
                 <div className="jackpot-rate-item even"><small>EVEN</small><b>{percent(signal.evenPercentage)}</b></div>
                 <div className="jackpot-rate-item odd"><small>ODD</small><b>{percent(signal.oddPercentage)}</b></div>
               </div>
-              <div className="jackpot-pair-rate-grid" aria-label="Observed rates for each possible dual pair">
-                {[
-                  ["Rise + Even", signal.risePercentage, signal.evenPercentage],
-                  ["Rise + Odd", signal.risePercentage, signal.oddPercentage],
-                  ["Fall + Even", signal.fallPercentage, signal.evenPercentage],
-                  ["Fall + Odd", signal.fallPercentage, signal.oddPercentage],
-                ].map(([label, directionRate, parityRate]) => (
-                  <div className="jackpot-pair-rate" key={label}>
-                    <b>{label}</b>
-                    <span>{percent(directionRate as number | null)} <i>·</i> {percent(parityRate as number | null)}</span>
-                  </div>
-                ))}
-              </div>
             </>
           )}
         </section>
@@ -206,8 +209,8 @@ export default function JackpotPanel({
           <div className="jackpot-guide-icon"><BadgeHelp size={17} /></div>
           <div>
             <span className="jackpot-eyebrow">QUICK GUIDE</span>
-            <h3>Two contracts. One pair.</h3>
-            <p>Each selected pair contains one Rise/Fall contract and one Even/Odd contract. Set 1–9 complete pairs, then choose duration and stake.</p>
+            <h3>Choose your contract sides.</h3>
+            <p>Enable either or both side families. Set 1–20 total contracts, then choose duration and stake.</p>
             <div className="jackpot-guide-rule"><ShieldCheck size={13} /><span>Use session limits to define your stop points.</span></div>
           </div>
         </aside>
@@ -244,35 +247,49 @@ export default function JackpotPanel({
               <Layers3 size={17} aria-hidden="true" />
             </div>
             <div className="jackpot-side-control">
-              <span className="jackpot-field-label">RISE / FALL</span>
+              <div className="jackpot-side-heading">
+                <span className="jackpot-field-label">RISE / FALL</span>
+                <label className="jackpot-inline-switch">
+                  <span>{riseFallEnabled ? "On" : "Off"}</span>
+                  <input type="checkbox" checked={riseFallEnabled} onChange={(event) => onRiseFallEnabledChange(event.target.checked)} aria-label="Enable Jackpot Rise/Fall contracts" data-testid="switch-jackpot-rise-fall" />
+                  <i aria-hidden="true" />
+                </label>
+              </div>
               <div className="jackpot-segmented" role="group" aria-label="Rise or Fall contract side">
-                {(["CALL", "PUT", "AUTO"] as const).map((side) => <button type="button" key={side} className={riseFallSide === side ? "selected" : ""} onClick={() => onRiseFallSideChange(side)} aria-pressed={riseFallSide === side} data-testid={`button-jackpot-direction-${side.toLowerCase()}`}>{side === "CALL" ? "Rise" : side === "PUT" ? "Fall" : "Auto"}</button>)}
+                {(["CALL", "PUT", "AUTO"] as const).map((side) => <button type="button" key={side} disabled={!riseFallEnabled} className={riseFallSide === side ? "selected" : ""} onClick={() => onRiseFallSideChange(side)} aria-pressed={riseFallSide === side} data-testid={`button-jackpot-direction-${side.toLowerCase()}`}>{side === "CALL" ? "Rise" : side === "PUT" ? "Fall" : "Auto"}</button>)}
               </div>
             </div>
             <div className="jackpot-side-control">
-              <span className="jackpot-field-label">EVEN / ODD</span>
+              <div className="jackpot-side-heading">
+                <span className="jackpot-field-label">EVEN / ODD</span>
+                <label className="jackpot-inline-switch">
+                  <span>{evenOddEnabled ? "On" : "Off"}</span>
+                  <input type="checkbox" checked={evenOddEnabled} onChange={(event) => onEvenOddEnabledChange(event.target.checked)} aria-label="Enable Jackpot Even/Odd contracts" data-testid="switch-jackpot-even-odd" />
+                  <i aria-hidden="true" />
+                </label>
+              </div>
               <div className="jackpot-segmented" role="group" aria-label="Even or Odd contract side">
-                {(["DIGITEVEN", "DIGITODD", "AUTO"] as const).map((side) => <button type="button" key={side} className={evenOddSide === side ? "selected" : ""} onClick={() => onEvenOddSideChange(side)} aria-pressed={evenOddSide === side} data-testid={`button-jackpot-parity-${side.toLowerCase()}`}>{side === "DIGITEVEN" ? "Even" : side === "DIGITODD" ? "Odd" : "Auto"}</button>)}
+                {(["DIGITEVEN", "DIGITODD", "AUTO"] as const).map((side) => <button type="button" key={side} disabled={!evenOddEnabled} className={evenOddSide === side ? "selected" : ""} onClick={() => onEvenOddSideChange(side)} aria-pressed={evenOddSide === side} data-testid={`button-jackpot-parity-${side.toLowerCase()}`}>{side === "DIGITEVEN" ? "Even" : side === "DIGITODD" ? "Odd" : "Auto"}</button>)}
               </div>
             </div>
-            <div className="jackpot-contract-note"><Sparkles size={14} /><span>Auto leaves side selection to the feature configuration.</span></div>
+            <div className="jackpot-contract-note"><Sparkles size={14} /><span>With both families on, the total is split evenly; the stronger observed rate gets any extra contract.</span></div>
           </section>
 
           <section className="jackpot-card jackpot-batch-card">
             <div className="jackpot-card-heading">
               <div><span className="jackpot-eyebrow">03 / BATCH SETUP</span><h3>Build the run</h3></div>
-              <span className="jackpot-pair-total"><b>{pairCount}</b> pairs <i>·</i> {pairCount * 2} contracts</span>
+              <span className="jackpot-pair-total"><b>{contractCount}</b> total contracts</span>
             </div>
             <label className="jackpot-field">
               <span>Stake per contract · {currency}</span>
               <input type="number" min="0.35" step="0.01" value={stake} onChange={(event) => onStakeChange(Number(event.target.value))} aria-label={`Jackpot stake per contract in ${currency}`} data-testid="input-jackpot-stake" />
             </label>
             <div className="jackpot-field-block">
-              <span className="jackpot-field-label">Complete dual pairs</span>
-              <div className="jackpot-count-grid" role="group" aria-label="Number of complete dual pairs">
-                {pairCounts.map((count) => <button type="button" key={count} className={pairCount === count ? "selected" : ""} onClick={() => onPairCountChange(count)} aria-pressed={pairCount === count} aria-label={`${count} complete dual ${count === 1 ? "pair" : "pairs"}, ${count * 2} contracts`} data-testid={`button-jackpot-pairs-${count}`}>{count}</button>)}
+              <span className="jackpot-field-label">Total contracts</span>
+              <div className="jackpot-count-grid" role="group" aria-label="Number of Jackpot contracts">
+                {contractCounts.map((count) => <button type="button" key={count} className={contractCount === count ? "selected" : ""} onClick={() => onContractCountChange(count)} aria-pressed={contractCount === count} aria-label={`${count} total contracts`} data-testid={`button-jackpot-count-${count}`}>{count}</button>)}
               </div>
-              <small className="jackpot-helper">A complete pair means two contracts: one Rise/Fall and one Even/Odd.</small>
+              <small className="jackpot-helper">The count is the total number of orders in this batch.</small>
             </div>
             <div className="jackpot-field-block">
               <span className="jackpot-field-label">Duration · ticks</span>
@@ -294,13 +311,20 @@ export default function JackpotPanel({
               <label className="jackpot-field"><span>Take profit · {currency}</span><input type="number" min="0" step="0.01" value={takeProfit} onChange={(event) => onTakeProfitChange(Number(event.target.value))} aria-label={`Jackpot session take-profit limit in ${currency}`} data-testid="input-jackpot-take-profit" /></label>
               <label className="jackpot-field"><span>Loss limit · {currency}</span><input type="number" min="0" step="0.01" value={lossLimit} onChange={(event) => onLossLimitChange(Number(event.target.value))} aria-label={`Jackpot session loss limit in ${currency}`} data-testid="input-jackpot-loss-limit" /></label>
             </div>
+            <label className="jackpot-switch-row jackpot-ai-switch">
+              <span><b>Jackpot AI</b><small>Scan for 5 seconds; choose an enabled side above a 55% observed rate with at least 20 samples. Results can differ.</small></span>
+              <input type="checkbox" checked={aiEnabled} onChange={(event) => onAiEnabledChange(event.target.checked)} aria-label="Enable Jackpot AI" data-testid="switch-jackpot-ai" />
+              <i aria-hidden="true" />
+            </label>
+            <p className="jackpot-ai-status" role="status" aria-live="polite" data-testid="status-jackpot-ai">{aiStatus}</p>
+            <small className="jackpot-helper">The Deriv account allows one active trade batch at a time; other feature orders wait for settlement.</small>
           </section>
         </div>
 
         <section className={`jackpot-batch-state ${isBlocked ? "blocked" : ""}`} role="status" aria-live="polite" data-testid="status-jackpot-batch">
           <span className="jackpot-batch-icon">{isBlocked ? <CircleAlert size={16} /> : <Activity size={16} />}</span>
           <span className="jackpot-batch-copy"><b>{batchLoading ? "Preparing your batch" : isBlocked ? "New batch unavailable" : batchStatus || "Batch standing by"}</b><small>{!isConnected ? "Connect Deriv before this feature can run." : tradeSlotBlocked ? "Wait for open contracts to settle before starting another batch." : batchLoading ? "Batch status will update when preparation is complete." : "Jackpot is configured here; execution remains controlled by the dashboard."}</small></span>
-          <span className="jackpot-batch-count">{pairCount} × 2</span>
+           <span className="jackpot-batch-count">{contractCount} orders</span>
         </section>
         <div className="jackpot-place-row">
           <div className="jackpot-place-copy" aria-live="polite">
@@ -311,12 +335,12 @@ export default function JackpotPanel({
             className="jackpot-place-button"
             onClick={onPlaceBatch}
             disabled={batchLoading || !canPlaceBatch}
-            aria-label={`Place ${pairCount} pairs`}
+             aria-label={`Place ${contractCount} Jackpot contracts`}
             aria-busy={batchLoading}
             data-testid="button-jackpot-place-batch"
           >
             <Zap size={16} aria-hidden="true" />
-            Place {pairCount} pairs
+             Place {contractCount} contracts
           </button>
         </div>
         {historyReviewRequired && (
@@ -332,7 +356,7 @@ export default function JackpotPanel({
       <div className="jackpot-history">
         <DerivHistory
           title="Jackpot History"
-          strategy="Jackpot Dual Pair"
+          strategy="Jackpot Bulk"
           rows={historyRows}
           sessionRows={currentRunRows}
           currency={currency}

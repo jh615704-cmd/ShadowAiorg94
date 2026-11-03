@@ -188,10 +188,13 @@ import {
   validateTradeXEntry,
 } from "../lib/trade-entry-guards";
 import {
+  buildJackpotContractTypes,
+  chooseJackpotBestBatch,
   chooseJackpotBestMarket,
   getJackpotNextStake,
   getJackpotStopReason,
-  resolveJackpotPair,
+  resolveJackpotSelection,
+  type JackpotContractType,
   type JackpotMarketSignal,
 } from "../lib/jackpot-trading";
 
@@ -283,9 +286,9 @@ const clockWorkGuidePages = [
 ] as const;
 
 const jackpotGuidePages = [
-  { title: "Welcome to Jackpot", body: "Jackpot Analysis builds a dual pair from one Rise/Fall contract and one Even/Odd contract.", points: ["Choose the market group and the exact sides.", "Each batch count is a complete pair: 1–9 means 2–18 contracts.", "Each contract is confirmed and settles independently."] },
+  { title: "Welcome to Jackpot", body: "Jackpot lets you batch Rise/Fall, Even/Odd, or both contract families.", points: ["Choose a market and enable the sides you want.", "Select 1–20 total contracts for a batch.", "Each contract is confirmed and settles independently."] },
   { title: "Choose markets and sides", body: "Select Bear, Bull, Volatility, or Jump, then choose a Rise/Fall side and an Even/Odd side.", points: ["Auto Best compares eligible live samples within the chosen market group.", "Auto can choose either side independently.", "Pair rates show the observed percentage for each leg, not a combined win probability."] },
-  { title: "Set stake and batch size", body: "Stake applies to each contract, so total planned stake is the per-contract amount multiplied by the number of contracts.", points: ["One complete pair uses two stakes.", "A 1–9 pair count sends two to eighteen contracts.", "All quotes are checked before any contract in the batch is sent."] },
+  { title: "Set stake and batch size", body: "Stake applies to each contract, so planned stake is the per-contract amount multiplied by the total contract count.", points: ["Choose 1–20 total orders.", "With both families enabled, orders are split as evenly as possible.", "All quotes are checked before any contract in the batch is sent."] },
   { title: "Set limits and review history", body: "Take-profit and loss limits pause later batches after the current run crosses a configured threshold.", points: ["Multiply after loss changes the next batch stake after a fully settled net-loss batch.", "Open contracts must settle before another batch can start.", "Observed percentages and limits cannot guarantee an outcome."] },
 ] as const;
 
@@ -560,16 +563,22 @@ export default function XTraderPage() {
   const [jackpotSymbol, setJackpotSymbol] = useState("R_75");
   const [jackpotAutoBestMode, setJackpotAutoBestMode] = useState(false);
   const [jackpotRiseFallSide, setJackpotRiseFallSide] = useState<JackpotRiseFallSide>("AUTO");
+  const [jackpotRiseFallEnabled, setJackpotRiseFallEnabled] = useState(true);
   const [jackpotEvenOddSide, setJackpotEvenOddSide] = useState<JackpotEvenOddSide>("AUTO");
+  const [jackpotEvenOddEnabled, setJackpotEvenOddEnabled] = useState(true);
   const [jackpotStake, setJackpotStake] = useState(0.5);
   const [jackpotNextStake, setJackpotNextStake] = useState(0.5);
-  const [jackpotPairCount, setJackpotPairCount] = useState(1);
+  const [jackpotContractCount, setJackpotContractCount] = useState(1);
   const [jackpotDuration, setJackpotDuration] = useState(1);
+  const [jackpotAiEnabled, setJackpotAiEnabled] = useState(false);
+  const [jackpotAiCycle, setJackpotAiCycle] = useState(0);
+  const [jackpotAiStatus, setJackpotAiStatus] = useState("Off. Use the manual button or enable Jackpot AI.");
+  const jackpotAiAccountIdRef = useRef<string | null>(null);
   const [jackpotMultiplyAfterLoss, setJackpotMultiplyAfterLoss] = useState(false);
   const [jackpotLossMultiplier, setJackpotLossMultiplier] = useState(2);
   const [jackpotTakeProfit, setJackpotTakeProfit] = useState(0);
   const [jackpotLossLimit, setJackpotLossLimit] = useState(10);
-  const [jackpotBatchStatus, setJackpotBatchStatus] = useState("Each complete pair uses two contracts.");
+  const [jackpotBatchStatus, setJackpotBatchStatus] = useState("Ready to place a manual Jackpot batch.");
   const [jackpotBatchContractIds, setJackpotBatchContractIds] = useState<string[]>([]);
   const [jackpotBatchHadFailure, setJackpotBatchHadFailure] = useState(false);
   const [jackpotNeedsHistoryCheck, setJackpotNeedsHistoryCheck] = useState(false);
@@ -1091,8 +1100,8 @@ export default function XTraderPage() {
       ));
       setJackpotBatchStatus(
         batchProfit < 0
-          ? "The pair batch settled with a net loss; the next stake was adjusted."
-          : "The pair batch settled; the next stake returned to its base amount.",
+          ? "The Jackpot batch settled with a net loss; the next stake was adjusted."
+          : "The Jackpot batch settled; the next stake returned to its base amount.",
       );
     } else {
       setJackpotBatchStatus("A partial batch settled. The next stake was not changed.");
@@ -1269,6 +1278,7 @@ export default function XTraderPage() {
       return {
         symbol: market.value,
         group: market.group,
+        tickSequence: signal?.tick_sequence ?? 0,
         risePercentage: signal?.rise_percentage ?? null,
         fallPercentage: signal?.fall_percentage ?? null,
         evenPercentage: signal?.digit_even_percentage ?? null,
@@ -1284,8 +1294,20 @@ export default function XTraderPage() {
       jackpotMarketGroup,
       jackpotRiseFallSide,
       jackpotEvenOddSide,
+      jackpotRiseFallEnabled,
+      jackpotEvenOddEnabled,
+      jackpotAutoBestMode ? null : jackpotSymbol,
     ),
-    [jackpotMarketSignals, jackpotMarketGroup, jackpotRiseFallSide, jackpotEvenOddSide],
+    [
+      jackpotMarketSignals,
+      jackpotMarketGroup,
+      jackpotRiseFallSide,
+      jackpotEvenOddSide,
+      jackpotRiseFallEnabled,
+      jackpotEvenOddEnabled,
+      jackpotAutoBestMode,
+      jackpotSymbol,
+    ],
   );
   const jackpotGroupMarkets = jackpotMarkets.filter((market) => market.group === jackpotMarketGroup);
   const jackpotEffectiveSymbol = jackpotAutoBestMode
@@ -1297,11 +1319,16 @@ export default function XTraderPage() {
   const jackpotSelectedMarketSignal = jackpotMarketSignals.find(
     (signal) => signal.symbol === jackpotEffectiveSymbol,
   ) ?? null;
-  const jackpotResolvedPair = resolveJackpotPair(
+  const jackpotResolvedSelection = resolveJackpotSelection(
     jackpotSelectedMarketSignal,
     jackpotRiseFallSide,
     jackpotEvenOddSide,
+    jackpotRiseFallEnabled,
+    jackpotEvenOddEnabled,
   );
+  const jackpotManualContractTypes = jackpotResolvedSelection
+    ? buildJackpotContractTypes(jackpotResolvedSelection, jackpotContractCount)
+    : [];
   const cashGrabMarketSignals = useMemo<CashGrabMarketSignal[]>(
     () => (status.data?.market_signals ?? []).map((signal) => ({
       symbol: signal.symbol,
@@ -1369,7 +1396,7 @@ export default function XTraderPage() {
     setJackpotBatchHadFailure(false);
     setJackpotNeedsHistoryCheck(false);
     setJackpotNextStake(jackpotStake);
-    setJackpotBatchStatus("Each complete pair uses two contracts.");
+    setJackpotBatchStatus("Ready to place a manual Jackpot batch.");
     setJackpotHistoryClearArmed(false);
     setJackpotHiddenHistoryIds(new Set());
     const savedMoneyBankContractIds = readMoneyBankHistoryClaims(getMoneyBankHistoryStorage(), accountId);
@@ -3451,21 +3478,24 @@ export default function XTraderPage() {
     setHistoryFading(false);
   };
 
-  const placeJackpotBatch = async () => {
-    if (jackpotDisabledReason) {
-      setJackpotBatchStatus(jackpotDisabledReason);
-      return;
+  const placeJackpotBatch = async (automatic?: {
+    symbol: string;
+    contractTypes: JackpotContractType[];
+  }): Promise<boolean> => {
+    const contractTypes = automatic?.contractTypes ?? jackpotManualContractTypes;
+    const targetSymbol = automatic?.symbol ?? jackpotEffectiveSymbol;
+    const disabledReason = automatic
+      ? getJackpotBatchBlockReason(contractTypes.length)
+      : jackpotDisabledReason;
+    if (disabledReason) {
+      setJackpotBatchStatus(disabledReason);
+      return false;
     }
-    const pair = resolveJackpotPair(
-      jackpotSelectedMarketSignal,
-      jackpotRiseFallSide,
-      jackpotEvenOddSide,
-    );
-    if (!pair) {
-      setJackpotBatchStatus("Auto side selection is waiting for at least 20 observed samples.");
-      return;
+    if (!contractTypes.length || !targetSymbol) {
+      setJackpotBatchStatus("Enable at least one contract family and select a supported market.");
+      return false;
     }
-    setJackpotBatchStatus("Requesting fresh quotes for both contracts in every pair.");
+    setJackpotBatchStatus(`Requesting fresh quotes for ${contractTypes.length} Jackpot contracts.`);
     setJackpotBatchHadFailure(false);
     try {
       const result = await jackpotBuyMutation.mutateAsync({
@@ -3474,10 +3504,8 @@ export default function XTraderPage() {
           amount: roundTradeStakeToCents(jackpotNextStake),
           duration: jackpotDuration,
           duration_unit: "t",
-          symbol: jackpotEffectiveSymbol,
-          rise_fall_type: pair.riseFallType,
-          parity_type: pair.evenOddType,
-          pair_count: jackpotPairCount,
+          symbol: targetSymbol,
+          contract_types: contractTypes,
         },
       });
       const contractIds = result.buys.map((buy) => String(buy.contract_id));
@@ -3490,17 +3518,21 @@ export default function XTraderPage() {
       }
       if (result.failed.some((failed) => failed.outcome === "uncertain")) {
         setJackpotNeedsHistoryCheck(true);
+        setJackpotAiEnabled(false);
       }
       setJackpotBatchStatus(result.ok
-        ? `${jackpotPairCount} complete pair${jackpotPairCount === 1 ? "" : "s"} acknowledged. Each contract settles independently.`
+        ? `${contractIds.length} Jackpot contract${contractIds.length === 1 ? "" : "s"} acknowledged. Each settles independently.`
         : `${result.message} Check account history before resubmitting an uncertain order.`);
       refreshTradeResults();
+      return contractIds.length > 0;
     } catch (error) {
       setJackpotNeedsHistoryCheck(true);
+      setJackpotAiEnabled(false);
       setJackpotBatchStatus(
         `${errorMessage(error)} Check Deriv history before sending another batch if the result is unclear.`,
       );
       refreshTradeResults();
+      return false;
     }
   };
 
@@ -4566,6 +4598,23 @@ export default function XTraderPage() {
     }
   };
 
+  const toggleJackpotAi = (enabled: boolean) => {
+    if (enabled && (!jackpotEnabled || !canUseJackpot)) return;
+    if (enabled && !currentAccount) {
+      setJackpotAiStatus("Select a Deriv account before starting Jackpot AI.");
+      return;
+    }
+    if (enabled && !jackpotRiseFallEnabled && !jackpotEvenOddEnabled) {
+      setJackpotAiStatus("Enable Rise/Fall or Even/Odd before starting Jackpot AI.");
+      return;
+    }
+    jackpotAiAccountIdRef.current = enabled && currentAccount ? String(currentAccount.id) : null;
+    setJackpotAiEnabled(enabled);
+    setJackpotAiStatus(enabled
+      ? "Starting a 5-second scan of enabled sides."
+      : "AI off. Any acknowledged contracts will continue to settle.");
+  };
+
   const toggleJackpot = (enabled: boolean) => {
     if (enabled && !canUseJackpot) return;
     if (enabled && !isConnected) {
@@ -5093,7 +5142,7 @@ export default function XTraderPage() {
     || (isReal && !status.data?.live_trading_enabled)
     || tradeSlotBlocked
     || clockWorkRunHasUnsettledResults;
-  const jackpotDisabledReason = (() => {
+  const getJackpotBatchBlockReason = (contractCount: number) => {
     if (!canUseJackpot) return "This feature is restricted for the current access key.";
     if (!isConnected) return "Connect Deriv before placing a Jackpot batch.";
     if (!currentAccount) return "Select a Deriv account before placing a batch.";
@@ -5104,21 +5153,188 @@ export default function XTraderPage() {
     if (tradeSlotBlocked) return "Wait for all open contracts to settle before starting another batch.";
     if (jackpotBatchContractIds.length) return "Wait for the batch history to confirm settlement before continuing.";
     if (jackpotStopReason) return jackpotStopReason;
+    if (!Number.isInteger(contractCount) || contractCount < 1 || contractCount > 20) return "Choose between 1 and 20 total contracts.";
+    if (!jackpotRiseFallEnabled && !jackpotEvenOddEnabled) return "Enable at least one contract family.";
     if (!Number.isFinite(jackpotNextStake) || jackpotNextStake < 0.35) return "Stake must be at least 0.35 per contract.";
     if (currentAccountBalance == null || currentAccountBalance <= 0) return "Sync the selected account balance before placing a batch.";
-    const totalStake = jackpotNextStake * jackpotPairCount * 2;
-    if (totalStake > currentAccountBalance) return "The full pair batch exceeds the selected account balance.";
+    const totalStake = jackpotNextStake * contractCount;
+    if (totalStake > currentAccountBalance) return "The full Jackpot batch exceeds the selected account balance.";
+    return null;
+  };
+  const jackpotDisabledReason = (() => {
+    const blocked = getJackpotBatchBlockReason(jackpotContractCount);
+    if (blocked) return blocked;
     if (jackpotAutoBestMode && !jackpotBestMarket) return "Auto Best is waiting for at least 20 live samples in this market group.";
-    if (
-      (jackpotRiseFallSide === "AUTO" || jackpotEvenOddSide === "AUTO")
-      && (!jackpotSelectedMarketSignal
-        || jackpotSelectedMarketSignal.sampleCount < 20)
-    ) {
-      return "Auto side selection needs at least 20 observed market samples.";
+    if (!jackpotResolvedSelection || !jackpotManualContractTypes.length) {
+      return "Auto side selection needs at least 20 observed samples, and at least one family must be enabled.";
     }
-    if (!jackpotResolvedPair || !jackpotEffectiveSymbol) return "Choose both sides and a supported market before continuing.";
+    if (!jackpotEffectiveSymbol) return "Choose a supported market before continuing.";
     return null;
   })();
+  const jackpotBatchBlockReasonRef = useRef(getJackpotBatchBlockReason);
+  jackpotBatchBlockReasonRef.current = getJackpotBatchBlockReason;
+  const jackpotSubmitBatchRef = useRef(placeJackpotBatch);
+  jackpotSubmitBatchRef.current = placeJackpotBatch;
+
+  useEffect(() => {
+    if (!jackpotEnabled && jackpotAiEnabled) {
+      setJackpotAiEnabled(false);
+      return;
+    }
+    if (!jackpotAiEnabled) {
+      setJackpotAiStatus("Off. Use the manual button or enable Jackpot AI.");
+      return;
+    }
+    if (!canUseJackpot) {
+      setJackpotAiEnabled(false);
+      setJackpotAiStatus("Stopped because Jackpot access is unavailable.");
+      return;
+    }
+    if (!jackpotRiseFallEnabled && !jackpotEvenOddEnabled) {
+      setJackpotAiStatus("Enable Rise/Fall or Even/Odd to start scanning.");
+      return;
+    }
+    if (jackpotStopReason || jackpotNeedsHistoryCheck) {
+      setJackpotAiEnabled(false);
+      setJackpotAiStatus(jackpotStopReason ?? "Stopped until Deriv history is reviewed.");
+      return;
+    }
+    if (jackpotBatchContractIds.length) {
+      setJackpotAiStatus("Waiting for the Jackpot batch to settle before scanning again.");
+      return;
+    }
+    if (
+      jackpotAiAccountIdRef.current
+      && currentAccount
+      && jackpotAiAccountIdRef.current !== String(currentAccount.id)
+    ) {
+      setJackpotAiEnabled(false);
+      setJackpotAiStatus("Stopped because the selected Deriv account changed.");
+      return;
+    }
+
+    let cancelled = false;
+    let scanTimer: number | undefined;
+    let delayTimer: number | undefined;
+    const scheduleNextScan = (message: string) => {
+      setJackpotAiStatus(message);
+      scanTimer = window.setTimeout(() => {
+        if (!cancelled) setJackpotAiCycle((cycle) => cycle + 1);
+      }, 1000);
+    };
+
+    setJackpotAiStatus("Starting a 5-second scan of enabled sides.");
+    scanTimer = window.setTimeout(async () => {
+      try {
+        const initial = await status.refetch({ cancelRefetch: false });
+        if (cancelled) return;
+        if (!initial.isSuccess || !initial.data?.connected || !initial.data.authorized) {
+          scheduleNextScan("Waiting for a fresh Deriv connection; the scanner will retry.");
+          return;
+        }
+        const startSequences = new Map(
+          (initial.data.market_signals ?? []).map((signal) => [signal.symbol, signal.tick_sequence]),
+        );
+        setJackpotAiStatus("Scanning live market samples for 5 seconds.");
+        await new Promise<void>((resolve) => {
+          delayTimer = window.setTimeout(resolve, 5000);
+        });
+        delayTimer = undefined;
+        if (cancelled) return;
+
+        const fresh = await status.refetch({ cancelRefetch: false });
+        if (cancelled) return;
+        if (!fresh.isSuccess || !fresh.data?.connected || !fresh.data.authorized) {
+          scheduleNextScan("Waiting for a fresh Deriv connection; the scanner will retry.");
+          return;
+        }
+        if (
+          jackpotAiAccountIdRef.current
+          && fresh.data.account?.id != null
+          && jackpotAiAccountIdRef.current !== String(fresh.data.account.id)
+        ) {
+          setJackpotAiEnabled(false);
+          setJackpotAiStatus("Stopped because the selected Deriv account changed.");
+          return;
+        }
+        const latestSignals: JackpotMarketSignal[] = jackpotMarkets.map((market) => {
+          const signal = fresh.data.market_signals?.find((entry) => entry.symbol === market.value);
+          return {
+            symbol: market.value,
+            group: market.group,
+            tickSequence: signal?.tick_sequence ?? 0,
+            risePercentage: signal?.rise_percentage ?? null,
+            fallPercentage: signal?.fall_percentage ?? null,
+            evenPercentage: signal?.digit_even_percentage ?? null,
+            oddPercentage: signal?.digit_odd_percentage ?? null,
+            sampleCount: signal?.sample_count ?? 0,
+          };
+        });
+        const candidate = chooseJackpotBestBatch(
+          latestSignals,
+          jackpotMarketGroup,
+          jackpotRiseFallSide,
+          jackpotEvenOddSide,
+          jackpotRiseFallEnabled,
+          jackpotEvenOddEnabled,
+          jackpotContractCount,
+          jackpotAutoBestMode ? null : jackpotSymbol,
+          55,
+        );
+        if (!candidate || candidate.tickSequence <= (startSequences.get(candidate.symbol) ?? 0)) {
+          scheduleNextScan("No enabled side exceeded 55% in the observed samples; scanning again.");
+          return;
+        }
+        const blocked = jackpotBatchBlockReasonRef.current(jackpotContractCount);
+        if (blocked) {
+          scheduleNextScan(`Waiting to trade: ${blocked}`);
+          return;
+        }
+        setJackpotAiStatus(
+          `Selected ${candidate.symbol} with ${candidate.observedRate.toFixed(1)}% average observed rate; submitting ${candidate.contractTypes.length} contracts.`,
+        );
+        const accepted = await jackpotSubmitBatchRef.current({
+          symbol: candidate.symbol,
+          contractTypes: candidate.contractTypes,
+        });
+        if (cancelled) return;
+        if (!accepted) {
+          scheduleNextScan("The batch was not acknowledged; checking fresh samples before another attempt.");
+        } else {
+          setJackpotAiStatus("Jackpot AI sent the batch and is waiting for settlement.");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          scheduleNextScan(`Scanner is waiting after a market read error: ${errorMessage(error)}`);
+        }
+      }
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      if (scanTimer != null) window.clearTimeout(scanTimer);
+      if (delayTimer != null) window.clearTimeout(delayTimer);
+    };
+  }, [
+    jackpotEnabled,
+    jackpotAiEnabled,
+    jackpotAiCycle,
+    jackpotBatchContractIds.length,
+    jackpotRiseFallEnabled,
+    jackpotEvenOddEnabled,
+    jackpotStopReason,
+    jackpotNeedsHistoryCheck,
+    jackpotAiAccountIdRef,
+    jackpotMarketGroup,
+    jackpotRiseFallSide,
+    jackpotEvenOddSide,
+    jackpotAutoBestMode,
+    jackpotSymbol,
+    jackpotContractCount,
+    canUseJackpot,
+    currentAccount?.id,
+    status.refetch,
+  ]);
 
   clockWorkAutomationRef.current = () => {
     if (!clockWorkEnabled || !clockWorkRunning) return;
@@ -5981,7 +6197,7 @@ export default function XTraderPage() {
       {jackpotEnabled && canUseJackpot && (
         <JackpotPanel
           isConnected={isConnected}
-          featureStatus={jackpotBatchHadFailure ? "error" : jackpotBuyMutation.isPending ? "active" : "ready"}
+          featureStatus={jackpotBatchHadFailure ? "error" : jackpotAiEnabled || jackpotBuyMutation.isPending ? "active" : "ready"}
           tradeSlotBlocked={tradeSlotBlocked}
           marketGroup={jackpotMarketGroup}
           onMarketGroupChange={(group) => {
@@ -6010,16 +6226,20 @@ export default function XTraderPage() {
           } : null}
           riseFallSide={jackpotRiseFallSide}
           onRiseFallSideChange={setJackpotRiseFallSide}
+          riseFallEnabled={jackpotRiseFallEnabled}
+          onRiseFallEnabledChange={setJackpotRiseFallEnabled}
           evenOddSide={jackpotEvenOddSide}
           onEvenOddSideChange={setJackpotEvenOddSide}
+          evenOddEnabled={jackpotEvenOddEnabled}
+          onEvenOddEnabledChange={setJackpotEvenOddEnabled}
           stake={jackpotNextStake}
           onStakeChange={(value) => {
             const next = roundTradeStakeToCents(Math.max(0, value));
             setJackpotStake(next);
             setJackpotNextStake(next);
           }}
-          pairCount={jackpotPairCount}
-          onPairCountChange={(value) => setJackpotPairCount(Math.max(1, Math.min(9, Math.trunc(value))))}
+          contractCount={jackpotContractCount}
+          onContractCountChange={(value) => setJackpotContractCount(Math.max(1, Math.min(20, Math.trunc(value))))}
           duration={jackpotDuration}
           onDurationChange={(value) => setJackpotDuration(Math.max(1, Math.min(5, Math.trunc(value))))}
           multiplyAfterLoss={jackpotMultiplyAfterLoss}
@@ -6030,6 +6250,9 @@ export default function XTraderPage() {
           onTakeProfitChange={(value) => setJackpotTakeProfit(Math.max(0, value))}
           lossLimit={jackpotLossLimit}
           onLossLimitChange={(value) => setJackpotLossLimit(Math.max(0, value))}
+          aiEnabled={jackpotAiEnabled}
+          onAiEnabledChange={toggleJackpotAi}
+          aiStatus={jackpotAiStatus}
           batchStatus={jackpotBatchStatus}
           batchLoading={jackpotBuyMutation.isPending}
           canPlaceBatch={jackpotDisabledReason === null}

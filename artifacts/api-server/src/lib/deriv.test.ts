@@ -1489,6 +1489,52 @@ describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
     }
   });
 
+  test("Jackpot bulk orders quote every selected side before dispatch and cap at 20 contracts", async () => {
+    const contractTypes = Array.from({ length: 20 }, (_, index) =>
+      (["CALL", "PUT", "DIGITEVEN", "DIGITODD"] as const)[index % 4]);
+    const result = await withSelectedAccount("jackpot-bulk-contracts-user", async () => {
+      const socket = latestSocket();
+      const firstActionIndex = socket.sent.length;
+      const response = await deriv.buyJackpotPairContracts({
+        amount: 0.35,
+        duration: 1,
+        duration_unit: "t",
+        symbol: "R_75",
+        contract_types: contractTypes,
+      });
+      const actions = socket.sent.slice(firstActionIndex).filter((message) => message.proposal || message.buy);
+      const proposalIndexes = actions.flatMap((message, index) => message.proposal ? [index] : []);
+      const firstBuyIndex = actions.findIndex((message) => message.buy);
+      assert.equal(actions.filter((message) => message.proposal).length, 20);
+      assert.equal(actions.filter((message) => message.buy).length, 20);
+      assert.ok(firstBuyIndex > Math.max(...proposalIndexes), "all 20 fresh quotes precede every buy request");
+      return response;
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.count, 20);
+    assert.equal(result.message, "20 Jackpot contracts sent together. Each contract settles independently.");
+
+    await withSelectedAccount("jackpot-bulk-contracts-over-limit-user", async () => {
+      const socket = latestSocket();
+      const firstActionIndex = socket.sent.length;
+      await assert.rejects(
+        deriv.buyJackpotPairContracts({
+          amount: 0.35,
+          duration: 1,
+          duration_unit: "t",
+          symbol: "R_75",
+          contract_types: Array.from({ length: 21 }, () => "CALL" as const),
+        }),
+        /1 to 20 selected contracts/,
+      );
+      assert.equal(
+        socket.sent.slice(firstActionIndex).filter((message) => message.proposal || message.buy).length,
+        0,
+      );
+    });
+  });
+
   test("Bulk Trader preserves exact 1–5 tick durations for every digit type and order size", async () => {
     const contractTypes = ["DIGITOVER", "DIGITUNDER", "DIGITDIFF"] as const;
     for (const count of [1, 3]) {
