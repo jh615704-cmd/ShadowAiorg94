@@ -21,6 +21,12 @@ Clock Work history should match DigitFlip's history presentation and clear behav
 
 **How to apply:** Reuse DigitFlip's history treatment and derive the displayed summary from rows that remain visible after a clear. Keep run P/L and contract tracking intact for stop-limit and settlement safety.
 
+Jackpot Clear Session resets local settled P/L used by Jackpot's session loss limit so the user can begin a new run. Preserve open and unresolved contract IDs, leave Deriv's account history unchanged, and keep account settlement and uncertain-order guards active.
+
+**Why:** The user asked for clearing Jackpot session history to release a loss-limit block while retaining settlement protection.
+
+**How to apply:** Remove only confirmed-settled Jackpot contract IDs from the local run tracker during a clear; never clear open or unconfirmed IDs or treat the operation as deleting Deriv records.
+
 Money Bank persists confirmed contract IDs in account-scoped browser storage so its history survives page refreshes. This is device-local; do not reconstruct Money Bank ownership from `ACCU` alone, because other features can also use Accumulator contracts.
 
 **Why:** Feature ownership is not included in Deriv history rows, and page-only claims disappeared on refresh. Claiming every Accumulator trade would mix results from other features into Money Bank.

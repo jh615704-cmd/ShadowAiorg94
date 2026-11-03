@@ -555,6 +555,82 @@ test("Jackpot keeps a batch blocked after an unclear order confirmation", async 
   }
 });
 
+test("Jackpot manual count sends exactly four Rise/Fall contracts in one batch", async () => {
+  const state = createState(userSession(["jackpot"]));
+  state.hasToken = true;
+  state.allowFixtureTrades = true;
+  state.statusVersion = 50;
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/app`);
+    await page.getByRole("heading", { name: "Trading Strategies" }).waitFor();
+    await page.getByRole("checkbox", { name: "Toggle Jackpot" }).check();
+    const panel = page.getByTestId("jackpot-panel");
+    await panel.getByTestId("switch-jackpot-even-odd").uncheck();
+    await panel.getByTestId("button-jackpot-direction-auto").click();
+    await panel.getByTestId("button-jackpot-count-4").click();
+    assert.equal(await panel.getByTestId("switch-jackpot-ai").isChecked(), false);
+
+    await panel.getByTestId("button-jackpot-place-batch").click();
+    const history = panel.locator(".jackpot-history");
+    await history.locator(".deriv-history-row").nth(3).waitFor({ timeout: 10_000 });
+    assert.equal(await history.locator(".deriv-history-row").count(), 4);
+    assert.deepEqual(state.tradeRequests[0].body.contract_types, Array(4).fill("CALL"));
+    await page.waitForTimeout(250);
+    assert.equal(state.tradeRequests.filter((request) => request.path === "/api/deriv/jackpot/buy").length, 1);
+    assert.deepEqual(pageErrors, []);
+    assert.deepEqual(state.unhandledApis, []);
+  } finally {
+    await context.close();
+  }
+});
+
+test("clearing Jackpot session resets settled loss-limit P/L without deleting Deriv history", async () => {
+  const state = createState(userSession(["jackpot"]));
+  state.hasToken = true;
+  state.allowFixtureTrades = true;
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/app`);
+    await page.getByRole("heading", { name: "Trading Strategies" }).waitFor();
+    await page.getByRole("checkbox", { name: "Toggle Jackpot" }).check();
+    const panel = page.getByTestId("jackpot-panel");
+    await panel.getByTestId("input-jackpot-loss-limit").fill("0.5");
+    await panel.locator("label.jackpot-multiply").click();
+    await panel.getByTestId("button-jackpot-place-batch").click();
+    await panel.locator(".jackpot-history .deriv-history-row").first().waitFor({ timeout: 10_000 });
+
+    state.history = state.history.map((trade) => ({
+      ...trade,
+      current_value: 0,
+      payout: 0,
+      profit: -trade.buy_price,
+      status: "lost",
+      sell_time: Math.floor(Date.now() / 1_000),
+    }));
+    state.activeContractCount = 0;
+    await page.waitForFunction(() =>
+      document.querySelector(".jackpot-place-copy [role='status']")?.textContent
+        ?.includes("Loss limit reached"),
+    undefined, { timeout: 15_000 });
+    const placeButton = panel.getByTestId("button-jackpot-place-batch");
+    assert.equal(await placeButton.isDisabled(), true);
+
+    await panel.getByRole("button", { name: "Clear Jackpot History session" }).click();
+    await panel.getByRole("button", { name: "Tap again to clear Jackpot History session" }).click();
+    await page.waitForFunction(() => {
+      const button = document.querySelector('[data-testid="button-jackpot-place-batch"]');
+      return button instanceof HTMLButtonElement && !button.disabled;
+    }, undefined, { timeout: 10_000 });
+    assert.equal(state.history.length, 1, "Clearing must not delete Deriv's account history.");
+    assert.equal(await panel.locator(".jackpot-history .deriv-history-row").count(), 0);
+    assert.deepEqual(pageErrors, []);
+    assert.deepEqual(state.unhandledApis, []);
+  } finally {
+    await context.close();
+  }
+});
+
 test("Jackpot place button re-enables after Deriv confirms settlement", async () => {
   const state = createState(userSession(["jackpot"]));
   state.hasToken = true;
@@ -627,7 +703,7 @@ test("Jackpot place button re-enables after Deriv confirms settlement", async ()
   }
 });
 
-test("Jackpot AI scans for five seconds, filters observed samples, and waits for settlement", async () => {
+test("Jackpot AI scans for five seconds, sends one batch, and switches off", async () => {
   const state = createState(userSession(["jackpot"]));
   state.hasToken = true;
   state.allowFixtureTrades = true;
@@ -652,9 +728,13 @@ test("Jackpot AI scans for five seconds, filters observed samples, and waits for
     assert.equal(state.tradeRequests.length, 1);
     assert.equal(state.tradeRequests[0].path, "/api/deriv/jackpot/buy");
     assert.deepEqual(state.tradeRequests[0].body.contract_types, ["CALL"]);
-    assert.match(await panel.getByTestId("status-jackpot-ai").innerText(), /settle/i);
+    await page.waitForFunction(() => {
+      const toggle = document.querySelector('[data-testid="switch-jackpot-ai"]');
+      return toggle instanceof HTMLInputElement && !toggle.checked;
+    }, undefined, { timeout: 5_000 });
+    assert.match(await panel.getByTestId("status-jackpot-ai").innerText(), /off/i);
     await page.waitForTimeout(250);
-    assert.equal(state.tradeRequests.length, 1, "AI must wait for settlement instead of replaying the batch.");
+    assert.equal(state.tradeRequests.length, 1, "AI must stop after its one acknowledged batch.");
     assert.deepEqual(pageErrors, []);
   } finally {
     await context.close();

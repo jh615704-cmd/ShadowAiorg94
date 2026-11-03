@@ -3488,6 +3488,14 @@ export default function XTraderPage() {
     setJackpotHistoryClearArmed(false);
     setHistoryFading(true);
     await sleep(260);
+    const settledRunIds = new Set(
+      jackpotRunRows
+        .filter((trade) => !isDerivHistoryOpen(trade.status))
+        .map((trade) => String(trade.contract_id)),
+    );
+    jackpotRunContractIdsRef.current = new Set(
+      [...jackpotRunContractIdsRef.current].filter((contractId) => !settledRunIds.has(contractId)),
+    );
     setJackpotHiddenHistoryIds((current) => {
       const next = new Set(current);
       jackpotRows
@@ -3495,6 +3503,7 @@ export default function XTraderPage() {
         .forEach((trade) => next.add(String(trade.contract_id)));
       return next;
     });
+    setJackpotBatchStatus("Settled Jackpot P/L cleared for a new session. Deriv history and open-trade protections are unchanged.");
     setHistoryFading(false);
   };
 
@@ -5328,7 +5337,9 @@ export default function XTraderPage() {
         if (!accepted) {
           scheduleNextScan("The batch was not acknowledged; checking fresh samples before another attempt.");
         } else {
-          setJackpotAiStatus("Jackpot AI sent the batch and is waiting for settlement.");
+          jackpotAiAccountIdRef.current = null;
+          setJackpotAiStatus("Jackpot AI sent one batch and switched off. Re-enable it to scan again.");
+          setJackpotAiEnabled(false);
         }
       } catch (error) {
         if (!cancelled) {

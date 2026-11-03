@@ -67,6 +67,14 @@ test("allocates the selected count across enabled families with no extra orders"
   assert.deepEqual(buildJackpotContractTypes(selection, 21), []);
 });
 
+test("every Jackpot batch size produces exactly the selected number of contracts", () => {
+  const selection = resolveJackpotSelection(signal(), "AUTO", "AUTO", true, false);
+  assert.ok(selection);
+  for (let count = 1; count <= 20; count += 1) {
+    assert.equal(buildJackpotContractTypes(selection, count).length, count);
+  }
+});
+
 test("supports a 20-contract AUTO batch with only one enabled family", () => {
   const selection = resolveJackpotSelection(signal(), "AUTO", "AUTO", false, true);
   assert.ok(selection);

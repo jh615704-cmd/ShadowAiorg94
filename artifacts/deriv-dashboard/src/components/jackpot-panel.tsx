@@ -289,7 +289,7 @@ export default function JackpotPanel({
               <div className="jackpot-count-grid" role="group" aria-label="Number of Jackpot contracts">
                 {contractCounts.map((count) => <button type="button" key={count} className={contractCount === count ? "selected" : ""} onClick={() => onContractCountChange(count)} aria-pressed={contractCount === count} aria-label={`${count} total contracts`} data-testid={`button-jackpot-count-${count}`}>{count}</button>)}
               </div>
-              <small className="jackpot-helper">Choose 1–20 total orders. Use Place for a manual batch or Jackpot AI for automatic batches.</small>
+              <small className="jackpot-helper">Choose 1–20 total orders. Place sends exactly this many together; Jackpot AI sends one batch of this size.</small>
             </div>
             <div className="jackpot-field-block">
               <span className="jackpot-field-label">Duration · ticks</span>
@@ -312,12 +312,12 @@ export default function JackpotPanel({
               <label className="jackpot-field"><span>Loss limit · {currency}</span><input type="number" min="0" step="0.01" value={lossLimit} onChange={(event) => onLossLimitChange(Number(event.target.value))} aria-label={`Jackpot session loss limit in ${currency}`} data-testid="input-jackpot-loss-limit" /></label>
             </div>
             <label className="jackpot-switch-row jackpot-ai-switch">
-              <span><b>Jackpot AI</b><small>Scan for 5 seconds; choose enabled sides above a 55% observed rate with at least 20 samples. Sample rates do not guarantee future results.</small></span>
+              <span><b>Jackpot AI</b><small>Scan for 5 seconds; choose enabled sides above a 55% observed rate with at least 20 samples. It switches off after one batch.</small></span>
               <input type="checkbox" checked={aiEnabled} onChange={(event) => onAiEnabledChange(event.target.checked)} aria-label="Enable Jackpot AI" data-testid="switch-jackpot-ai" />
               <i aria-hidden="true" />
             </label>
             <p className="jackpot-ai-status" role="status" aria-live="polite" data-testid="status-jackpot-ai">{aiStatus}</p>
-            <small className="jackpot-helper">Jackpot AI keeps scanning through temporary no-signal waits. It waits for the current batch to settle before submitting another.</small>
+            <small className="jackpot-helper">Jackpot AI retries temporary no-signal waits, then switches off after one acknowledged batch. Enable it again to scan another.</small>
           </section>
         </div>
 
@@ -354,6 +354,7 @@ export default function JackpotPanel({
       </div>
 
       <div className="jackpot-history">
+        <small className="jackpot-helper jackpot-clear-note">Clear Session resets settled Jackpot P/L for its loss limit. It does not delete Deriv history or unlock open or uncertain trades.</small>
         <DerivHistory
           title="Jackpot History"
           strategy="Jackpot Bulk"
