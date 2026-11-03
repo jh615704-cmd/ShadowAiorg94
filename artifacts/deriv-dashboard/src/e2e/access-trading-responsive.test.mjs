@@ -36,6 +36,7 @@ const fixtureFeatureIds = [
   "digit-flip",
   "trade-x",
   "bulk-trader",
+  "jackpot",
   "clock-work",
   "cash-grab",
   "money-bank",
@@ -470,12 +471,66 @@ test("DigitFlip history stays visible after switching the feature off", async ()
   }
 });
 
+test("Jackpot uses complete dual pairs, labels its run history, and excludes other features", async () => {
+  const state = createState(userSession(["jackpot", "clock-work"]));
+  state.hasToken = true;
+  state.allowFixtureTrades = true;
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/app`);
+    await page.getByRole("heading", { name: "Trading Strategies" }).waitFor();
+    const jackpotCard = page.locator("#jackpot-feature");
+    const clockWorkCard = page.locator("#clock-work-feature");
+    assert.ok(
+      (await jackpotCard.boundingBox()).y < (await clockWorkCard.boundingBox()).y,
+      "Jackpot should appear above Clock Work.",
+    );
+    await jackpotCard.getByText("Jackpot Analysis", { exact: true }).waitFor();
+
+    const jackpotToggle = page.getByRole("checkbox", { name: "Toggle Jackpot" });
+    await jackpotToggle.check();
+    const panel = page.getByTestId("jackpot-panel");
+    await panel.waitFor({ state: "visible" });
+    assert.equal(await panel.getByTestId("button-jackpot-pairs-1").getAttribute("aria-pressed"), "true");
+    await panel.getByTestId("button-jackpot-place-batch").click();
+    const history = panel.locator(".jackpot-history");
+    await history.locator(".deriv-history-row").nth(1).waitFor({ timeout: 10_000 });
+    assert.equal(await history.locator(".deriv-history-row").count(), 2);
+    assert.equal(await history.getByText("CURRENT RUN", { exact: true }).count(), 2);
+    assert.equal(await history.locator(".deriv-history-win-sample").count(), 0);
+    assert.doesNotMatch(await history.innerText(), /n=0 settled/);
+    assert.deepEqual(state.tradeRequests.map(({ path }) => path), ["/api/deriv/jackpot/buy"]);
+    assert.deepEqual(state.tradeRequests[0].body, {
+      access_feature: "jackpot",
+      amount: 0.5,
+      duration: 1,
+      duration_unit: "t",
+      symbol: "R_75",
+      rise_fall_type: "CALL",
+      parity_type: "DIGITEVEN",
+      pair_count: 1,
+    });
+
+    const clockWorkToggle = page.getByRole("checkbox", { name: "Toggle Clock Work" });
+    await clockWorkToggle.check();
+    assert.equal(await jackpotToggle.isChecked(), false);
+    assert.equal(await clockWorkToggle.isChecked(), true);
+    await panel.waitFor({ state: "hidden" });
+    await page.getByTestId("clock-work-panel").waitFor({ state: "visible" });
+    assert.deepEqual(state.unhandledApis, []);
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+});
+
 test("all active trading panels fit phone, tablet, laptop, and 4K widths", async () => {
   const state = createState(userSession([
     "edge",
     "digit-flip",
     "trade-x",
     "bulk-trader",
+    "jackpot",
     "cash-grab",
     "clock-work",
     "money-bank",
@@ -502,6 +557,7 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
     { feature: "digit-flip", card: "digit-flip", selector: '[data-testid="digit-flip-panel"]', label: "DigitFlip" },
     { feature: "trade-x", card: "trade-x", selector: '[data-testid="trade-x-panel"]', label: "Trade X" },
     { feature: "bulk-trader", card: "bulk", selector: '[data-testid="panel-bulk-trader"]', label: "Bulk Trader" },
+    { feature: "jackpot", card: "jackpot", selector: '[data-testid="jackpot-panel"]', label: "Jackpot" },
     { feature: "cash-grab", card: "cash-grab", selector: '[data-testid="cash-grab-panel"]', label: "Cash Grab" },
     { feature: "clock-work", card: "clock-work", selector: '[data-testid="clock-work-panel"]', label: "Clock Work" },
     { feature: "money-bank", card: "edge2", selector: ".money-bank-panel", label: "Money Bank" },
@@ -595,6 +651,15 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
         await panel.getByTestId("button-clock-start").waitFor({ state: "visible" });
         assert.equal(await takeProfit.isDisabled(), false);
         assert.equal(await lossLimit.isDisabled(), false);
+      }
+      if (screen.feature === "cash-grab") {
+        const marketTrigger = panel.getByRole("button", { name: "Select Cash Grab market" });
+        await marketTrigger.click();
+        const autoBestOption = panel.locator(".df-market-option.df-market-smart");
+        await autoBestOption.waitFor({ state: "visible" });
+        assert.equal(await autoBestOption.isDisabled(), false, "Auto Best should remain selectable before a best market sample is available.");
+        await autoBestOption.click();
+        assert.match(await panel.locator(".df-market-copy small").innerText(), /ACTIVE MARKET · AUTO BEST/);
       }
       for (const viewport of bulkViewports) {
         await page.setViewportSize({ width: viewport.width, height: viewport.height });
@@ -1416,7 +1481,7 @@ test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewpor
     assert.equal(await page.locator(".money-bank-knockout-card").count(), 0, "The retired live knockout area should remain absent.");
     const moneyBankHistory = page.locator(".money-bank-panel .deriv-history");
     await moneyBankHistory.getByText("WIN RATE", { exact: true }).waitFor();
-    assert.match(await moneyBankHistory.innerText(), /n=0 settled/);
+    assert.doesNotMatch(await moneyBankHistory.innerText(), /n=0 settled/);
     assert.equal(await page.locator(".money-bank-chart-reset").count(), 0, "The chart refresh control should be hidden.");
     assert.equal(await page.getByText(/ticks since reset/).count(), 0, "The chart tick counter should be hidden.");
     assert.equal(await page.getByText(/BASE is the first stake|Auto Budget includes only levels affordable/).count(), 0, "The requested Money Bank helper copy should be hidden.");
@@ -1984,6 +2049,39 @@ async function mockApiRequest(route, state, pathname, method) {
     }, 202);
     return;
   }
+  if (pathname === "/api/deriv/jackpot/buy" && method === "POST" && state.allowFixtureTrades) {
+    const order = request.postDataJSON();
+    state.tradeRequests.push({ path: pathname, method, body: order });
+    const contractTypes = Array.from({ length: order.pair_count }, () => [
+      order.rise_fall_type,
+      order.parity_type,
+    ]).flat();
+    const buys = contractTypes.map((contract_type) => {
+      const row = fixtureBuy(state, { ...order, contract_type });
+      return {
+        contract_id: row.contract_id,
+        buy_price: row.buy_price,
+        payout: row.payout,
+        start_time: row.buy_time,
+      };
+    });
+    state.activeContractCount = buys.length;
+    await fulfillJson(route, {
+      ok: true,
+      count: buys.length,
+      message: "Fixture Jackpot batch confirmed.",
+      proposals: contractTypes.map(() => ({
+        id: "fixture-proposal",
+        ask_price: order.amount,
+        payout: order.amount * 2,
+        spot: 100_000,
+        longcode: "Fixture quote",
+      })),
+      buys,
+      failed: [],
+    }, 202);
+    return;
+  }
   if (pathname === "/api/deriv/sell" && method === "POST" && state.allowFixtureTrades) {
     state.tradeRequests.push({ path: pathname, method });
     const { contract_id } = request.postDataJSON();
@@ -2008,7 +2106,7 @@ async function mockApiRequest(route, state, pathname, method) {
     await fulfillJson(route, { symbol: state.selectedSymbol });
     return;
   }
-  if (/^\/api\/deriv\/(buy|bulk-buy|dual-buy|sell)(\/|$)/.test(pathname)) {
+  if (/^\/api\/deriv\/(buy|bulk-buy|dual-buy|sell|jackpot\/buy)(\/|$)/.test(pathname)) {
     state.tradeRequests.push({ path: pathname, method });
     await fulfillJson(route, { error: "Live trade endpoints are disabled in browser tests." }, 501);
     return;
