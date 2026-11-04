@@ -1,10 +1,8 @@
 export type ClockWorkDirection = "HIGHER" | "LOWER";
 
-export const CLOCK_WORK_AI_MIN_WIN_RATE = 50;
-export const CLOCK_WORK_AI_MIN_WIN_RATE_OPTIONS = [50, 55, 65, 70] as const;
-export type ClockWorkAiMinimumWinRate = typeof CLOCK_WORK_AI_MIN_WIN_RATE_OPTIONS[number];
-export const CLOCK_WORK_AI_MIN_SAMPLE_COUNT = 20;
-export const CLOCK_WORK_AUTO_BEST_MARKET_MIN_SAMPLE_COUNT = 20;
+export const CLOCK_WORK_AI_MIN_WIN_RATE = 58;
+export const CLOCK_WORK_AI_MIN_SAMPLE_COUNT = 6;
+export const CLOCK_WORK_AUTO_BEST_MARKET_MIN_SAMPLE_COUNT = CLOCK_WORK_AI_MIN_SAMPLE_COUNT;
 export const CLOCK_WORK_AUTO_BEST_MARKET_VALUE = "__clock_work_auto_best_market__";
 export const CLOCK_WORK_AI_REQUIRED_CONFIRMATIONS = 2;
 export const CLOCK_WORK_CONTRACT_DURATION_TICKS = 5 as const;
@@ -172,32 +170,20 @@ export function getClockWorkFiveTickSampleCount(inputQuotes: readonly number[]):
 /**
  * Choose the best historical Higher/Lower setup for a fixed five-tick expiry.
  * Evaluation uses only the newest non-overlapping expiry windows; it returns
- * no candidate until the sample floor and selected entry threshold are met.
+ * no candidate until six samples exist and the observed rate is over 58%.
  */
 export function chooseClockWorkAiCandidate(
   inputQuotes: readonly number[],
   options: {
-    minimumWinRate?: number;
-    minimumSamples?: number;
     barrierOffsets?: readonly number[];
   } = {},
 ): ClockWorkAiCandidate | null {
   const duration = CLOCK_WORK_CONTRACT_DURATION_TICKS;
-  const minimumWinRate = options.minimumWinRate ?? CLOCK_WORK_AI_MIN_WIN_RATE;
-  const minimumSamples = Math.floor(options.minimumSamples ?? CLOCK_WORK_AI_MIN_SAMPLE_COUNT);
+  const minimumSamples = CLOCK_WORK_AI_MIN_SAMPLE_COUNT;
   const barriers = options.barrierOffsets ?? CLOCK_WORK_AI_BARRIER_OFFSETS;
   const quotes = inputQuotes.filter(Number.isFinite).slice(-CLOCK_WORK_MAX_TICKS);
 
-  if (
-    duration < 1
-    || !Number.isFinite(minimumWinRate)
-    || minimumWinRate < 0
-    || minimumWinRate > 100
-    || !Number.isFinite(minimumSamples)
-    || minimumSamples < 1
-  ) {
-    return null;
-  }
+  if (duration < 1) return null;
 
   const outcomes: Array<{ start: number; expiry: number }> = [];
   for (let expiryIndex = quotes.length - 1; expiryIndex >= duration; expiryIndex -= duration) {
@@ -216,7 +202,7 @@ export function chooseClockWorkAiCandidate(
         ? expiry > start + barrierOffset
         : expiry < start - barrierOffset).length;
       const observedRate = (wins / outcomes.length) * 100;
-      if (observedRate < minimumWinRate) continue;
+      if (observedRate <= CLOCK_WORK_AI_MIN_WIN_RATE) continue;
 
       const signedBarrier = direction === "HIGHER" ? barrierOffset : -barrierOffset;
       const candidate: ClockWorkAiCandidate = {
@@ -255,21 +241,14 @@ export function chooseClockWorkAutoBestMarket(
   signals: readonly ClockWorkMarketSignal[],
   eligibleSymbols: readonly string[],
   options: {
-    minimumWinRate?: number;
-    minimumSamples?: number;
     maxTickAgeSeconds?: number;
     nowEpoch?: number;
   } = {},
 ): ClockWorkAutoBestMarket | null {
-  const minimumSamples = Math.floor(
-    options.minimumSamples ?? CLOCK_WORK_AUTO_BEST_MARKET_MIN_SAMPLE_COUNT,
-  );
   const maxTickAgeSeconds = options.maxTickAgeSeconds ?? 30;
   const nowEpoch = options.nowEpoch ?? Math.floor(Date.now() / 1000);
   if (
-    minimumSamples < 1
-    || !Number.isFinite(minimumSamples)
-    || !Number.isFinite(maxTickAgeSeconds)
+    !Number.isFinite(maxTickAgeSeconds)
     || maxTickAgeSeconds <= 0
     || !Number.isFinite(nowEpoch)
   ) return null;
@@ -287,10 +266,7 @@ export function chooseClockWorkAutoBestMarket(
     const tickAgeSeconds = nowEpoch - signal.tick_epoch;
     if (tickAgeSeconds < -5 || tickAgeSeconds > maxTickAgeSeconds) return [];
 
-    const candidate = chooseClockWorkAiCandidate(signal.recent_quotes, {
-      minimumWinRate: options.minimumWinRate,
-      minimumSamples,
-    });
+    const candidate = chooseClockWorkAiCandidate(signal.recent_quotes);
     return candidate
       ? [{
         symbol: signal.symbol,

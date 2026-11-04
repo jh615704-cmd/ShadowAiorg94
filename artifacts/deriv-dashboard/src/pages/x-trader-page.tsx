@@ -154,7 +154,6 @@ import {
   CLOCK_WORK_AI_REQUIRED_CONFIRMATIONS,
   CLOCK_WORK_MAX_TICKS,
   type ClockWorkAutoBestMarket,
-  type ClockWorkAiMinimumWinRate,
   type ClockWorkQuoteBuffer,
 } from "../lib/clock-work-logic";
 import { getClockWorkNextStake, getClockWorkRunSummary } from "../lib/clock-work-session";
@@ -297,7 +296,7 @@ const clockWorkGuidePages = [
   { title: "Welcome to Clock Work", body: "Clock Work places Higher or Lower contracts on the selected market and account.", points: ["Use a demo account while learning.", "Only one trading feature can be active at a time.", "The selected Deriv account receives any accepted order."] },
   { title: "Connect and choose an account", body: "Connect Deriv and confirm which account is selected before enabling Clock Work. Real-account orders remain subject to the workspace's live-trading and balance checks.", points: ["A disconnected account blocks new entries.", "Open contracts must settle before Clock Work can enter again.", "Use demo mode to learn the controls."] },
   { title: "Choose a market and stake", body: "Select a supported market and set the stake for each entry.", points: ["The selected market is shown above the control.", "Auto Best is available as a market choice.", "Review your account balance before starting."] },
-  { title: "Start and stop Clock Work", body: "Choose your market and historical-rate threshold, then press Start Clock Work when your account and settings are ready.", points: ["Stop prevents new entries.", "Accepted contracts settle through Deriv.", "An open or unsettled contract pauses the next entry."] },
+  { title: "Start and stop Clock Work", body: "Ai Clock uses a fixed entry filter: the observed historical rate must be greater than 58% across at least six completed five-tick samples. Press Start Clock Work when your account and settings are ready.", points: ["Stop prevents new entries.", "Accepted contracts settle through Deriv.", "An open or unsettled contract pauses the next entry."] },
   { title: "Stop and review history", body: "Stop Clock Work to prevent new entries. An order already accepted by Deriv is not canceled by Stop and must settle through Deriv.", points: ["Clock Work History shows entries and their reported results.", "Clearing history hides local rows only; it does not delete Deriv's account history.", "Check Deriv history before restarting after an uncertain order."] },
 ] as const;
 
@@ -616,7 +615,6 @@ export default function XTraderPage() {
   const [clockWorkStake, setClockWorkStake] = useState(1);
   const [clockWorkLossMultiplier, setClockWorkLossMultiplier] = useState(2);
   const [clockWorkAiEnabled, setClockWorkAiEnabled] = useState(false);
-  const [clockWorkAiMinimumWinRate, setClockWorkAiMinimumWinRate] = useState<ClockWorkAiMinimumWinRate>(CLOCK_WORK_AI_MIN_WIN_RATE);
   const [clockWorkTakeProfit, setClockWorkTakeProfit] = useState(0);
   const [clockWorkLossLimit, setClockWorkLossLimit] = useState(10);
   const [clockWorkRunning, setClockWorkRunning] = useState(false);
@@ -1206,10 +1204,7 @@ export default function XTraderPage() {
     clockWorkLatestTick?.quote,
     clockWorkLatestTick?.symbol,
   ]);
-  const clockWorkAiCandidate = chooseClockWorkAiCandidate(clockWorkQuoteHistory, {
-    minimumWinRate: clockWorkAiMinimumWinRate,
-    minimumSamples: clockWorkAiMinimumSamples,
-  });
+  const clockWorkAiCandidate = chooseClockWorkAiCandidate(clockWorkQuoteHistory);
   const clockWorkTickEpoch = clockWorkTickIsFreshForMarket ? clockWorkLatestTick?.epoch ?? null : null;
   const clockWorkLatestTickId = clockWorkQuoteBuffer.symbol === clockWorkSymbol
     ? clockWorkQuoteBuffer.lastTickId
@@ -1242,7 +1237,6 @@ export default function XTraderPage() {
     clockWorkLatestTickId,
     clockWorkAiCandidate?.direction,
     clockWorkAiCandidate?.barrier,
-    clockWorkAiMinimumWinRate,
     clockWorkAiMinimumSamples,
     isConnected,
     currentAccount?.id,
@@ -5662,7 +5656,7 @@ export default function XTraderPage() {
       const sampleCount = getClockWorkFiveTickSampleCount(clockWorkQuoteHistory);
       setClockWorkAiStatus(sampleCount < clockWorkAiMinimumSamples
         ? `Collecting Clock Work five-tick samples: ${sampleCount}/${clockWorkAiMinimumSamples}.`
-        : `No setup met the ${clockWorkAiMinimumWinRate}% historical threshold in ${sampleCount} completed five-tick samples. Waiting for updated evidence.`);
+        : `No setup met the >${CLOCK_WORK_AI_MIN_WIN_RATE}% observed-rate filter in ${sampleCount} completed five-tick samples. Waiting for updated evidence.`);
       return;
     }
     const confirmation = clockWorkAiConfirmationRef.current;
@@ -5714,16 +5708,12 @@ export default function XTraderPage() {
     return () => window.clearInterval(timer);
   }, [clockWorkEnabled, clockWorkRunning]);
 
-  const refreshClockWorkAutoBest = (
-    minimumWinRate: ClockWorkAiMinimumWinRate,
-    resetWindow: boolean,
-  ) => {
+  const refreshClockWorkAutoBest = (resetWindow: boolean) => {
     const signals = status.data?.market_signals ?? [];
     const bestMarket = chooseClockWorkAutoBestMarket(
       signals,
       clockWorkSymbols.map((market) => market.value),
       {
-        minimumWinRate,
         nowEpoch: Math.floor(Date.now() / 1_000),
       },
     );
@@ -6537,7 +6527,7 @@ export default function XTraderPage() {
               setClockWorkStatusMessage(null);
               if (next === CLOCK_WORK_AUTO_BEST_MARKET_VALUE) {
                 setClockWorkAutoBestMode(true);
-                refreshClockWorkAutoBest(clockWorkAiMinimumWinRate, true);
+                refreshClockWorkAutoBest(true);
                 return;
               }
 
@@ -6556,16 +6546,6 @@ export default function XTraderPage() {
             lossMultiplier={clockWorkLossMultiplier}
             onLossMultiplierChange={setClockWorkLossMultiplier}
             aiEnabled={clockWorkAiEnabled}
-            minimumWinRate={clockWorkAiMinimumWinRate}
-            onMinimumWinRateChange={(value) => {
-              setClockWorkAiMinimumWinRate(value);
-              clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
-              if (clockWorkAutoBestMode) {
-                refreshClockWorkAutoBest(value, false);
-              } else {
-                setClockWorkAiStatus("Win-rate threshold updated.");
-              }
-            }}
             takeProfit={clockWorkTakeProfit}
             onTakeProfitChange={(value) => setClockWorkTakeProfit(roundTradeStakeToCents(Math.max(0, value)))}
             lossLimit={clockWorkLossLimit}

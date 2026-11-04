@@ -1,9 +1,9 @@
 import { Bot, Clock3, Pause, Play } from "lucide-react";
 import {
   CLOCK_WORK_AUTO_BEST_MARKET_VALUE,
-  CLOCK_WORK_AI_MIN_WIN_RATE_OPTIONS,
+  CLOCK_WORK_AI_MIN_WIN_RATE,
+  CLOCK_WORK_AI_MIN_SAMPLE_COUNT,
   type ClockWorkAutoBestMarket,
-  type ClockWorkAiMinimumWinRate,
 } from "../lib/clock-work-logic";
 import { getLossLimitRunwayMessage } from "../lib/loss-runway";
 import "./clock-work-panel.css";
@@ -21,8 +21,6 @@ export interface ClockWorkPanelProps {
   onLossMultiplierChange: (value: number) => void;
   aiEnabled: boolean;
   onAiEnabledChange: (value: boolean) => void;
-  minimumWinRate: ClockWorkAiMinimumWinRate;
-  onMinimumWinRateChange: (value: ClockWorkAiMinimumWinRate) => void;
   takeProfit: number;
   onTakeProfitChange: (value: number) => void;
   lossLimit: number;
@@ -76,8 +74,6 @@ export default function ClockWorkPanel({
   onLossMultiplierChange,
   aiEnabled,
   onAiEnabledChange,
-  minimumWinRate,
-  onMinimumWinRateChange,
   takeProfit,
   onTakeProfitChange,
   lossLimit,
@@ -244,18 +240,10 @@ export default function ClockWorkPanel({
             </div>
             <Toggle checked={aiEnabled} onChange={onAiEnabledChange} disabled={disabled && !aiEnabled} />
           </div>
-          <label className="cw-ai-threshold" htmlFor="cw-ai-minimum-rate">
-            <span>MINIMUM HISTORICAL RATE</span>
-            <select
-              id="cw-ai-minimum-rate"
-              value={minimumWinRate}
-              onChange={(event) => onMinimumWinRateChange(Number(event.target.value) as ClockWorkAiMinimumWinRate)}
-              aria-label="Ai Clock minimum historical rate threshold"
-              data-testid="select-ai-clock-rate"
-            >
-              {CLOCK_WORK_AI_MIN_WIN_RATE_OPTIONS.map((rate) => <option key={rate} value={rate}>{rate}%</option>)}
-            </select>
-          </label>
+          <div className="cw-ai-rate-rule" data-testid="clock-work-ai-rate-rule">
+            <span>FIXED ENTRY FILTER</span>
+            <strong>&gt;{CLOCK_WORK_AI_MIN_WIN_RATE}% observed · {CLOCK_WORK_AI_MIN_SAMPLE_COUNT} complete samples</strong>
+          </div>
           <div className={`cw-ai-status ${running ? "is-running" : ""}`} role="status" aria-live="polite" data-testid="clock-ai-status">
             <i aria-hidden="true" />
             <span>{statusMessage || aiStatus}</span>

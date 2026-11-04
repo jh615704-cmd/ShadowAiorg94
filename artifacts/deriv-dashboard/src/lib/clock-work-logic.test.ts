@@ -11,6 +11,8 @@ import {
   getClockWorkLimitReached,
   getClockWorkLossBudgetBlockReason,
   updateClockWorkAiConfirmation,
+  CLOCK_WORK_AI_MIN_SAMPLE_COUNT,
+  CLOCK_WORK_AI_MIN_WIN_RATE,
   CLOCK_WORK_AUTO_BEST_MARKET_MIN_SAMPLE_COUNT,
   CLOCK_WORK_AI_REQUIRED_CONFIRMATIONS,
   CLOCK_WORK_CONTRACT_DURATION_TICKS,
@@ -29,9 +31,9 @@ function historyForOutcomes(outcomes: readonly boolean[]) {
   return quotes;
 }
 
-test("Clock Work selects the strongest side and smallest tied barrier at 70%", () => {
+test("Clock Work selects the strongest side and smallest tied barrier above 58%", () => {
   const outcomes = [...Array.from({ length: 28 }, () => true), ...Array.from({ length: 12 }, () => false)];
-  const candidate = chooseClockWorkAiCandidate(historyForOutcomes(outcomes), { minimumWinRate: 70 });
+  const candidate = chooseClockWorkAiCandidate(historyForOutcomes(outcomes));
 
   assert.deepEqual(candidate, {
     direction: "HIGHER",
@@ -42,34 +44,36 @@ test("Clock Work selects the strongest side and smallest tied barrier at 70%", (
   });
 });
 
-test("Clock Work does not select a direction below the 70% cutoff", () => {
-  const outcomes = [...Array.from({ length: 27 }, () => true), ...Array.from({ length: 13 }, () => false)];
-  assert.equal(chooseClockWorkAiCandidate(historyForOutcomes(outcomes), { minimumWinRate: 70 }), null);
-});
-
-test("Clock Work accepts the selected 50%, 55%, 65%, or 70% entry threshold", () => {
-  const outcomes = [...Array.from({ length: 65 }, () => true), ...Array.from({ length: 35 }, () => false)];
-  const quotes = historyForOutcomes(outcomes);
-
-  assert.equal(chooseClockWorkAiCandidate(quotes, { minimumWinRate: 55 })?.observedRate, 65);
-  assert.equal(chooseClockWorkAiCandidate(quotes, { minimumWinRate: 65 })?.observedRate, 65);
-  assert.equal(chooseClockWorkAiCandidate(quotes, { minimumWinRate: 70 }), null);
-
-  const minimumRateQuotes = historyForOutcomes([
-    ...Array.from({ length: 11 }, () => true),
-    ...Array.from({ length: 9 }, () => false),
+test("Clock Work uses a fixed strict observed-rate threshold above 58%", () => {
+  const exactThreshold = historyForOutcomes([
+    ...Array.from({ length: 29 }, () => true),
+    ...Array.from({ length: 21 }, () => false),
   ]);
-  const minimumRateCandidate = chooseClockWorkAiCandidate(minimumRateQuotes, { minimumWinRate: 55 });
-  assert.ok(Math.abs((minimumRateCandidate?.observedRate ?? 0) - 55) < 1e-9,
-    "The selected 55% threshold must not be silently overridden by an additional confidence gate.");
+  const belowThreshold = historyForOutcomes([
+    ...Array.from({ length: 28 }, () => true),
+    ...Array.from({ length: 22 }, () => false),
+  ]);
+  const aboveThreshold = historyForOutcomes([
+    ...Array.from({ length: 30 }, () => true),
+    ...Array.from({ length: 20 }, () => false),
+  ]);
+
+  assert.equal(CLOCK_WORK_AI_MIN_WIN_RATE, 58);
+  assert.equal(chooseClockWorkAiCandidate(exactThreshold), null, "Exactly 58% must not qualify.");
+  assert.equal(chooseClockWorkAiCandidate(belowThreshold), null, "Rates below 58% must not qualify.");
+  assert.equal(chooseClockWorkAiCandidate(aboveThreshold)?.observedRate, 60);
 });
 
-test("Clock Work accepts the 50% default with the full evidence sample", () => {
-  const outcomes = [...Array.from({ length: 10 }, () => true), ...Array.from({ length: 10 }, () => false)];
-  const candidate = chooseClockWorkAiCandidate(historyForOutcomes(outcomes));
+test("Clock Work requires six completed outcomes and a qualifying rate", () => {
+  const fiveOutcomes = historyForOutcomes(Array.from({ length: 5 }, () => true));
+  const sixOutcomesAt50Percent = historyForOutcomes([true, true, true, false, false, false]);
+  const sixQualifyingOutcomes = historyForOutcomes([true, true, true, true, false, false]);
 
-  assert.equal(candidate?.observedRate, 50);
-  assert.equal(candidate?.sampleCount, 20);
+  assert.equal(CLOCK_WORK_AI_MIN_SAMPLE_COUNT, 6);
+  assert.equal(chooseClockWorkAiCandidate(fiveOutcomes), null, "Five outcomes are not enough.");
+  assert.equal(chooseClockWorkAiCandidate(sixOutcomesAt50Percent), null, "Enough samples still need a rate above 58%.");
+  assert.equal(chooseClockWorkAiCandidate(sixQualifyingOutcomes)?.sampleCount, 6);
+  assert.equal(chooseClockWorkAiCandidate(sixQualifyingOutcomes)?.observedRate, (4 / 6) * 100);
 });
 
 test("Clock Work auto-best ranks fresh markets by stable five-tick evidence", () => {
@@ -90,10 +94,10 @@ test("Clock Work auto-best ranks fresh markets by stable five-tick evidence", ()
       },
     ],
     ["R_10", "R_75"],
-    { minimumWinRate: 70, nowEpoch: 1_000 },
+    { nowEpoch: 1_000 },
   );
 
-  assert.equal(CLOCK_WORK_AUTO_BEST_MARKET_MIN_SAMPLE_COUNT, 20);
+  assert.equal(CLOCK_WORK_AUTO_BEST_MARKET_MIN_SAMPLE_COUNT, 6);
   assert.equal(best?.symbol, "R_75", "The larger, nearly-as-strong sample should outrank a perfect but shorter sample.");
   assert.equal(best?.candidate.sampleCount, 39);
   assert.equal(best?.candidate.observedRate, (38 / 39) * 100);
@@ -101,7 +105,7 @@ test("Clock Work auto-best ranks fresh markets by stable five-tick evidence", ()
 });
 
 test("Clock Work keeps contracts and analysis fixed at five ticks", () => {
-  const quotes = historyForOutcomes(Array.from({ length: 20 }, () => true));
+  const quotes = historyForOutcomes(Array.from({ length: 6 }, () => true));
   const best = chooseClockWorkAutoBestMarket(
     [{ symbol: "R_75", recent_quotes: quotes, tick_epoch: 1_000 }],
     ["R_75"],
@@ -109,12 +113,12 @@ test("Clock Work keeps contracts and analysis fixed at five ticks", () => {
   );
 
   assert.equal(CLOCK_WORK_CONTRACT_DURATION_TICKS, 5);
-  assert.equal(chooseClockWorkAiCandidate(quotes)?.sampleCount, 20);
-  assert.equal(best?.candidate.sampleCount, 20);
+  assert.equal(chooseClockWorkAiCandidate(quotes)?.sampleCount, 6);
+  assert.equal(best?.candidate.sampleCount, 6);
 });
 
 test("Clock Work confirms a preloaded five-tick setup on one fresh quote", () => {
-  const recentQuotes = historyForOutcomes(Array.from({ length: 20 }, () => true));
+  const recentQuotes = historyForOutcomes(Array.from({ length: 6 }, () => true));
   const quoteHistory = getClockWorkQuoteHistory(
     [{ symbol: "R_75", recent_quotes: recentQuotes, tick_epoch: 2_000 }],
     "R_75",
@@ -127,7 +131,7 @@ test("Clock Work confirms a preloaded five-tick setup on one fresh quote", () =>
   );
 
   assert.equal(CLOCK_WORK_AI_REQUIRED_CONFIRMATIONS, 2);
-  assert.equal(candidate?.sampleCount, 20);
+  assert.equal(candidate?.sampleCount, 6);
   assert.equal(confirmation.count, 1);
   confirmation = updateClockWorkAiConfirmation(confirmation, candidate, "2002:102");
   assert.equal(confirmation.count, 2, "An unchanged candidate must survive a second distinct fresh tick.");
@@ -135,8 +139,8 @@ test("Clock Work confirms a preloaded five-tick setup on one fresh quote", () =>
 });
 
 test("Clock Work auto-best ignores stale, unsupported, undersampled, and below-threshold markets", () => {
-  const fullHistory = historyForOutcomes(Array.from({ length: 20 }, () => true));
-  const shortHistory = historyForOutcomes(Array.from({ length: 19 }, () => true));
+  const fullHistory = historyForOutcomes(Array.from({ length: 6 }, () => true));
+  const shortHistory = historyForOutcomes(Array.from({ length: 5 }, () => true));
   const signals = [
     { symbol: "R_10", recent_quotes: fullHistory, tick_epoch: 969 },
     { symbol: "JD10", recent_quotes: fullHistory, tick_epoch: 1_000 },
@@ -144,8 +148,8 @@ test("Clock Work auto-best ignores stale, unsupported, undersampled, and below-t
     {
       symbol: "R_25",
       recent_quotes: historyForOutcomes([
-        ...Array.from({ length: 10 }, () => true),
-        ...Array.from({ length: 5 }, () => false),
+        ...Array.from({ length: 29 }, () => true),
+        ...Array.from({ length: 21 }, () => false),
       ]),
       tick_epoch: 1_000,
     },
@@ -153,7 +157,6 @@ test("Clock Work auto-best ignores stale, unsupported, undersampled, and below-t
 
   assert.equal(
     chooseClockWorkAutoBestMarket(signals, ["R_10", "R_75", "R_25"], {
-      minimumWinRate: 70,
       nowEpoch: 1_000,
     }),
     null,
@@ -174,16 +177,15 @@ test("Clock Work selects LOWER and sends a negative barrier when that side quali
 
 test("Clock Work waits for the minimum history of complete five-tick outcomes", () => {
   assert.equal(chooseClockWorkAiCandidate([100, 101, 102, 103, 104]), null);
-  assert.equal(chooseClockWorkAiCandidate(historyForOutcomes(Array.from({ length: 19 }, () => true))), null);
-  assert.equal(chooseClockWorkAiCandidate(historyForOutcomes(Array.from({ length: 20 }, () => true)))?.sampleCount, 20);
-  assert.equal(getClockWorkFiveTickSampleCount(historyForOutcomes(Array.from({ length: 19 }, () => true))), 19);
-  assert.equal(getClockWorkFiveTickSampleCount(historyForOutcomes(Array.from({ length: 20 }, () => true))), 20);
+  assert.equal(chooseClockWorkAiCandidate(historyForOutcomes(Array.from({ length: 5 }, () => true))), null);
+  assert.equal(chooseClockWorkAiCandidate(historyForOutcomes(Array.from({ length: 6 }, () => true)))?.sampleCount, 6);
+  assert.equal(getClockWorkFiveTickSampleCount(historyForOutcomes(Array.from({ length: 5 }, () => true))), 5);
+  assert.equal(getClockWorkFiveTickSampleCount(historyForOutcomes(Array.from({ length: 6 }, () => true))), 6);
 });
 
 test("Clock Work does not count an expiry that only touches its barrier as a win", () => {
   const quotes = historyForOutcomes(Array.from({ length: 20 }, () => false));
   const candidate = chooseClockWorkAiCandidate(quotes, {
-    minimumWinRate: 30,
     barrierOffsets: [1],
   });
   assert.equal(candidate, null);

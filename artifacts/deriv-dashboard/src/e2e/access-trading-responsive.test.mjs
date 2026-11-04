@@ -842,13 +842,15 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
         assert.equal(await panel.getByTestId("clock-work-fixed-duration").getByText("5 ticks", { exact: true }).count(), 1);
         assert.equal(await panel.getByTestId("select-clock-duration").count(), 0, "Clock Work should not expose other contract durations.");
 
-        const threshold = panel.getByTestId("select-ai-clock-rate");
-        assert.equal(await threshold.inputValue(), "50");
-        assert.deepEqual(await threshold.locator("option").allTextContents(), ["50%", "55%", "65%", "70%"]);
-        for (const rate of ["50", "55", "65", "70"]) {
-          await threshold.selectOption(rate);
-          assert.equal(await threshold.inputValue(), rate);
-        }
+        const rateFilter = panel.getByTestId("clock-work-ai-rate-rule");
+        assert.match(await rateFilter.innerText(), /FIXED ENTRY FILTER/);
+        assert.match(await rateFilter.innerText(), />58% observed · 6 complete samples/);
+        assert.equal(await panel.getByTestId("select-ai-clock-rate").count(), 0, "Ai Clock should not expose a selectable historical-rate threshold.");
+        await panel.locator(".cw-ai-heading .cw-toggle").click();
+        assert.equal(await panel.getByTestId("switch-ai-clock").isChecked(), true);
+        assert.match(await rateFilter.innerText(), />58% observed · 6 complete samples/, "The fixed threshold remains visible when Ai Clock is enabled.");
+        await panel.locator(".cw-ai-heading .cw-toggle").click();
+        assert.equal(await panel.getByTestId("switch-ai-clock").isChecked(), false);
         const takeProfit = panel.getByTestId("input-clock-take-profit");
         const lossLimit = panel.getByTestId("input-clock-loss-limit");
         assert.equal(await takeProfit.inputValue(), "0");
@@ -874,7 +876,7 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
 
         const visibleClockWorkText = await panel.evaluate((element) => {
           const clone = element.cloneNode(true);
-          clone.querySelector(".cw-ai-threshold")?.remove();
+          clone.querySelector(".cw-ai-rate-rule")?.remove();
           clone.querySelector(".cw-ai-status")?.remove();
           return clone.textContent ?? "";
         });
