@@ -1368,6 +1368,13 @@ test("Auto Trader reflects Deriv tick and settlement events without polling dela
     assert.equal(await market.locator(".at-opposite-guidance").count(), 0, "The green advisory banner should not cover the market rows.");
     await market.locator(".at-market-tick-count").getByText("1 tick").waitFor();
     await market.locator(".at-digit-column").nth(7).locator(".at-digit-count").getByText("1", { exact: true }).waitFor();
+    const recommendedColumn = market.locator(".at-digit-column.recommended").first();
+    const recommendedStyle = await recommendedColumn.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { backgroundImage: style.backgroundImage, boxShadow: style.boxShadow };
+    });
+    assert.equal(recommendedStyle.backgroundImage, "none", "Recommended digits should no longer have a green panel.");
+    assert.equal(recommendedStyle.boxShadow, "none", "Recommended digits should no longer have a green outline.");
 
     await page.evaluate(({ accountId, buyTime }) => {
       window.__dispatchDerivEvent("trade-update", {
