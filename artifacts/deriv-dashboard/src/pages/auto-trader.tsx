@@ -485,6 +485,10 @@ function AutoTraderContent() {
   const hasOpenTodayContract = todaysHistory.some((item) => isDerivHistoryOpen(item.status));
   const winRate = outcomeSummary.sampleSize > 0 ? `${outcomeSummary.winRate.toFixed(1)}%` : "—";
   const connected = Boolean(status.data?.connected && status.data?.authorized && hasToken);
+  const scanActionsDisabled = !connected
+    || scanResetPending
+    || autoMagicStatus === "settling"
+    || (autoMagicEnabled && autoMagicStatus === "review");
   const autoMagicStatusText = !autoMagicEnabled
     ? autoMagicStatus === "settling"
       ? "OFF · An accepted batch is still settling."
@@ -928,9 +932,6 @@ function AutoTraderContent() {
                         <span>6×</span>
                       </label>
                     </fieldset>
-                    <small className="at-auto-magic-reminder">
-                      Reminder, not a requirement: review stake, duration, take-profit and stop-loss above. Stake and duration must still be valid to place an order.
-                    </small>
                     <p className="at-auto-magic-status" role="status" data-testid="status-auto-magic">{autoMagicStatusText}</p>
                   </div>
                   <div className="at-deferred-note"><ShieldAlert size={14} /> Take-profit and stop-loss are reference targets only.</div>
@@ -1046,7 +1047,7 @@ function AutoTraderContent() {
                 <button type="button" className="at-guide-button" onClick={() => { setGuidePage(0); setGuideOpen(true); }} data-testid="button-open-guide">
                   <BookOpen size={15} /> Guide
                 </button>
-                <button type="button" className="at-icon-button" onClick={() => void startScan(true)} disabled={!connected || scanResetPending || autoMagicStatus === "settling" || (autoMagicEnabled && autoMagicStatus === "review")} aria-label="Rescan markets" data-testid="button-rescan"><RefreshCw size={15} className={scanResetPending ? "at-spin" : ""} /> Rescan</button>
+                <button type="button" className="at-icon-button" onClick={() => void startScan(true)} disabled={scanActionsDisabled} aria-label="Rescan markets" data-testid="button-rescan"><RefreshCw size={15} className={scanResetPending ? "at-spin" : ""} /> Rescan</button>
                 {scanning ? (
                   <button type="button" className="at-stop-button" onClick={() => {
                     setScanning(false);
@@ -1055,7 +1056,7 @@ function AutoTraderContent() {
                     setMessage(null);
                   }} data-testid="button-stop-scan"><Pause size={14} /> Stop</button>
                 ) : (
-                  <button type="button" className="at-live-button" onClick={() => void startScan(false)} disabled={!connected || scanResetPending || autoMagicStatus === "settling" || (autoMagicEnabled && autoMagicStatus === "review")} data-testid="button-go-live"><Play size={14} /> Go Live</button>
+                  <button type="button" className="at-live-button" onClick={() => void startScan(false)} disabled={scanActionsDisabled} data-testid="button-go-live"><Play size={14} /> Go Live</button>
                 )}
               </div>
             </header>

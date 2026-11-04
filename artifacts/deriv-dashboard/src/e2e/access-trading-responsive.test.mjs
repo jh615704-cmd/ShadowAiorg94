@@ -1423,7 +1423,12 @@ test("Auto Magic waits for Go Live and requires settlement plus Rescan for anoth
     await page.goto(`${baseUrl}/auto-trader`);
     await page.getByTestId("button-settings").click();
     await page.getByTestId("radio-auto-magic-6x").check();
+    const autoMagicSwitch = page.getByTestId("switch-auto-magic");
     await page.locator(".at-auto-magic-switch-row").click();
+    assert.equal(await autoMagicSwitch.isChecked(), true);
+    assert.equal(await page.getByTestId("button-go-live").isEnabled(), true, "Auto Magic should not disable Go Live in the ready state.");
+    assert.equal(await page.getByTestId("button-rescan").isEnabled(), true, "Auto Magic should not disable Rescan in the ready state.");
+    assert.equal(await page.getByText(/Reminder, not a requirement/).count(), 0, "The optional reminder should be removed.");
     assert.deepEqual(state.tradeRequests, [], "Enabling Auto Magic must not send an order before Go Live.");
 
     await page.getByTestId("button-go-live").click();

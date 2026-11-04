@@ -509,7 +509,6 @@
 }
 .at-auto-magic-batch input { margin: 0; accent-color: #61d5b2; }
 .at-auto-magic-batch:disabled { opacity: .6; }
-.at-auto-magic-reminder,
 .at-auto-magic-status {
   margin: 0;
   color: #91a8c1;
