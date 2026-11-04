@@ -559,11 +559,6 @@ function AutoTraderContent() {
           <span className="at-market-name">{market.name.replace("Volatility ", "V").replace(" · 1s", " 1s")}</span>
           <span className="at-market-tick-count">{ticks} {ticks === 1 ? "tick" : "ticks"}</span>
         </div>
-        <div className="at-opposite-guidance" data-testid={`advisory-${market.symbol}`}>
-          {oppositeGroup
-            ? <><span>LIVE ADVISORY</span><strong>Latest {latestDigit} · review {oppositeGroup.label}</strong></>
-            : <span>Waiting for a live digit</span>}
-        </div>
         <div className="at-frequencies" aria-label={`Digit frequency and trade controls for ${market.name}`}>
           {digits.map((count, digit) => (
             <div className={`at-digit-column${oppositeGroup && digit >= oppositeGroup.minDigit && digit <= oppositeGroup.maxDigit ? " recommended" : ""}`} key={digit}>

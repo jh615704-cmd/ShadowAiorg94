@@ -321,29 +321,6 @@
 .at-market-meta span:first-child { display: inline-flex; align-items: center; gap: 4px; }
 .at-market-live { color: #8ca1ba; font: 800 8px "DM Mono", monospace; letter-spacing: .06em; }
 .at-market-live.is-live { color: #83e5a0; }
-.at-opposite-guidance {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 23px;
-  margin-top: 5px;
-  padding: 4px 7px;
-  border: 1px solid rgba(41, 196, 161, .18);
-  border-radius: 6px;
-  background: rgba(8, 99, 88, .13);
-  color: #7c9baf;
-  font-size: 8px;
-}
-.at-opposite-guidance > span:first-child {
-  color: #60cfb7;
-  font: 800 7px "DM Mono", monospace;
-  letter-spacing: .06em;
-}
-.at-opposite-guidance strong {
-  color: #b8e9df;
-  font: 700 8px "DM Mono", monospace;
-}
 .at-frequencies { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 3px; margin-top: 11px; }
 .at-digit-column {
   min-width: 0;
