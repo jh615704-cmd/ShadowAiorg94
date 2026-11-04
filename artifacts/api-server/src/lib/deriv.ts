@@ -15,6 +15,8 @@ const buyAckTimeoutMs = 12_000;
 const settlementFallbackIntervalMs = 10_000;
 const minimumProfitTableRefreshIntervalMs = 5_000;
 const profitTableRateLimitBackoffMs = 10_000;
+const profitTableTimeoutBackoffMs = 15_000;
+const profitTableResponseTimeoutMs = 10_000;
 const maxBulkCount = 6;
 const supportedSymbols = new Set([
   "R_10", "R_25", "R_50", "R_75", "R_100",
@@ -371,9 +373,10 @@ return {
   }>(),
   profitTableSequence: 0,
   profitTableWaiters: new Map<number, {
-    resolve: () => void;
+    resolve: (fresh: boolean) => void;
     reject: (error: Error) => void;
     timer: NodeJS.Timeout;
+    cleanupTimer?: NodeJS.Timeout;
   }>(),
   contractInputs: new Map<string, ProposalInput>(),
   digitEvenCount: 0,
@@ -493,6 +496,7 @@ export function disposeUser(userId: string) {
   runtime.portfolioWaiters.clear();
   for (const waiter of runtime.profitTableWaiters.values()) {
     clearTimeout(waiter.timer);
+    if (waiter.cleanupTimer) clearTimeout(waiter.cleanupTimer);
     waiter.reject(new Error("Deriv runtime disposed"));
   }
   runtime.profitTableWaiters.clear();
@@ -532,6 +536,7 @@ function rejectPortfolioWaiters(message: string) {
 function rejectProfitTableWaiters(message: string) {
   for (const waiter of getState().profitTableWaiters.values()) {
     clearTimeout(waiter.timer);
+    if (waiter.cleanupTimer) clearTimeout(waiter.cleanupTimer);
     waiter.reject(new Error(message));
   }
   getState().profitTableWaiters.clear();
@@ -1737,6 +1742,7 @@ async function connectInternal() {
         const profitTableWaiter = getState().profitTableWaiters.get(reqId);
         if (profitTableWaiter) {
           clearTimeout(profitTableWaiter.timer);
+          if (profitTableWaiter.cleanupTimer) clearTimeout(profitTableWaiter.cleanupTimer);
           getState().profitTableWaiters.delete(reqId);
           if (message.error.code === "RateLimit") {
             getState().profitTableRetryAfter = Date.now() + profitTableRateLimitBackoffMs;
@@ -1745,7 +1751,7 @@ async function connectInternal() {
               { backoffMs: profitTableRateLimitBackoffMs },
               "Deriv rate-limited trade history refresh; serving cached history during backoff",
             );
-            profitTableWaiter.resolve();
+            profitTableWaiter.resolve(false);
           } else {
             profitTableWaiter.reject(new Error(errorMessage));
           }
@@ -1915,8 +1921,9 @@ async function connectInternal() {
         getState().profitTableReady = true;
         if (waiter) {
           clearTimeout(waiter.timer);
+          if (waiter.cleanupTimer) clearTimeout(waiter.cleanupTimer);
           getState().profitTableWaiters.delete(reqId);
-          waiter.resolve();
+          waiter.resolve(true);
         }
       } else if (message.msg_type === "portfolio") {
         const reqId = Number(message.req_id ?? message.echo_req?.req_id);
@@ -2089,21 +2096,26 @@ export async function getLiveStatus() {
   return status;
 }
 
-export async function refreshDerivHistory() {
+export async function refreshDerivHistory(options: { force?: boolean } = {}) {
   if (!await connect()) throw new Error("Deriv WebSocket is not ready");
   const runtime = getState();
   if (runtime.profitTableRefreshPromise) return runtime.profitTableRefreshPromise;
   const now = Date.now();
-  if (now < runtime.profitTableRetryAfter) return;
-  if (now - runtime.profitTableRefreshAt < minimumProfitTableRefreshIntervalMs) return;
+  if (now < runtime.profitTableRetryAfter) return false;
+  if (!options.force && now - runtime.profitTableRefreshAt < minimumProfitTableRefreshIntervalMs) return false;
 
   const reqId = ++runtime.profitTableSequence;
   runtime.profitTableRefreshAt = Date.now();
-  runtime.profitTableRefreshPromise = new Promise<void>((resolve, reject) => {
+  runtime.profitTableRefreshPromise = new Promise<boolean>((resolve, reject) => {
     const timer = setTimeout(() => {
-      runtime.profitTableWaiters.delete(reqId);
+      const waiter = runtime.profitTableWaiters.get(reqId);
+      if (!waiter) return;
+      runtime.profitTableRetryAfter = Date.now() + profitTableTimeoutBackoffMs;
+      waiter.cleanupTimer = setTimeout(() => {
+        runtime.profitTableWaiters.delete(reqId);
+      }, 30_000);
       reject(new Error("Deriv did not refresh trade history in time."));
-    }, 5_000);
+    }, profitTableResponseTimeoutMs);
     runtime.profitTableWaiters.set(reqId, { resolve, reject, timer });
     if (!send({ profit_table: 1, limit: 50, description: 1, sort: "DESC", req_id: reqId })) {
       clearTimeout(timer);
@@ -2111,7 +2123,10 @@ export async function refreshDerivHistory() {
       reject(new Error("Deriv WebSocket is not ready"));
     }
   }).catch((error: unknown) => {
-    runtime.profitTableRefreshAt = 0;
+    runtime.profitTableRetryAfter = Math.max(
+      runtime.profitTableRetryAfter,
+      Date.now() + profitTableTimeoutBackoffMs,
+    );
     throw error;
   }).finally(() => {
     runtime.profitTableRefreshPromise = null;
