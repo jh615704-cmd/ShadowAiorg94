@@ -194,6 +194,8 @@ import {
   validateTradeXEntry,
 } from "../lib/trade-entry-guards";
 import {
+  JACKPOT_MIN_AUTO_OBSERVED_RATE,
+  JACKPOT_MIN_AUTO_SAMPLES,
   buildJackpotContractTypes,
   chooseJackpotBestBatch,
   chooseJackpotBestMarket,
@@ -5415,9 +5417,11 @@ export default function XTraderPage() {
   const jackpotDisabledReason = (() => {
     const blocked = getJackpotBatchBlockReason(jackpotContractCount);
     if (blocked) return blocked;
-    if (jackpotAutoBestMode && !jackpotBestMarket) return "Auto Best is waiting for at least 20 live samples in this market group.";
+    if (jackpotAutoBestMode && !jackpotBestMarket) {
+      return `Auto Best is waiting for at least ${JACKPOT_MIN_AUTO_SAMPLES} samples and a recent observed rate above ${JACKPOT_MIN_AUTO_OBSERVED_RATE}%.`;
+    }
     if (!jackpotResolvedSelection || !jackpotManualContractTypes.length) {
-      return "Auto side selection needs at least 20 observed samples, and at least one family must be enabled.";
+      return `Auto side selection needs at least ${JACKPOT_MIN_AUTO_SAMPLES} observed samples. Jackpot AI also requires a rate above ${JACKPOT_MIN_AUTO_OBSERVED_RATE}%.`;
     }
     if (!jackpotEffectiveSymbol) return "Choose a supported market before continuing.";
     return null;
@@ -5530,10 +5534,11 @@ export default function XTraderPage() {
           jackpotEvenOddEnabled,
           jackpotContractCount,
           jackpotAutoBestMode ? null : jackpotSymbol,
-          55,
         );
         if (!candidate || candidate.tickSequence <= (startSequences.get(candidate.symbol) ?? 0)) {
-          scheduleNextScan("No qualifying setup yet. Checking again.");
+          scheduleNextScan(
+            `No setup met the ${JACKPOT_MIN_AUTO_SAMPLES}-sample and >${JACKPOT_MIN_AUTO_OBSERVED_RATE}% observed-rate filter. Checking again.`,
+          );
           return;
         }
         const blocked = jackpotBatchBlockReasonRef.current(jackpotContractCount);

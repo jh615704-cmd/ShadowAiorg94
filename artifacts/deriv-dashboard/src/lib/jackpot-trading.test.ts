@@ -19,7 +19,7 @@ const signal = (values: Partial<JackpotMarketSignal> = {}): JackpotMarketSignal 
   fallPercentage: 40,
   evenPercentage: 55,
   oddPercentage: 45,
-  sampleCount: 40,
+  sampleCount: 60,
   ...values,
 });
 
@@ -33,7 +33,7 @@ test("resolves each AUTO side independently using sampled rates", () => {
 });
 
 test("does not choose AUTO sides without the minimum sample count", () => {
-  assert.equal(resolveJackpotPair(signal({ sampleCount: 19 }), "AUTO", "AUTO"), null);
+  assert.equal(resolveJackpotPair(signal({ sampleCount: 49 }), "AUTO", "AUTO"), null);
 });
 
 test("manual side choices remain available before a sample is collected", () => {
@@ -85,9 +85,9 @@ test("supports a 20-contract AUTO batch with only one enabled family", () => {
 test("AI market ranking requires a live sample above its observed-rate threshold", () => {
   const selected = chooseJackpotBestMarket(
     [
-      signal({ symbol: "R_25", risePercentage: 56, evenPercentage: 52 }),
-      signal({ symbol: "R_50", risePercentage: 55, evenPercentage: 59 }),
-      signal({ symbol: "R_10", risePercentage: 80, evenPercentage: 90, sampleCount: 19 }),
+      signal({ symbol: "R_25", risePercentage: 70, evenPercentage: 65 }),
+      signal({ symbol: "R_50", risePercentage: 65, evenPercentage: 69 }),
+      signal({ symbol: "R_10", risePercentage: 80, evenPercentage: 90, sampleCount: 49 }),
     ],
     "volatility",
     "AUTO",
@@ -95,16 +95,25 @@ test("AI market ranking requires a live sample above its observed-rate threshold
     true,
     true,
     null,
-    55,
   );
-  assert.equal(selected?.symbol, "R_50");
-  assert.equal(selected?.contractType, "DIGITEVEN");
-  assert.equal(selected?.observedRate, 59);
+  assert.equal(selected?.symbol, "R_25");
+  assert.equal(selected?.contractType, "CALL");
+  assert.equal(selected?.observedRate, 70);
+});
+
+test("Auto Best rejects exactly 68 percent even with enough samples", () => {
+  const selected = chooseJackpotBestMarket(
+    [signal({ risePercentage: 68, fallPercentage: 32 })],
+    "volatility",
+    "AUTO",
+    "AUTO",
+  );
+  assert.equal(selected, null);
 });
 
 test("AI bulk selection splits the total across qualifying enabled families only", () => {
   const selected = chooseJackpotBestBatch(
-    [signal({ risePercentage: 60, evenPercentage: 57 })],
+    [signal({ risePercentage: 75, evenPercentage: 72 })],
     "volatility",
     "AUTO",
     "AUTO",
@@ -112,13 +121,12 @@ test("AI bulk selection splits the total across qualifying enabled families only
     true,
     5,
     "R_75",
-    55,
   );
   assert.deepEqual(selected?.contractTypes, ["CALL", "DIGITEVEN", "CALL", "DIGITEVEN", "CALL"]);
-  assert.equal(selected?.observedRate, 58.5);
+  assert.equal(selected?.observedRate, 73.5);
 
   const oneSideQualifies = chooseJackpotBestBatch(
-    [signal({ risePercentage: 62, evenPercentage: 55 })],
+    [signal({ risePercentage: 70, evenPercentage: 68 })],
     "volatility",
     "AUTO",
     "AUTO",
@@ -126,14 +134,13 @@ test("AI bulk selection splits the total across qualifying enabled families only
     true,
     3,
     "R_75",
-    55,
   );
   assert.deepEqual(oneSideQualifies?.contractTypes, ["CALL", "CALL", "CALL"]);
 });
 
-test("Jackpot AI only accepts observed rates strictly above 55% with 20 samples", () => {
+test("Jackpot AI requires 50 samples and an observed rate strictly above 68 percent", () => {
   const exactlyAtThreshold = chooseJackpotBestBatch(
-    [signal({ risePercentage: 55, fallPercentage: 45, sampleCount: 20 })],
+    [signal({ risePercentage: 68, fallPercentage: 32, sampleCount: 50 })],
     "volatility",
     "AUTO",
     "AUTO",
@@ -145,7 +152,7 @@ test("Jackpot AI only accepts observed rates strictly above 55% with 20 samples"
   assert.equal(exactlyAtThreshold, null);
 
   const aboveThreshold = chooseJackpotBestBatch(
-    [signal({ risePercentage: 55.1, fallPercentage: 44.9, sampleCount: 20 })],
+    [signal({ risePercentage: 68.1, fallPercentage: 31.9, sampleCount: 50 })],
     "volatility",
     "AUTO",
     "AUTO",
@@ -154,10 +161,10 @@ test("Jackpot AI only accepts observed rates strictly above 55% with 20 samples"
     1,
     "R_75",
   );
-  assert.equal(aboveThreshold?.observedRate, 55.1);
+  assert.equal(aboveThreshold?.observedRate, 68.1);
 
   const undersampled = chooseJackpotBestBatch(
-    [signal({ risePercentage: 90, fallPercentage: 10, sampleCount: 19 })],
+    [signal({ risePercentage: 90, fallPercentage: 10, sampleCount: 49 })],
     "volatility",
     "AUTO",
     "AUTO",
@@ -171,7 +178,7 @@ test("Jackpot AI only accepts observed rates strictly above 55% with 20 samples"
 
 test("Auto Best ranks only the selected market group and sample-backed sides", () => {
   const best = chooseJackpotBestMarket([
-    signal({ symbol: "R_25", risePercentage: 59, evenPercentage: 55 }),
+    signal({ symbol: "R_25", risePercentage: 72, evenPercentage: 55 }),
     signal({ symbol: "RDBULL", group: "bull", risePercentage: 100, evenPercentage: 100 }),
     signal({ symbol: "R_50", risePercentage: 65, evenPercentage: 60, sampleCount: 10 }),
   ], "volatility", "AUTO", "AUTO");

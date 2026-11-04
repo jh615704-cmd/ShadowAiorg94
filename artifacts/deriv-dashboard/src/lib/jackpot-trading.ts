@@ -45,7 +45,8 @@ export interface JackpotBestBatch {
   score: number;
 }
 
-export const JACKPOT_MIN_AUTO_SAMPLES = 20;
+export const JACKPOT_MIN_AUTO_SAMPLES = 50;
+export const JACKPOT_MIN_AUTO_OBSERVED_RATE = 68;
 
 function validRate(value: number | null): value is number {
   return value != null && Number.isFinite(value) && value >= 0 && value <= 100;
@@ -166,7 +167,7 @@ export function chooseJackpotBestMarket(
   riseFallEnabled = true,
   evenOddEnabled = true,
   selectedSymbol?: string | null,
-  minimumObservedRate = 0,
+  minimumObservedRate = JACKPOT_MIN_AUTO_OBSERVED_RATE,
 ): JackpotBestMarket | null {
   if (!riseFallEnabled && !evenOddEnabled) return null;
   const candidates = signals.flatMap((signal) => {
@@ -213,7 +214,7 @@ export function chooseJackpotBestBatch(
   evenOddEnabled: boolean,
   count: number,
   selectedSymbol?: string | null,
-  minimumObservedRate = 55,
+  minimumObservedRate = JACKPOT_MIN_AUTO_OBSERVED_RATE,
 ): JackpotBestBatch | null {
   if (!Number.isInteger(count) || count < 1 || count > 20) return null;
   const candidates = signals.flatMap((signal) => {
