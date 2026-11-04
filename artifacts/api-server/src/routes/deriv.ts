@@ -31,6 +31,7 @@ import {
   getAccounts,
   getStatus,
   getLiveStatus,
+  refreshOpenContracts,
   getHistory,
   getMarketTickSnapshot,
   subscribeDerivHistoryUpdates,
@@ -86,6 +87,17 @@ function tradeOutcomeForRouteError(
   status: number,
 ): "rejected" | "uncertain" | "not_sent" {
   if (error && typeof error === "object" && "name" in error && error.name === "ZodError") return "uncertain";
+  if (error && typeof error === "object" && "tradeOutcome" in error) {
+    const explicitOutcome = error.tradeOutcome;
+    if (
+      explicitOutcome === "rejected"
+      || explicitOutcome === "uncertain"
+      || explicitOutcome === "not_sent"
+    ) return explicitOutcome;
+  }
+  if (isCapacityError(error) || isCredentialError(error) || error instanceof AccessSessionRevokedError) {
+    return "not_sent";
+  }
   const outcome = classifyBuyFailure(error).outcome;
   if (outcome !== "uncertain") return outcome;
   if (status === 429) return "rejected";
@@ -184,8 +196,15 @@ router.get("/deriv/accounts", async (req, res) => {
   }
 });
 
-router.get("/deriv/status", (_req, res) => {
-  void withCredential(res.locals.userId, getLiveStatus, false)
+router.get("/deriv/status", (req, res) => {
+  void withCredential(res.locals.userId, async () => {
+    const status = await getLiveStatus();
+    if (req.query.refresh_open_contracts === "true" || req.query.refresh_open_contracts === "1") {
+      await refreshOpenContracts();
+      return getStatus();
+    }
+    return status;
+  }, false)
     .then((status) => {
       res.set("Cache-Control", "no-store");
       res.json(GetDerivStatusResponse.parse(status));
@@ -204,22 +223,32 @@ router.get("/deriv/status", (_req, res) => {
 
 router.get("/deriv/history", async (req, res) => {
   res.set("Cache-Control", "no-store");
+  const requireFresh = req.query.require_fresh === "true" || req.query.require_fresh === "1";
   try {
     const snapshot = await withCredential(res.locals.userId, async () => {
       let refreshError: unknown = null;
+      let fresh = false;
       try {
-        await refreshDerivHistory();
+        fresh = await refreshDerivHistory({ force: requireFresh });
+        if (!fresh) refreshError = new Error("Deriv history has not completed a fresh refresh.");
       } catch (error) {
         if (isCredentialError(error) || isCapacityError(error)) throw error;
         refreshError = error;
       }
-      return { history: await getHistory(), refreshError };
+      return { history: await getHistory(), refreshError, fresh };
     }, false);
+    if (requireFresh && snapshot.refreshError != null) {
+      res.set("X-Deriv-History-Stale", "true");
+      return res.status(503).json({
+        error: "Deriv history is still syncing. Retry the status check shortly.",
+        code: "DERIV_HISTORY_NOT_FRESH",
+      });
+    }
     const historySnapshot = Array.isArray(snapshot.history)
       ? snapshot.history.map(normalizeHistoryBarrier)
       : snapshot.history;
     let historyResult = GetDerivHistoryResponse.safeParse(historySnapshot);
-    let stale = snapshot.refreshError != null;
+    let stale = snapshot.refreshError != null || !snapshot.fresh;
     if (!historyResult.success) {
       if (!Array.isArray(historySnapshot)) throw historyResult.error;
       const validationError = historyResult.error;
@@ -759,7 +788,9 @@ router.post("/deriv/jackpot/buy", requireTradeAccessFeature, async (req, res) =>
     req.log?.error({ err: error }, "Deriv Jackpot pair buy request failed");
     if (isDerivBuyRateLimitError(error)) {
       res.status(429).json({
-        error: "Deriv temporarily limited the Jackpot batch. Check account history before sending another batch.",
+        error: tradeOutcomeForRouteError(error, 429) === "uncertain"
+          ? "Deriv did not confirm every Jackpot order. Refresh order status before placing another batch."
+          : "Deriv temporarily limited the Jackpot batch. No additional orders were sent.",
         code: "DERIV_BUY_RATE_LIMITED",
         diagnostic_source: "deriv",
         trade_outcome: tradeOutcomeForRouteError(error, 429),

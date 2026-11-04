@@ -484,6 +484,10 @@ export const GetDerivAccountsResponse = zod.array(GetDerivAccountsResponseItem)
 /**
  * @summary Get Deriv connection status
  */
+export const GetDerivStatusQueryParams = zod.object({
+  "refresh_open_contracts": zod.coerce.boolean().optional()
+})
+
 export const getDerivStatusResponseActiveContractCountMin = 0;
 
 export const getDerivStatusResponseLastDigitMin = 0;
@@ -1561,6 +1565,10 @@ export const DualBuyDerivContractsResponse = zod.object({
 /**
  * @summary Get Deriv trade history observed for real and demo accounts
  */
+export const GetDerivHistoryQueryParams = zod.object({
+  "require_fresh": zod.coerce.boolean().optional()
+})
+
 export const getDerivHistoryResponseTickPassedMin = 0;
 
 

@@ -531,7 +531,7 @@ test("Jackpot supports one-sided bulk batches, labels its run history, and exclu
   }
 });
 
-test("Jackpot keeps a batch blocked after an unclear order confirmation", async () => {
+test("Jackpot keeps an uncertain batch blocked until order status is refreshed", async () => {
   const state = createState(userSession(["jackpot"]));
   state.hasToken = true;
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
@@ -541,13 +541,26 @@ test("Jackpot keeps a batch blocked after an unclear order confirmation", async 
     await page.getByRole("checkbox", { name: "Toggle Jackpot" }).check();
     const panel = page.getByTestId("jackpot-panel");
     await panel.getByTestId("button-jackpot-place-batch").click();
-    await panel.getByTestId("button-jackpot-history-reviewed").waitFor({ state: "visible" });
+    const refreshStatusButton = panel.getByTestId("button-jackpot-refresh-order-status");
+    await refreshStatusButton.waitFor({ state: "visible" });
     assert.equal(await panel.getByTestId("button-jackpot-place-batch").isDisabled(), true);
+    assert.equal(await panel.getByText(/Order confirmation was unclear|I checked Deriv history/i).count(), 0);
     await page.waitForTimeout(250);
     assert.equal(
       state.tradeRequests.filter(({ path }) => path === "/api/deriv/jackpot/buy").length,
       1,
       "An unclear confirmation must not automatically submit the batch again.",
+    );
+    await refreshStatusButton.click();
+    await refreshStatusButton.waitFor({ state: "hidden" });
+    await page.waitForFunction(() => {
+      const button = document.querySelector('[data-testid="button-jackpot-place-batch"]');
+      return button instanceof HTMLButtonElement && !button.disabled;
+    }, undefined, { timeout: 10_000 });
+    assert.equal(
+      state.tradeRequests.filter(({ path }) => path === "/api/deriv/jackpot/buy").length,
+      1,
+      "Refreshing status must not replay the uncertain batch.",
     );
     assert.deepEqual(pageErrors, []);
   } finally {
@@ -694,6 +707,17 @@ test("Jackpot place button re-enables after Deriv confirms settlement", async ()
       state.tradeRequests.filter((request) => request.path === "/api/deriv/jackpot/buy").length,
       2,
       "The second batch must be accepted once the first is settled.",
+    );
+
+    await page.reload();
+    await page.getByRole("heading", { name: "Trading Strategies" }).waitFor();
+    await page.getByRole("checkbox", { name: "Toggle Jackpot" }).check();
+    const reloadedPanel = page.getByTestId("jackpot-panel");
+    await reloadedPanel.locator(".deriv-history-row").nth(1).waitFor({ timeout: 10_000 });
+    assert.equal(
+      await reloadedPanel.locator(".deriv-history-row").count(),
+      2,
+      "Jackpot's acknowledged contract links should survive a dashboard reload.",
     );
 
     assert.deepEqual(pageErrors, []);

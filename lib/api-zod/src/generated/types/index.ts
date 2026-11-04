@@ -97,6 +97,8 @@ export * from './featureControl';
 export * from './featureControlAudience';
 export * from './featureControlFeature';
 export * from './featureControlMode';
+export * from './getDerivHistoryParams';
+export * from './getDerivStatusParams';
 export * from './healthStatus';
 export * from './jackpotPairBuyInput';
 export * from './jackpotPairBuyInputAccessFeature';

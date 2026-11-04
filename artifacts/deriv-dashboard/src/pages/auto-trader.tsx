@@ -116,7 +116,7 @@ function AutoTraderContent() {
   const accounts = useGetDerivAccounts({
     query: { queryKey: getGetDerivAccountsQueryKey(), enabled: hasAutoTraderAccess && hasToken, retry: false, refetchInterval: 10_000 },
   });
-  const status = useGetDerivStatus({
+  const status = useGetDerivStatus(undefined, {
     query: {
       queryKey: getGetDerivStatusQueryKey(),
       enabled: hasAutoTraderAccess && hasToken,
@@ -124,7 +124,7 @@ function AutoTraderContent() {
       refetchInterval: scanning ? 5_000 : false,
     },
   });
-  const history = useGetDerivHistory({
+  const history = useGetDerivHistory(undefined, {
     query: { queryKey: getGetDerivHistoryQueryKey(), enabled: hasAutoTraderAccess && hasToken, retry: false, refetchInterval: false },
   });
   const bulkBuy = useBulkBuyDerivContracts();

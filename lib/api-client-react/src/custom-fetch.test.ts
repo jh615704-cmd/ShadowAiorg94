@@ -26,7 +26,7 @@ describe("customFetch transport recovery", () => {
         assert.ok(error instanceof Error);
         assert.match(error.message, /dashboard preview page was returned instead of the trading API/i);
         assert.doesNotMatch(error.message, /@font-face|Replit Diatype/);
-        assert.match(error.message, /check Deriv history before retrying/i);
+        assert.match(error.message, /no order was sent/i);
         return true;
       },
     );
@@ -42,8 +42,9 @@ describe("customFetch transport recovery", () => {
       customFetch("/api/deriv/bulk-buy", { method: "POST", body: JSON.stringify({ count: 2 }) }),
       (error: unknown) => {
         assert.ok(error instanceof Error);
-        assert.match(error.message, /could not be confirmed/i);
-        assert.match(error.message, /check Deriv open contracts and account history/i);
+        assert.match(error.message, /has not confirmed this order/i);
+        assert.match(error.message, /refresh order status/i);
+        assert.doesNotMatch(error.message, /account history/i);
         assert.doesNotMatch(error.message, /HTTP 502|Bad Gateway|rate limit for buy/i);
         return true;
       },
@@ -107,7 +108,7 @@ describe("customFetch transport recovery", () => {
         assert.ok(error instanceof ApiTransportError);
         assert.equal(error.tradeOutcomeUncertain, true);
         assert.match(error.message, /contract may already be open/i);
-        assert.match(error.message, /Refresh Deriv history before sending it again/i);
+        assert.match(error.message, /refresh order status before trying again/i);
         assert.doesNotMatch(error.message, /^Failed to fetch$/);
         assert.ok(error.requestId);
         return true;
@@ -133,7 +134,7 @@ describe("customFetch transport recovery", () => {
         assert.ok(error instanceof ApiTransportError);
         assert.equal(error.tradeOutcomeUncertain, true);
         assert.match(error.message, /contract may already be open/i);
-        assert.match(error.message, /Refresh Deriv history before sending it again/i);
+        assert.match(error.message, /refresh order status before trying again/i);
         return true;
       },
     );
@@ -264,7 +265,7 @@ describe("customFetch transport recovery", () => {
         assert.ok(error instanceof ApiTransportError);
         assert.equal(error.tradeOutcomeUncertain, true);
         assert.match(error.message, /open/i);
-        assert.match(error.message, /history before sending it again/i);
+        assert.match(error.message, /refresh order status before trying again/i);
         return true;
       },
     );

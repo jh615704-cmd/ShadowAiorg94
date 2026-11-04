@@ -180,6 +180,7 @@ mock.module("../lib/deriv", {
       observePat();
       return status;
     },
+    refreshOpenContracts: async () => [],
     getHistory: async () => {
       observePat();
       return historyRows;
@@ -202,7 +203,7 @@ mock.module("../lib/deriv", {
     },
     refreshDerivHistory: async () => {
       if (forceHistoryRefreshError) throw new Error("Deriv history refresh timed out");
-      return;
+      return true;
     },
     clearHistory: async () => {
       observePat();

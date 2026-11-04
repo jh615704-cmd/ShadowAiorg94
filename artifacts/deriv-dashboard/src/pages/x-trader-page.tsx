@@ -5,6 +5,7 @@ import {
   getGetAdminFeatureSettingsQueryKey,
   getUserFacingErrorMessage,
   ApiTransportError,
+  customFetch,
   type ClockWorkContractOrder,
   useBuyClockWorkContracts,
   useBuyJackpotPairs,
@@ -177,6 +178,11 @@ import {
   type DerivHistoryFeature,
 } from "../lib/deriv-history";
 import {
+  addDerivHistoryClaims,
+  readDerivHistoryClaims,
+  removeDerivHistoryClaims,
+} from "../lib/deriv-history-claims";
+import {
   acquireTradeXActionLock,
   buildTradeXPendingHistoryRow,
   buildTradeXOrderData,
@@ -228,6 +234,14 @@ const realizedProfit = (trades: readonly { status: string; profit: number }[]) =
   trades.reduce((sum, trade) => sum + (isDerivHistoryOpen(trade.status) ? 0 : trade.profit), 0);
 
 const getMoneyBankHistoryStorage = () => {
+  try {
+    return typeof window === "undefined" ? null : window.localStorage;
+  } catch {
+    return null;
+  }
+};
+
+const getDerivHistoryClaimsStorage = () => {
   try {
     return typeof window === "undefined" ? null : window.localStorage;
   } catch {
@@ -463,8 +477,8 @@ export default function XTraderPage() {
   const connectedToken = Boolean(tokenStatus.data?.has_token);
   const accounts = useGetDerivAccounts({ query: { enabled: connectedToken && canUseDeriv, retry: false, refetchInterval: 10_000, queryKey: getGetDerivAccountsQueryKey() } });
   const storedPatInvalid = errorMessage(accounts.error).includes("saved Deriv token is no longer readable");
-  const status = useGetDerivStatus({ query: { enabled: connectedToken && canUseDeriv, retry: false, refetchInterval: 500, queryKey: getGetDerivStatusQueryKey() } });
-  const history = useGetDerivHistory({
+  const status = useGetDerivStatus(undefined, { query: { enabled: connectedToken && canUseDeriv, retry: false, refetchInterval: 500, queryKey: getGetDerivStatusQueryKey() } });
+  const history = useGetDerivHistory(undefined, {
     query: {
       enabled: connectedToken && canViewHistory,
       retry: false,
@@ -583,6 +597,14 @@ export default function XTraderPage() {
   const [jackpotBatchContractIds, setJackpotBatchContractIds] = useState<string[]>([]);
   const [jackpotBatchHadFailure, setJackpotBatchHadFailure] = useState(false);
   const [jackpotNeedsHistoryCheck, setJackpotNeedsHistoryCheck] = useState(false);
+  const [jackpotHistoryCheckLoading, setJackpotHistoryCheckLoading] = useState(false);
+  const jackpotPendingAttemptRef = useRef<{
+    accountId: string;
+    symbol: string;
+    contractTypes: string[];
+    stake: number;
+    startedAt: number;
+  } | null>(null);
   const [jackpotHistoryClearArmed, setJackpotHistoryClearArmed] = useState(false);
   const [jackpotHiddenHistoryIds, setJackpotHiddenHistoryIds] = useState<Set<string>>(new Set());
   const [clockWorkEnabled, setClockWorkEnabled] = useState(false);
@@ -1415,18 +1437,43 @@ export default function XTraderPage() {
     setJackpotBatchContractIds([]);
     setJackpotBatchHadFailure(false);
     setJackpotNeedsHistoryCheck(false);
+    setJackpotHistoryCheckLoading(false);
+    jackpotPendingAttemptRef.current = null;
     setJackpotNextStake(jackpotStake);
     setJackpotBatchStatus("Ready to place a manual Jackpot batch.");
     setJackpotHistoryClearArmed(false);
     setJackpotHiddenHistoryIds(new Set());
-    const savedMoneyBankContractIds = readMoneyBankHistoryClaims(getMoneyBankHistoryStorage(), accountId);
-    claimDerivHistoryFeatureContractIds(
-      historyFeatureOwnersRef.current,
-      accountId,
-      "money-bank",
-      moneyBankClaimedHistoryIdsRef.current,
-      savedMoneyBankContractIds,
+    const claimsStorage = getDerivHistoryClaimsStorage();
+    const savedFeatureClaims = readDerivHistoryClaims(
+      claimsStorage,
+      accountId == null ? null : String(accountId),
     );
+    const savedMoneyBankContractIds = [...new Set([
+      ...savedFeatureClaims["money-bank"],
+      ...readMoneyBankHistoryClaims(getMoneyBankHistoryStorage(), accountId),
+    ])];
+    const claimsToRestore = [
+      ["edge", edgeClaimedHistoryIdsRef.current, savedFeatureClaims.edge],
+      ["trade-x", tradeXClaimedHistoryIdsRef.current, savedFeatureClaims["trade-x"]],
+      ["digit-flip", digitFlipClaimedHistoryIdsRef.current, savedFeatureClaims["digit-flip"]],
+      ["bulk-trader", bulkClaimedHistoryIdsRef.current, savedFeatureClaims["bulk-trader"]],
+      ["cash-grab", cashGrabClaimedHistoryIdsRef.current, savedFeatureClaims["cash-grab"]],
+      ["clock-work", clockWorkClaimedHistoryIdsRef.current, savedFeatureClaims["clock-work"]],
+      ["jackpot", jackpotClaimedHistoryIdsRef.current, savedFeatureClaims.jackpot],
+      ["money-bank", moneyBankClaimedHistoryIdsRef.current, savedMoneyBankContractIds],
+    ] as const satisfies readonly [DerivHistoryFeature, Set<string>, readonly string[]][];
+    for (const [feature, target, contractIds] of claimsToRestore) {
+      claimDerivHistoryFeatureContractIds(
+        historyFeatureOwnersRef.current,
+        accountId,
+        feature,
+        target,
+        contractIds,
+      );
+    }
+    if (accountId != null && savedMoneyBankContractIds.length) {
+      addDerivHistoryClaims(claimsStorage, String(accountId), "money-bank", savedMoneyBankContractIds);
+    }
     setMoneyBankHistoryClaims({ accountId, ids: savedMoneyBankContractIds });
     setDigitFlipPendingHistoryIds(new Set());
     setEdgeHiddenHistoryIds(new Set());
@@ -1868,16 +1915,54 @@ export default function XTraderPage() {
     target: Set<string>,
     confirmedContractIds: readonly string[],
   ) => {
+    const contractIds = confirmedContractIds.map((contractId) => String(contractId));
+    const accountId = currentAccountRef.current?.id;
     claimDerivHistoryFeatureContractIds(
       historyFeatureOwnersRef.current,
-      currentAccountRef.current?.id,
+      accountId,
       feature,
       target,
-      confirmedContractIds.map((contractId) => String(contractId)),
+      contractIds,
     );
+    if (accountId != null) {
+      addDerivHistoryClaims(
+        getDerivHistoryClaimsStorage(),
+        String(accountId),
+        feature,
+        contractIds.filter((contractId) => target.has(contractId)),
+      );
+    }
     // Contract IDs come from Deriv's buy acknowledgement. Claim them locally
     // now; the single background refresh/poll fills in the authoritative row.
     return queryClient.getQueryData<typeof rows>(getGetDerivHistoryQueryKey()) ?? rows;
+  };
+
+  const removeSettledFeatureClaims = (
+    feature: DerivHistoryFeature,
+    target: Set<string>,
+    featureRows: readonly DerivHistoryRow[],
+  ) => {
+    const accountId = currentAccountRef.current?.id;
+    if (accountId == null) return [];
+    const settledIds = featureRows
+      .filter((trade) => !isDerivHistoryOpen(trade.status))
+      .map((trade) => String(trade.contract_id))
+      .filter((contractId) => target.has(contractId));
+    settledIds.forEach((contractId) => {
+      target.delete(contractId);
+      historyFeatureOwnersRef.current.delete(JSON.stringify([accountId, contractId]));
+    });
+    const remaining = removeDerivHistoryClaims(
+      getDerivHistoryClaimsStorage(),
+      String(accountId),
+      feature,
+      settledIds,
+    );
+    if (feature === "money-bank") {
+      saveMoneyBankHistoryClaims(getMoneyBankHistoryStorage(), accountId, remaining);
+      setMoneyBankHistoryClaims({ accountId, ids: remaining });
+    }
+    return settledIds;
   };
 
   const claimMoneyBankContract = (contractId: string) => {
@@ -3471,9 +3556,11 @@ export default function XTraderPage() {
     setCashGrabClearArmed(false);
     setHistoryFading(true);
     await sleep(260);
+    const settledRows = cashGrabRows.filter((trade) => !isDerivHistoryOpen(trade.status));
+    removeSettledFeatureClaims("cash-grab", cashGrabClaimedHistoryIdsRef.current, settledRows);
     setCashGrabHiddenHistoryIds((current) => {
       const next = new Set(current);
-      cashGrabRows.forEach((trade) => next.add(trade.contract_id));
+      settledRows.forEach((trade) => next.add(trade.contract_id));
       return next;
     });
     setHistoryFading(false);
@@ -3489,9 +3576,14 @@ export default function XTraderPage() {
     setHistoryFading(true);
     await sleep(260);
     const settledRunIds = new Set(
-      jackpotRunRows
+      jackpotAllRows
         .filter((trade) => !isDerivHistoryOpen(trade.status))
         .map((trade) => String(trade.contract_id)),
+    );
+    removeSettledFeatureClaims(
+      "jackpot",
+      jackpotClaimedHistoryIdsRef.current,
+      jackpotAllRows.filter((trade) => !isDerivHistoryOpen(trade.status)),
     );
     jackpotRunContractIdsRef.current = new Set(
       [...jackpotRunContractIdsRef.current].filter((contractId) => !settledRunIds.has(contractId)),
@@ -3503,8 +3595,103 @@ export default function XTraderPage() {
         .forEach((trade) => next.add(String(trade.contract_id)));
       return next;
     });
-    setJackpotBatchStatus("Settled Jackpot P/L cleared for a new session. Deriv history and open-trade protections are unchanged.");
+    setJackpotBatchStatus("Session cleared.");
     setHistoryFading(false);
+  };
+
+  const refreshJackpotOrderStatus = async () => {
+    if (jackpotHistoryCheckLoading) return;
+    const accountId = currentAccountRef.current?.id;
+    if (accountId == null) {
+      setJackpotBatchStatus("Select the account used for the last Jackpot batch before refreshing its status.");
+      return;
+    }
+
+    setJackpotHistoryCheckLoading(true);
+    setJackpotBatchStatus("Refreshing the selected account's order status.");
+    try {
+      const [freshStatus, freshHistory] = await Promise.all([
+        customFetch<{
+          open_contracts_ready?: boolean;
+          active_contract_count?: number;
+        }>("/api/deriv/status?refresh_open_contracts=true"),
+        customFetch<DerivHistoryRow[]>("/api/deriv/history?require_fresh=true"),
+      ]);
+      queryClient.setQueryData(getGetDerivStatusQueryKey(), freshStatus);
+      queryClient.setQueryData(getGetDerivHistoryQueryKey(), freshHistory);
+
+      if (freshStatus.open_contracts_ready !== true || typeof freshStatus.active_contract_count !== "number") {
+        setJackpotBatchStatus("Deriv has not confirmed the account's open-contract status yet. Refresh again shortly.");
+        return;
+      }
+      if (freshStatus.active_contract_count > 0) {
+        setJackpotBatchStatus(
+          `Deriv still reports ${freshStatus.active_contract_count} open account contract${freshStatus.active_contract_count === 1 ? "" : "s"}. Jackpot will unlock after settlement.`,
+        );
+        return;
+      }
+
+      const selectedAccountId = String(accountId);
+      const accountHistory = freshHistory.filter((trade) => String(trade.account_id) === selectedAccountId);
+      if (accountHistory.some((trade) => isDerivHistoryOpen(trade.status))) {
+        setJackpotBatchStatus("Deriv history still shows an open contract. Jackpot will unlock after settlement.");
+        return;
+      }
+
+      const missingKnownIds = jackpotBatchContractIds.filter((contractId) => {
+        const row = accountHistory.find((trade) => String(trade.contract_id) === contractId);
+        return !row || isDerivHistoryOpen(row.status);
+      });
+      if (missingKnownIds.length) {
+        setJackpotBatchStatus("Deriv has not returned every Jackpot result yet. Refresh order status again shortly.");
+        return;
+      }
+
+      const attempt = jackpotPendingAttemptRef.current;
+      if (attempt && attempt.accountId === selectedAccountId) {
+        const earliestBuyTime = Math.floor(attempt.startedAt / 1_000) - 20;
+        const latestBuyTime = Math.floor(Date.now() / 1_000) + 10;
+        const expectedByType = new Map<string, number>();
+        for (const contractType of attempt.contractTypes) {
+          expectedByType.set(contractType, (expectedByType.get(contractType) ?? 0) + 1);
+        }
+        const candidatesByType = new Map<string, DerivHistoryRow[]>();
+        for (const trade of accountHistory) {
+          const buyTime = Number(trade.buy_time);
+          if (
+            trade.symbol !== attempt.symbol
+            || !expectedByType.has(trade.contract_type)
+            || !Number.isFinite(buyTime)
+            || buyTime < earliestBuyTime
+            || buyTime > latestBuyTime
+            || Math.abs(Number(trade.buy_price) - attempt.stake) > 0.01
+          ) continue;
+          const candidates = candidatesByType.get(trade.contract_type) ?? [];
+          candidates.push(trade);
+          candidatesByType.set(trade.contract_type, candidates);
+        }
+        const matchedRows = [...candidatesByType.entries()].flatMap(([contractType, candidates]) => (
+          candidates.length <= (expectedByType.get(contractType) ?? 0) ? candidates : []
+        ));
+        const matchedIds = matchedRows.map((trade) => String(trade.contract_id));
+        if (matchedIds.length) {
+          claimFeatureRows("jackpot", jackpotClaimedHistoryIdsRef.current, matchedIds);
+          matchedIds.forEach((contractId) => jackpotRunContractIdsRef.current.add(contractId));
+          jackpotRunAccountIdRef.current = selectedAccountId;
+          setJackpotBatchContractIds((current) => [...new Set([...current, ...matchedIds])]);
+          setJackpotBatchHadFailure(matchedIds.length < attempt.contractTypes.length);
+        }
+      }
+
+      jackpotPendingAttemptRef.current = null;
+      setJackpotNeedsHistoryCheck(false);
+      setJackpotBatchStatus("Deriv confirmed the account is clear. Jackpot can place the next batch.");
+      refreshTradeResults();
+    } catch {
+      setJackpotBatchStatus("Could not refresh Deriv order status yet. Try again shortly.");
+    } finally {
+      setJackpotHistoryCheckLoading(false);
+    }
   };
 
   const placeJackpotBatch = async (automatic?: {
@@ -3526,6 +3713,13 @@ export default function XTraderPage() {
     }
     setJackpotBatchStatus(`Requesting fresh quotes for ${contractTypes.length} Jackpot contracts.`);
     setJackpotBatchHadFailure(false);
+    jackpotPendingAttemptRef.current = {
+      accountId: String(currentAccount?.id ?? ""),
+      symbol: targetSymbol,
+      contractTypes: [...contractTypes],
+      stake: roundTradeStakeToCents(jackpotNextStake),
+      startedAt: Date.now(),
+    };
     try {
       const result = await jackpotBuyMutation.mutateAsync({
         data: {
@@ -3545,21 +3739,38 @@ export default function XTraderPage() {
         setJackpotBatchContractIds(contractIds);
         setJackpotBatchHadFailure(result.failed.length > 0);
       }
-      if (result.failed.some((failed) => failed.outcome === "uncertain")) {
+      const hasUncertainFailure = result.failed.some((failed) => failed.outcome === "uncertain");
+      if (hasUncertainFailure) {
         setJackpotNeedsHistoryCheck(true);
         setJackpotAiEnabled(false);
+        setJackpotBatchStatus("Waiting for Deriv to confirm every order in the Jackpot batch.");
+      } else {
+        jackpotPendingAttemptRef.current = null;
+        setJackpotNeedsHistoryCheck(false);
       }
-      setJackpotBatchStatus(result.ok
+      if (!hasUncertainFailure) setJackpotBatchStatus(result.ok
         ? `${contractIds.length} Jackpot contract${contractIds.length === 1 ? "" : "s"} acknowledged. Each settles independently.`
-        : `${result.message} Check account history before resubmitting an uncertain order.`);
+        : result.message);
       refreshTradeResults();
       return contractIds.length > 0;
     } catch (error) {
-      setJackpotNeedsHistoryCheck(true);
+      const candidate = error && typeof error === "object"
+        ? error as { status?: unknown; data?: unknown }
+        : null;
+      const errorData = candidate?.data && typeof candidate.data === "object"
+        ? candidate.data as { trade_outcome?: unknown }
+        : null;
+      const responseOutcome = errorData?.trade_outcome;
+      const uncertain = error instanceof ApiTransportError
+        ? error.tradeOutcomeUncertain
+        : responseOutcome === "uncertain"
+          || (responseOutcome !== "not_sent" && responseOutcome !== "rejected"
+            && !(typeof candidate?.status === "number" && candidate.status < 500));
+      setJackpotNeedsHistoryCheck(uncertain);
+      setJackpotHistoryCheckLoading(false);
       setJackpotAiEnabled(false);
-      setJackpotBatchStatus(
-        `${errorMessage(error)} Check Deriv history before sending another batch if the result is unclear.`,
-      );
+      if (!uncertain) jackpotPendingAttemptRef.current = null;
+      setJackpotBatchStatus(errorMessage(error));
       refreshTradeResults();
       return false;
     }
@@ -4591,11 +4802,11 @@ export default function XTraderPage() {
     setDigitFlipClearArmed(false);
     setHistoryFading(true);
     await sleep(260);
+    const settledRows = digitFlipRows.filter((trade) => !isDerivHistoryOpen(trade.status));
+    removeSettledFeatureClaims("digit-flip", digitFlipClaimedHistoryIdsRef.current, settledRows);
     setDigitFlipHiddenHistoryIds((current) => {
       const next = new Set(current);
-      digitFlipRows
-        .filter((trade) => !isDerivHistoryOpen(trade.status))
-        .forEach((trade) => next.add(String(trade.contract_id)));
+      settledRows.forEach((trade) => next.add(String(trade.contract_id)));
       return next;
     });
     setHistoryFading(false);
@@ -5053,9 +5264,11 @@ export default function XTraderPage() {
     setClearHistoryArmed(false);
     setHistoryFading(true);
     await sleep(260);
+    const settledRows = edgeRows.filter((trade) => !isDerivHistoryOpen(trade.status));
+    removeSettledFeatureClaims("edge", edgeClaimedHistoryIdsRef.current, settledRows);
     setEdgeHiddenHistoryIds((current) => {
       const next = new Set(current);
-      edgeRows.forEach((trade) => next.add(trade.contract_id));
+      settledRows.forEach((trade) => next.add(trade.contract_id));
       return next;
     });
     setHistoryFading(false);
@@ -5070,9 +5283,11 @@ export default function XTraderPage() {
     setTradeXHistoryClearArmed(false);
     setHistoryFading(true);
     await sleep(260);
+    const settledRows = tradeXRows.filter((trade) => !isDerivHistoryOpen(trade.status));
+    removeSettledFeatureClaims("trade-x", tradeXClaimedHistoryIdsRef.current, settledRows);
     setTradeXHiddenHistoryIds((current) => {
       const next = new Set(current);
-      tradeXRows.forEach((trade) => next.add(trade.contract_id));
+      settledRows.forEach((trade) => next.add(trade.contract_id));
       return next;
     });
     setHistoryFading(false);
@@ -5087,11 +5302,11 @@ export default function XTraderPage() {
     setClockWorkHistoryClearArmed(false);
     setHistoryFading(true);
     await sleep(260);
+    const settledRows = clockWorkRows.filter((trade) => !isDerivHistoryOpen(trade.status));
+    removeSettledFeatureClaims("clock-work", clockWorkClaimedHistoryIdsRef.current, settledRows);
     setClockWorkHiddenHistoryIds((current) => {
       const next = new Set(current);
-      clockWorkRows
-        .filter((trade) => !isDerivHistoryOpen(trade.status))
-        .forEach((trade) => next.add(trade.contract_id));
+      settledRows.forEach((trade) => next.add(trade.contract_id));
       return next;
     });
     setHistoryFading(false);
@@ -5106,9 +5321,11 @@ export default function XTraderPage() {
     setBulkTraderClearArmed(false);
     setHistoryFading(true);
     await sleep(260);
+    const settledRows = bulkRows.filter((trade) => !isDerivHistoryOpen(trade.status));
+    removeSettledFeatureClaims("bulk-trader", bulkClaimedHistoryIdsRef.current, settledRows);
     setBulkTraderHiddenHistoryIds((current) => {
       const next = new Set(current);
-      bulkRows.forEach((trade) => next.add(trade.contract_id));
+      settledRows.forEach((trade) => next.add(trade.contract_id));
       return next;
     });
     setHistoryFading(false);
@@ -5177,7 +5394,7 @@ export default function XTraderPage() {
     if (!currentAccount) return "Select a Deriv account before placing a batch.";
     if (isReal && !status.data?.live_trading_enabled) return "Live-account trading is disabled for this workspace.";
     if (jackpotBuyMutation.isPending) return "Fresh quotes and order confirmations are in progress.";
-    if (jackpotNeedsHistoryCheck) return "Check Deriv account history and confirm before continuing.";
+    if (jackpotNeedsHistoryCheck) return "Refresh Deriv order status before placing another batch.";
     if (anyContractBuyPending) return "Wait for the other feature's order request to finish.";
     if (tradeSlotBlocked) {
       if (!openContractsReady) {
@@ -6297,11 +6514,8 @@ export default function XTraderPage() {
           disabledReason={jackpotDisabledReason ?? undefined}
           onPlaceBatch={() => void placeJackpotBatch()}
           historyReviewRequired={jackpotNeedsHistoryCheck}
-          onConfirmHistoryReviewed={() => {
-            setJackpotNeedsHistoryCheck(false);
-            setJackpotBatchStatus("Deriv history was checked. New batches remain subject to settlement and balance checks.");
-            refreshTradeResults();
-          }}
+          historyCheckLoading={jackpotHistoryCheckLoading}
+          onRefreshOrderStatus={() => void refreshJackpotOrderStatus()}
           historyRows={jackpotRows}
           currentRunRows={jackpotVisibleRunRows}
           clearArmed={jackpotHistoryClearArmed}

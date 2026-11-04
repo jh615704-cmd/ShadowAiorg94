@@ -158,6 +158,7 @@ function buildErrorMessage(
     getStringField(data, "message") ??
     getStringField(data, "error_description") ??
     getStringField(data, "error");
+  const tradeOutcome = getStringField(data, "trade_outcome");
 
   if (code === "DERIV_BUY_RATE_LIMITED") {
     return message
@@ -167,9 +168,13 @@ function buildErrorMessage(
     return message ?? "Auto Trader 2.0 is paused by an administrator. No new order was sent.";
   }
   if (response.status >= 500) {
-    return isTradeMutation(requestInfo.method, getPathname(requestInfo.url))
-      ? "The trade could not be confirmed. Check Deriv open contracts and account history before taking another action."
-      : "This service is temporarily unavailable. Please try again shortly.";
+    if ((tradeOutcome === "not_sent" || tradeOutcome === "rejected") && message) {
+      return `${message} No order was sent.`;
+    }
+    if (isTradeMutation(requestInfo.method, getPathname(requestInfo.url))) {
+      return "Deriv has not confirmed this order. Refresh order status before sending another one.";
+    }
+    return message ?? "The server could not complete this request. Try again shortly.";
   }
   if (response.status === 429) {
     return "This action is being sent too quickly. Wait a moment before trying again.";
@@ -183,7 +188,7 @@ function buildErrorMessage(
       && mediaType === "text/html"
       && /run this app to see the results here|replit diatype/i.test(text)
     ) {
-      return "The dashboard preview page was returned instead of the trading API. Check that the API service is running with the dashboard. No trade confirmation was received; check Deriv history before retrying.";
+      return "The dashboard preview page was returned instead of the trading API. No order was sent; the API service must be running before retrying.";
     }
     return text ? truncate(text) : "The request could not be completed.";
   }
@@ -282,8 +287,8 @@ export class ApiTransportError extends Error {
     const tradeOutcomeUncertain = isTradeMutation(requestInfo.method, pathname);
     const recoveryMessage = tradeOutcomeUncertain
       ? pathname.endsWith("/sell")
-        ? "The connection dropped before the server confirmed the close. The contract may already be closed. Refresh Deriv history before trying to close it again."
-        : "The connection dropped before the server confirmed the trade. The contract may already be open. Refresh Deriv history before sending it again."
+        ? "The connection dropped before the server confirmed the close. The contract may already be closed; refresh order status before trying again."
+        : "The connection dropped before the server confirmed the trade. The contract may already be open; refresh order status before trying again."
       : `The dashboard API could not be reached for ${requestInfo.method} ${pathname}. Check your connection and retry.`;
 
     super(`${recoveryMessage} Reference: ${requestId}`);
@@ -315,8 +320,13 @@ export function getUserFacingErrorMessage(
     ? candidate.data as Record<string, unknown>
     : null;
   const message = typeof candidate.message === "string" ? candidate.message : "";
+  const dataMessage = typeof data?.error === "string" ? data.error : "";
+  const tradeOutcome = typeof data?.trade_outcome === "string" ? data.trade_outcome : "";
   if (status !== null && status >= 500) {
-    return "This service is temporarily unavailable. Please try again shortly.";
+    if ((tradeOutcome === "not_sent" || tradeOutcome === "rejected") && dataMessage) {
+      return `${dataMessage} No order was sent.`;
+    }
+    return dataMessage || "The server could not complete this request. Try again shortly.";
   }
   if (status === 429) {
     return "This action is being sent too quickly. Wait a moment before trying again.";
@@ -325,7 +335,6 @@ export function getUserFacingErrorMessage(
   if (rawProviderError.test(message)) {
     return "The trade service could not confirm the request. Check Deriv open contracts and account history before taking another action.";
   }
-  const dataMessage = typeof data?.error === "string" ? data.error : "";
   if (rawProviderError.test(dataMessage)) {
     return "The trade service could not confirm the request. Check Deriv open contracts and account history before taking another action.";
   }

@@ -64,7 +64,8 @@ export interface JackpotPanelProps {
   disabledReason?: string;
   onPlaceBatch: () => void;
   historyReviewRequired: boolean;
-  onConfirmHistoryReviewed: () => void;
+  historyCheckLoading: boolean;
+  onRefreshOrderStatus: () => void;
   historyRows: readonly DerivHistoryRow[];
   currentRunRows: readonly DerivHistoryRow[];
   clearArmed?: boolean;
@@ -126,7 +127,8 @@ export default function JackpotPanel({
   disabledReason,
   onPlaceBatch,
   historyReviewRequired,
-  onConfirmHistoryReviewed,
+  historyCheckLoading,
+  onRefreshOrderStatus,
   historyRows,
   currentRunRows,
   clearArmed = false,
@@ -323,7 +325,7 @@ export default function JackpotPanel({
 
         <section className={`jackpot-batch-state ${isBlocked ? "blocked" : ""}`} role="status" aria-live="polite" data-testid="status-jackpot-batch">
           <span className="jackpot-batch-icon">{isBlocked ? <CircleAlert size={16} /> : <Activity size={16} />}</span>
-          <span className="jackpot-batch-copy"><b>{batchLoading ? "Preparing your batch" : !isConnected ? "Connect Deriv" : tradeSlotBlocked ? "Waiting for settlement confirmation" : featureStatus === "paused" ? "Jackpot is paused" : featureStatus === "error" ? "Jackpot needs attention" : batchStatus || "Batch standing by"}</b><small>{!isConnected ? "Connect Deriv before this feature can run." : tradeSlotBlocked ? "New batches unlock automatically after Deriv confirms all open account contracts have settled." : batchLoading ? "Batch status will update when preparation is complete." : "Jackpot is configured here; execution remains controlled by the dashboard."}</small></span>
+          <span className="jackpot-batch-copy"><b>{batchLoading ? "Preparing your batch" : !isConnected ? "Connect Deriv" : tradeSlotBlocked ? "Waiting for settlement confirmation" : featureStatus === "paused" ? "Jackpot is paused" : featureStatus === "error" ? "Jackpot needs attention" : batchStatus || "Batch standing by"}</b><small>{!isConnected ? "Connect Deriv before this feature can run." : tradeSlotBlocked ? "New batches unlock automatically when all open account contracts settle." : batchLoading ? "Batch status will update when preparation is complete." : "Select enabled sides, then place a batch."}</small></span>
            <span className="jackpot-batch-count">{contractCount} orders</span>
         </section>
         <div className="jackpot-place-row">
@@ -344,17 +346,21 @@ export default function JackpotPanel({
           </button>
         </div>
         {historyReviewRequired && (
-          <div className="jackpot-history-review" role="alert">
-            <span>Order confirmation was unclear. Check Deriv account history before continuing.</span>
-            <button type="button" onClick={onConfirmHistoryReviewed} data-testid="button-jackpot-history-reviewed">
-              I checked Deriv history
+          <div className="jackpot-history-review" role="status">
+            <span>Deriv is confirming the last Jackpot order. New batches stay paused until account status is refreshed.</span>
+            <button
+              type="button"
+              onClick={onRefreshOrderStatus}
+              disabled={historyCheckLoading}
+              data-testid="button-jackpot-refresh-order-status"
+            >
+              {historyCheckLoading ? "Refreshing status…" : "Refresh order status"}
             </button>
           </div>
         )}
       </div>
 
       <div className="jackpot-history">
-        <small className="jackpot-helper jackpot-clear-note">Clear Session resets settled Jackpot P/L for its loss limit. It does not delete Deriv history or unlock open or uncertain trades.</small>
         <DerivHistory
           title="Jackpot History"
           strategy="Jackpot Bulk"

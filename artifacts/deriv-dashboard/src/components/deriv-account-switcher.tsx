@@ -60,7 +60,7 @@ export function DerivAccountSwitcher({
       refetchInterval: 10_000,
     },
   });
-  const statusQuery = useGetDerivStatus({
+  const statusQuery = useGetDerivStatus(undefined, {
     query: {
       queryKey: getGetDerivStatusQueryKey(),
       enabled: enabled && hasToken,

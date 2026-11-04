@@ -43,8 +43,8 @@ export default function AppPage() {
   const hasToken = Boolean(tokenStatusQuery.data?.has_token);
 
   const accountsQuery = useGetDerivAccounts({ query: { queryKey: getGetDerivAccountsQueryKey(), refetchInterval: 5000, enabled: hasToken } });
-  const statusQuery = useGetDerivStatus({ query: { queryKey: getGetDerivStatusQueryKey(), refetchInterval: 500, enabled: hasToken } });
-   const historyQuery = useGetDerivHistory({ query: { queryKey: getGetDerivHistoryQueryKey(), refetchInterval: 5000, enabled: hasToken } });
+  const statusQuery = useGetDerivStatus(undefined, { query: { queryKey: getGetDerivStatusQueryKey(), refetchInterval: 500, enabled: hasToken } });
+   const historyQuery = useGetDerivHistory(undefined, { query: { queryKey: getGetDerivHistoryQueryKey(), refetchInterval: 5000, enabled: hasToken } });
   const loadErrorMessage = [accountsQuery.error, statusQuery.error]
     .map((error) => error ? getUserFacingErrorMessage(error, "") : "")
     .find((message) => Boolean(message));

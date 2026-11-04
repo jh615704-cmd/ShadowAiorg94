@@ -2044,7 +2044,7 @@ async function connect() {
   return runtime.connecting;
 }
 
-async function refreshOpenContracts(): Promise<string[]> {
+export async function refreshOpenContracts(): Promise<string[]> {
   const ownerId = userContext.getStore();
   const runtime = getState();
   try {
@@ -2633,7 +2633,7 @@ export async function buyJackpotPairContracts(
       ? contractTypes
         ? `${contractTypes.length} Jackpot contracts sent together. Each contract settles independently.`
         : `${input.pair_count} Jackpot dual pairs sent together. Each contract settles independently.`
-      : `${buys.length} of ${proposalInputs.length} Jackpot contracts were confirmed. Check Deriv history before resubmitting any uncertain order.`,
+      : `${buys.length} of ${proposalInputs.length} Jackpot contracts were confirmed. Refresh order status before placing another batch.`,
     proposals,
     buys,
     failed,

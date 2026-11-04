@@ -1210,10 +1210,18 @@ export interface ErrorResponse {
   trade_outcome?: TradeBuyFailureOutcome;
 }
 
+export type GetDerivStatusParams = {
+refresh_open_contracts?: boolean;
+};
+
 export type StreamDerivTradeUpdatesParams = {
 /**
  * Include real Deriv tick updates for the Auto Trader scanner.
  */
 market_ticks?: boolean;
+};
+
+export type GetDerivHistoryParams = {
+require_fresh?: boolean;
 };
 

@@ -222,7 +222,7 @@ function AutoTrader2Content() {
   const accounts = useGetDerivAccounts({
     query: { queryKey: getGetDerivAccountsQueryKey(), enabled: hasAccess && hasToken, retry: false, refetchInterval: hasAccess && hasToken ? 10_000 : false },
   });
-  const status = useGetDerivStatus({
+  const status = useGetDerivStatus(undefined, {
     query: {
       queryKey: getGetDerivStatusQueryKey(),
       enabled: hasAccess && hasToken,
@@ -230,7 +230,7 @@ function AutoTrader2Content() {
       refetchInterval: running || aiEnabled ? 1_000 : hasAccess && hasToken ? 4_000 : false,
     },
   });
-  const history = useGetDerivHistory({
+  const history = useGetDerivHistory(undefined, {
     query: { queryKey: derivHistoryQueryKey, enabled: hasAccess && hasToken, retry: false, refetchInterval: false },
   });
   const statusRef = useRef(status);

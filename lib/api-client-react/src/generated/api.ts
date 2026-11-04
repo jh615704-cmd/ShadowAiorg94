@@ -60,6 +60,8 @@ import type {
   EdgeDurationAvailability,
   EdgeDurationAvailabilityInput,
   ErrorResponse,
+  GetDerivHistoryParams,
+  GetDerivStatusParams,
   HealthStatus,
   JackpotPairBuyInput,
   MoneyBankKnockoutScannerInput,
@@ -1797,20 +1799,27 @@ export function useGetDerivAccounts<TData = Awaited<ReturnType<typeof getDerivAc
 
 
 
-export const getGetDerivStatusUrl = () => {
+export const getGetDerivStatusUrl = (params?: GetDerivStatusParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/deriv/status`
+  return stringifiedParams.length > 0 ? `/api/deriv/status?${stringifiedParams}` : `/api/deriv/status`
 }
 
 /**
  * @summary Get Deriv connection status
  */
-export const getDerivStatus = async ( options?: Parameters<typeof customFetch>[1]): Promise<DerivStatus> => {
+export const getDerivStatus = async (params?: GetDerivStatusParams, options?: Parameters<typeof customFetch>[1]): Promise<DerivStatus> => {
 
-  return customFetch<DerivStatus>(getGetDerivStatusUrl(),
+  return customFetch<DerivStatus>(getGetDerivStatusUrl(params),
   {
     ...options,
     method: 'GET'
@@ -1823,23 +1832,23 @@ export const getDerivStatus = async ( options?: Parameters<typeof customFetch>[1
 
 
 
-export const getGetDerivStatusQueryKey = () => {
+export const getGetDerivStatusQueryKey = (params?: GetDerivStatusParams,) => {
     return [
-    `/api/deriv/status`
+    `/api/deriv/status`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetDerivStatusQueryOptions = <TData = Awaited<ReturnType<typeof getDerivStatus>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDerivStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetDerivStatusQueryOptions = <TData = Awaited<ReturnType<typeof getDerivStatus>>, TError = ErrorType<ErrorResponse>>(params?: GetDerivStatusParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDerivStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetDerivStatusQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetDerivStatusQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDerivStatus>>> = ({ signal }) => getDerivStatus({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDerivStatus>>> = ({ signal }) => getDerivStatus(params, { signal, ...requestOptions });
 
 
 
@@ -1849,19 +1858,19 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetDerivStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getDerivStatus>>>
-export type GetDerivStatusQueryError = ErrorType<unknown>
+export type GetDerivStatusQueryError = ErrorType<ErrorResponse>
 
 
 /**
  * @summary Get Deriv connection status
  */
 
-export function useGetDerivStatus<TData = Awaited<ReturnType<typeof getDerivStatus>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDerivStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export function useGetDerivStatus<TData = Awaited<ReturnType<typeof getDerivStatus>>, TError = ErrorType<ErrorResponse>>(
+ params?: GetDerivStatusParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDerivStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetDerivStatusQueryOptions(options)
+  const queryOptions = getGetDerivStatusQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -2887,20 +2896,27 @@ export const useDualBuyDerivContracts = <TError = ErrorType<ErrorResponse>,
       return useMutation(getDualBuyDerivContractsMutationOptions(options));
     }
 
-export const getGetDerivHistoryUrl = () => {
+export const getGetDerivHistoryUrl = (params?: GetDerivHistoryParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/deriv/history`
+  return stringifiedParams.length > 0 ? `/api/deriv/history?${stringifiedParams}` : `/api/deriv/history`
 }
 
 /**
  * @summary Get Deriv trade history observed for real and demo accounts
  */
-export const getDerivHistory = async ( options?: Parameters<typeof customFetch>[1]): Promise<DerivHistoryResponse> => {
+export const getDerivHistory = async (params?: GetDerivHistoryParams, options?: Parameters<typeof customFetch>[1]): Promise<DerivHistoryResponse> => {
 
-  return customFetch<DerivHistoryResponse>(getGetDerivHistoryUrl(),
+  return customFetch<DerivHistoryResponse>(getGetDerivHistoryUrl(params),
   {
     ...options,
     method: 'GET'
@@ -2913,23 +2929,23 @@ export const getDerivHistory = async ( options?: Parameters<typeof customFetch>[
 
 
 
-export const getGetDerivHistoryQueryKey = () => {
+export const getGetDerivHistoryQueryKey = (params?: GetDerivHistoryParams,) => {
     return [
-    `/api/deriv/history`
+    `/api/deriv/history`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetDerivHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getDerivHistory>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDerivHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetDerivHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getDerivHistory>>, TError = ErrorType<ErrorResponse>>(params?: GetDerivHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDerivHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetDerivHistoryQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetDerivHistoryQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDerivHistory>>> = ({ signal }) => getDerivHistory({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDerivHistory>>> = ({ signal }) => getDerivHistory(params, { signal, ...requestOptions });
 
 
 
@@ -2939,19 +2955,19 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetDerivHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getDerivHistory>>>
-export type GetDerivHistoryQueryError = ErrorType<unknown>
+export type GetDerivHistoryQueryError = ErrorType<ErrorResponse>
 
 
 /**
  * @summary Get Deriv trade history observed for real and demo accounts
  */
 
-export function useGetDerivHistory<TData = Awaited<ReturnType<typeof getDerivHistory>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDerivHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export function useGetDerivHistory<TData = Awaited<ReturnType<typeof getDerivHistory>>, TError = ErrorType<ErrorResponse>>(
+ params?: GetDerivHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDerivHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetDerivHistoryQueryOptions(options)
+  const queryOptions = getGetDerivHistoryQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

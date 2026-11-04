@@ -595,6 +595,12 @@ paths:
       operationId: getDerivStatus
       tags: [deriv]
       summary: Get Deriv connection status
+      parameters:
+        - name: refresh_open_contracts
+          in: query
+          required: false
+          schema:
+            type: boolean
       responses:
         "200":
           description: Current connection status
@@ -602,6 +608,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DerivStatus"
+        "502":
+          description: Deriv could not refresh account status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Deriv session capacity is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /deriv/events:
     get:
       operationId: streamDerivTradeUpdates
@@ -1071,6 +1089,12 @@ paths:
       operationId: getDerivHistory
       tags: [deriv]
       summary: Get Deriv trade history observed for real and demo accounts
+      parameters:
+        - name: require_fresh
+          in: query
+          required: false
+          schema:
+            type: boolean
       responses:
         "200":
           description: Trade history
@@ -1084,6 +1108,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DerivHistoryResponse"
+        "503":
+          description: A fresh Deriv history snapshot is not available yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     delete:
       operationId: clearDerivHistory
       tags: [deriv]
