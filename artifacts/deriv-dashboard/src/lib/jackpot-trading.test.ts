@@ -131,6 +131,44 @@ test("AI bulk selection splits the total across qualifying enabled families only
   assert.deepEqual(oneSideQualifies?.contractTypes, ["CALL", "CALL", "CALL"]);
 });
 
+test("Jackpot AI only accepts observed rates strictly above 55% with 20 samples", () => {
+  const exactlyAtThreshold = chooseJackpotBestBatch(
+    [signal({ risePercentage: 55, fallPercentage: 45, sampleCount: 20 })],
+    "volatility",
+    "AUTO",
+    "AUTO",
+    true,
+    false,
+    1,
+    "R_75",
+  );
+  assert.equal(exactlyAtThreshold, null);
+
+  const aboveThreshold = chooseJackpotBestBatch(
+    [signal({ risePercentage: 55.1, fallPercentage: 44.9, sampleCount: 20 })],
+    "volatility",
+    "AUTO",
+    "AUTO",
+    true,
+    false,
+    1,
+    "R_75",
+  );
+  assert.equal(aboveThreshold?.observedRate, 55.1);
+
+  const undersampled = chooseJackpotBestBatch(
+    [signal({ risePercentage: 90, fallPercentage: 10, sampleCount: 19 })],
+    "volatility",
+    "AUTO",
+    "AUTO",
+    true,
+    false,
+    1,
+    "R_75",
+  );
+  assert.equal(undersampled, null);
+});
+
 test("Auto Best ranks only the selected market group and sample-backed sides", () => {
   const best = chooseJackpotBestMarket([
     signal({ symbol: "R_25", risePercentage: 59, evenPercentage: 55 }),
