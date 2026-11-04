@@ -586,7 +586,7 @@ export default function XTraderPage() {
   const [jackpotDuration, setJackpotDuration] = useState(1);
   const [jackpotAiEnabled, setJackpotAiEnabled] = useState(false);
   const [jackpotAiCycle, setJackpotAiCycle] = useState(0);
-  const [jackpotAiStatus, setJackpotAiStatus] = useState("Off. Use the manual button or enable Jackpot AI.");
+  const [jackpotAiStatus, setJackpotAiStatus] = useState("");
   const jackpotAiAccountIdRef = useRef<string | null>(null);
   const jackpotHadOpenContractsRef = useRef(false);
   const [jackpotMultiplyAfterLoss, setJackpotMultiplyAfterLoss] = useState(false);
@@ -1124,7 +1124,7 @@ export default function XTraderPage() {
       setJackpotBatchStatus(
         batchProfit < 0
           ? "The Jackpot batch settled with a net loss; the next stake was adjusted."
-          : "The Jackpot batch settled; the next stake returned to its base amount.",
+          : "",
       );
     } else {
       setJackpotBatchStatus("A partial batch settled. The next stake was not changed.");
@@ -4850,9 +4850,7 @@ export default function XTraderPage() {
     }
     jackpotAiAccountIdRef.current = enabled && currentAccount ? String(currentAccount.id) : null;
     setJackpotAiEnabled(enabled);
-    setJackpotAiStatus(enabled
-      ? "Starting a 5-second scan of enabled sides."
-      : "AI off. Any acknowledged contracts will continue to settle.");
+    setJackpotAiStatus("");
   };
 
   const toggleJackpot = (enabled: boolean) => {
@@ -5435,7 +5433,7 @@ export default function XTraderPage() {
       return;
     }
     if (!jackpotAiEnabled) {
-      setJackpotAiStatus("Off. Use the manual button or enable Jackpot AI.");
+      setJackpotAiStatus("");
       return;
     }
     if (!canUseJackpot) {
@@ -5476,7 +5474,7 @@ export default function XTraderPage() {
       }, 1000);
     };
 
-    setJackpotAiStatus("Starting a 5-second scan of enabled sides.");
+    setJackpotAiStatus("Scanning Jackpot markets.");
     scanTimer = window.setTimeout(async () => {
       try {
         const initial = await status.refetch({ cancelRefetch: false });
@@ -5488,7 +5486,7 @@ export default function XTraderPage() {
         const startSequences = new Map(
           (initial.data.market_signals ?? []).map((signal) => [signal.symbol, signal.tick_sequence]),
         );
-        setJackpotAiStatus("Scanning live market samples for 5 seconds.");
+        setJackpotAiStatus("Scanning Jackpot markets.");
         await new Promise<void>((resolve) => {
           delayTimer = window.setTimeout(resolve, 5000);
         });
@@ -5535,7 +5533,7 @@ export default function XTraderPage() {
           55,
         );
         if (!candidate || candidate.tickSequence <= (startSequences.get(candidate.symbol) ?? 0)) {
-          scheduleNextScan("No enabled side exceeded 55% in the observed samples; scanning again.");
+          scheduleNextScan("No qualifying setup yet. Checking again.");
           return;
         }
         const blocked = jackpotBatchBlockReasonRef.current(jackpotContractCount);
@@ -5543,9 +5541,7 @@ export default function XTraderPage() {
           scheduleNextScan(`Waiting to trade: ${blocked}`);
           return;
         }
-        setJackpotAiStatus(
-          `Selected ${candidate.symbol} with ${candidate.observedRate.toFixed(1)}% average observed rate; submitting ${candidate.contractTypes.length} contracts.`,
-        );
+        setJackpotAiStatus("Submitting a Jackpot batch.");
         const accepted = await jackpotSubmitBatchRef.current({
           symbol: candidate.symbol,
           contractTypes: candidate.contractTypes,
@@ -5555,7 +5551,6 @@ export default function XTraderPage() {
           scheduleNextScan("The batch was not acknowledged; checking fresh samples before another attempt.");
         } else {
           jackpotAiAccountIdRef.current = null;
-          setJackpotAiStatus("Jackpot AI sent one batch and switched off. Re-enable it to scan again.");
           setJackpotAiEnabled(false);
         }
       } catch (error) {

@@ -495,6 +495,8 @@ test("Jackpot supports one-sided bulk batches, labels its run history, and exclu
     assert.equal(await panel.getByText("Each pair shows its two observed side rates, not a combined win probability.", { exact: true }).count(), 0);
     assert.equal(await panel.getByText("Percentages describe observed sample context only; they do not predict or guarantee outcomes.", { exact: true }).count(), 0);
     assert.equal(await panel.getByText("Limits are session thresholds, not a guarantee against losses.", { exact: true }).count(), 0);
+    assert.equal(await panel.getByText(/Scan for 5 seconds|Jackpot AI retries temporary no-signal waits|Select enabled sides, then place a batch\./).count(), 0);
+    assert.equal(await panel.getByTestId("status-jackpot-ai").innerText(), "");
     const rateFontSize = await panel.locator(".jackpot-rate-item b").first().evaluate((element) => getComputedStyle(element).fontSize);
     assert.ok(Number.parseFloat(rateFontSize) >= 16, "Jackpot market rates should be large enough to read clearly.");
     await panel.getByTestId("switch-jackpot-even-odd").uncheck();
@@ -699,6 +701,10 @@ test("Jackpot place button re-enables after Deriv confirms settlement", async ()
       const button = document.querySelector('[data-testid="button-jackpot-place-batch"]');
       return button instanceof HTMLButtonElement && !button.disabled;
     }, undefined, { timeout: 15_000 });
+    assert.equal(
+      await panel.getByText("The Jackpot batch settled; the next stake returned to its base amount.", { exact: true }).count(),
+      0,
+    );
     await placeButton.click();
     await page.waitForFunction(() =>
       document.querySelectorAll(".jackpot-history .deriv-history-row").length >= 2,
@@ -756,7 +762,7 @@ test("Jackpot AI scans for five seconds, sends one batch, and switches off", asy
       const toggle = document.querySelector('[data-testid="switch-jackpot-ai"]');
       return toggle instanceof HTMLInputElement && !toggle.checked;
     }, undefined, { timeout: 5_000 });
-    assert.match(await panel.getByTestId("status-jackpot-ai").innerText(), /off/i);
+    assert.equal(await panel.getByTestId("status-jackpot-ai").innerText(), "");
     await page.waitForTimeout(250);
     assert.equal(state.tradeRequests.length, 1, "AI must stop after its one acknowledged batch.");
     assert.deepEqual(pageErrors, []);

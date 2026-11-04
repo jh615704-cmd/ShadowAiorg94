@@ -314,18 +314,28 @@ export default function JackpotPanel({
               <label className="jackpot-field"><span>Loss limit · {currency}</span><input type="number" min="0" step="0.01" value={lossLimit} onChange={(event) => onLossLimitChange(Number(event.target.value))} aria-label={`Jackpot session loss limit in ${currency}`} data-testid="input-jackpot-loss-limit" /></label>
             </div>
             <label className="jackpot-switch-row jackpot-ai-switch">
-              <span><b>Jackpot AI</b><small>Scan for 5 seconds; choose enabled sides above a 55% observed rate with at least 20 samples. It switches off after one batch.</small></span>
+              <span><b>Jackpot AI</b></span>
               <input type="checkbox" checked={aiEnabled} onChange={(event) => onAiEnabledChange(event.target.checked)} aria-label="Enable Jackpot AI" data-testid="switch-jackpot-ai" />
               <i aria-hidden="true" />
             </label>
             <p className="jackpot-ai-status" role="status" aria-live="polite" data-testid="status-jackpot-ai">{aiStatus}</p>
-            <small className="jackpot-helper">Jackpot AI retries temporary no-signal waits, then switches off after one acknowledged batch. Enable it again to scan another.</small>
           </section>
         </div>
 
         <section className={`jackpot-batch-state ${isBlocked ? "blocked" : ""}`} role="status" aria-live="polite" data-testid="status-jackpot-batch">
           <span className="jackpot-batch-icon">{isBlocked ? <CircleAlert size={16} /> : <Activity size={16} />}</span>
-          <span className="jackpot-batch-copy"><b>{batchLoading ? "Preparing your batch" : !isConnected ? "Connect Deriv" : tradeSlotBlocked ? "Waiting for settlement confirmation" : featureStatus === "paused" ? "Jackpot is paused" : featureStatus === "error" ? "Jackpot needs attention" : batchStatus || "Batch standing by"}</b><small>{!isConnected ? "Connect Deriv before this feature can run." : tradeSlotBlocked ? "New batches unlock automatically when all open account contracts settle." : batchLoading ? "Batch status will update when preparation is complete." : "Select enabled sides, then place a batch."}</small></span>
+          <span className="jackpot-batch-copy">
+            <b>{batchLoading ? "Preparing your batch" : !isConnected ? "Connect Deriv" : tradeSlotBlocked ? "Waiting for settlement confirmation" : featureStatus === "paused" ? "Jackpot is paused" : featureStatus === "error" ? "Jackpot needs attention" : batchStatus || "Batch standing by"}</b>
+            {(!isConnected || tradeSlotBlocked || batchLoading) && (
+              <small>
+                {!isConnected
+                  ? "Connect Deriv before this feature can run."
+                  : tradeSlotBlocked
+                    ? "New batches unlock automatically when all open account contracts settle."
+                    : "Batch status will update when preparation is complete."}
+              </small>
+            )}
+          </span>
            <span className="jackpot-batch-count">{contractCount} orders</span>
         </section>
         <div className="jackpot-place-row">
