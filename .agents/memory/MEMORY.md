@@ -48,3 +48,4 @@
 - [Vite preview cache isolation](vite-preview-cache-isolation.md) — keep isolated E2E Vite caches separate from the live dashboard server to prevent stale-chunk 504s.
 - [Clock Work evidence and risk](clock-work-evidence-risk.md) — use five-tick historical evidence and enforce the session loss budget; never imply a guaranteed win rate.
 - [Non-Auto-Trader entry thresholds](non-auto-trader-entry-thresholds.md) — percentage-based signal floors are 50% for the seven other trading features; preserve sample and risk controls.
+- [Auto Magic entry policy](auto-magic-entry-policy.md) — one top-ranked market, >68% on 50+ expiry samples, untouched opposite-half digit; one batch per manual scan.

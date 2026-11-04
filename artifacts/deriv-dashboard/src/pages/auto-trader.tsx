@@ -23,6 +23,7 @@ import {
 import type { DerivHistoryItem } from "@workspace/api-client-react";
 import { mergeDerivTradeUpdate } from "@/lib/deriv-trade-feed";
 import { collectAutoTraderTickChanges, getAutoTraderOppositeDigitGroup, type AutoTraderMarketTickSignal } from "@/lib/auto-trader-ticks";
+import { chooseAutoMagicCandidate, type AutoMagicSignal } from "@/lib/auto-magic-strategy";
 import { AppShell } from "@/components/layout/app-shell";
 import { DerivAccountSwitcher } from "@/components/deriv-account-switcher";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -65,7 +66,7 @@ const filterOptions: Array<[FilterKey, string, number]> = [
 ];
 const storagePrefix = "deriv-auto-trader-contracts:";
 const guideCopy = [
-  ["Auto Trader overview", "This workspace shows live last-digit counts for supported Deriv markets and lets you choose when to place Digit Differs contracts.", "Neither the scanner nor its highlighted advisory sends an order; each trade requires your confirmation."],
+  ["Auto Trader overview", "This workspace shows live last-digit counts for supported Deriv markets and lets you place manual Digit Differs orders or use Auto Magic.", "Auto Magic can send one selected 3×/6× batch after you enable it and press Go Live. Press Rescan after settlement for another scan. Historical samples do not guarantee future results."],
   ["Confirm your account", "Check the account name, account type, connection, and balance in the header before using the controls.", "A real account uses real funds. Demo trading is recommended while you learn."],
   ["Start and rescan", "Go Live counts new market ticks. Rescan resets the counts to a fresh live baseline while keeping your selected market filter and visible market list in place.", "Stop pauses the scan; it does not cancel contracts already accepted by Deriv."],
   ["Filter the market list", "Use All Markets, Volatility, Jump, or Volatility 1s to narrow the instruments shown. Each market keeps its own count during a scan.", "Rescanning does not change the selected filter."],
@@ -87,6 +88,11 @@ type LocalContract = {
 type FilterKey = "all" | MarketGroup;
 type Frequencies = Record<string, number[]>;
 type TickMap = Record<string, number>;
+type AutoMagicStatus = "off" | "ready" | "waiting" | "settings" | "placing" | "settling" | "rescan" | "review";
+type TradePlacementOutcome =
+  | { kind: "accepted"; contractIds: string[] }
+  | { kind: "not-sent" }
+  | { kind: "uncertain"; contractIds: string[] };
 
 const money = (amount: number | undefined, currency = "USD") =>
   amount == null || !Number.isFinite(amount)
@@ -113,6 +119,13 @@ function AutoTraderContent() {
   const [scanning, setScanning] = useState(false);
   const [scanResetPending, setScanResetPending] = useState(false);
   const scanRestartLockRef = useRef(false);
+  const [autoMagicEnabled, setAutoMagicEnabled] = useState(false);
+  const [autoMagicCount, setAutoMagicCount] = useState<3 | 6>(3);
+  const [autoMagicStatus, setAutoMagicStatus] = useState<AutoMagicStatus>("off");
+  const [autoMagicRunActive, setAutoMagicRunActive] = useState(false);
+  const [autoMagicBatchIds, setAutoMagicBatchIds] = useState<string[]>([]);
+  const autoMagicAttemptedRef = useRef(false);
+  const [scannerSignals, setScannerSignals] = useState<AutoMagicSignal[]>([]);
   const accounts = useGetDerivAccounts({
     query: { queryKey: getGetDerivAccountsQueryKey(), enabled: hasAutoTraderAccess && hasToken, retry: false, refetchInterval: 10_000 },
   });
@@ -158,7 +171,12 @@ function AutoTraderContent() {
   localContractsRef.current = localContracts;
 
   useEffect(() => {
-    if (!hasAutoTraderAccess) setScanning(false);
+    if (!hasAutoTraderAccess) {
+      setScanning(false);
+      setAutoMagicEnabled(false);
+      setAutoMagicRunActive(false);
+      setAutoMagicStatus("off");
+    }
   }, [hasAutoTraderAccess]);
 
   useEffect(() => {
@@ -202,8 +220,14 @@ function AutoTraderContent() {
     setFrequencies({});
     setMarketTicks({});
     setLatestDigits({});
+    setScannerSignals([]);
     seenTicks.current = {};
     baselineTicks.current = {};
+    autoMagicAttemptedRef.current = false;
+    setAutoMagicBatchIds([]);
+    setAutoMagicEnabled(false);
+    setAutoMagicRunActive(false);
+    setAutoMagicStatus("off");
   }, [accountId]);
 
   useEffect(() => () => {
@@ -219,6 +243,21 @@ function AutoTraderContent() {
     const source = new EventSource(eventUrl, { withCredentials: true });
     const applySignals = (signals: AutoTraderMarketTickSignal[]) => {
       if (!scanning || scanResetPendingRef.current || !Array.isArray(signals)) return;
+      setScannerSignals((current) => {
+        const next = new Map(current.map((signal) => [signal.symbol, signal]));
+        for (const signal of signals) {
+          const recentDigits = signal.recent_digits.filter((digit) =>
+            Number.isInteger(digit) && digit >= 0 && digit <= 9
+          );
+          if (!recentDigits.length) continue;
+          next.set(signal.symbol, {
+            symbol: signal.symbol,
+            sample_count: recentDigits.length,
+            recent_digits: recentDigits,
+          });
+        }
+        return [...next.values()];
+      });
       setLatestDigits((current) => {
         let next = current;
         for (const signal of signals) {
@@ -309,10 +348,18 @@ function AutoTraderContent() {
     return () => source.close();
   }, [accountId, hasAutoTraderAccess, hasToken, history.isFetched, queryClient, scanning]);
 
-  const startScan = async () => {
+  const startScan = async (isRescan = false) => {
     if (!hasAutoTraderAccess) return;
     if (!connected) {
       setMessage({ tone: "error", text: "Connect and select an authorized Deriv account before starting the scanner." });
+      return;
+    }
+    if (autoMagicStatus === "settling") {
+      setMessage({ tone: "info", text: "Wait for every accepted Auto Magic contract to settle before rescanning." });
+      return;
+    }
+    if (autoMagicEnabled && autoMagicStatus === "review") {
+      setMessage({ tone: "error", text: "Check Deriv history before Auto Magic can be armed again. No order was resent." });
       return;
     }
     if (scanRestartLockRef.current) return;
@@ -330,6 +377,11 @@ function AutoTraderContent() {
         return;
       }
       const startingSignals = result.data.market_signals ?? [];
+      setScannerSignals(startingSignals.map((signal) => ({
+        symbol: signal.symbol,
+        sample_count: signal.sample_count,
+        recent_digits: signal.recent_digits,
+      })));
       const baseline = Object.fromEntries(startingSignals.map((signal) => [signal.symbol, signal.tick_sequence]));
       const startingDigits = Object.fromEntries(
         startingSignals.flatMap((signal) => {
@@ -344,6 +396,15 @@ function AutoTraderContent() {
       setFrequencies(Object.fromEntries(markets.map((market) => [market.symbol, Array(10).fill(0)])));
       setMarketTicks(Object.fromEntries(markets.map((market) => [market.symbol, 0])));
       setLatestDigits(startingDigits);
+      if (isRescan) {
+        autoMagicAttemptedRef.current = false;
+        setAutoMagicBatchIds([]);
+      }
+      const canArmAutoMagic = autoMagicEnabled && !autoMagicAttemptedRef.current;
+      setAutoMagicRunActive(canArmAutoMagic);
+      setAutoMagicStatus(autoMagicEnabled
+        ? canArmAutoMagic ? "waiting" : "rescan"
+        : "off");
       setScanning(true);
       setMessage({ tone: "info", text: "Scanner live. Counts begin with the next real tick observed from Deriv." });
     } catch (error) {
@@ -424,9 +485,38 @@ function AutoTraderContent() {
   const hasOpenTodayContract = todaysHistory.some((item) => isDerivHistoryOpen(item.status));
   const winRate = outcomeSummary.sampleSize > 0 ? `${outcomeSummary.winRate.toFixed(1)}%` : "—";
   const connected = Boolean(status.data?.connected && status.data?.authorized && hasToken);
+  const autoMagicStatusText = !autoMagicEnabled
+    ? autoMagicStatus === "settling"
+      ? "OFF · An accepted batch is still settling."
+      : autoMagicStatus === "review"
+        ? "OFF · Check Deriv history before rearming."
+        : "OFF"
+    : autoMagicStatus === "ready"
+      ? scanning ? "Enabled · press Rescan to start a new scan." : "Enabled · press Go Live to start."
+      : autoMagicStatus === "waiting"
+        ? "Scanning live markets for a qualifying setup."
+        : autoMagicStatus === "settings"
+          ? "Review stake, duration, and available balance."
+          : autoMagicStatus === "placing"
+            ? "Sending one batch."
+            : autoMagicStatus === "settling"
+              ? "Waiting for every accepted contract to settle."
+              : autoMagicStatus === "rescan"
+                ? "Batch finished · press Rescan for another."
+                : autoMagicStatus === "review"
+                  ? "Check Deriv history · Auto Magic will not retry."
+                  : "OFF";
+  const handleAutoMagicToggle = (enabled: boolean) => {
+    setAutoMagicEnabled(enabled);
+    setAutoMagicRunActive(false);
+    if (autoMagicStatus === "settling" || autoMagicStatus === "review") return;
+    setAutoMagicStatus(enabled
+      ? autoMagicAttemptedRef.current ? "rescan" : "ready"
+      : "off");
+  };
 
   useEffect(() => {
-    if (!accountId || !hasOpenTodayContract) return;
+    if (!accountId || (!hasOpenTodayContract && autoMagicStatus !== "settling")) return;
     const timer = window.setInterval(() => {
       void queryClient.refetchQueries(
         { queryKey: getGetDerivHistoryQueryKey(), type: "active" },
@@ -434,30 +524,49 @@ function AutoTraderContent() {
       );
     }, 2_000);
     return () => window.clearInterval(timer);
-  }, [accountId, hasOpenTodayContract, queryClient]);
+  }, [accountId, autoMagicStatus, hasOpenTodayContract, queryClient]);
 
-  const placeTrade = async (market: Market, digit: number, count: 1 | 3 | 6) => {
+  useEffect(() => {
+    if (!accountId || autoMagicStatus !== "settling" || autoMagicBatchIds.length === 0) return;
+    const accountHistory = (history.data ?? []) as DerivHistoryItem[];
+    const allSettled = autoMagicBatchIds.every((contractId) => {
+      const row = accountHistory.find((item) =>
+        item.account_id === accountId && String(item.contract_id) === contractId
+      );
+      return row !== undefined && !isDerivHistoryOpen(row.status);
+    });
+    if (allSettled) {
+      setAutoMagicRunActive(false);
+      setAutoMagicStatus("rescan");
+    }
+  }, [accountId, autoMagicBatchIds, autoMagicStatus, history.data]);
+
+  const placeTrade = async (
+    market: Market,
+    digit: number,
+    count: 1 | 3 | 6,
+  ): Promise<TradePlacementOutcome> => {
     if (batchSubmitLockRef.current || bulkBuy.isPending) {
       setMessage({ tone: "info", text: "Auto Trader is already sending a batch. Wait for its result before sending another." });
-      return;
+      return { kind: "not-sent" };
     }
     if (!hasAutoTraderAccess) {
       setMessage({ tone: "error", text: "Auto Trader access is restricted. No order was sent." });
-      return;
+      return { kind: "not-sent" };
     }
     const amount = Number(stake);
     const duration = Number(durationTicks);
     if (!accountId || !connected) {
       setMessage({ tone: "error", text: "Connect and select a Deriv account before trading." });
-      return;
+      return { kind: "not-sent" };
     }
     if (!Number.isFinite(amount) || amount <= 0) {
       setMessage({ tone: "error", text: "Enter a valid stake greater than zero." });
-      return;
+      return { kind: "not-sent" };
     }
     if (!Number.isInteger(duration) || duration < 1 || duration > 5) {
       setMessage({ tone: "error", text: "Enter a whole-number duration from 1 to 5 ticks." });
-      return;
+      return { kind: "not-sent" };
     }
     const orderError = validateAutoTraderBatch({
       stake: amount,
@@ -470,7 +579,7 @@ function AutoTraderContent() {
     });
     if (orderError) {
       setMessage({ tone: "error", text: orderError });
-      return;
+      return { kind: "not-sent" };
     }
     setMessage(null);
     batchSubmitLockRef.current = true;
@@ -494,21 +603,26 @@ function AutoTraderContent() {
         tone: "error",
         text: `${errorMessage} If Deriv's response was uncertain, check account history before resubmitting.`,
       });
-      return;
+      return { kind: "uncertain", contractIds: [] };
     } finally {
       batchSubmitLockRef.current = false;
     }
 
     if (!result.buys.length) {
       setMessage({ tone: result.ok ? "success" : "info", text: result.message });
-      return;
+      return { kind: "not-sent" };
     }
+    const validBuys = result.buys.filter((buy) => {
+      const contractId = String(buy.contract_id ?? "").trim();
+      return contractId.length > 0 && contractId !== "undefined" && contractId !== "null";
+    });
+    const hasMissingContractIds = validBuys.length !== result.buys.length;
     const placedAt = Date.now();
-    const batchId = result.buys.length > 1 ? `auto-trader-${placedAt}-${result.buys[0]?.contract_id ?? "batch"}` : undefined;
-    const fresh = result.buys.map((buy, index) => ({
+    const batchId = validBuys.length > 1 ? `auto-trader-${placedAt}-${validBuys[0]?.contract_id ?? "batch"}` : undefined;
+    const fresh = validBuys.map((buy, index) => ({
       id: String(buy.contract_id),
       placedAt,
-      ...(batchId ? { batchId, batchIndex: index + 1, batchCount: result.buys.length } : {}),
+      ...(batchId ? { batchId, batchIndex: index + 1, batchCount: validBuys.length } : {}),
     }));
     const updated = [...localContracts.filter((item) => !fresh.some((entry) => entry.id === item.id)), ...fresh];
     setLocalContracts(updated);
@@ -519,10 +633,12 @@ function AutoTraderContent() {
       trackingNote = " The order was accepted, but this browser could not save its local daily-stat tracking; check Deriv history.";
     }
     setMessage({
-      tone: result.ok ? "success" : "info",
-      text: `${result.ok
-        ? `${result.buys.length} contract${result.buys.length === 1 ? "" : "s"} accepted for ${market.name}, digit ${digit}, ${duration} tick${duration === 1 ? "" : "s"}. Separate contracts can settle differently.`
-        : result.message}${trackingNote}`,
+      tone: hasMissingContractIds ? "error" : result.ok ? "success" : "info",
+      text: hasMissingContractIds
+        ? `Deriv accepted an order response without every contract ID. Check account history before resubmitting.${trackingNote}`
+        : `${result.ok
+          ? `${validBuys.length} contract${validBuys.length === 1 ? "" : "s"} accepted for ${market.name}, digit ${digit}, ${duration} tick${duration === 1 ? "" : "s"}. Separate contracts can settle differently.`
+          : result.message}${trackingNote}`,
     });
     const refetchOptions = { cancelRefetch: false };
     void Promise.all([
@@ -540,7 +656,109 @@ function AutoTraderContent() {
         console.warn("Could not refresh Auto Trader trade status after two seconds.", error);
       });
     }, 2_000);
+    if (hasMissingContractIds) {
+      return { kind: "uncertain", contractIds: fresh.map((contract) => contract.id) };
+    }
+    return { kind: "accepted", contractIds: fresh.map((contract) => contract.id) };
   };
+
+  useEffect(() => {
+    if (
+      !autoMagicEnabled
+      || !autoMagicRunActive
+      || !scanning
+      || autoMagicAttemptedRef.current
+      || !connected
+      || !accountId
+      || !hasAutoTraderAccess
+    ) {
+      return;
+    }
+
+    const duration = Number(durationTicks);
+    const amount = Number(stake);
+    const liveMarkets = filteredMarkets.filter((market) => (marketTicks[market.symbol] ?? 0) > 0);
+    const candidate = chooseAutoMagicCandidate({
+      signals: scannerSignals,
+      markets: liveMarkets,
+      latestDigits,
+      scanFrequencies: frequencies,
+      duration,
+    });
+    if (!candidate) {
+      setAutoMagicStatus("waiting");
+      return;
+    }
+
+    const market = liveMarkets.find((item) => item.symbol === candidate.symbol);
+    if (!market) return;
+    const orderError = validateAutoTraderBatch({
+      stake: amount,
+      balance: accountBalance,
+      symbol: market.symbol,
+      supportedSymbols: markets.map((item) => item.symbol),
+      digit: candidate.barrier,
+      duration,
+      count: autoMagicCount,
+    });
+    if (orderError) {
+      setAutoMagicStatus("settings");
+      setMessage((current) => current?.text === `Auto Magic waiting: ${orderError}`
+        ? current
+        : { tone: "error", text: `Auto Magic waiting: ${orderError}` });
+      return;
+    }
+
+    autoMagicAttemptedRef.current = true;
+    setAutoMagicRunActive(false);
+    setAutoMagicStatus("placing");
+    void placeTrade(market, candidate.barrier, autoMagicCount)
+      .then((outcome) => {
+        if (outcome.kind === "accepted" && outcome.contractIds.length > 0) {
+          setAutoMagicBatchIds(outcome.contractIds);
+          setAutoMagicStatus("settling");
+        } else if (outcome.kind === "uncertain") {
+          setAutoMagicBatchIds(outcome.contractIds);
+          setAutoMagicStatus("review");
+          setMessage({
+            tone: "error",
+            text: "Auto Magic could not confirm the full order result. Check Deriv history; it will not resend this batch.",
+          });
+        } else if (outcome.kind === "accepted") {
+          setAutoMagicStatus("review");
+          setMessage({
+            tone: "error",
+            text: "Deriv accepted a batch without usable contract IDs. Check account history before taking further action.",
+          });
+        } else {
+          setAutoMagicStatus("rescan");
+        }
+      })
+      .catch((error: unknown) => {
+        setAutoMagicStatus("review");
+        setMessage({
+          tone: "error",
+          text: `${error instanceof Error ? error.message : "The batch result is uncertain."} Check Deriv history; Auto Magic will not resend this batch.`,
+        });
+      });
+  }, [
+    accountBalance,
+    accountId,
+    autoMagicCount,
+    autoMagicEnabled,
+    autoMagicRunActive,
+    connected,
+    durationTicks,
+    filteredMarkets,
+    frequencies,
+    hasAutoTraderAccess,
+    latestDigits,
+    marketTicks,
+    placeTrade,
+    scanning,
+    scannerSignals,
+    stake,
+  ]);
 
   const renderMarket = (market: Market) => {
     const signal = signalBySymbol.get(market.symbol);
@@ -565,8 +783,8 @@ function AutoTraderContent() {
               <span className="at-digit-label">{digit}</span>
               <span className={`at-digit-count${count === 0 ? " zero" : ""}`} aria-label={`${count} observations`}>{count}</span>
               <div className="at-digit-trades">
-                <button type="button" disabled={!connected || !scanning || !signal || !hasMarketTicksThisScan || bulkBuy.isPending} onClick={() => void placeTrade(market, digit, 3)} aria-label={`Place three separate contracts on ${market.name}, digit ${digit}`} data-testid={`button-trade-3x-${market.symbol}-${digit}`}>3×</button>
-                <button type="button" disabled={!connected || !scanning || !signal || !hasMarketTicksThisScan || bulkBuy.isPending} onClick={() => void placeTrade(market, digit, 6)} aria-label={`Place six separate contracts on ${market.name}, digit ${digit}`} data-testid={`button-trade-6x-${market.symbol}-${digit}`}>6×</button>
+                <button type="button" disabled={!connected || !scanning || !signal || !hasMarketTicksThisScan || bulkBuy.isPending || autoMagicEnabled} onClick={() => void placeTrade(market, digit, 3)} aria-label={`Place three separate contracts on ${market.name}, digit ${digit}`} data-testid={`button-trade-3x-${market.symbol}-${digit}`}>3×</button>
+                <button type="button" disabled={!connected || !scanning || !signal || !hasMarketTicksThisScan || bulkBuy.isPending || autoMagicEnabled} onClick={() => void placeTrade(market, digit, 6)} aria-label={`Place six separate contracts on ${market.name}, digit ${digit}`} data-testid={`button-trade-6x-${market.symbol}-${digit}`}>6×</button>
               </div>
             </div>
           ))}
@@ -667,6 +885,54 @@ function AutoTraderContent() {
                   <label htmlFor="at-duration-ticks">Duration (ticks)<div className="at-inline-input"><input id="at-duration-ticks" type="number" min="1" max="5" step="1" value={durationTicks} onChange={(event) => setDurationTicks(event.target.value)} aria-label="Duration in ticks" data-testid="input-duration-ticks" /><span>1–5</span></div><small className="at-duration-note">Tick 0 is entry; settlement is evaluated on the selected numbered tick.</small></label>
                   <label>Take profit target<div className="at-inline-input"><input type="number" min="0" step="0.01" value={takeProfit} onChange={(event) => setTakeProfit(event.target.value)} data-testid="input-take-profit" /><span>{currency}</span></div></label>
                   <label>Stop loss limit<div className="at-inline-input"><input type="number" min="0" step="0.01" value={stopLoss} onChange={(event) => setStopLoss(event.target.value)} data-testid="input-stop-loss" /><span>{currency}</span></div></label>
+                  <div className="at-auto-magic-block" data-testid="panel-auto-magic">
+                    <label className={`at-auto-magic-switch-row${autoMagicEnabled ? " enabled" : ""}`}>
+                      <input
+                        type="checkbox"
+                        role="switch"
+                        checked={autoMagicEnabled}
+                        onChange={(event) => handleAutoMagicToggle(event.target.checked)}
+                        disabled={!connected || bulkBuy.isPending}
+                        aria-label="Auto Magic"
+                        data-testid="switch-auto-magic"
+                      />
+                      <span className="at-auto-magic-switch-track" aria-hidden="true" />
+                      <strong>Auto Magic</strong>
+                      <b className="at-auto-magic-state">{autoMagicEnabled ? "ON" : "OFF"}</b>
+                    </label>
+                    <fieldset
+                      className="at-auto-magic-batch"
+                      disabled={autoMagicRunActive || autoMagicStatus === "placing" || autoMagicStatus === "settling"}
+                    >
+                      <legend>Contracts per batch</legend>
+                      <label>
+                        <input
+                          type="radio"
+                          name="auto-magic-count"
+                          value="3"
+                          checked={autoMagicCount === 3}
+                          onChange={() => setAutoMagicCount(3)}
+                          data-testid="radio-auto-magic-3x"
+                        />
+                        <span>3×</span>
+                      </label>
+                      <label>
+                        <input
+                          type="radio"
+                          name="auto-magic-count"
+                          value="6"
+                          checked={autoMagicCount === 6}
+                          onChange={() => setAutoMagicCount(6)}
+                          data-testid="radio-auto-magic-6x"
+                        />
+                        <span>6×</span>
+                      </label>
+                    </fieldset>
+                    <small className="at-auto-magic-reminder">
+                      Reminder, not a requirement: review stake, duration, take-profit and stop-loss above. Stake and duration must still be valid to place an order.
+                    </small>
+                    <p className="at-auto-magic-status" role="status" data-testid="status-auto-magic">{autoMagicStatusText}</p>
+                  </div>
                   <div className="at-deferred-note"><ShieldAlert size={14} /> Take-profit and stop-loss are reference targets only.</div>
                 </div>
               )}
@@ -780,11 +1046,16 @@ function AutoTraderContent() {
                 <button type="button" className="at-guide-button" onClick={() => { setGuidePage(0); setGuideOpen(true); }} data-testid="button-open-guide">
                   <BookOpen size={15} /> Guide
                 </button>
-                <button type="button" className="at-icon-button" onClick={() => void startScan()} disabled={!connected || scanResetPending} aria-label="Rescan markets" data-testid="button-rescan"><RefreshCw size={15} className={scanResetPending ? "at-spin" : ""} /> Rescan</button>
+                <button type="button" className="at-icon-button" onClick={() => void startScan(true)} disabled={!connected || scanResetPending || autoMagicStatus === "settling" || (autoMagicEnabled && autoMagicStatus === "review")} aria-label="Rescan markets" data-testid="button-rescan"><RefreshCw size={15} className={scanResetPending ? "at-spin" : ""} /> Rescan</button>
                 {scanning ? (
-                  <button type="button" className="at-stop-button" onClick={() => { setScanning(false); setMessage(null); }} data-testid="button-stop-scan"><Pause size={14} /> Stop</button>
+                  <button type="button" className="at-stop-button" onClick={() => {
+                    setScanning(false);
+                    setAutoMagicRunActive(false);
+                    if (autoMagicEnabled && !autoMagicAttemptedRef.current) setAutoMagicStatus("ready");
+                    setMessage(null);
+                  }} data-testid="button-stop-scan"><Pause size={14} /> Stop</button>
                 ) : (
-                  <button type="button" className="at-live-button" onClick={() => void startScan()} disabled={!connected || scanResetPending} data-testid="button-go-live"><Play size={14} /> Go Live</button>
+                  <button type="button" className="at-live-button" onClick={() => void startScan(false)} disabled={!connected || scanResetPending || autoMagicStatus === "settling" || (autoMagicEnabled && autoMagicStatus === "review")} data-testid="button-go-live"><Play size={14} /> Go Live</button>
                 )}
               </div>
             </header>

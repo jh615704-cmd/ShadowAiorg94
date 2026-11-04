@@ -1406,6 +1406,112 @@ test("Auto Trader reflects Deriv tick and settlement events without polling dela
   }
 });
 
+test("Auto Magic waits for Go Live and requires settlement plus Rescan for another batch", async () => {
+  const state = createState(userSession(["auto-trader"]));
+  state.hasToken = true;
+  state.allowFixtureTrades = true;
+  const historicalDigits = [0, ...Array(50).fill(0)];
+  state.marketSignalOverrides = {
+    R_10: {
+      sample_count: historicalDigits.length,
+      recent_digits: historicalDigits,
+      last_digit: 0,
+    },
+  };
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/auto-trader`);
+    await page.getByTestId("button-settings").click();
+    await page.getByTestId("radio-auto-magic-6x").check();
+    await page.locator(".at-auto-magic-switch-row").click();
+    assert.deepEqual(state.tradeRequests, [], "Enabling Auto Magic must not send an order before Go Live.");
+
+    await page.getByTestId("button-go-live").click();
+    await page.waitForFunction(() =>
+      window.__getDerivEventSourceUrls().some((url) => String(url).includes("market_ticks=true")),
+    );
+    const firstOrderRequest = page.waitForRequest((request) =>
+      request.url().endsWith("/api/deriv/bulk-buy") && request.method() === "POST",
+    );
+    await page.evaluate(({ digits, sequence }) => {
+      window.__dispatchDerivEvent("market-tick", {
+        symbol: "R_10",
+        tick_sequence: sequence,
+        recent_digits: digits,
+        tick_epoch: 1_700_000_001,
+      });
+    }, { digits: historicalDigits, sequence: state.statusVersion + 1 });
+    await firstOrderRequest;
+    await page.waitForFunction(() =>
+      document.querySelector('[data-testid="status-auto-magic"]')?.textContent?.includes("Waiting for every accepted contract"),
+    );
+
+    assert.equal(state.tradeRequests.length, 1, "Auto Magic should send one batch for the current scan.");
+    assert.equal(state.tradeRequests[0].path, "/api/deriv/bulk-buy");
+    assert.equal(state.tradeRequests[0].body.count, 6);
+    assert.equal(state.tradeRequests[0].body.symbol, "R_10");
+    assert.equal(state.tradeRequests[0].body.barrier, 5);
+    assert.equal(state.tradeRequests[0].body.contract_type, "DIGITDIFF");
+    assert.equal(await page.getByTestId("button-rescan").isEnabled(), false, "Rescan must wait for the accepted batch to settle.");
+
+    const unsettledDigits = [...historicalDigits.slice(1), 1];
+    await page.evaluate(({ digits, sequence }) => {
+      window.__dispatchDerivEvent("market-tick", {
+        symbol: "R_10",
+        tick_sequence: sequence,
+        recent_digits: digits,
+        tick_epoch: 1_700_000_002,
+      });
+    }, { digits: unsettledDigits, sequence: state.statusVersion + 2 });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(state.tradeRequests.length, 1, "Additional live ticks must not repeat a batch before settlement and Rescan.");
+
+    const openTrade = state.history[0];
+    const settledTrade = {
+      ...openTrade,
+      current_value: 2,
+      profit: 1,
+      status: "won",
+      sell_time: openTrade.buy_time + 1,
+    };
+    state.history = [settledTrade];
+    state.activeContractCount = 0;
+    await page.evaluate((trade) => {
+      window.__dispatchDerivEvent("trade-update", trade);
+    }, settledTrade);
+    await page.waitForFunction(() =>
+      document.querySelector('[data-testid="status-auto-magic"]')?.textContent?.includes("Batch finished"),
+    );
+    assert.equal(await page.getByTestId("button-rescan").isEnabled(), true);
+
+    await page.getByTestId("button-rescan").click();
+    await page.waitForFunction(() =>
+      document.querySelector('[data-testid="status-auto-magic"]')?.textContent?.includes("Scanning live markets"),
+    );
+    const secondOrderRequest = page.waitForRequest((request) =>
+      request.url().endsWith("/api/deriv/bulk-buy") && request.method() === "POST",
+    );
+    await page.evaluate(({ digits, sequence }) => {
+      window.__dispatchDerivEvent("market-tick", {
+        symbol: "R_10",
+        tick_sequence: sequence,
+        recent_digits: digits,
+        tick_epoch: 1_700_000_003,
+      });
+    }, { digits: historicalDigits, sequence: state.statusVersion + 1 });
+    await secondOrderRequest;
+    await page.waitForFunction(() =>
+      document.querySelector('[data-testid="status-auto-magic"]')?.textContent?.includes("Waiting for every accepted contract"),
+    );
+    assert.equal(state.tradeRequests.length, 2, "A new batch is allowed only after settlement and an explicit Rescan.");
+    assert.equal(state.tradeRequests[1].body.count, 6);
+    assert.deepEqual(state.unhandledApis, []);
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+});
+
 test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewports", async () => {
   const state = createState(userSession(["edge", "trade-x", "auto-trader", "auto-trader-2", "money-bank"]));
   state.hasToken = true;
