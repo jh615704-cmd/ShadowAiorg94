@@ -242,7 +242,7 @@ export default function ClockWorkPanel({
           </div>
           <div className="cw-ai-rate-rule" data-testid="clock-work-ai-rate-rule">
             <span>FIXED ENTRY FILTER</span>
-            <strong>&gt;{CLOCK_WORK_AI_MIN_WIN_RATE}% observed · {CLOCK_WORK_AI_MIN_SAMPLE_COUNT} complete samples</strong>
+            <strong>At least {CLOCK_WORK_AI_MIN_WIN_RATE}% observed · {CLOCK_WORK_AI_MIN_SAMPLE_COUNT} complete samples</strong>
           </div>
           <div className={`cw-ai-status ${running ? "is-running" : ""}`} role="status" aria-live="polite" data-testid="clock-ai-status">
             <i aria-hidden="true" />

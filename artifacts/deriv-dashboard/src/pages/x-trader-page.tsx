@@ -200,7 +200,7 @@ import {
   chooseJackpotBestMarket,
   getJackpotNextStake,
   getJackpotStopReason,
-  jackpotAutoSelectionMeetsRateThreshold,
+  jackpotSelectionMeetsEntryThreshold,
   resolveJackpotSelection,
   type JackpotContractType,
   type JackpotMarketSignal,
@@ -297,7 +297,7 @@ const clockWorkGuidePages = [
   { title: "Welcome to Clock Work", body: "Clock Work places Higher or Lower contracts on the selected market and account.", points: ["Use a demo account while learning.", "Only one trading feature can be active at a time.", "The selected Deriv account receives any accepted order."] },
   { title: "Connect and choose an account", body: "Connect Deriv and confirm which account is selected before enabling Clock Work. Real-account orders remain subject to the workspace's live-trading and balance checks.", points: ["A disconnected account blocks new entries.", "Open contracts must settle before Clock Work can enter again.", "Use demo mode to learn the controls."] },
   { title: "Choose a market and stake", body: "Select a supported market and set the stake for each entry.", points: ["The selected market is shown above the control.", "Auto Best is available as a market choice.", "Review your account balance before starting."] },
-  { title: "Start and stop Clock Work", body: "Ai Clock uses a fixed entry filter: the observed historical rate must be greater than 58% across at least six completed five-tick samples. Press Start Clock Work when your account and settings are ready.", points: ["Stop prevents new entries.", "Accepted contracts settle through Deriv.", "An open or unsettled contract pauses the next entry."] },
+  { title: "Start and stop Clock Work", body: "Ai Clock uses a fixed entry filter: the observed historical rate must be at least 58% across at least six completed five-tick samples. Turn on Ai Clock, then press Start Clock Work when your account and settings are ready.", points: ["Stop prevents new entries.", "Accepted contracts settle through Deriv.", "An open or unsettled contract pauses the next entry."] },
   { title: "Stop and review history", body: "Stop Clock Work to prevent new entries. An order already accepted by Deriv is not canceled by Stop and must settle through Deriv.", points: ["Clock Work History shows entries and their reported results.", "Clearing history hides local rows only; it does not delete Deriv's account history.", "Check Deriv history before restarting after an uncertain order."] },
 ] as const;
 
@@ -1369,10 +1369,9 @@ export default function XTraderPage() {
   const jackpotManualContractTypes = jackpotResolvedSelection
     ? buildJackpotContractTypes(jackpotResolvedSelection, jackpotContractCount)
     : [];
-  const jackpotAutoRateQualified = jackpotAutoSelectionMeetsRateThreshold(
+  const jackpotEntryRateQualified = jackpotSelectionMeetsEntryThreshold(
     jackpotResolvedSelection,
-    jackpotRiseFallSide,
-    jackpotEvenOddSide,
+    jackpotSelectedMarketSignal,
     jackpotRiseFallEnabled,
     jackpotEvenOddEnabled,
   );
@@ -5423,8 +5422,8 @@ export default function XTraderPage() {
     if (jackpotAutoBestMode && !jackpotBestMarket) {
       return `Auto Best is waiting for a fresh ${JACKPOT_MIN_AUTO_SAMPLES}-sample setup at or above ${JACKPOT_MIN_AUTO_OBSERVED_RATE}%.`;
     }
-    if (!jackpotResolvedSelection || !jackpotManualContractTypes.length || !jackpotAutoRateQualified) {
-      return `Auto side selection is waiting for ${JACKPOT_MIN_AUTO_SAMPLES} fresh samples and a rate of at least ${JACKPOT_MIN_AUTO_OBSERVED_RATE}%.`;
+    if (!jackpotResolvedSelection || !jackpotManualContractTypes.length || !jackpotEntryRateQualified) {
+      return `Jackpot needs ${JACKPOT_MIN_AUTO_SAMPLES} fresh samples and at least ${JACKPOT_MIN_AUTO_OBSERVED_RATE}% observed on each enabled side.`;
     }
     if (!jackpotEffectiveSymbol) return "Choose a supported market before continuing.";
     return null;
@@ -5629,6 +5628,11 @@ export default function XTraderPage() {
       setClockWorkAiStatus("Waiting for the previous Clock Work result to update session P/L.");
       return;
     }
+    if (!clockWorkAiEnabled) {
+      clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
+      setClockWorkAiStatus("Clock Work is running. Turn on Ai Clock to allow automated entries.");
+      return;
+    }
     if (clockWorkCurrentQuote == null || clockWorkTickEpoch == null) {
       clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
       setClockWorkAiStatus("Waiting for fresh market data.");
@@ -5648,7 +5652,7 @@ export default function XTraderPage() {
       const sampleCount = getClockWorkFiveTickSampleCount(clockWorkQuoteHistory);
       setClockWorkAiStatus(sampleCount < clockWorkAiMinimumSamples
         ? `Collecting Clock Work five-tick samples: ${sampleCount}/${clockWorkAiMinimumSamples}.`
-        : `No setup met the >${CLOCK_WORK_AI_MIN_WIN_RATE}% observed-rate filter in ${sampleCount} completed five-tick samples. Waiting for updated evidence.`);
+        : `No setup met the at-least-${CLOCK_WORK_AI_MIN_WIN_RATE}% observed-rate filter in ${sampleCount} completed five-tick samples. Waiting for updated evidence.`);
       return;
     }
     const confirmation = clockWorkAiConfirmationRef.current;
@@ -5713,20 +5717,33 @@ export default function XTraderPage() {
       ? signals.find((signal) => signal.symbol === bestMarket.symbol)
       : null;
     if (!bestMarket || !selectedSignal) {
-      setClockWorkAutoBestSelection(null);
-      setClockWorkAiStatus(
-        "Auto Best is waiting for an eligible market.",
-      );
+      setClockWorkAutoBestSelection((current) => current ? null : current);
+      setClockWorkAiStatus("Auto Best is waiting for an eligible market.");
       return false;
     }
 
     const selectedMarketLabel = clockWorkSymbols.find(
       (market) => market.value === bestMarket.symbol,
     )?.label ?? bestMarket.symbol;
-    setClockWorkAutoBestSelection(bestMarket);
-    clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState();
-    clockWorkAiAttemptAtRef.current = 0;
-    if (resetWindow || bestMarket.symbol !== clockWorkSymbol) {
+    const currentSelection = clockWorkAutoBestSelection;
+    const marketChanged = bestMarket.symbol !== clockWorkSymbol;
+    const setupChanged = currentSelection?.symbol !== bestMarket.symbol
+      || currentSelection.candidate.direction !== bestMarket.candidate.direction
+      || currentSelection.candidate.barrier !== bestMarket.candidate.barrier;
+    setClockWorkAutoBestSelection((current) => (
+      current?.symbol === bestMarket.symbol
+      && current.candidate.direction === bestMarket.candidate.direction
+      && current.candidate.barrier === bestMarket.candidate.barrier
+      && current.candidate.sampleCount === bestMarket.candidate.sampleCount
+      && current.candidate.observedRate === bestMarket.candidate.observedRate
+      ? current
+      : bestMarket
+    ));
+    if (resetWindow || marketChanged || setupChanged) {
+      clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState();
+      clockWorkAiAttemptAtRef.current = 0;
+    }
+    if (resetWindow || marketChanged) {
       clockWorkMarketResetEpochRef.current = Math.floor(Date.now() / 1_000);
       setClockWorkQuoteBuffer({
         symbol: bestMarket.symbol,
@@ -5738,11 +5755,15 @@ export default function XTraderPage() {
         if (!selected) setClockWorkAiStatus(`Could not switch to ${selectedMarketLabel}. No order was sent.`);
       });
     }
-    setClockWorkAiStatus(
-      `Auto Best selected ${selectedMarketLabel}. Waiting for a live quote.`,
-    );
+    const message = `Auto Best selected ${selectedMarketLabel}. Waiting for a live quote.`;
+    setClockWorkAiStatus((current) => current === message ? current : message);
     return true;
   };
+
+  useEffect(() => {
+    if (!clockWorkEnabled || !clockWorkAutoBestMode) return;
+    refreshClockWorkAutoBest(false);
+  }, [clockWorkAutoBestMode, clockWorkEnabled, status.data?.market_signals]);
 
   return (
     <main className="xt-app">

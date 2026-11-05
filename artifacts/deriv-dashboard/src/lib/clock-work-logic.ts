@@ -170,7 +170,7 @@ export function getClockWorkFiveTickSampleCount(inputQuotes: readonly number[]):
 /**
  * Choose the best historical Higher/Lower setup for a fixed five-tick expiry.
  * Evaluation uses only the newest non-overlapping expiry windows; it returns
- * no candidate until six samples exist and the observed rate is over 58%.
+ * no candidate until six samples exist and the observed rate is at least 58%.
  */
 export function chooseClockWorkAiCandidate(
   inputQuotes: readonly number[],
@@ -202,7 +202,7 @@ export function chooseClockWorkAiCandidate(
         ? expiry > start + barrierOffset
         : expiry < start - barrierOffset).length;
       const observedRate = (wins / outcomes.length) * 100;
-      if (observedRate <= CLOCK_WORK_AI_MIN_WIN_RATE) continue;
+      if (wins * 100 < CLOCK_WORK_AI_MIN_WIN_RATE * outcomes.length) continue;
 
       const signedBarrier = direction === "HIGHER" ? barrierOffset : -barrierOffset;
       const candidate: ClockWorkAiCandidate = {

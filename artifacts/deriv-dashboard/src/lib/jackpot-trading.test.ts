@@ -7,6 +7,7 @@ import {
   getJackpotNextStake,
   getJackpotStopReason,
   jackpotAutoSelectionMeetsRateThreshold,
+  jackpotSelectionMeetsEntryThreshold,
   resolveJackpotPair,
   resolveJackpotSelection,
   type JackpotMarketSignal,
@@ -101,7 +102,7 @@ test("AI market ranking requires a live sample above its observed-rate threshold
     [
       signal({ symbol: "R_25", risePercentage: 70, evenPercentage: 65 }),
       signal({ symbol: "R_50", risePercentage: 65, evenPercentage: 69 }),
-      signal({ symbol: "R_10", risePercentage: 80, evenPercentage: 90, sampleCount: 49 }),
+      signal({ symbol: "R_10", risePercentage: 80, evenPercentage: 90, sampleCount: 5 }),
     ],
     "volatility",
     "AUTO",
@@ -164,6 +165,54 @@ test("Auto side place selection needs six samples and at least 58 percent", () =
   assert.equal(jackpotAutoSelectionMeetsRateThreshold(atThreshold, "AUTO", "DIGITEVEN", true, false), true);
   assert.equal(jackpotAutoSelectionMeetsRateThreshold(belowThreshold, "AUTO", "DIGITEVEN", true, false), false);
   assert.equal(jackpotAutoSelectionMeetsRateThreshold(undersampled, "AUTO", "DIGITEVEN", true, false), false);
+});
+
+test("Jackpot manual and automatic entry sides need six fresh samples and at least 58 percent", () => {
+  const qualifyingSignal = signal({
+    risePercentage: 66.7,
+    fallPercentage: 33.3,
+    evenPercentage: 66.7,
+    oddPercentage: 33.3,
+    sampleCount: 6,
+  });
+  const qualifyingSelection = resolveJackpotSelection(
+    qualifyingSignal,
+    "CALL",
+    "DIGITEVEN",
+    true,
+    true,
+  );
+  const weakManualSelection = resolveJackpotSelection(
+    signal({ risePercentage: 50, fallPercentage: 50, sampleCount: 6 }),
+    "CALL",
+    "DIGITEVEN",
+    true,
+    false,
+  );
+  assert.equal(jackpotSelectionMeetsEntryThreshold(
+    qualifyingSelection,
+    qualifyingSignal,
+    true,
+    true,
+  ), true);
+  assert.equal(jackpotSelectionMeetsEntryThreshold(
+    weakManualSelection,
+    signal({ risePercentage: 50, fallPercentage: 50, sampleCount: 6 }),
+    true,
+    false,
+  ), false);
+  assert.equal(jackpotSelectionMeetsEntryThreshold(
+    qualifyingSelection,
+    signal({ ...qualifyingSignal, sampleCount: 5 }),
+    true,
+    true,
+  ), false);
+  assert.equal(jackpotSelectionMeetsEntryThreshold(
+    qualifyingSelection,
+    signal({ ...qualifyingSignal, tickEpoch: 1 }),
+    true,
+    true,
+  ), false);
 });
 
 test("Auto Best and Jackpot AI reject stale cached market signals", () => {
@@ -250,7 +299,7 @@ test("Jackpot AI uses six samples and an observed rate of at least 58 percent", 
 
 test("Auto Best ranks only the selected market group and sample-backed sides", () => {
   const best = chooseJackpotBestMarket([
-    signal({ symbol: "R_25", risePercentage: 72, evenPercentage: 55 }),
+    signal({ symbol: "R_25", risePercentage: 72, evenPercentage: 65 }),
     signal({ symbol: "RDBULL", group: "bull", risePercentage: 100, evenPercentage: 100 }),
     signal({ symbol: "R_50", risePercentage: 65, evenPercentage: 60, sampleCount: 10 }),
   ], "volatility", "AUTO", "AUTO");

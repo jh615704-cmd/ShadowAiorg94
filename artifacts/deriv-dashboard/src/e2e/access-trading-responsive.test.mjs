@@ -840,6 +840,7 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
       assert.equal(await control.isChecked(), true, `${screen.label} should be enabled in the mock session.`);
       const panel = page.locator(screen.selector);
       await panel.waitFor({ state: "visible" });
+        assert.doesNotMatch(await panel.innerText(), /n=0 settled/, `${screen.label} history must not display an empty settled sample.`);
       if (screen.feature === "clock-work") {
         assert.equal(await panel.locator('input[type="number"]').count(), 4, "Clock Work should have stake, loss multiplier, and two session-limit inputs.");
         assert.equal(await panel.getByTestId("button-clock-start").count(), 1);
@@ -865,11 +866,11 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
 
         const rateFilter = panel.getByTestId("clock-work-ai-rate-rule");
         assert.match(await rateFilter.innerText(), /FIXED ENTRY FILTER/);
-        assert.match(await rateFilter.innerText(), />58% observed · 6 complete samples/);
+        assert.match(await rateFilter.innerText(), /At least 58% observed · 6 complete samples/);
         assert.equal(await panel.getByTestId("select-ai-clock-rate").count(), 0, "Ai Clock should not expose a selectable historical-rate threshold.");
         await panel.locator(".cw-ai-heading .cw-toggle").click();
         assert.equal(await panel.getByTestId("switch-ai-clock").isChecked(), true);
-        assert.match(await rateFilter.innerText(), />58% observed · 6 complete samples/, "The fixed threshold remains visible when Ai Clock is enabled.");
+        assert.match(await rateFilter.innerText(), /At least 58% observed · 6 complete samples/, "The fixed threshold remains visible when Ai Clock is enabled.");
         await panel.locator(".cw-ai-heading .cw-toggle").click();
         assert.equal(await panel.getByTestId("switch-ai-clock").isChecked(), false);
         const takeProfit = panel.getByTestId("input-clock-take-profit");

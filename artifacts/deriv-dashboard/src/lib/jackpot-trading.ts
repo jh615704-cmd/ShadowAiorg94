@@ -173,6 +173,36 @@ export function jackpotAutoSelectionMeetsRateThreshold(
   return true;
 }
 
+export function jackpotSelectionMeetsEntryThreshold(
+  selection: JackpotResolvedSelection | null | undefined,
+  signal: JackpotMarketSignal | null | undefined,
+  riseFallEnabled: boolean,
+  evenOddEnabled: boolean,
+  minimumObservedRate = JACKPOT_MIN_AUTO_OBSERVED_RATE,
+) {
+  if (
+    !selection
+    || !signal
+    || signal.sampleCount < JACKPOT_MIN_AUTO_SAMPLES
+    || !hasFreshMarketSample(signal)
+    || (!riseFallEnabled && !evenOddEnabled)
+  ) return false;
+
+  const rateFor = (types: JackpotContractType[]) => {
+    const index = selection.contractTypes.findIndex((type) => types.includes(type));
+    return index < 0 ? null : selection.rates[index] ?? null;
+  };
+  if (
+    riseFallEnabled
+    && (rateFor(["CALL", "PUT"]) == null || rateFor(["CALL", "PUT"])! < minimumObservedRate)
+  ) return false;
+  if (
+    evenOddEnabled
+    && (rateFor(["DIGITEVEN", "DIGITODD"]) == null || rateFor(["DIGITEVEN", "DIGITODD"])! < minimumObservedRate)
+  ) return false;
+  return true;
+}
+
 export function buildJackpotContractTypes(
   selection: JackpotResolvedSelection,
   count: number,
@@ -211,6 +241,13 @@ export function chooseJackpotBestMarket(
       evenOddEnabled,
     );
     if (!selection) return [];
+    if (!jackpotSelectionMeetsEntryThreshold(
+      selection,
+      signal,
+      riseFallEnabled,
+      evenOddEnabled,
+      minimumObservedRate,
+    )) return [];
     return selection.contractTypes.flatMap((contractType, index) => {
       const observedRate = selection.rates[index];
       if (observedRate == null || observedRate < minimumObservedRate) return [];

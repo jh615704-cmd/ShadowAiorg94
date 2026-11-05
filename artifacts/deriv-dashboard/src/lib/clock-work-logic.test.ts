@@ -31,7 +31,7 @@ function historyForOutcomes(outcomes: readonly boolean[]) {
   return quotes;
 }
 
-test("Clock Work selects the strongest side and smallest tied barrier above 58%", () => {
+test("Clock Work selects the strongest side and smallest tied barrier at or above 58%", () => {
   const outcomes = [...Array.from({ length: 28 }, () => true), ...Array.from({ length: 12 }, () => false)];
   const candidate = chooseClockWorkAiCandidate(historyForOutcomes(outcomes));
 
@@ -44,7 +44,7 @@ test("Clock Work selects the strongest side and smallest tied barrier above 58%"
   });
 });
 
-test("Clock Work uses a fixed strict observed-rate threshold above 58%", () => {
+test("Clock Work uses a fixed inclusive observed-rate threshold of 58%", () => {
   const exactThreshold = historyForOutcomes([
     ...Array.from({ length: 29 }, () => true),
     ...Array.from({ length: 21 }, () => false),
@@ -59,7 +59,10 @@ test("Clock Work uses a fixed strict observed-rate threshold above 58%", () => {
   ]);
 
   assert.equal(CLOCK_WORK_AI_MIN_WIN_RATE, 58);
-  assert.equal(chooseClockWorkAiCandidate(exactThreshold), null, "Exactly 58% must not qualify.");
+  assert.ok(
+    Math.abs((chooseClockWorkAiCandidate(exactThreshold)?.observedRate ?? 0) - 58) < 1e-9,
+    "Exactly 58% qualifies.",
+  );
   assert.equal(chooseClockWorkAiCandidate(belowThreshold), null, "Rates below 58% must not qualify.");
   assert.equal(chooseClockWorkAiCandidate(aboveThreshold)?.observedRate, 60);
 });
@@ -71,7 +74,7 @@ test("Clock Work requires six completed outcomes and a qualifying rate", () => {
 
   assert.equal(CLOCK_WORK_AI_MIN_SAMPLE_COUNT, 6);
   assert.equal(chooseClockWorkAiCandidate(fiveOutcomes), null, "Five outcomes are not enough.");
-  assert.equal(chooseClockWorkAiCandidate(sixOutcomesAt50Percent), null, "Enough samples still need a rate above 58%.");
+  assert.equal(chooseClockWorkAiCandidate(sixOutcomesAt50Percent), null, "Enough samples still need at least 58%.");
   assert.equal(chooseClockWorkAiCandidate(sixQualifyingOutcomes)?.sampleCount, 6);
   assert.equal(chooseClockWorkAiCandidate(sixQualifyingOutcomes)?.observedRate, (4 / 6) * 100);
 });
@@ -148,8 +151,8 @@ test("Clock Work auto-best ignores stale, unsupported, undersampled, and below-t
     {
       symbol: "R_25",
       recent_quotes: historyForOutcomes([
-        ...Array.from({ length: 29 }, () => true),
-        ...Array.from({ length: 21 }, () => false),
+        ...Array.from({ length: 28 }, () => true),
+        ...Array.from({ length: 22 }, () => false),
       ]),
       tick_epoch: 1_000,
     },
