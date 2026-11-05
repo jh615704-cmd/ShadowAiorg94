@@ -46,7 +46,7 @@
 - [Global announcement broadcast](global-announcement-broadcast.md) — every access-key session, including the primary admin, receives each new broadcast revision.
 - [Workspace idle lock](workspace-idle-lock.md) — lock the entire trading workspace after two hours away; keep access revocation's short exit countdown separate.
 - [Vite preview cache isolation](vite-preview-cache-isolation.md) — keep isolated E2E Vite caches separate from the live dashboard server to prevent stale-chunk 504s.
-- [Clock Work evidence and risk](clock-work-evidence-risk.md) — require six completed five-tick samples and at least 58% observed; preserve confirmations and loss limits.
+- [Clock Work evidence and risk](clock-work-evidence-risk.md) — require six completed five-tick samples and at least 58%; history clearing must not disrupt run settlement tracking.
 - [Jackpot entry evidence](jackpot-entry-evidence.md) — every placed side needs six fresh samples and at least 58% observed; do not imply guaranteed outcomes.
 - [Non-Auto-Trader entry thresholds](non-auto-trader-entry-thresholds.md) — keep the 50% floor scoped to its features; Jackpot and Clock Work have separate 58% rules.
 - [Auto Magic entry policy](auto-magic-entry-policy.md) — one top-ranked market, >68% on 50+ expiry samples, untouched opposite-half digit; one batch per manual scan.

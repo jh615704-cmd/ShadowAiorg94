@@ -1170,7 +1170,9 @@ export default function XTraderPage() {
     ? clockWorkRunAccountIdRef.current
     : null;
   const clockWorkRunSummary = getClockWorkRunSummary(
-    clockWorkSessionRows,
+    // Clearing the visible feature history removes its claims, but session
+    // accounting must continue to use Deriv's authoritative account history.
+    clockWorkAllRows,
     clockWorkRunAccountId,
     clockWorkRunContractIdsRef.current,
   );

@@ -961,6 +961,79 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
   }
 });
 
+test("clearing settled Clock Work history keeps Ai Clock and Start usable", async () => {
+  const state = createState(userSession(["clock-work"]));
+  state.hasToken = true;
+  state.allowFixtureTrades = true;
+  state.statusTickEpochBase = Math.floor(Date.now() / 1_000) + 1;
+  state.marketSignalOverrides = {
+    R_75: {
+      recent_quotes: clockWorkQuotesForOutcomes(Array(6).fill(true)),
+    },
+  };
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/app`);
+    await page.getByRole("heading", { name: "Trading Strategies" }).waitFor();
+    await page.getByRole("checkbox", { name: "Toggle Clock Work" }).check();
+
+    const panel = page.getByTestId("clock-work-panel");
+    const aiSwitch = panel.getByTestId("switch-ai-clock");
+    await panel.locator(".cw-ai-heading .cw-toggle").click();
+    assert.equal(await aiSwitch.isChecked(), true);
+    await panel.getByTestId("button-clock-start").click();
+    try {
+      await panel.getByTestId("clock-ai-status")
+        .getByText(/Order submitted\. Waiting for settlement before checking again\./)
+        .waitFor({ timeout: 15_000 });
+    } catch (error) {
+      console.error("Clock Work clear-history test diagnostics", {
+        status: await panel.getByTestId("clock-ai-status").innerText(),
+        tradeRequests: state.tradeRequests,
+        marketSignals: state.marketSignalOverrides,
+        recentApiCalls: state.apiCalls.slice(-30),
+        pageErrors,
+      });
+      throw error;
+    }
+    assert.equal(state.tradeRequests.length, 1, "The fixture should accept one Clock Work entry.");
+
+    await panel.locator(".cw-ai-heading .cw-toggle").click();
+    assert.equal(await aiSwitch.isChecked(), false);
+    assert.equal(await panel.getByTestId("button-clock-start").isDisabled(), true, "The open contract must still block a new run.");
+
+    const settledTrade = state.history[0];
+    assert.ok(settledTrade, "The accepted fixture order should appear in Deriv history.");
+    Object.assign(settledTrade, {
+      current_value: settledTrade.payout,
+      profit: settledTrade.buy_price,
+      status: "won",
+      sell_time: Math.floor(Date.now() / 1_000),
+    });
+    state.activeContractCount = 0;
+    await page.waitForFunction(() => {
+      const button = document.querySelector('[data-testid="button-clock-start"]');
+      return button instanceof HTMLButtonElement && !button.disabled;
+    }, undefined, { timeout: 15_000 });
+
+    await page.getByRole("button", { name: "Clear Clock Work History session" }).click();
+    await page.getByRole("button", { name: "Tap again to clear Clock Work History session" }).click();
+    await page.waitForFunction(() => {
+      const button = document.querySelector('[data-testid="button-clock-start"]');
+      return button instanceof HTMLButtonElement && !button.disabled;
+    }, undefined, { timeout: 10_000 });
+
+    assert.equal(await aiSwitch.isDisabled(), false, "Ai Clock should be usable after the settled row is hidden.");
+    assert.equal(await panel.locator(".digit-flip-history .deriv-history-row").count(), 0);
+    assert.equal(state.history.length, 1, "Clearing local history must preserve Deriv's authoritative record.");
+    assert.equal(state.tradeRequests.length, 1, "Clearing history must not submit another trade.");
+    assert.deepEqual(pageErrors, []);
+    assert.deepEqual(state.unhandledApis, []);
+  } finally {
+    await context.close();
+  }
+});
+
 test("retired Matches Analysis is not shown or available to trade", async () => {
   const state = createState(userSession(["matches-analysis"]));
   state.hasToken = true;
@@ -2139,6 +2212,7 @@ function createState(session) {
     heldHistoryResponses: [],
     createdKeyBody: null,
     statusVersion: 0,
+    statusTickEpochBase: null,
     activeContractCount: 0,
     marketSignalOverrides: {},
     featureSettings: {
@@ -2344,7 +2418,13 @@ async function mockApiRequest(route, state, pathname, method) {
   }
   if (pathname === "/api/deriv/status" && method === "GET") {
     state.statusVersion += 1;
-    await fulfillJson(route, makeDerivStatus(state.statusVersion, state.activeContractCount, state.marketSignalOverrides, state.selectedSymbol));
+    await fulfillJson(route, makeDerivStatus(
+      state.statusVersion,
+      state.activeContractCount,
+      state.marketSignalOverrides,
+      state.selectedSymbol,
+      state.statusTickEpochBase ?? undefined,
+    ));
     return;
   }
   if (pathname === "/api/deriv/history" && method === "GET") {
@@ -2373,6 +2453,38 @@ async function mockApiRequest(route, state, pathname, method) {
         longcode: "Fixture quote",
       })),
     });
+    return;
+  }
+  if (pathname === "/api/deriv/clock-work/buy" && method === "POST" && state.allowFixtureTrades) {
+    const { contracts } = request.postDataJSON();
+    state.tradeRequests.push({ path: pathname, method, body: { contracts } });
+    const completed = contracts.map((contract) => {
+      const buy = fixtureBuy(state, contract);
+      return {
+        ...contract,
+        proposal: {
+          id: "fixture-clock-work-proposal",
+          ask_price: contract.amount,
+          payout: contract.amount * 2,
+          spot: 100_000,
+          longcode: "Fixture Clock Work quote",
+        },
+        buy: {
+          contract_id: buy.contract_id,
+          buy_price: contract.amount,
+          payout: contract.amount * 2,
+          start_time: buy.buy_time,
+        },
+      };
+    });
+    await fulfillJson(route, {
+      ok: true,
+      message: "Fixture Clock Work buy confirmed.",
+      requested_count: contracts.length,
+      completed_count: completed.length,
+      contracts: completed,
+      failed: [],
+    }, 202);
     return;
   }
   if (pathname === "/api/deriv/accumulator-knockout-scan" && method === "POST") {
@@ -2510,7 +2622,13 @@ async function mockApiRequest(route, state, pathname, method) {
   await fulfillJson(route, { error: "Unhandled fixture API request." }, 501);
 }
 
-function makeDerivStatus(version, activeContractCount = 0, marketSignalOverrides = {}, selectedSymbol = "R_75") {
+function makeDerivStatus(
+  version,
+  activeContractCount = 0,
+  marketSignalOverrides = {},
+  selectedSymbol = "R_75",
+  lastTickEpochBase = 1_700_000_000,
+) {
   const signals = symbols.map((symbol, index) => {
     const digit = (version + index) % 10;
     return {
@@ -2543,7 +2661,7 @@ function makeDerivStatus(version, activeContractCount = 0, marketSignalOverrides
     active_contract_count: activeContractCount,
     last_digit: version % 10,
     open_contracts_ready: true,
-    last_tick: { symbol: selectedSymbol, quote: 100_000 + version, epoch: 1_700_000_000 + version },
+    last_tick: { symbol: selectedSymbol, quote: 100_000 + version, epoch: lastTickEpochBase + version },
     market_signals: signals,
   };
 }

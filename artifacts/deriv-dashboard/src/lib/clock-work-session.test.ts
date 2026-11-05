@@ -31,6 +31,23 @@ test("Clock Work considers a run reconciled only after every acknowledged contra
   assert.equal(summary.hasUnsettled, false);
 });
 
+test("clearing visible Clock Work history does not hide a settled run result from accounting", () => {
+  const authoritativeHistory = [
+    row("cleared-run-trade", "account-1", "won", 1.5),
+  ];
+  const visibleFeatureHistory: typeof authoritativeHistory = [];
+  const summary = getClockWorkRunSummary(
+    authoritativeHistory,
+    "account-1",
+    new Set(["cleared-run-trade"]),
+  );
+
+  assert.deepEqual(visibleFeatureHistory, [], "The clear action may hide the settled history row.");
+  assert.deepEqual(summary.rows.map((trade) => trade.contract_id), ["cleared-run-trade"]);
+  assert.equal(summary.pnl, 1.5);
+  assert.equal(summary.hasUnsettled, false, "A hidden settled row must not block Clock Work controls.");
+});
+
 test("Clock Work run P&L is unavailable when a settled profit is invalid", () => {
   const summary = getClockWorkRunSummary([
     row("bad-run-trade", "account-1", "closed", Number.NaN),
