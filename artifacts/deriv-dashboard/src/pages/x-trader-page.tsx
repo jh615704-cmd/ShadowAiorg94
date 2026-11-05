@@ -194,11 +194,13 @@ import {
 } from "../lib/trade-entry-guards";
 import {
   JACKPOT_MIN_AUTO_OBSERVED_RATE,
+  JACKPOT_MIN_AUTO_SAMPLES,
   buildJackpotContractTypes,
   chooseJackpotBestBatch,
   chooseJackpotBestMarket,
   getJackpotNextStake,
   getJackpotStopReason,
+  jackpotAutoSelectionMeetsRateThreshold,
   resolveJackpotSelection,
   type JackpotContractType,
   type JackpotMarketSignal,
@@ -1367,6 +1369,13 @@ export default function XTraderPage() {
   const jackpotManualContractTypes = jackpotResolvedSelection
     ? buildJackpotContractTypes(jackpotResolvedSelection, jackpotContractCount)
     : [];
+  const jackpotAutoRateQualified = jackpotAutoSelectionMeetsRateThreshold(
+    jackpotResolvedSelection,
+    jackpotRiseFallSide,
+    jackpotEvenOddSide,
+    jackpotRiseFallEnabled,
+    jackpotEvenOddEnabled,
+  );
   const cashGrabMarketSignals = useMemo<CashGrabMarketSignal[]>(
     () => (status.data?.market_signals ?? []).map((signal) => ({
       symbol: signal.symbol,
@@ -5412,10 +5421,10 @@ export default function XTraderPage() {
     const blocked = getJackpotBatchBlockReason(jackpotContractCount);
     if (blocked) return blocked;
     if (jackpotAutoBestMode && !jackpotBestMarket) {
-      return `Auto Best is waiting for a fresh market setup above ${JACKPOT_MIN_AUTO_OBSERVED_RATE}%.`;
+      return `Auto Best is waiting for a fresh ${JACKPOT_MIN_AUTO_SAMPLES}-sample setup at or above ${JACKPOT_MIN_AUTO_OBSERVED_RATE}%.`;
     }
-    if (!jackpotResolvedSelection || !jackpotManualContractTypes.length) {
-      return `Auto side selection is waiting for fresh qualifying market evidence. Jackpot AI also requires a rate above ${JACKPOT_MIN_AUTO_OBSERVED_RATE}%.`;
+    if (!jackpotResolvedSelection || !jackpotManualContractTypes.length || !jackpotAutoRateQualified) {
+      return `Auto side selection is waiting for ${JACKPOT_MIN_AUTO_SAMPLES} fresh samples and a rate of at least ${JACKPOT_MIN_AUTO_OBSERVED_RATE}%.`;
     }
     if (!jackpotEffectiveSymbol) return "Choose a supported market before continuing.";
     return null;
@@ -5514,7 +5523,9 @@ export default function XTraderPage() {
           jackpotAutoBestMode ? null : jackpotSymbol,
         );
         if (!candidate) {
-          scheduleNextScan("No fresh setup met Jackpot's evidence filter. Checking again.");
+          scheduleNextScan(
+            `No fresh ${JACKPOT_MIN_AUTO_SAMPLES}-sample setup met the at-least-${JACKPOT_MIN_AUTO_OBSERVED_RATE}% filter. Checking again.`,
+          );
           return;
         }
         const blocked = jackpotBatchBlockReasonRef.current(jackpotContractCount);

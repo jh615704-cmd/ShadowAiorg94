@@ -471,11 +471,28 @@ test("DigitFlip history stays visible after switching the feature off", async ()
   }
 });
 
+function seedJackpotMarketHistory(state, overrides = {}) {
+  state.statusVersion = 6;
+  state.marketSignalOverrides = {
+    ...(state.marketSignalOverrides ?? {}),
+    R_75: {
+      tick_sequence: 6,
+      tick_epoch: Math.floor(Date.now() / 1000),
+      sample_count: 6,
+      rise_percentage: 66.7,
+      fall_percentage: 33.3,
+      digit_even_percentage: 66.7,
+      digit_odd_percentage: 33.3,
+      ...overrides,
+    },
+  };
+}
+
 test("Jackpot supports one-sided bulk batches, labels its run history, and excludes other features", async () => {
   const state = createState(userSession(["jackpot", "clock-work"]));
   state.hasToken = true;
   state.allowFixtureTrades = true;
-  state.statusVersion = 50;
+  seedJackpotMarketHistory(state);
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {
     await page.goto(`${baseUrl}/app`);
@@ -537,7 +554,7 @@ test("Jackpot supports one-sided bulk batches, labels its run history, and exclu
 test("Jackpot keeps an uncertain batch blocked until order status is refreshed", async () => {
   const state = createState(userSession(["jackpot"]));
   state.hasToken = true;
-  state.statusVersion = 50;
+  seedJackpotMarketHistory(state);
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {
     await page.goto(`${baseUrl}/app`);
@@ -576,7 +593,7 @@ test("Jackpot manual count sends exactly four Rise/Fall contracts in one batch",
   const state = createState(userSession(["jackpot"]));
   state.hasToken = true;
   state.allowFixtureTrades = true;
-  state.statusVersion = 50;
+  seedJackpotMarketHistory(state);
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {
     await page.goto(`${baseUrl}/app`);
@@ -606,7 +623,7 @@ test("clearing Jackpot session resets settled loss-limit P/L without deleting De
   const state = createState(userSession(["jackpot"]));
   state.hasToken = true;
   state.allowFixtureTrades = true;
-  state.statusVersion = 50;
+  seedJackpotMarketHistory(state);
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {
     await page.goto(`${baseUrl}/app`);
@@ -653,7 +670,7 @@ test("Jackpot place button re-enables after Deriv confirms settlement", async ()
   const state = createState(userSession(["jackpot"]));
   state.hasToken = true;
   state.allowFixtureTrades = true;
-  state.statusVersion = 50;
+  seedJackpotMarketHistory(state);
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {
     await page.goto(`${baseUrl}/app`);
@@ -741,24 +758,21 @@ test("Jackpot AI reuses fresh market history, sends one batch, and switches off"
   const state = createState(userSession(["jackpot"]));
   state.hasToken = true;
   state.allowFixtureTrades = true;
-  state.statusVersion = 50;
-  state.marketSignalOverrides = {
-    R_75: {
-      tick_sequence: 50,
-      tick_epoch: Math.floor(Date.now() / 1000),
-      sample_count: 50,
-      rise_percentage: 75,
-      fall_percentage: 25,
-      digit_even_percentage: 57,
-      digit_odd_percentage: 43,
-    },
-  };
+  seedJackpotMarketHistory(state, {
+    rise_percentage: 66.7,
+    fall_percentage: 33.3,
+  });
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {
     await page.goto(`${baseUrl}/app`);
     await page.getByRole("heading", { name: "Trading Strategies" }).waitFor();
     await page.getByRole("checkbox", { name: "Toggle Jackpot" }).check();
     const panel = page.getByTestId("jackpot-panel");
+    const autoMarketSwitch = panel.getByTestId("switch-jackpot-auto-best");
+    await autoMarketSwitch.check();
+    assert.equal(await autoMarketSwitch.isChecked(), true);
+    assert.equal(await panel.getByTestId("select-jackpot-symbol").isDisabled(), true);
+    assert.equal(await panel.getByTestId("button-jackpot-place-batch").isDisabled(), false);
     await panel.locator("label.jackpot-ai-switch").click();
     assert.equal(await panel.getByTestId("switch-jackpot-ai").isChecked(), true);
     await panel.locator(".deriv-history-row").first().waitFor({ timeout: 3_000 });

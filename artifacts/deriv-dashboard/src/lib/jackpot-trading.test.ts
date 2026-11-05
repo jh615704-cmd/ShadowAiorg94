@@ -6,6 +6,7 @@ import {
   chooseJackpotBestMarket,
   getJackpotNextStake,
   getJackpotStopReason,
+  jackpotAutoSelectionMeetsRateThreshold,
   resolveJackpotPair,
   resolveJackpotSelection,
   type JackpotMarketSignal,
@@ -34,7 +35,7 @@ test("resolves each AUTO side independently using sampled rates", () => {
 });
 
 test("does not choose AUTO sides without the minimum sample count", () => {
-  assert.equal(resolveJackpotPair(signal({ sampleCount: 49 }), "AUTO", "AUTO"), null);
+  assert.equal(resolveJackpotPair(signal({ sampleCount: 5 }), "AUTO", "AUTO"), null);
 });
 
 test("AUTO selection rejects stale history while manual sides remain selectable", () => {
@@ -114,14 +115,55 @@ test("AI market ranking requires a live sample above its observed-rate threshold
   assert.equal(selected?.observedRate, 70);
 });
 
-test("Auto Best rejects exactly 68 percent even with enough samples", () => {
+test("Auto Best accepts 58 percent and rejects rates below the threshold", () => {
   const selected = chooseJackpotBestMarket(
-    [signal({ risePercentage: 68, fallPercentage: 32 })],
+    [signal({ risePercentage: 58, fallPercentage: 42, sampleCount: 6 })],
     "volatility",
     "AUTO",
     "AUTO",
+    true,
+    false,
   );
-  assert.equal(selected, null);
+  assert.equal(selected?.observedRate, 58);
+  assert.equal(
+    chooseJackpotBestMarket(
+      [signal({ risePercentage: 57.9, fallPercentage: 42.1, sampleCount: 6 })],
+      "volatility",
+      "AUTO",
+      "AUTO",
+      true,
+      false,
+    ),
+    null,
+  );
+});
+
+test("Auto side place selection needs six samples and at least 58 percent", () => {
+  const atThreshold = resolveJackpotSelection(
+    signal({ risePercentage: 58, fallPercentage: 42, sampleCount: 6 }),
+    "AUTO",
+    "DIGITEVEN",
+    true,
+    false,
+  );
+  const belowThreshold = resolveJackpotSelection(
+    signal({ risePercentage: 57.9, fallPercentage: 42.1, sampleCount: 6 }),
+    "AUTO",
+    "DIGITEVEN",
+    true,
+    false,
+  );
+  const undersampled = resolveJackpotSelection(
+    signal({ risePercentage: 100, fallPercentage: 0, sampleCount: 5 }),
+    "AUTO",
+    "DIGITEVEN",
+    true,
+    false,
+  );
+
+  assert.equal(jackpotAutoSelectionMeetsRateThreshold(atThreshold, "AUTO", "DIGITEVEN", true, false), true);
+  assert.equal(jackpotAutoSelectionMeetsRateThreshold(belowThreshold, "AUTO", "DIGITEVEN", true, false), false);
+  assert.equal(jackpotAutoSelectionMeetsRateThreshold(undersampled, "AUTO", "DIGITEVEN", true, false), false);
 });
 
 test("Auto Best and Jackpot AI reject stale cached market signals", () => {
@@ -156,7 +198,7 @@ test("AI bulk selection splits the total across qualifying enabled families only
   assert.equal(selected?.observedRate, 73.5);
 
   const oneSideQualifies = chooseJackpotBestBatch(
-    [signal({ risePercentage: 70, evenPercentage: 68 })],
+    [signal({ risePercentage: 70, evenPercentage: 57.9 })],
     "volatility",
     "AUTO",
     "AUTO",
@@ -168,9 +210,9 @@ test("AI bulk selection splits the total across qualifying enabled families only
   assert.deepEqual(oneSideQualifies?.contractTypes, ["CALL", "CALL", "CALL"]);
 });
 
-test("Jackpot AI requires 50 samples and an observed rate strictly above 68 percent", () => {
+test("Jackpot AI uses six samples and an observed rate of at least 58 percent", () => {
   const exactlyAtThreshold = chooseJackpotBestBatch(
-    [signal({ risePercentage: 68, fallPercentage: 32, sampleCount: 50 })],
+    [signal({ risePercentage: 58, fallPercentage: 42, sampleCount: 6 })],
     "volatility",
     "AUTO",
     "AUTO",
@@ -179,10 +221,10 @@ test("Jackpot AI requires 50 samples and an observed rate strictly above 68 perc
     1,
     "R_75",
   );
-  assert.equal(exactlyAtThreshold, null);
+  assert.equal(exactlyAtThreshold?.observedRate, 58);
 
-  const aboveThreshold = chooseJackpotBestBatch(
-    [signal({ risePercentage: 68.1, fallPercentage: 31.9, sampleCount: 50 })],
+  const belowThreshold = chooseJackpotBestBatch(
+    [signal({ risePercentage: 57.9, fallPercentage: 42.1, sampleCount: 6 })],
     "volatility",
     "AUTO",
     "AUTO",
@@ -191,10 +233,10 @@ test("Jackpot AI requires 50 samples and an observed rate strictly above 68 perc
     1,
     "R_75",
   );
-  assert.equal(aboveThreshold?.observedRate, 68.1);
+  assert.equal(belowThreshold, null);
 
   const undersampled = chooseJackpotBestBatch(
-    [signal({ risePercentage: 90, fallPercentage: 10, sampleCount: 49 })],
+    [signal({ risePercentage: 90, fallPercentage: 10, sampleCount: 5 })],
     "volatility",
     "AUTO",
     "AUTO",

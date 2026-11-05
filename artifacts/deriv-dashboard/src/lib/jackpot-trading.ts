@@ -46,8 +46,8 @@ export interface JackpotBestBatch {
   score: number;
 }
 
-export const JACKPOT_MIN_AUTO_SAMPLES = 50;
-export const JACKPOT_MIN_AUTO_OBSERVED_RATE = 68;
+export const JACKPOT_MIN_AUTO_SAMPLES = 6;
+export const JACKPOT_MIN_AUTO_OBSERVED_RATE = 58;
 export const JACKPOT_MAX_SIGNAL_AGE_SECONDS = 30;
 
 function hasFreshMarketSample(
@@ -146,6 +146,33 @@ export function resolveJackpotSelection(
   return { contractTypes, rates };
 }
 
+export function jackpotAutoSelectionMeetsRateThreshold(
+  selection: JackpotResolvedSelection | null | undefined,
+  riseFallSide: JackpotRiseFallSide,
+  evenOddSide: JackpotEvenOddSide,
+  riseFallEnabled: boolean,
+  evenOddEnabled: boolean,
+  minimumObservedRate = JACKPOT_MIN_AUTO_OBSERVED_RATE,
+) {
+  if (!selection) return false;
+  const getRate = (types: JackpotContractType[]) => {
+    const index = selection.contractTypes.findIndex((type) => types.includes(type));
+    return index < 0 ? null : selection.rates[index] ?? null;
+  };
+
+  if (
+    riseFallEnabled
+    && riseFallSide === "AUTO"
+    && (getRate(["CALL", "PUT"]) ?? -1) < minimumObservedRate
+  ) return false;
+  if (
+    evenOddEnabled
+    && evenOddSide === "AUTO"
+    && (getRate(["DIGITEVEN", "DIGITODD"]) ?? -1) < minimumObservedRate
+  ) return false;
+  return true;
+}
+
 export function buildJackpotContractTypes(
   selection: JackpotResolvedSelection,
   count: number,
@@ -186,7 +213,7 @@ export function chooseJackpotBestMarket(
     if (!selection) return [];
     return selection.contractTypes.flatMap((contractType, index) => {
       const observedRate = selection.rates[index];
-      if (observedRate == null || observedRate <= minimumObservedRate) return [];
+      if (observedRate == null || observedRate < minimumObservedRate) return [];
       return [{
         symbol: signal.symbol,
         sampleCount: signal.sampleCount,
@@ -235,7 +262,7 @@ export function chooseJackpotBestBatch(
     const qualifying = selection.contractTypes
       .map((contractType, index) => ({ contractType, rate: selection.rates[index] }))
       .filter((side): side is { contractType: JackpotContractType; rate: number } =>
-        side.rate != null && side.rate > minimumObservedRate);
+        side.rate != null && side.rate >= minimumObservedRate);
     if (!qualifying.length) return [];
     const qualifyingSelection: JackpotResolvedSelection = {
       contractTypes: qualifying.map((side) => side.contractType),
