@@ -15,6 +15,7 @@ const signal = (values: Partial<JackpotMarketSignal> = {}): JackpotMarketSignal 
   symbol: "R_75",
   group: "volatility",
   tickSequence: 10,
+  tickEpoch: Math.floor(Date.now() / 1000),
   risePercentage: 60,
   fallPercentage: 40,
   evenPercentage: 55,
@@ -34,6 +35,18 @@ test("resolves each AUTO side independently using sampled rates", () => {
 
 test("does not choose AUTO sides without the minimum sample count", () => {
   assert.equal(resolveJackpotPair(signal({ sampleCount: 49 }), "AUTO", "AUTO"), null);
+});
+
+test("AUTO selection rejects stale history while manual sides remain selectable", () => {
+  const stale = signal({ tickEpoch: 1 });
+
+  assert.equal(resolveJackpotPair(stale, "AUTO", "AUTO"), null);
+  assert.deepEqual(resolveJackpotPair(stale, "CALL", "DIGITEVEN"), {
+    riseFallType: "CALL",
+    evenOddType: "DIGITEVEN",
+    riseFallRate: 60,
+    evenOddRate: 55,
+  });
 });
 
 test("manual side choices remain available before a sample is collected", () => {
@@ -109,6 +122,23 @@ test("Auto Best rejects exactly 68 percent even with enough samples", () => {
     "AUTO",
   );
   assert.equal(selected, null);
+});
+
+test("Auto Best and Jackpot AI reject stale cached market signals", () => {
+  const stale = signal({
+    tickEpoch: 1,
+    risePercentage: 80,
+    evenPercentage: 80,
+  });
+
+  assert.equal(
+    chooseJackpotBestMarket([stale], "volatility", "AUTO", "AUTO"),
+    null,
+  );
+  assert.equal(
+    chooseJackpotBestBatch([stale], "volatility", "CALL", "DIGITEVEN", true, true, 2),
+    null,
+  );
 });
 
 test("AI bulk selection splits the total across qualifying enabled families only", () => {

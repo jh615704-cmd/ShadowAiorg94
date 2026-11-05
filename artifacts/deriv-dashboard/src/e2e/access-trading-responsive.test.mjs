@@ -475,6 +475,7 @@ test("Jackpot supports one-sided bulk batches, labels its run history, and exclu
   const state = createState(userSession(["jackpot", "clock-work"]));
   state.hasToken = true;
   state.allowFixtureTrades = true;
+  state.statusVersion = 50;
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {
     await page.goto(`${baseUrl}/app`);
@@ -536,6 +537,7 @@ test("Jackpot supports one-sided bulk batches, labels its run history, and exclu
 test("Jackpot keeps an uncertain batch blocked until order status is refreshed", async () => {
   const state = createState(userSession(["jackpot"]));
   state.hasToken = true;
+  state.statusVersion = 50;
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {
     await page.goto(`${baseUrl}/app`);
@@ -604,6 +606,7 @@ test("clearing Jackpot session resets settled loss-limit P/L without deleting De
   const state = createState(userSession(["jackpot"]));
   state.hasToken = true;
   state.allowFixtureTrades = true;
+  state.statusVersion = 50;
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {
     await page.goto(`${baseUrl}/app`);
@@ -650,6 +653,7 @@ test("Jackpot place button re-enables after Deriv confirms settlement", async ()
   const state = createState(userSession(["jackpot"]));
   state.hasToken = true;
   state.allowFixtureTrades = true;
+  state.statusVersion = 50;
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {
     await page.goto(`${baseUrl}/app`);
@@ -733,15 +737,18 @@ test("Jackpot place button re-enables after Deriv confirms settlement", async ()
   }
 });
 
-test("Jackpot AI scans for five seconds, sends one batch, and switches off", async () => {
+test("Jackpot AI reuses fresh market history, sends one batch, and switches off", async () => {
   const state = createState(userSession(["jackpot"]));
   state.hasToken = true;
   state.allowFixtureTrades = true;
   state.statusVersion = 50;
   state.marketSignalOverrides = {
     R_75: {
-      rise_percentage: 62,
-      fall_percentage: 38,
+      tick_sequence: 50,
+      tick_epoch: Math.floor(Date.now() / 1000),
+      sample_count: 50,
+      rise_percentage: 75,
+      fall_percentage: 25,
       digit_even_percentage: 57,
       digit_odd_percentage: 43,
     },
@@ -754,7 +761,7 @@ test("Jackpot AI scans for five seconds, sends one batch, and switches off", asy
     const panel = page.getByTestId("jackpot-panel");
     await panel.locator("label.jackpot-ai-switch").click();
     assert.equal(await panel.getByTestId("switch-jackpot-ai").isChecked(), true);
-    await panel.locator(".deriv-history-row").first().waitFor({ timeout: 15_000 });
+    await panel.locator(".deriv-history-row").first().waitFor({ timeout: 3_000 });
     assert.equal(state.tradeRequests.length, 1);
     assert.equal(state.tradeRequests[0].path, "/api/deriv/jackpot/buy");
     assert.deepEqual(state.tradeRequests[0].body.contract_types, ["CALL"]);
@@ -2498,7 +2505,7 @@ function makeDerivStatus(version, activeContractCount = 0, marketSignalOverrides
       tick_sequence: version,
       recent_digits: [digit],
       recent_quotes: [],
-      tick_epoch: 0,
+      tick_epoch: Math.floor(Date.now() / 1000),
       sample_count: version,
       digit_even_percentage: 50,
       digit_odd_percentage: 50,

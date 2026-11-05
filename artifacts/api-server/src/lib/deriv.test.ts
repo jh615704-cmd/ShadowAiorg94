@@ -612,6 +612,28 @@ describe("Deriv market subscriptions", { concurrency: false }, () => {
     });
   });
 
+  test("retains public market samples when switching Deriv accounts", async () => {
+    const userId = "market-history-account-switch-user";
+    await inUser(userId, async () => {
+      await deriv.selectAccount("DOT123");
+      const epoch = Math.floor(Date.now() / 1000);
+      emitMessage(latestSocket(), {
+        msg_type: "tick",
+        tick: { symbol: "R_75", quote: 1234.56, epoch, pip_size: 2 },
+      });
+
+      const before = deriv.getStatus().market_signals.find((signal: { symbol: string }) => signal.symbol === "R_75");
+      assert.equal(before?.sample_count, 1);
+
+      const switched = await deriv.selectAccount("CR123");
+      const after = switched.market_signals.find((signal: { symbol: string }) => signal.symbol === "R_75");
+      assert.equal(switched.account?.id, "CR123");
+      assert.equal(after?.sample_count, 1);
+      assert.equal(after?.tick_sequence, 1);
+      assert.equal(after?.tick_epoch, epoch);
+    });
+  });
+
   test("publishes real market ticks to Auto Trader listeners and supports a reconnect snapshot", async () => {
     await withSelectedAccount("auto-trader-market-feed-user", async () => {
       const updates: Array<{

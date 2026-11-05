@@ -2280,7 +2280,8 @@ export async function selectAccount(accountId: string) {
   getState().digitEvenCount = 0;
   getState().digitOddCount = 0;
   getState().digitHistory = [];
-  getState().marketHistory.clear();
+  // Market quotes are public and account-independent; keep their rolling
+  // samples so automated features can reuse recent evidence after switching.
   await connect();
   return getStatus();
 }

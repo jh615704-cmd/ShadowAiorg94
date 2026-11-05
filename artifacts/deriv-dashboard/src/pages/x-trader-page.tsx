@@ -194,7 +194,6 @@ import {
 } from "../lib/trade-entry-guards";
 import {
   JACKPOT_MIN_AUTO_OBSERVED_RATE,
-  JACKPOT_MIN_AUTO_SAMPLES,
   buildJackpotContractTypes,
   chooseJackpotBestBatch,
   chooseJackpotBestMarket,
@@ -1317,6 +1316,7 @@ export default function XTraderPage() {
         symbol: market.value,
         group: market.group,
         tickSequence: signal?.tick_sequence ?? 0,
+        tickEpoch: signal?.tick_epoch ?? 0,
         risePercentage: signal?.rise_percentage ?? null,
         fallPercentage: signal?.fall_percentage ?? null,
         evenPercentage: signal?.digit_even_percentage ?? null,
@@ -5412,10 +5412,10 @@ export default function XTraderPage() {
     const blocked = getJackpotBatchBlockReason(jackpotContractCount);
     if (blocked) return blocked;
     if (jackpotAutoBestMode && !jackpotBestMarket) {
-      return `Auto Best is waiting for at least ${JACKPOT_MIN_AUTO_SAMPLES} samples and a recent observed rate above ${JACKPOT_MIN_AUTO_OBSERVED_RATE}%.`;
+      return `Auto Best is waiting for a fresh market setup above ${JACKPOT_MIN_AUTO_OBSERVED_RATE}%.`;
     }
     if (!jackpotResolvedSelection || !jackpotManualContractTypes.length) {
-      return `Auto side selection needs at least ${JACKPOT_MIN_AUTO_SAMPLES} observed samples. Jackpot AI also requires a rate above ${JACKPOT_MIN_AUTO_OBSERVED_RATE}%.`;
+      return `Auto side selection is waiting for fresh qualifying market evidence. Jackpot AI also requires a rate above ${JACKPOT_MIN_AUTO_OBSERVED_RATE}%.`;
     }
     if (!jackpotEffectiveSymbol) return "Choose a supported market before continuing.";
     return null;
@@ -5464,7 +5464,6 @@ export default function XTraderPage() {
 
     let cancelled = false;
     let scanTimer: number | undefined;
-    let delayTimer: number | undefined;
     const scheduleNextScan = (message: string) => {
       setJackpotAiStatus(message);
       scanTimer = window.setTimeout(() => {
@@ -5481,37 +5480,22 @@ export default function XTraderPage() {
           scheduleNextScan("Waiting for a fresh Deriv connection; the scanner will retry.");
           return;
         }
-        const startSequences = new Map(
-          (initial.data.market_signals ?? []).map((signal) => [signal.symbol, signal.tick_sequence]),
-        );
-        setJackpotAiStatus("Scanning Jackpot markets.");
-        await new Promise<void>((resolve) => {
-          delayTimer = window.setTimeout(resolve, 5000);
-        });
-        delayTimer = undefined;
-        if (cancelled) return;
-
-        const fresh = await status.refetch({ cancelRefetch: false });
-        if (cancelled) return;
-        if (!fresh.isSuccess || !fresh.data?.connected || !fresh.data.authorized) {
-          scheduleNextScan("Waiting for a fresh Deriv connection; the scanner will retry.");
-          return;
-        }
         if (
           jackpotAiAccountIdRef.current
-          && fresh.data.account?.id != null
-          && jackpotAiAccountIdRef.current !== String(fresh.data.account.id)
+          && initial.data.account?.id != null
+          && jackpotAiAccountIdRef.current !== String(initial.data.account.id)
         ) {
           setJackpotAiEnabled(false);
           setJackpotAiStatus("Stopped because the selected Deriv account changed.");
           return;
         }
         const latestSignals: JackpotMarketSignal[] = jackpotMarkets.map((market) => {
-          const signal = fresh.data.market_signals?.find((entry) => entry.symbol === market.value);
+          const signal = initial.data.market_signals?.find((entry) => entry.symbol === market.value);
           return {
             symbol: market.value,
             group: market.group,
             tickSequence: signal?.tick_sequence ?? 0,
+            tickEpoch: signal?.tick_epoch ?? 0,
             risePercentage: signal?.rise_percentage ?? null,
             fallPercentage: signal?.fall_percentage ?? null,
             evenPercentage: signal?.digit_even_percentage ?? null,
@@ -5529,10 +5513,8 @@ export default function XTraderPage() {
           jackpotContractCount,
           jackpotAutoBestMode ? null : jackpotSymbol,
         );
-        if (!candidate || candidate.tickSequence <= (startSequences.get(candidate.symbol) ?? 0)) {
-          scheduleNextScan(
-            `No setup met the ${JACKPOT_MIN_AUTO_SAMPLES}-sample and >${JACKPOT_MIN_AUTO_OBSERVED_RATE}% observed-rate filter. Checking again.`,
-          );
+        if (!candidate) {
+          scheduleNextScan("No fresh setup met Jackpot's evidence filter. Checking again.");
           return;
         }
         const blocked = jackpotBatchBlockReasonRef.current(jackpotContractCount);
@@ -5562,7 +5544,6 @@ export default function XTraderPage() {
     return () => {
       cancelled = true;
       if (scanTimer != null) window.clearTimeout(scanTimer);
-      if (delayTimer != null) window.clearTimeout(delayTimer);
     };
   }, [
     jackpotEnabled,

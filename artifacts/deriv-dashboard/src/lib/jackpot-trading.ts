@@ -6,6 +6,7 @@ export interface JackpotMarketSignal {
   symbol: string;
   group: JackpotMarketGroup;
   tickSequence?: number;
+  tickEpoch: number;
   risePercentage: number | null;
   fallPercentage: number | null;
   evenPercentage: number | null;
@@ -47,6 +48,17 @@ export interface JackpotBestBatch {
 
 export const JACKPOT_MIN_AUTO_SAMPLES = 50;
 export const JACKPOT_MIN_AUTO_OBSERVED_RATE = 68;
+export const JACKPOT_MAX_SIGNAL_AGE_SECONDS = 30;
+
+function hasFreshMarketSample(
+  signal: JackpotMarketSignal,
+  nowEpoch = Math.floor(Date.now() / 1000),
+) {
+  return Number.isFinite(signal.tickEpoch)
+    && signal.tickEpoch > 0
+    && signal.tickEpoch <= nowEpoch + 5
+    && nowEpoch - signal.tickEpoch <= JACKPOT_MAX_SIGNAL_AGE_SECONDS;
+}
 
 function validRate(value: number | null): value is number {
   return value != null && Number.isFinite(value) && value >= 0 && value <= 100;
@@ -72,21 +84,8 @@ export function resolveJackpotPair(
       evenOddRate: null,
     };
   }
-  const riseRate = observedRate(signal.risePercentage, signal.sampleCount);
-  const fallRate = observedRate(signal.fallPercentage, signal.sampleCount);
-  const evenRate = observedRate(signal.evenPercentage, signal.sampleCount);
-  const oddRate = observedRate(signal.oddPercentage, signal.sampleCount);
-
-  const riseFallType = riseFallSide === "AUTO"
-    ? riseRate == null && fallRate == null
-      ? null
-      : (riseRate ?? -1) >= (fallRate ?? -1) ? "CALL" : "PUT"
-    : riseFallSide;
-  const evenOddType = evenOddSide === "AUTO"
-    ? evenRate == null && oddRate == null
-      ? null
-      : (evenRate ?? -1) >= (oddRate ?? -1) ? "DIGITEVEN" : "DIGITODD"
-    : evenOddSide;
+  const riseFallType = resolveDirection(signal, riseFallSide);
+  const evenOddType = resolveParity(signal, evenOddSide);
 
   if (!riseFallType || !evenOddType) return null;
   return {
@@ -102,7 +101,7 @@ function resolveDirection(
   side: JackpotRiseFallSide,
 ) {
   if (side !== "AUTO") return side;
-  if (!signal || signal.sampleCount < JACKPOT_MIN_AUTO_SAMPLES) return null;
+  if (!signal || signal.sampleCount < JACKPOT_MIN_AUTO_SAMPLES || !hasFreshMarketSample(signal)) return null;
   const riseRate = observedRate(signal.risePercentage, signal.sampleCount);
   const fallRate = observedRate(signal.fallPercentage, signal.sampleCount);
   if (riseRate == null && fallRate == null) return null;
@@ -114,7 +113,7 @@ function resolveParity(
   side: JackpotEvenOddSide,
 ) {
   if (side !== "AUTO") return side;
-  if (!signal || signal.sampleCount < JACKPOT_MIN_AUTO_SAMPLES) return null;
+  if (!signal || signal.sampleCount < JACKPOT_MIN_AUTO_SAMPLES || !hasFreshMarketSample(signal)) return null;
   const evenRate = observedRate(signal.evenPercentage, signal.sampleCount);
   const oddRate = observedRate(signal.oddPercentage, signal.sampleCount);
   if (evenRate == null && oddRate == null) return null;
@@ -174,6 +173,7 @@ export function chooseJackpotBestMarket(
     if (
       signal.group !== group
       || signal.sampleCount < JACKPOT_MIN_AUTO_SAMPLES
+      || !hasFreshMarketSample(signal)
       || (selectedSymbol && signal.symbol !== selectedSymbol)
     ) return [];
     const selection = resolveJackpotSelection(
@@ -221,6 +221,7 @@ export function chooseJackpotBestBatch(
     if (
       signal.group !== group
       || signal.sampleCount < JACKPOT_MIN_AUTO_SAMPLES
+      || !hasFreshMarketSample(signal)
       || (selectedSymbol && signal.symbol !== selectedSymbol)
     ) return [];
     const selection = resolveJackpotSelection(
