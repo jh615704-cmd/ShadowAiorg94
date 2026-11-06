@@ -1,11 +1,13 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useUser } from '@clerk/react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   getGetAccessSessionQueryKey,
   getGetAdminFeatureSettingsQueryKey,
   useGetAccessSession,
   useGetAdminFeatureSettings,
+  type AdminFeatureSettings,
 } from '@workspace/api-client-react';
 import {
   Bot,
@@ -32,6 +34,7 @@ interface AppShellProps {
 }
 
 export function AppShell({ children, title, onRefresh, headerContent }: AppShellProps) {
+  const queryClient = useQueryClient();
   const [location, setLocation] = useLocation();
   const { theme, setTheme } = useTheme();
   const { user } = useUser();
@@ -39,6 +42,35 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
   const featureSettings = useGetAdminFeatureSettings({
     query: { retry: false, refetchInterval: 10_000, queryKey: getGetAdminFeatureSettingsQueryKey() },
   });
+  useEffect(() => {
+    if (!accessSession.data?.key_id) return;
+    const stream = new EventSource('/api/access/feature-announcements/stream', { withCredentials: true });
+    const onAnnouncement = (event: Event) => {
+      try {
+        const update = JSON.parse((event as MessageEvent<string>).data) as {
+          enabled: boolean;
+          message: string;
+          revision: string;
+        };
+        queryClient.setQueryData<AdminFeatureSettings>(
+          getGetAdminFeatureSettingsQueryKey(),
+          (current) => current ? {
+            ...current,
+            global_announcement_enabled: update.enabled,
+            global_announcement: update.message,
+            global_announcement_revision: update.revision,
+          } : current,
+        );
+      } catch {
+        // The regular settings query remains the fallback if a stream event is malformed.
+      }
+    };
+    stream.addEventListener('announcement', onAnnouncement);
+    return () => {
+      stream.removeEventListener('announcement', onAnnouncement);
+      stream.close();
+    };
+  }, [accessSession.data?.key_id, queryClient]);
   const { logout } = useAccessSessionLogout();
   const isAdmin = accessSession.data?.is_admin === true;
   const features = accessSession.data?.features ?? [];

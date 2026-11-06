@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './accessDeviceSummary';
+export * from './accessDeviceSummaryFormFactor';
 export * from './accessFeature';
 export * from './accessKeyCreated';
 export * from './accessKeyCreateInput';
@@ -93,6 +95,8 @@ export * from './edgeDurationAvailabilityInput';
 export * from './edgeDurationAvailabilityInputAccessFeature';
 export * from './edgeDurationAvailabilityInputContractType';
 export * from './errorResponse';
+export * from './featureActionControl';
+export * from './featureActionControlMode';
 export * from './featureControl';
 export * from './featureControlAudience';
 export * from './featureControlFeature';

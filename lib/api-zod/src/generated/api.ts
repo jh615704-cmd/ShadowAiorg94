@@ -209,6 +209,10 @@ export const UpdateTradingProtectionResponse = zod.object({
  */
 export const getAdminFeatureSettingsResponseFeaturesItemNoticeMax = 500;
 
+export const getAdminFeatureSettingsResponseActionControlsItemControlIdMax = 80;
+
+export const getAdminFeatureSettingsResponseActionControlsItemLabelMax = 120;
+
 export const getAdminFeatureSettingsResponseGlobalAnnouncementMax = 500;
 
 export const getAdminFeatureSettingsResponseGlobalAnnouncementRevisionMax = 128;
@@ -226,6 +230,12 @@ export const GetAdminFeatureSettingsResponse = zod.object({
   "countdown_at": zod.coerce.date().nullable(),
   "notice": zod.string().max(getAdminFeatureSettingsResponseFeaturesItemNoticeMax)
 })),
+  "action_controls": zod.array(zod.object({
+  "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'jackpot', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin']),
+  "control_id": zod.string().min(1).max(getAdminFeatureSettingsResponseActionControlsItemControlIdMax),
+  "label": zod.string().min(1).max(getAdminFeatureSettingsResponseActionControlsItemLabelMax),
+  "mode": zod.enum(['available', 'restricted', 'coming_soon', 'under_construction'])
+})),
   "global_announcement_enabled": zod.boolean(),
   "global_announcement": zod.string().max(getAdminFeatureSettingsResponseGlobalAnnouncementMax),
   "global_announcement_revision": zod.string().max(getAdminFeatureSettingsResponseGlobalAnnouncementRevisionMax),
@@ -239,6 +249,10 @@ export const GetAdminFeatureSettingsResponse = zod.object({
  * @summary Update feature availability and bot controls
  */
 export const updateAdminFeatureSettingsBodyFeaturesItemNoticeMax = 500;
+
+export const updateAdminFeatureSettingsBodyActionControlsItemControlIdMax = 80;
+
+export const updateAdminFeatureSettingsBodyActionControlsItemLabelMax = 120;
 
 export const updateAdminFeatureSettingsBodyGlobalAnnouncementMax = 500;
 
@@ -257,6 +271,12 @@ export const UpdateAdminFeatureSettingsBody = zod.object({
   "countdown_at": zod.coerce.date().nullable(),
   "notice": zod.string().max(updateAdminFeatureSettingsBodyFeaturesItemNoticeMax)
 })),
+  "action_controls": zod.array(zod.object({
+  "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'jackpot', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin']),
+  "control_id": zod.string().min(1).max(updateAdminFeatureSettingsBodyActionControlsItemControlIdMax),
+  "label": zod.string().min(1).max(updateAdminFeatureSettingsBodyActionControlsItemLabelMax),
+  "mode": zod.enum(['available', 'restricted', 'coming_soon', 'under_construction'])
+})).optional(),
   "global_announcement_enabled": zod.boolean(),
   "global_announcement": zod.string().max(updateAdminFeatureSettingsBodyGlobalAnnouncementMax),
   "global_announcement_revision": zod.string().max(updateAdminFeatureSettingsBodyGlobalAnnouncementRevisionMax).optional(),
@@ -265,6 +285,10 @@ export const UpdateAdminFeatureSettingsBody = zod.object({
 })
 
 export const updateAdminFeatureSettingsResponseFeaturesItemNoticeMax = 500;
+
+export const updateAdminFeatureSettingsResponseActionControlsItemControlIdMax = 80;
+
+export const updateAdminFeatureSettingsResponseActionControlsItemLabelMax = 120;
 
 export const updateAdminFeatureSettingsResponseGlobalAnnouncementMax = 500;
 
@@ -282,6 +306,12 @@ export const UpdateAdminFeatureSettingsResponse = zod.object({
   "user_ids": zod.array(zod.string().uuid()),
   "countdown_at": zod.coerce.date().nullable(),
   "notice": zod.string().max(updateAdminFeatureSettingsResponseFeaturesItemNoticeMax)
+})),
+  "action_controls": zod.array(zod.object({
+  "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'jackpot', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'settings', 'history', 'admin']),
+  "control_id": zod.string().min(1).max(updateAdminFeatureSettingsResponseActionControlsItemControlIdMax),
+  "label": zod.string().min(1).max(updateAdminFeatureSettingsResponseActionControlsItemLabelMax),
+  "mode": zod.enum(['available', 'restricted', 'coming_soon', 'under_construction'])
 })),
   "global_announcement_enabled": zod.boolean(),
   "global_announcement": zod.string().max(updateAdminFeatureSettingsResponseGlobalAnnouncementMax),
@@ -311,7 +341,14 @@ export const ListAccessKeysResponseItem = zod.object({
   "device_count": zod.number().int(),
   "online_devices": zod.number().int(),
   "offline_seconds": zod.number().int(),
-  "created_at": zod.coerce.date()
+  "created_at": zod.coerce.date(),
+  "device_sessions": zod.array(zod.object({
+  "label": zod.string(),
+  "form_factor": zod.enum(['desktop', 'tablet', 'phone', 'other']),
+  "online": zod.boolean(),
+  "first_seen_at": zod.coerce.date(),
+  "last_seen_at": zod.coerce.date()
+})).optional()
 }))
 export const ListAccessKeysResponse = zod.array(ListAccessKeysResponseItem)
 
@@ -385,7 +422,14 @@ export const UpdateAccessKeyResponse = zod.object({
   "device_count": zod.number().int(),
   "online_devices": zod.number().int(),
   "offline_seconds": zod.number().int(),
-  "created_at": zod.coerce.date()
+  "created_at": zod.coerce.date(),
+  "device_sessions": zod.array(zod.object({
+  "label": zod.string(),
+  "form_factor": zod.enum(['desktop', 'tablet', 'phone', 'other']),
+  "online": zod.boolean(),
+  "first_seen_at": zod.coerce.date(),
+  "last_seen_at": zod.coerce.date()
+})).optional()
 }))
 
 

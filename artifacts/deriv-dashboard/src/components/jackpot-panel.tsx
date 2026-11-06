@@ -56,6 +56,10 @@ export interface JackpotPanelProps {
   lossLimit: number;
   onLossLimitChange: (value: number) => void;
   aiEnabled: boolean;
+  jackpotAiAvailable: boolean;
+  autoMarketAvailable: boolean;
+  autoSideAvailable: boolean;
+  placeTradeAvailable: boolean;
   onAiEnabledChange: (enabled: boolean) => void;
   aiStatus: string;
   batchStatus: string;
@@ -119,6 +123,10 @@ export default function JackpotPanel({
   lossLimit,
   onLossLimitChange,
   aiEnabled,
+  jackpotAiAvailable,
+  autoMarketAvailable,
+  autoSideAvailable,
+  placeTradeAvailable,
   onAiEnabledChange,
   aiStatus,
   batchStatus,
@@ -238,7 +246,7 @@ export default function JackpotPanel({
             </label>
             <label className="jackpot-switch-row">
               <span><b>Auto Best market</b><small>Use the currently selected best market.</small></span>
-              <input type="checkbox" checked={autoBestMode} onChange={(event) => onAutoBestModeChange(event.target.checked)} aria-label="Enable Jackpot Auto Best market mode" data-testid="switch-jackpot-auto-best" />
+              <input type="checkbox" checked={autoBestMode} onChange={(event) => onAutoBestModeChange(event.target.checked)} disabled={!autoMarketAvailable} aria-label="Enable Jackpot Auto Best market mode" data-testid="switch-jackpot-auto-best" />
               <i aria-hidden="true" />
             </label>
           </section>
@@ -258,7 +266,7 @@ export default function JackpotPanel({
                 </label>
               </div>
               <div className="jackpot-segmented" role="group" aria-label="Rise or Fall contract side">
-                {(["CALL", "PUT", "AUTO"] as const).map((side) => <button type="button" key={side} disabled={!riseFallEnabled} className={riseFallSide === side ? "selected" : ""} onClick={() => onRiseFallSideChange(side)} aria-pressed={riseFallSide === side} data-testid={`button-jackpot-direction-${side.toLowerCase()}`}>{side === "CALL" ? "Rise" : side === "PUT" ? "Fall" : "Auto"}</button>)}
+                {(["CALL", "PUT", "AUTO"] as const).map((side) => <button type="button" key={side} disabled={!riseFallEnabled || side === "AUTO" && !autoSideAvailable} className={riseFallSide === side ? "selected" : ""} onClick={() => onRiseFallSideChange(side)} aria-pressed={riseFallSide === side} data-testid={`button-jackpot-direction-${side.toLowerCase()}`}>{side === "CALL" ? "Rise" : side === "PUT" ? "Fall" : "Auto"}</button>)}
               </div>
             </div>
             <div className="jackpot-side-control">
@@ -271,7 +279,7 @@ export default function JackpotPanel({
                 </label>
               </div>
               <div className="jackpot-segmented" role="group" aria-label="Even or Odd contract side">
-                {(["DIGITEVEN", "DIGITODD", "AUTO"] as const).map((side) => <button type="button" key={side} disabled={!evenOddEnabled} className={evenOddSide === side ? "selected" : ""} onClick={() => onEvenOddSideChange(side)} aria-pressed={evenOddSide === side} data-testid={`button-jackpot-parity-${side.toLowerCase()}`}>{side === "DIGITEVEN" ? "Even" : side === "DIGITODD" ? "Odd" : "Auto"}</button>)}
+                {(["DIGITEVEN", "DIGITODD", "AUTO"] as const).map((side) => <button type="button" key={side} disabled={!evenOddEnabled || side === "AUTO" && !autoSideAvailable} className={evenOddSide === side ? "selected" : ""} onClick={() => onEvenOddSideChange(side)} aria-pressed={evenOddSide === side} data-testid={`button-jackpot-parity-${side.toLowerCase()}`}>{side === "DIGITEVEN" ? "Even" : side === "DIGITODD" ? "Odd" : "Auto"}</button>)}
               </div>
             </div>
             <div className="jackpot-contract-note"><Sparkles size={14} /><span>With both families on, the total is split evenly; the stronger observed rate gets any extra contract.</span></div>
@@ -315,7 +323,7 @@ export default function JackpotPanel({
             </div>
             <label className="jackpot-switch-row jackpot-ai-switch">
               <span><b>Jackpot AI</b></span>
-              <input type="checkbox" checked={aiEnabled} onChange={(event) => onAiEnabledChange(event.target.checked)} aria-label="Enable Jackpot AI" data-testid="switch-jackpot-ai" />
+              <input type="checkbox" checked={aiEnabled} onChange={(event) => onAiEnabledChange(event.target.checked)} disabled={!jackpotAiAvailable && !aiEnabled} aria-label="Enable Jackpot AI" data-testid="switch-jackpot-ai" />
               <i aria-hidden="true" />
             </label>
             <p className="jackpot-ai-status" role="status" aria-live="polite" data-testid="status-jackpot-ai">{aiStatus}</p>
@@ -346,7 +354,7 @@ export default function JackpotPanel({
             type="button"
             className="jackpot-place-button"
             onClick={onPlaceBatch}
-            disabled={batchLoading || !canPlaceBatch}
+            disabled={batchLoading || !canPlaceBatch || !placeTradeAvailable}
              aria-label={`Place ${contractCount} Jackpot contracts`}
             aria-busy={batchLoading}
             data-testid="button-jackpot-place-batch"

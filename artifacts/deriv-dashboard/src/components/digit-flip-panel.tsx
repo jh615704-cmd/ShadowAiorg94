@@ -543,6 +543,7 @@ export default function DigitFlipPanel({
           }, currency)}
         </p>
         <AiScannerAction
+          feature="digit-flip"
           onScan={onAiScan}
           disabled={disabled || isPlacingTrade || running || entryBlocked}
           messageAutoDismissMs={3000}

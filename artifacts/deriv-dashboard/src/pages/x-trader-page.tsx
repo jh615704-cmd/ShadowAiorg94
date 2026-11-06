@@ -56,6 +56,7 @@ import {
   chooseEdgeDurationByWinRate,
   createEdgeDurationAvailabilitySetup,
   nextStakeAfterSettlement,
+  nextStakeFromLossHistory,
   rankBestEdgeTradeSignals,
   rankDigitsByDistribution,
   sessionStopReason,
@@ -460,6 +461,19 @@ export default function XTraderPage() {
     adminFeatureSettings.data?.features.find((item) => item.feature === feature);
   const featureIsAvailable = (feature: FeatureControl["feature"]) =>
     isAdmin || featureControl(feature)?.mode === "available";
+  const featureActionIsAvailable = (feature: string, controlId: string) =>
+    isAdmin || (
+      adminFeatureSettings.isFetched
+      && adminFeatureSettings.data?.action_controls.find((item) =>
+        item.feature === feature && item.control_id === controlId,
+      )?.mode !== "restricted"
+      && adminFeatureSettings.data?.action_controls.find((item) =>
+        item.feature === feature && item.control_id === controlId,
+      )?.mode !== "coming_soon"
+      && adminFeatureSettings.data?.action_controls.find((item) =>
+        item.feature === feature && item.control_id === controlId,
+      )?.mode !== "under_construction"
+    );
   const hasFeature = (feature: FeatureControl["feature"]) =>
     isAdmin || accessSession.data?.features.includes(feature) === true;
   const canUseEdge = hasFeature("edge") && featureIsAvailable("edge");
@@ -543,6 +557,7 @@ export default function XTraderPage() {
   const [tradeXMarketType, setTradeXMarketType] = useState<TradeXMarketType>("volatility");
   const [tradeXSymbol, setTradeXSymbol] = useState("R_75");
   const [tradeXStake, setTradeXStake] = useState(1);
+  const [tradeXMultiplier, setTradeXMultiplier] = useState(2);
   const [tradeXSelectedDigit, setTradeXSelectedDigit] = useState(5);
   const [tradeXDuration, setTradeXDuration] = useState<TradeXDuration>(1);
   const [digitFlipEnabled, setDigitFlipEnabled] = useState(false);
@@ -1068,7 +1083,9 @@ export default function XTraderPage() {
   const tradeXRows = tradeXHistoryRows.filter((trade) => tradeXClaimedHistoryIdsRef.current.has(String(trade.contract_id)) && !tradeXHiddenHistoryIds.has(String(trade.contract_id)));
   const tradeXSessionRows = tradeXHistoryRows.filter((trade) => tradeXClaimedHistoryIdsRef.current.has(String(trade.contract_id)));
   const tradeXVisibleSessionRows = tradeXSessionRows.filter((trade) => !tradeXHiddenHistoryIds.has(trade.contract_id));
+  const tradeXScannerStake = nextStakeFromLossHistory(tradeXSessionRows, tradeXStake, tradeXMultiplier);
   const digitFlipOwnedRows = digitFlipAllRows.filter((trade) => digitFlipClaimedHistoryIdsRef.current.has(String(trade.contract_id)));
+  const digitFlipScannerStake = nextStakeFromLossHistory(digitFlipOwnedRows, digitFlipStake, digitFlipMultiplier);
   const digitFlipRows = digitFlipOwnedRows.filter((trade) => !digitFlipHiddenHistoryIds.has(String(trade.contract_id)));
   const bulkRows = bulkAllRows.filter((trade) => bulkClaimedHistoryIdsRef.current.has(trade.contract_id) && !bulkTraderHiddenHistoryIds.has(trade.contract_id));
   const visibleMoneyBankContractIds = new Set(
@@ -1080,6 +1097,7 @@ export default function XTraderPage() {
   const cashGrabRows = cashGrabAllRows
     .filter((trade) => !cashGrabHiddenHistoryIds.has(trade.contract_id))
     .filter((trade) => cashGrabClaimedHistoryIdsRef.current.has(trade.contract_id)) as CashGrabTrade[];
+  const cashGrabScannerStake = nextStakeFromLossHistory(cashGrabRows, cashGrabStake, cashGrabMultiplier);
   const clockWorkSessionRows = clockWorkAllRows.filter((trade) => clockWorkClaimedHistoryIdsRef.current.has(trade.contract_id));
   const clockWorkRows = clockWorkSessionRows.filter((trade) => !clockWorkHiddenHistoryIds.has(trade.contract_id));
   const jackpotAllRows = rows.filter((trade) => (
@@ -3934,6 +3952,7 @@ export default function XTraderPage() {
     durationOverride = tradeXDuration,
     digitOverride?: number,
     symbolOverride?: string,
+    stakeOverride?: number,
   ) => {
     if (!tradeXEnabled) {
       notifyTradeX("Enable Trade X before sending a contract.");
@@ -3952,6 +3971,7 @@ export default function XTraderPage() {
       return false;
     }
     const config = tradeXConfigRef.current;
+    const amount = stakeOverride ?? config.stake;
     const entryDigit = digitOverride ?? config.selectedDigit;
     if (!isConnected) {
       notifyTradeX("Connect Deriv before sending a Trade X contract.");
@@ -3996,7 +4016,7 @@ export default function XTraderPage() {
         return false;
       }
       const orderError = validateTradeXEntry({
-        stake: config.stake,
+        stake: amount,
         balance: freshBalance,
         symbol,
         supportedSymbols,
@@ -4011,7 +4031,7 @@ export default function XTraderPage() {
       buyRequestStarted = true;
       const result = await bulkBuyMutation.mutateAsync({
         data: buildTradeXOrderData({
-          stake: config.stake,
+          stake: amount,
           duration: durationOverride,
           digit: entryDigit,
           symbol,
@@ -4241,7 +4261,7 @@ export default function XTraderPage() {
       if (!Number.isInteger(cashGrabDuration) || cashGrabDuration < 1 || cashGrabDuration > 5) {
         throw new Error("Choose a Cash Grab duration from 1 to 5 ticks first.");
       }
-      const amount = Number(cashGrabStake.toFixed(2));
+      const amount = Number(cashGrabScannerStake.toFixed(2));
       if (!Number.isFinite(amount) || amount < 0.35) throw new Error("Set a Cash Grab stake of at least 0.35 first.");
 
       const initialStatus = await status.refetch();
@@ -4369,9 +4389,9 @@ export default function XTraderPage() {
     if (currentAccountBalanceRef.current == null || tradeXStake > currentAccountBalanceRef.current) {
       throw new Error("The selected Trade X stake exceeds the current account balance.");
     }
-    const sent = await executeTradeX(1, tradeXDuration, candidate.digit, candidate.symbol);
+    const sent = await executeTradeX(1, tradeXDuration, candidate.digit, candidate.symbol, tradeXScannerStake);
     if (!sent) throw new Error("The setup was selected, but the existing Trade X checks blocked the order.");
-    return `Sent one ${candidate.symbol} Digit Differs ${candidate.digit} trade. The digit differed in ${candidate.observedRate.toFixed(1)}% of ${candidate.sampleCount} sampled moves; that history is not a prediction.`;
+    return `Sent one ${candidate.symbol} Digit Differs ${candidate.digit} trade at ${tradeXScannerStake.toFixed(2)}. The digit differed in ${candidate.observedRate.toFixed(1)}% of ${candidate.sampleCount} sampled moves; that history is not a prediction.`;
   });
 
 
@@ -4484,6 +4504,7 @@ export default function XTraderPage() {
 
   const executeDigitFlip = async (
     observedSignalOverride?: { parity: DigitFlipParity; observedRate: number; sampleCount: number },
+    stakeOverride?: number,
   ) => {
     if (digitFlipActionLockRef.current) return false;
     if (!isConnected) {
@@ -4555,9 +4576,9 @@ export default function XTraderPage() {
       }
       digitFlipNextStakeRef.current = nextStake;
     }
-    const amount = config.stakeMode === "martingale"
+    const amount = stakeOverride ?? (config.stakeMode === "martingale"
       ? digitFlipNextStakeRef.current
-      : config.stake;
+      : config.stake);
     if (amount > declaredAccountBalance || (currentAccountBalance != null && amount > currentAccountBalance)) {
       setConnectionMessage({ kind: "info", text: "DigitFlip remains active and is waiting for enough balance for the selected stake." });
       await sleep(1_000);
@@ -4651,9 +4672,7 @@ export default function XTraderPage() {
       odd: selectedSignal.digit_odd_percentage,
       sampleCount: selectedSignal.sample_count,
     };
-    const currentDigitFlipStake = digitFlipStakeMode === "martingale"
-      ? digitFlipNextStakeRef.current
-      : digitFlipStake;
+    const currentDigitFlipStake = digitFlipScannerStake;
     if (currentAccountBalanceRef.current == null || currentDigitFlipStake > currentAccountBalanceRef.current) {
       throw new Error("The selected DigitFlip stake exceeds the current account balance.");
     }
@@ -4661,7 +4680,7 @@ export default function XTraderPage() {
       parity: candidate.parity,
       observedRate: candidate.observedRate,
       sampleCount: candidate.sampleCount,
-    });
+    }, digitFlipScannerStake);
     if (!sent) throw new Error("The setup was selected, but the existing DigitFlip checks blocked the order.");
     return `Sent one ${candidate.symbol} ${candidate.parity === "DIGITEVEN" ? "Even" : "Odd"} trade. That parity appeared in ${candidate.observedRate.toFixed(1)}% of ${candidate.sampleCount} sampled moves; that history is not a prediction.`;
   });
@@ -6289,6 +6308,8 @@ export default function XTraderPage() {
             symbol={tradeXSymbol}
             tradeType="DIGITDIFF"
             stake={tradeXStake}
+            multiplier={tradeXMultiplier}
+            nextScannerStake={tradeXScannerStake}
             selectedDigit={tradeXEntryDigit}
             duration={tradeXDuration}
             distribution={tradeXDistribution}
@@ -6304,6 +6325,7 @@ export default function XTraderPage() {
             onSymbolChange={(next) => { setTradeXSymbol(next); void selectMarket(next); }}
             onTradeTypeChange={() => undefined}
             onStakeChange={(next) => setTradeXStake(Math.max(0.35, Number.isFinite(next) ? next : 0.35))}
+            onMultiplierChange={setTradeXMultiplier}
              onSelectedDigitChange={(digit) => {
                setTradeXSelectedDigit(digit);
              }}
@@ -6376,7 +6398,7 @@ export default function XTraderPage() {
           marketSignals={cashGrabMarketSignals}
           quote={status.data?.last_tick?.symbol === cashGrabSymbol ? status.data?.last_tick?.quote ?? null : null}
           stake={cashGrabStake}
-          currentStake={cashGrabCurrentStakeRef.current}
+          currentStake={cashGrabScannerStake}
           duration={cashGrabDuration}
           stakeMode={cashGrabStakeMode}
           currency={currentAccount?.currency ?? "USD"}
@@ -6511,12 +6533,30 @@ export default function XTraderPage() {
           lossLimit={jackpotLossLimit}
           onLossLimitChange={(value) => setJackpotLossLimit(Math.max(0, value))}
           aiEnabled={jackpotAiEnabled}
+          jackpotAiAvailable={featureActionIsAvailable("jackpot", "jackpot-ai")}
+          autoMarketAvailable={featureActionIsAvailable("jackpot", "auto-market")}
+          autoSideAvailable={featureActionIsAvailable("jackpot", "auto-side-selection")}
+          placeTradeAvailable={featureActionIsAvailable("jackpot", "place-trade")}
           onAiEnabledChange={toggleJackpotAi}
           aiStatus={jackpotAiStatus}
           batchStatus={jackpotBatchStatus}
           batchLoading={jackpotBuyMutation.isPending}
-          canPlaceBatch={jackpotDisabledReason === null}
-          disabledReason={jackpotDisabledReason ?? undefined}
+          canPlaceBatch={jackpotDisabledReason === null
+            && featureActionIsAvailable("jackpot", "place-trade")
+            && (!jackpotAutoBestMode || featureActionIsAvailable("jackpot", "auto-market"))
+            && (!(jackpotRiseFallEnabled && jackpotRiseFallSide === "AUTO")
+              && !(jackpotEvenOddEnabled && jackpotEvenOddSide === "AUTO")
+              || featureActionIsAvailable("jackpot", "auto-side-selection"))}
+          disabledReason={jackpotDisabledReason
+            ?? (!featureActionIsAvailable("jackpot", "place-trade")
+              ? "Place trade is unavailable by administrator settings."
+              : jackpotAutoBestMode && !featureActionIsAvailable("jackpot", "auto-market")
+                ? "Auto market selection is unavailable by administrator settings."
+                : (jackpotRiseFallEnabled && jackpotRiseFallSide === "AUTO"
+                  || jackpotEvenOddEnabled && jackpotEvenOddSide === "AUTO")
+                  && !featureActionIsAvailable("jackpot", "auto-side-selection")
+                  ? "Auto side selection is unavailable by administrator settings."
+                  : undefined)}
           onPlaceBatch={() => void placeJackpotBatch()}
           historyReviewRequired={jackpotNeedsHistoryCheck}
           historyCheckLoading={jackpotHistoryCheckLoading}
@@ -6580,11 +6620,13 @@ export default function XTraderPage() {
             running={clockWorkRunning}
             busy={clockWorkBusy || clockWorkBuyMutation.isPending}
             disabled={clockWorkControlsDisabled}
+            aiControlAvailable={featureActionIsAvailable("clock-work", "ai-clock")}
+            tradeControlAvailable={featureActionIsAvailable("clock-work", "place-trade")}
             aiStatus={clockWorkAiStatus}
             statusMessage={clockWorkStatusMessage}
             currency={currentAccount?.currency ?? "USD"}
             onStart={() => {
-              if (clockWorkControlsDisabled) return;
+              if (clockWorkControlsDisabled || !featureActionIsAvailable("clock-work", "place-trade")) return;
               clockWorkRunContractIdsRef.current.clear();
               clockWorkRunAccountIdRef.current = currentAccount ? String(currentAccount.id) : null;
               clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   AccessFeature,
@@ -52,7 +52,6 @@ const featureLabels: Partial<Record<AccessFeatureValue, string>> = {
   "clock-work": "Clock Work",
   "cash-grab": "Cash Grab",
   "money-bank": "Money Bank",
-  "jdy-ai-3": "Shadows 3",
   "auto-trader": "Auto Trader",
   "auto-trader-2": "Auto Trader 2.0",
   settings: "Settings",
@@ -68,7 +67,6 @@ const featureDescriptions: Partial<Record<AccessFeatureValue, string>> = {
   "clock-work": "Five-tick Higher and Lower analysis and trading",
   "cash-grab": "Controlled batch trading with risk gates",
   "money-bank": "Accumulator automation with recovery controls",
-  "jdy-ai-3": "Cash Grab live gate and immediate stop control",
   "auto-trader": "Live market scanner and Digit Differs orders",
   "auto-trader-2": "Automated contract selection and session controls",
   settings: "View and manage the Deriv connection",
@@ -76,7 +74,7 @@ const featureDescriptions: Partial<Record<AccessFeatureValue, string>> = {
 };
 
 const featureOptions = Object.values(AccessFeature)
-  .filter((value) => value !== "admin")
+  .filter((value) => value !== "admin" && value !== "jdy-ai-3")
   .map((value) => {
     const label = featureLabels[value] ?? value.split("-").map((part) => part[0]?.toUpperCase() + part.slice(1)).join(" ");
     return {
@@ -85,6 +83,23 @@ const featureOptions = Object.values(AccessFeature)
       description: featureDescriptions[value] ?? `${label} access`,
     };
   });
+
+const featureActionCatalog: Omit<AdminFeatureSettings["action_controls"][number], "mode">[] = [
+  ...(["edge", "digit-flip", "trade-x", "bulk-trader", "cash-grab"] as const).map((feature) => ({
+    feature,
+    control_id: "ai-scanner",
+    label: "AI Scanner",
+  })),
+  ...(["edge", "digit-flip", "trade-x", "bulk-trader", "jackpot", "clock-work", "cash-grab", "money-bank", "auto-trader", "auto-trader-2"] as const).map((feature) => ({
+    feature,
+    control_id: "place-trade",
+    label: "Place trade",
+  })),
+  { feature: "jackpot", control_id: "jackpot-ai", label: "Jackpot AI" },
+  { feature: "jackpot", control_id: "auto-market", label: "Auto market switch" },
+  { feature: "jackpot", control_id: "auto-side-selection", label: "Auto side selection" },
+  { feature: "clock-work", control_id: "ai-clock", label: "AI Clock switch" },
+];
 
 function errorMessage(error: unknown) {
   return getUserFacingErrorMessage(error, "The request could not be completed.");
@@ -104,6 +119,14 @@ function toDateTimeLocal(value: Date | string | null): string {
   if (!Number.isFinite(date.getTime())) return "";
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 16);
+}
+
+function deviceSeenLabel(value: Date | string, online: boolean) {
+  if (online) return "Online now";
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(date.getTime())
+    ? `Last active ${date.toLocaleString()}`
+    : "Last active time unavailable";
 }
 
 function StatusBadge({ item }: { item: AccessKeySummary }) {
@@ -174,7 +197,21 @@ function KeyRow({
           {item.access_key && <code className="key-full-value">{item.access_key}</code>}
         </div>
       </div>
-      <div className="key-row-data"><span>{item.kind === "admin" ? "Administrator" : "User"}</span><strong>{item.device_count} / {item.max_devices === 0 ? "Unlimited" : item.max_devices}</strong><small>devices</small></div>
+      <div className="key-row-data key-row-device-data">
+        <span>{item.kind === "admin" ? "Administrator" : "User"}</span>
+        <strong>{item.device_count} / {item.max_devices === 0 ? "Unlimited" : item.max_devices}</strong>
+        <small>devices · {item.online_devices} online</small>
+        <div className="key-device-list" aria-label={`Devices used by ${item.label}`}>
+          {item.device_sessions?.length
+            ? item.device_sessions.map((device, index) => (
+              <span className="key-device-item" key={`${device.label}-${device.first_seen_at}-${index}`}>
+                <b>{device.label}</b>
+                <small>{device.form_factor} · {deviceSeenLabel(device.last_seen_at, device.online)}</small>
+              </span>
+            ))
+            : <small>No active device sessions</small>}
+        </div>
+      </div>
       <div className="key-row-data"><StatusBadge item={item} /><small>{formatOffline(item.offline_seconds, item.online)}</small></div>
       {editing ? (
         <div className="key-edit-panel">
@@ -203,11 +240,11 @@ function KeyRow({
             ))}
           </div>
           <div className="key-edit-actions">
-            <button type="button" className="key-action key-action-green" disabled={!draftFeatures.length} onClick={() => { onUpdate(item, { max_devices: item.kind === "admin" && unlimitedDevices ? 0 : draftDevices, features: draftFeatures }); setEditing(false); }}><Save size={13} /> Save</button>
+            <button type="button" className="key-action key-action-green" disabled={!draftFeatures.length} onClick={() => { onUpdate(item, { max_devices: item.kind === "admin" && unlimitedDevices ? 0 : draftDevices, features: [...new Set([...draftFeatures, ...item.features.filter((feature) => feature === "jdy-ai-3")])] }); setEditing(false); }}><Save size={13} /> Save</button>
             <button type="button" className="key-action" onClick={() => setEditing(false)}><X size={13} /> Cancel</button>
           </div>
         </div>
-      ) : <div className="key-feature-list">{item.features.map((feature) => <span key={feature}>{feature}</span>)}</div>}
+      ) : <div className="key-feature-list">{item.features.filter((feature) => feature !== "jdy-ai-3").map((feature) => <span key={feature}>{featureOptions.find((option) => option.value === feature)?.label ?? feature}</span>)}</div>}
       <div className="key-row-actions">
         {!isBanned && !editing && <button type="button" className="key-action" onClick={startEditing} title="Edit device limit and features"><Pencil size={14} /> Edit access</button>}
         {item.status !== "active" && !isBanned && <button type="button" className="key-action key-action-green" onClick={() => onStatus(item, "active")} title="Resume or unblock"><Unlock size={14} /> Resume</button>}
@@ -242,6 +279,8 @@ export default function AdminUsersPage() {
   const [newKey, setNewKey] = useState<{ value: string; kind: "user" | "admin"; label: string } | null>(null);
   const [formError, setFormError] = useState("");
   const [deletingKeyIds, setDeletingKeyIds] = useState<Set<string>>(new Set());
+  const [saveCountdown, setSaveCountdown] = useState<number | null>(null);
+  const saveCountdownTimerRef = useRef<number | undefined>(undefined);
   const [protection, setProtection] = useState({
     weekdays_enabled: false,
     weekends_enabled: false,
@@ -255,6 +294,24 @@ export default function AdminUsersPage() {
   const userCount = keys.filter((key) => key.kind === "user").length;
   const activeCount = keys.filter((key) => key.status === "active").length;
   const canCreate = Boolean(label.trim()) && features.length > 0 && !createKey.isPending;
+
+  const showSaveCountdown = () => {
+    if (saveCountdownTimerRef.current !== undefined) window.clearInterval(saveCountdownTimerRef.current);
+    const endAt = Date.now() + 5_000;
+    setSaveCountdown(5);
+    saveCountdownTimerRef.current = window.setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((endAt - Date.now()) / 1_000));
+      setSaveCountdown(remaining || null);
+      if (!remaining && saveCountdownTimerRef.current !== undefined) {
+        window.clearInterval(saveCountdownTimerRef.current);
+        saveCountdownTimerRef.current = undefined;
+      }
+    }, 200);
+  };
+
+  useEffect(() => () => {
+    if (saveCountdownTimerRef.current !== undefined) window.clearInterval(saveCountdownTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (!protectionQuery.data) return;
@@ -288,6 +345,7 @@ export default function AdminUsersPage() {
        { data: { label: label.trim(), kind, max_devices: kind === "admin" && unlimitedDevices ? 0 : maxDevices, features } },
       {
         onSuccess: (created) => {
+          showSaveCountdown();
            setNewKey({ value: created.access_key, kind: created.kind, label: created.label });
           setLabel("");
           setKind("user");
@@ -308,6 +366,7 @@ export default function AdminUsersPage() {
       { id: item.key_id, data: { status } },
       {
         onSuccess: () => {
+          showSaveCountdown();
           queryClient.invalidateQueries({ queryKey: getListAccessKeysQueryKey() });
           toast({ title: status === "banned" ? "Key permanently banned" : `Key ${status === "active" ? "resumed" : status}` });
         },
@@ -321,6 +380,7 @@ export default function AdminUsersPage() {
       { id: item.key_id, data },
       {
         onSuccess: () => {
+          showSaveCountdown();
           queryClient.invalidateQueries({ queryKey: getListAccessKeysQueryKey() });
           toast({ title: "Access updated", description: `${item.label} now has the selected device limit and features.` });
         },
@@ -335,6 +395,7 @@ export default function AdminUsersPage() {
       { id: item.key_id },
       {
         onSuccess: (created) => {
+          showSaveCountdown();
           setNewKey({ value: created.access_key, kind: created.kind, label: created.label });
           queryClient.invalidateQueries({ queryKey: getListAccessKeysQueryKey() });
           toast({ title: "Replacement key ready", description: "Copy the new key now. The old key has been revoked." });
@@ -351,6 +412,7 @@ export default function AdminUsersPage() {
       { id: item.key_id },
       {
         onSuccess: () => {
+          showSaveCountdown();
           toast({ title: "Access key deleted", description: `${item.label} has been removed and can no longer sign in. You can reuse this name for a new key.` });
           window.setTimeout(() => {
             setDeletingKeyIds((current) => {
@@ -386,6 +448,7 @@ export default function AdminUsersPage() {
       { data: next },
       {
         onSuccess: (saved) => {
+          showSaveCountdown();
           setProtection({
             weekdays_enabled: saved.weekdays_enabled,
             weekends_enabled: saved.weekends_enabled,
@@ -407,12 +470,23 @@ export default function AdminUsersPage() {
       : current);
   };
 
+  const editFeatureAction = (feature: AdminFeatureSettings["action_controls"][number]["feature"], controlId: string, mode: AdminFeatureSettings["action_controls"][number]["mode"]) => {
+    const definition = featureActionCatalog.find((item) => item.feature === feature && item.control_id === controlId);
+    if (!definition) return;
+    setFeatureSettingsDraft((current) => {
+      if (!current) return current;
+      const next = current.action_controls.filter((item) => !(item.feature === feature && item.control_id === controlId));
+      return { ...current, action_controls: [...next, { ...definition, mode }] };
+    });
+  };
+
   const featureSettingsPayload = (
     base: AdminFeatureSettings,
     featureOverrides: FeatureControl[] = base.features,
     extra?: Partial<AdminFeatureSettings>,
   ) => ({
     features: featureOverrides,
+    action_controls: extra?.action_controls ?? base.action_controls,
     global_announcement_enabled: extra?.global_announcement_enabled ?? base.global_announcement_enabled,
     global_announcement: extra?.global_announcement ?? base.global_announcement,
     global_announcement_revision: extra?.global_announcement_revision ?? base.global_announcement_revision,
@@ -425,15 +499,20 @@ export default function AdminUsersPage() {
     const draftControl = featureSettingsDraft?.features.find((item) => item.feature === feature);
     if (!savedSettings || !draftControl) return;
     const features = savedSettings.features.map((item) => item.feature === feature ? draftControl : item);
+    const action_controls = [
+      ...savedSettings.action_controls.filter((item) => item.feature !== feature),
+      ...(featureSettingsDraft?.action_controls.filter((item) => item.feature === feature) ?? []),
+    ];
     updateFeatureSettings.mutate(
-      { data: featureSettingsPayload(savedSettings, features) },
+      { data: featureSettingsPayload(savedSettings, features, { action_controls }) },
       {
         onSuccess: (saved) => {
+          showSaveCountdown();
           queryClient.setQueryData(getGetAdminFeatureSettingsQueryKey(), saved);
           setFeatureSettingsDraft((current) => current
             ? { ...current, features: current.features.map((item) => item.feature === feature
               ? saved.features.find((savedItem) => savedItem.feature === feature) ?? item
-              : item) }
+              : item), action_controls: saved.action_controls }
             : saved);
           toast({ title: "Feature notice saved", description: "The selected users are updated immediately." });
         },
@@ -444,7 +523,13 @@ export default function AdminUsersPage() {
 
   const cancelFeatureControl = (feature: FeatureControl["feature"]) => {
     const savedControl = featureSettingsQuery.data?.features.find((item) => item.feature === feature);
-    if (savedControl) editFeatureControl(feature, savedControl);
+    const savedActions = featureSettingsQuery.data?.action_controls.filter((item) => item.feature === feature) ?? [];
+    if (savedControl) {
+      editFeatureControl(feature, savedControl);
+      setFeatureSettingsDraft((current) => current
+        ? { ...current, action_controls: [...current.action_controls.filter((item) => item.feature !== feature), ...savedActions] }
+        : current);
+    }
   };
 
   const saveAnnouncement = () => {
@@ -461,6 +546,7 @@ export default function AdminUsersPage() {
       },
       {
         onSuccess: (saved) => {
+          showSaveCountdown();
           queryClient.setQueryData(getGetAdminFeatureSettingsQueryKey(), saved);
           setFeatureSettingsDraft((current) => current
             ? {
@@ -503,6 +589,7 @@ export default function AdminUsersPage() {
       },
       {
         onSuccess: (saved) => {
+          showSaveCountdown();
           queryClient.setQueryData(getGetAdminFeatureSettingsQueryKey(), saved);
           setFeatureSettingsDraft((current) => current
             ? { ...current, auto_trader_2_paused: saved.auto_trader_2_paused, auto_trader_2_pause_message: saved.auto_trader_2_pause_message }
@@ -537,7 +624,14 @@ export default function AdminUsersPage() {
             <h1>Access <em>control.</em></h1>
             <p>Provision keys, set device limits, grant features, and control who can enter the trading workspace.</p>
           </div>
-           <button type="button" className="refresh-control" onClick={() => void refreshEverything()} disabled={keysQuery.isFetching}><RefreshCw size={14} className={keysQuery.isFetching ? "spin" : ""} /> Refresh everything</button>
+          <div className="admin-heading-actions">
+            <button type="button" className="refresh-control" onClick={() => void refreshEverything()} disabled={keysQuery.isFetching}><RefreshCw size={14} className={keysQuery.isFetching ? "spin" : ""} /> Refresh everything</button>
+            {saveCountdown !== null && (
+              <div className="admin-save-countdown" role="status" aria-live="polite" data-testid="admin-save-countdown">
+                <span>Saved</span><strong>{saveCountdown}</strong><small>sec</small><i aria-hidden="true"><b /></i>
+              </div>
+            )}
+          </div>
         </section>
 
         <AdminIntelligencePanel />
@@ -560,7 +654,14 @@ export default function AdminUsersPage() {
                   const comparable = (item: FeatureControl | undefined) => item
                     ? JSON.stringify({ ...item, user_ids: [...item.user_ids].sort() })
                     : "";
-                  const changed = comparable(control) !== comparable(savedControl);
+                  const controlsForFeature = featureActionCatalog.filter((item) => item.feature === control.feature);
+                  const actionMode = (controls: AdminFeatureSettings["action_controls"], controlId: string) =>
+                    controls.find((item) => item.feature === control.feature && item.control_id === controlId)?.mode ?? "available";
+                  const savedActions = featureSettingsQuery.data?.action_controls ?? [];
+                  const actionChanged = controlsForFeature.some((item) =>
+                    actionMode(featureSettingsDraft.action_controls, item.control_id) !== actionMode(savedActions, item.control_id),
+                  );
+                  const changed = comparable(control) !== comparable(savedControl) || actionChanged;
                   const search = (featureUserSearch[control.feature] ?? "").trim().toLowerCase();
                   const matchingUsers = userKeys.filter((key) =>
                     !search || `${key.label} ${key.key_prefix}`.toLowerCase().includes(search),
@@ -614,6 +715,26 @@ export default function AdminUsersPage() {
                           {!userKeys.length && <small className="admin-feature-user-limit">No user keys have been created yet. New users are included automatically when All users is selected.</small>}
                         </div>
                       )}
+                      <div className="admin-feature-action-controls" aria-label={`${featureLabel} switches and buttons`}>
+                        <div className="admin-feature-action-heading">
+                          <strong>Switches and trade actions</strong>
+                          <small>Any non-Available setting blocks that control for users.</small>
+                        </div>
+                        {controlsForFeature.map((action) => (
+                          <label className="admin-control-field" key={action.control_id}>
+                            <span>{action.label}</span>
+                            <select
+                              value={actionMode(featureSettingsDraft.action_controls, action.control_id)}
+                              onChange={(event) => editFeatureAction(control.feature, action.control_id, event.target.value as AdminFeatureSettings["action_controls"][number]["mode"])}
+                            >
+                              <option value="available">Available</option>
+                              <option value="restricted">Restricted — admin access only</option>
+                              <option value="coming_soon">Coming soon</option>
+                              <option value="under_construction">Under construction</option>
+                            </select>
+                          </label>
+                        ))}
+                      </div>
                       <div className="admin-feature-control-actions">
                         <button type="button" className="secondary-button" onClick={() => saveFeatureControl(control.feature)} disabled={!changed || !savedControl || updateFeatureSettings.isPending}>
                           <Save size={14} />{updateFeatureSettings.isPending ? "Saving…" : "Save"}

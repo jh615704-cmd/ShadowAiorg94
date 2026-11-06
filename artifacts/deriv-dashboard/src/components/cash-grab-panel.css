@@ -291,7 +291,7 @@
 @media (max-width: 560px) {
   .cash-grab-ai-scanner { grid-template-columns: 1fr; }
   .cash-grab-ai-scanner .ai-scanner-control { width: 100%; }
-  .cash-grab-ai-scanner .ai-scanner-button { width: 100%; }
+  .cash-grab-ai-scanner .ai-scanner-switch { width: 100%; }
 }
 
 @media (max-width: 560px) {
@@ -345,7 +345,7 @@
 }
 .cash-grab-ai-scanner > div b { letter-spacing: .12em; }
 .cash-grab-ai-scanner .ai-scanner-control { min-width: 150px; margin-top: 0; }
-.cash-grab-ai-scanner .ai-scanner-button {
+.cash-grab-ai-scanner .ai-scanner-switch {
   min-height: 42px;
   padding-inline: 17px;
   border: 1px solid rgba(112, 199, 255, .45);
@@ -355,7 +355,7 @@
   font-weight: 800;
   letter-spacing: .025em;
 }
-.cash-grab-ai-scanner .ai-scanner-button:hover:not(:disabled) {
+.cash-grab-ai-scanner .ai-scanner-switch:hover:not(.is-disabled) {
   border-color: #8bd1ff;
   background: linear-gradient(145deg, #2181c9, #155d98);
 }

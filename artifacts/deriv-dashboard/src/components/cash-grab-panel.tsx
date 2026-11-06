@@ -488,7 +488,7 @@ export default function CashGrabPanel({
 
         <div className="cash-grab-ai-scanner">
           <div><b>AI SCANNER</b></div>
-          <AiScannerAction onScan={onAiScan} disabled={!canRunScanner} />
+          <AiScannerAction feature="cash-grab" onScan={onAiScan} disabled={!canRunScanner} />
         </div>
 
         <div className="df-action-row">

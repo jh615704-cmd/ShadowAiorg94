@@ -35,6 +35,8 @@ export interface TradeXPanelProps {
   symbol: string;
   tradeType: TradeXTradeType;
   stake: number;
+  multiplier: number;
+  nextScannerStake: number;
   selectedDigit: number;
   duration: TradeXDuration;
   distribution?: readonly TradeXDigitDistribution[];
@@ -50,6 +52,7 @@ export interface TradeXPanelProps {
   onSymbolChange: (symbol: string) => void;
   onTradeTypeChange: (tradeType: TradeXTradeType) => void;
   onStakeChange: (stake: number) => void;
+  onMultiplierChange: (multiplier: number) => void;
   onSelectedDigitChange: (digit: number) => void;
   onDurationChange: (duration: TradeXDuration) => void;
   onTradeSelect: (digit: number) => void;
@@ -82,6 +85,8 @@ export default function TradeXPanel({
   symbol,
   tradeType,
   stake,
+  multiplier,
+  nextScannerStake,
   selectedDigit,
   duration,
   distribution = [],
@@ -97,6 +102,7 @@ export default function TradeXPanel({
   onSymbolChange,
   onTradeTypeChange,
   onStakeChange,
+  onMultiplierChange,
   onSelectedDigitChange,
   onDurationChange,
   onTradeSelect,
@@ -300,6 +306,24 @@ export default function TradeXPanel({
                   data-testid="input-trade-x-stake"
                 />
               </span>
+            </label>
+            <label className="tx-field">
+              <span className="tx-field-label">AI SCANNER LOSS MULTIPLIER</span>
+              <span className="tx-input-prefix">
+                <span>×</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  step="0.1"
+                  value={multiplier}
+                  onChange={(event) => onMultiplierChange(clamp(Number(event.target.value) || 1, 1, 10))}
+                  disabled={disabled}
+                  aria-label="Trade X AI Scanner loss multiplier"
+                  data-testid="input-trade-x-multiplier"
+                />
+              </span>
+              <small className="tx-field-help">Next AI Scanner stake: ${nextScannerStake.toFixed(2)}. Losses increase it; wins keep it until Trade X history is cleared.</small>
             </label>
           </div>
         </section>
@@ -610,6 +634,7 @@ export default function TradeXPanel({
             </button>
           </div>
           <AiScannerAction
+            feature="trade-x"
             onScan={onAiScan}
             disabled={disabled || isPlacingTrade || !enabled}
           />

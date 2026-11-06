@@ -227,6 +227,7 @@ export default function BulkTraderPanel({
           </div>
           {type === "over-under" && (overUnavailable || underUnavailable) && <p className="bulk-contract-warning">Over 9 and Under 0 have no possible winning digit, so Deriv does not offer a return. Choose the other direction or another barrier.</p>}
           <AiScannerAction
+            feature="bulk-trader"
             onScan={onAiScan}
             disabled={!isConnected || isPlacingTrade || Boolean(tradeSlotMessage)}
           />

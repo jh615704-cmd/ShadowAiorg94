@@ -34,15 +34,62 @@ import {
 } from "../lib/access-keys";
 import { disposeUser, withUserSerialized } from "../lib/deriv";
 import { logger } from "../lib/logger";
+import { publishGlobalAnnouncement, subscribeGlobalAnnouncements } from "../lib/global-announcement-events";
 import { requireAccess, requireAccessAdmin } from "../middlewares/requireAccess";
 
 const router: IRouter = Router();
 const featureControlModes = new Set(["available", "restricted", "coming_soon", "under_construction"]);
 
+function summarizeUserAgent(userAgent: string | null) {
+  const ua = userAgent ?? "";
+  const browser = /Edg\//i.test(ua) ? "Edge"
+    : /Firefox\//i.test(ua) ? "Firefox"
+      : /Chrome\//i.test(ua) ? "Chrome"
+        : /Safari\//i.test(ua) ? "Safari"
+          : "Unknown browser";
+  const platform = /iPad|Tablet/i.test(ua) ? "Tablet"
+    : /iPhone|Android.*Mobile|Mobile/i.test(ua) ? "Phone"
+      : /Windows/i.test(ua) ? "Windows"
+        : /Macintosh|Mac OS/i.test(ua) ? "Mac"
+          : /Android/i.test(ua) ? "Android"
+            : /Linux/i.test(ua) ? "Linux"
+              : "Unknown device";
+  const form_factor = /iPad|Tablet/i.test(ua) ? "tablet"
+    : /iPhone|Android.*Mobile|Mobile/i.test(ua) ? "phone"
+      : /Windows|Macintosh|Mac OS|Linux/i.test(ua) ? "desktop"
+        : "other";
+  return { label: `${browser} · ${platform}`, form_factor };
+}
+
+async function deviceSummaries(accessKeyId: string) {
+  const sessions = await db.select({
+    deviceHash: accessKeySessionsTable.deviceHash,
+    userAgent: accessKeySessionsTable.userAgent,
+    firstSeenAt: accessKeySessionsTable.firstSeenAt,
+    lastSeenAt: accessKeySessionsTable.lastSeenAt,
+  }).from(accessKeySessionsTable).where(and(
+    eq(accessKeySessionsTable.accessKeyId, accessKeyId),
+    isNull(accessKeySessionsTable.revokedAt),
+  ));
+  const latestByDevice = new Map<string, typeof sessions[number]>();
+  for (const session of sessions) {
+    const previous = latestByDevice.get(session.deviceHash);
+    if (!previous || session.lastSeenAt > previous.lastSeenAt) latestByDevice.set(session.deviceHash, session);
+  }
+  return [...latestByDevice.values()]
+    .map((session) => ({
+      ...summarizeUserAgent(session.userAgent),
+      online: isOnline(session.lastSeenAt),
+      first_seen_at: session.firstSeenAt,
+      last_seen_at: session.lastSeenAt,
+    }))
+    .sort((left, right) => right.last_seen_at.getTime() - left.last_seen_at.getTime());
+}
+
 function defaultFeatureSettings() {
   return {
     features: ACCESS_FEATURES
-      .filter((feature) => feature !== "admin")
+      .filter((feature) => feature !== "admin" && feature !== "jdy-ai-3")
       .map((feature) => ({
         feature,
         mode: "available",
@@ -51,6 +98,7 @@ function defaultFeatureSettings() {
         countdown_at: null,
         notice: "",
       })),
+    action_controls: [],
     global_announcement_enabled: false,
     global_announcement: "",
     global_announcement_revision: "",
@@ -79,8 +127,27 @@ function normalizeFeatureSettings(value: Record<string, unknown> | undefined, up
       notice: typeof saved.notice === "string" ? saved.notice.slice(0, 500) : "",
     };
   });
+  const actionControls = (Array.isArray(value?.action_controls) ? value.action_controls : [])
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item))
+    .filter((item) =>
+      typeof item.feature === "string"
+      && ACCESS_FEATURES.includes(item.feature as typeof ACCESS_FEATURES[number])
+      && item.feature !== "admin"
+      && item.feature !== "jdy-ai-3"
+      && typeof item.control_id === "string"
+      && /^[a-z0-9][a-z0-9-]{0,79}$/.test(item.control_id)
+      && typeof item.label === "string"
+      && featureControlModes.has(String(item.mode)),
+    )
+    .map((item) => ({
+      feature: item.feature,
+      control_id: item.control_id,
+      label: String(item.label).slice(0, 120),
+      mode: item.mode,
+    }));
   return GetAdminFeatureSettingsResponse.parse({
     features,
+    action_controls: actionControls,
     global_announcement_enabled: value?.global_announcement_enabled === true,
     global_announcement: typeof value?.global_announcement === "string" ? value.global_announcement.slice(0, 500) : "",
     global_announcement_revision: typeof value?.global_announcement_revision === "string"
@@ -347,6 +414,23 @@ router.get("/access/feature-settings", requireAccess, async (_req, res): Promise
   res.json(sessionFeatureSettings(settings, res.locals.accessKeyId, isAdmin));
 });
 
+router.get("/access/feature-announcements/stream", requireAccess, (req, res): void => {
+  res.status(200);
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
+
+  const unsubscribe = subscribeGlobalAnnouncements((event) => {
+    res.write(`event: announcement\ndata: ${JSON.stringify(event)}\n\n`);
+  });
+  const heartbeat = setInterval(() => res.write(": keep-alive\n\n"), 25_000);
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    unsubscribe();
+  });
+});
+
 router.patch("/access/feature-settings", requireAccess, requireAccessAdmin, async (req, res): Promise<void> => {
   const parsed = UpdateAdminFeatureSettingsBody.safeParse(req.body);
   if (!parsed.success) {
@@ -361,6 +445,11 @@ router.patch("/access/feature-settings", requireAccess, requireAccessAdmin, asyn
   const values = {
     settings: {
       ...parsed.data,
+      action_controls: parsed.data.action_controls
+        ?? (existing?.settings && typeof existing.settings === "object" && !Array.isArray(existing.settings)
+          && Array.isArray((existing.settings as Record<string, unknown>).action_controls)
+          ? (existing.settings as Record<string, unknown>).action_controls
+          : []),
       global_announcement_revision: parsed.data.global_announcement_revision
         ?? (typeof previousRevision === "string" ? previousRevision : ""),
     },
@@ -370,7 +459,13 @@ router.patch("/access/feature-settings", requireAccess, requireAccessAdmin, asyn
     ? await db.update(adminFeatureSettingsTable).set(values)
       .where(eq(adminFeatureSettingsTable.id, existing.id)).returning()
     : await db.insert(adminFeatureSettingsTable).values({ id: 1, ...values }).returning();
-  res.json(normalizeFeatureSettings(row.settings, row.updatedAt));
+  const settings = normalizeFeatureSettings(row.settings, row.updatedAt);
+  publishGlobalAnnouncement({
+    enabled: settings.global_announcement_enabled,
+    message: settings.global_announcement,
+    revision: settings.global_announcement_revision,
+  });
+  res.json(settings);
 });
 
 router.use("/access/keys", requireAccess, requireAccessAdmin);
@@ -380,10 +475,8 @@ router.get("/access/keys", async (_req, res): Promise<void> => {
     .where(ne(accessKeysTable.status, "deleted"))
     .orderBy(asc(accessKeysTable.createdAt));
   const response = await Promise.all(keys.map(async (key) => {
-    const [deviceCount, onlineDevices] = await Promise.all([
-      activeDeviceCount(key.id),
-      onlineDeviceCount(key.id),
-    ]);
+    const devices = await deviceSummaries(key.id);
+    const onlineDevices = devices.filter((device) => device.online).length;
     return {
       key_id: key.id,
       access_key: isPrimaryAdminKeyHash(key.keyHash) ? null : readableAccessKey(key.encryptedKey),
@@ -393,8 +486,9 @@ router.get("/access/keys", async (_req, res): Promise<void> => {
       is_admin: isPrimaryAdminKeyHash(key.keyHash),
       status: key.status,
       max_devices: key.maxDevices,
-      device_count: deviceCount,
+      device_count: devices.length,
       online_devices: onlineDevices,
+      device_sessions: devices,
       online: onlineDevices > 0,
       features: featureList(key.features, key.kind),
       last_seen_at: key.lastSeenAt,
@@ -564,6 +658,7 @@ router.patch("/access/keys/:id", async (req, res): Promise<void> => {
     max_devices: updated.maxDevices,
     device_count: await activeDeviceCount(updated.id),
     online_devices: onlineDevices,
+    device_sessions: await deviceSummaries(updated.id),
     online: onlineDevices > 0,
     features: featureList(updated.features, updated.kind),
     last_seen_at: updated.lastSeenAt,

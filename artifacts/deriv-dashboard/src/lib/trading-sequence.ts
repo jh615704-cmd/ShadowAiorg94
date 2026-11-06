@@ -72,6 +72,7 @@ export type SettledTrade = {
   contract_id: string;
   status: string;
   profit: number;
+  buy_time?: number | null;
 };
 
 export function rankDigitsByDistribution(counts: ReadonlyArray<number>): number[] {
@@ -120,6 +121,30 @@ export function nextStakeAfterSettlement(
     return Number((amount * Math.max(1, multiplier)).toFixed(2));
   }
   return normalStake;
+}
+
+/**
+ * Derives the next stake from only this feature's retained, settled history.
+ * Wins leave an escalated stake unchanged; removing local history resets the
+ * result to the configured base stake.
+ */
+export function nextStakeFromLossHistory(
+  rows: readonly SettledTrade[],
+  baseStake: number,
+  multiplier: number,
+) {
+  if (!Number.isFinite(baseStake) || baseStake <= 0) return 0;
+  const safeMultiplier = Number.isFinite(multiplier) ? Math.max(1, multiplier) : 1;
+  let nextStake = Number(baseStake.toFixed(2));
+  const settledRows = rows
+    .filter((trade) => trade.status !== "open" && Number.isFinite(trade.profit))
+    .slice()
+    .sort((left, right) => (left.buy_time ?? 0) - (right.buy_time ?? 0));
+
+  for (const trade of settledRows) {
+    if (trade.profit < 0) nextStake = Number((nextStake * safeMultiplier).toFixed(2));
+  }
+  return nextStake;
 }
 
 export function findNewlySettledTrade(

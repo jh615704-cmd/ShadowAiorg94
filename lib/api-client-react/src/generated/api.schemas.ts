@@ -254,6 +254,24 @@ export interface AccessSession {
   last_seen_at: string | null;
 }
 
+export type AccessDeviceSummaryFormFactor = typeof AccessDeviceSummaryFormFactor[keyof typeof AccessDeviceSummaryFormFactor];
+
+
+export const AccessDeviceSummaryFormFactor = {
+  desktop: 'desktop',
+  tablet: 'tablet',
+  phone: 'phone',
+  other: 'other',
+} as const;
+
+export interface AccessDeviceSummary {
+  label: string;
+  form_factor: AccessDeviceSummaryFormFactor;
+  online: boolean;
+  first_seen_at: string;
+  last_seen_at: string;
+}
+
 export type AccessKeySummary = AccessSession & ({
   /** @nullable */
   access_key: string | null;
@@ -261,6 +279,7 @@ export type AccessKeySummary = AccessSession & ({
   online_devices: number;
   offline_seconds: number;
   created_at: string;
+  device_sessions?: AccessDeviceSummary[];
 });
 
 export type AccessKeyCreated = AccessSession & {
@@ -329,8 +348,34 @@ export interface FeatureControl {
   notice: string;
 }
 
+export type FeatureActionControlMode = typeof FeatureActionControlMode[keyof typeof FeatureActionControlMode];
+
+
+export const FeatureActionControlMode = {
+  available: 'available',
+  restricted: 'restricted',
+  coming_soon: 'coming_soon',
+  under_construction: 'under_construction',
+} as const;
+
+export interface FeatureActionControl {
+  feature: AccessFeature;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  control_id: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  label: string;
+  mode: FeatureActionControlMode;
+}
+
 export interface AdminFeatureSettings {
   features: FeatureControl[];
+  action_controls: FeatureActionControl[];
   global_announcement_enabled: boolean;
   /** @maxLength 500 */
   global_announcement: string;
@@ -345,6 +390,7 @@ export interface AdminFeatureSettings {
 
 export interface AdminFeatureSettingsUpdate {
   features: FeatureControl[];
+  action_controls?: FeatureActionControl[];
   global_announcement_enabled: boolean;
   /** @maxLength 500 */
   global_announcement: string;

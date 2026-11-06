@@ -461,9 +461,10 @@ export default function EdgeReferencePanel({
       </label>
       <section className="edge-ref-ai-scanner">
         <AiScannerAction
+          feature="edge"
           onScan={onAiScan}
           disabled={!canRunAiScanner}
-          actionLabel="Scan + trade"
+          actionLabel="AI Scanner"
           messageAutoDismissMs={3000}
         />
       </section>

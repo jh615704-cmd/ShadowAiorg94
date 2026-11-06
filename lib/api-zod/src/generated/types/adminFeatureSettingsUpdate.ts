@@ -5,10 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { FeatureActionControl } from './featureActionControl';
 import type { FeatureControl } from './featureControl';
 
 export interface AdminFeatureSettingsUpdate {
   features: FeatureControl[];
+  action_controls?: FeatureActionControl[];
   global_announcement_enabled: boolean;
   /** @maxLength 500 */
   global_announcement: string;

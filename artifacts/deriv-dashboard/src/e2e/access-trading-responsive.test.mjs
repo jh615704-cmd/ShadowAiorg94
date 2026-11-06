@@ -453,7 +453,7 @@ test("DigitFlip history stays visible after switching the feature off", async ()
     await digitFlipToggle.waitFor();
     await digitFlipSwitch.click();
     await page.getByTestId("digit-flip-panel").waitFor();
-    await page.getByRole("button", { name: "AI Scanner" }).click();
+    await page.getByRole("switch", { name: "AI Scanner" }).check();
 
     const history = page.locator(".digit-flip-history");
     await history.locator(".deriv-history-row").waitFor({ timeout: 10_000 });
@@ -2224,6 +2224,7 @@ function createState(session) {
         countdown_at: null,
         notice: "",
       })),
+      action_controls: [],
       global_announcement_enabled: false,
       global_announcement: "",
       global_announcement_revision: "",
@@ -2343,6 +2344,19 @@ async function mockApiRequest(route, state, pathname, method) {
       state.sessionRevoked ? { error: "The access session is no longer active." } : state.session,
       state.sessionRevoked ? 401 : 200,
     );
+    return;
+  }
+  if (pathname === "/api/access/feature-announcements/stream" && method === "GET") {
+    const announcement = {
+      enabled: state.featureSettings.global_announcement_enabled,
+      message: state.featureSettings.global_announcement,
+      revision: state.featureSettings.global_announcement_revision,
+    };
+    await route.fulfill({
+      status: 200,
+      contentType: "text/event-stream",
+      body: `event: announcement\ndata: ${JSON.stringify(announcement)}\n\n`,
+    });
     return;
   }
   if (pathname === "/api/access/feature-settings" && method === "GET") {

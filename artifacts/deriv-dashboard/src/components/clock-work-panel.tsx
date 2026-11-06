@@ -29,6 +29,8 @@ export interface ClockWorkPanelProps {
   running: boolean;
   busy: boolean;
   disabled: boolean;
+  aiControlAvailable: boolean;
+  tradeControlAvailable: boolean;
   aiStatus: string;
   statusMessage: string | null;
   currency: string;
@@ -82,13 +84,15 @@ export default function ClockWorkPanel({
   running,
   busy,
   disabled,
+  aiControlAvailable,
+  tradeControlAvailable,
   aiStatus,
   statusMessage,
   currency,
   onStart,
   onStop,
 }: ClockWorkPanelProps) {
-  const startDisabled = disabled || busy;
+  const startDisabled = disabled || busy || !tradeControlAvailable;
 
   return (
     <section className={`cw-panel ${enabled ? "cw-live" : ""}`} data-testid="clock-work-panel">
@@ -238,7 +242,7 @@ export default function ClockWorkPanel({
               <span className="cw-ai-icon"><Bot size={18} /></span>
               <span><b>Ai Clock</b></span>
             </div>
-            <Toggle checked={aiEnabled} onChange={onAiEnabledChange} disabled={disabled && !aiEnabled} />
+            <Toggle checked={aiEnabled} onChange={onAiEnabledChange} disabled={!aiEnabled && (!aiControlAvailable || disabled)} />
           </div>
           <div className="cw-ai-rate-rule" data-testid="clock-work-ai-rate-rule">
             <span>FIXED ENTRY FILTER</span>

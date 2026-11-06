@@ -56,6 +56,28 @@ async function blockedFeature(feature: string, accessKeyId: string) {
   return (await blockedFeatures([feature], accessKeyId))[0] ?? null;
 }
 
+async function blockedFeatureAction(feature: string, controlId: string) {
+  const [row] = await db.select().from(adminFeatureSettingsTable).limit(1);
+  const settings = row?.settings;
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return null;
+  const controls = (settings as { action_controls?: unknown }).action_controls;
+  if (!Array.isArray(controls)) return null;
+  const control = controls.find((item) =>
+    Boolean(item)
+    && typeof item === "object"
+    && !Array.isArray(item)
+    && (item as { feature?: unknown }).feature === feature
+    && (item as { control_id?: unknown }).control_id === controlId,
+  ) as { mode?: unknown; label?: unknown } | undefined;
+  if (!control || typeof control.mode !== "string" || control.mode === "available") return null;
+  if (!["restricted", "coming_soon", "under_construction"].includes(control.mode)) return null;
+  return {
+    feature,
+    control_id: controlId,
+    message: `${featureStatusMessage(control.mode, "")}: ${typeof control.label === "string" ? control.label : "This control"} is unavailable.`,
+  };
+}
+
 export const requireAccess: RequestHandler = async (req, res, next) => {
   try {
     const rawToken = parseAccessCookie(req.headers.cookie);
@@ -122,7 +144,52 @@ export const requireTradeAccessFeature: RequestHandler = async (req, res, next) 
     res.status(400).json({ error: "A valid access_feature is required to place this trade." });
     return;
   }
-  await requireAccessFeature(feature)(req, res, next);
+  const keyHash = res.locals.accessKey?.keyHash as string | undefined;
+  if (keyHash && isPrimaryAdminKeyHash(keyHash)) {
+    next();
+    return;
+  }
+  const features = res.locals.accessKey?.features as string[] | undefined;
+  if (!features?.includes(feature)) {
+    res.status(403).json({ error: `Restricted — admin access only: this access key does not include the ${feature} feature` });
+    return;
+  }
+  const accessKeyId = String(res.locals.accessKeyId ?? "");
+  const featureBlock = await blockedFeature(feature, accessKeyId);
+  if (featureBlock) {
+    res.status(403).json({ error: featureBlock.message, code: "FEATURE_UNAVAILABLE", feature });
+    return;
+  }
+  const actionBlock = await blockedFeatureAction(feature, "place-trade");
+  if (actionBlock) {
+    res.status(403).json({
+      error: actionBlock.message,
+      code: "FEATURE_ACTION_UNAVAILABLE",
+      feature,
+      control_id: "place-trade",
+    });
+    return;
+  }
+  next();
+};
+
+export const requireFeatureAction = (feature: string, controlId: string): RequestHandler => async (_req, res, next) => {
+  const keyHash = res.locals.accessKey?.keyHash as string | undefined;
+  if (keyHash && isPrimaryAdminKeyHash(keyHash)) {
+    next();
+    return;
+  }
+  const blocked = await blockedFeatureAction(feature, controlId);
+  if (blocked) {
+    res.status(403).json({
+      error: blocked.message,
+      code: "FEATURE_ACTION_UNAVAILABLE",
+      feature,
+      control_id: controlId,
+    });
+    return;
+  }
+  next();
 };
 
 export const requireAnyAccessFeature = (...allowedFeatures: string[]): RequestHandler => async (_req, res, next) => {

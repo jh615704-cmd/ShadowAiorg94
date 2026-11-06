@@ -12,6 +12,7 @@ import {
   findNewlySettledTrade,
   rankDigitsForDiffers,
   nextStakeAfterSettlement,
+  nextStakeFromLossHistory,
   rankDigitsByDistribution,
   sessionStopReason,
   type MarketSignal,
@@ -69,6 +70,17 @@ describe("martingale settlement sequencing", () => {
 
   it("resets the next stake to the normal amount after a win", () => {
     assert.equal(nextStakeAfterSettlement(2.5, 3.13, 1.25, 2.5), 1.25);
+  });
+
+  it("keeps the multiplied stake through wins until feature history is cleared", () => {
+    const rows = [
+      { contract_id: "loss", status: "lost", profit: -0.5, buy_time: 1 },
+      { contract_id: "win", status: "won", profit: 1, buy_time: 2 },
+      { contract_id: "loss-2", status: "lost", profit: -1, buy_time: 3 },
+      { contract_id: "open", status: "open", profit: -2, buy_time: 4 },
+    ];
+    assert.equal(nextStakeFromLossHistory(rows, 0.5, 2), 2);
+    assert.equal(nextStakeFromLossHistory([], 0.5, 2), 0.5);
   });
 
   it("ignores open and already-known rows when finding a settlement", () => {

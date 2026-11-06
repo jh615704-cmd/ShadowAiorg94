@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AccessDeviceSummary } from './accessDeviceSummary';
 import type { AccessSession } from './accessSession';
 
 export type AccessKeySummary = AccessSession & ({
@@ -14,4 +15,5 @@ export type AccessKeySummary = AccessSession & ({
   online_devices: number;
   offline_seconds: number;
   created_at: Date;
+  device_sessions?: AccessDeviceSummary[];
 });

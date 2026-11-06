@@ -39,7 +39,7 @@ mock.module("drizzle-orm", {
 });
 
 const { ACCESS_FEATURES, featureList, TRADING_ACCESS_FEATURES } = await import("../lib/access-keys.ts");
-const { requireAccessFeature, requireAnyAccessFeature, requireTradeAccessFeature } = await import("./requireAccess.ts");
+const { requireAccessFeature, requireAnyAccessFeature, requireFeatureAction, requireTradeAccessFeature } = await import("./requireAccess.ts");
 
 const autoTraderFeature = "auto-trader";
 const autoTrader2Feature = "auto-trader-2";
@@ -177,6 +177,41 @@ describe("Trading access-key feature path", () => {
     assert.equal(missing.statusCode, 400);
     assert.equal(blocked.statusCode, 403);
     assert.equal(blocked.body?.feature, autoTraderFeature);
+    savedFeatureSettings = null;
+  });
+
+  it("blocks a feature trade when its admin-managed Place trade action is unavailable", async () => {
+    savedFeatureSettings = {
+      settings: {
+        features: [{ feature: autoTraderFeature, mode: "available", audience: "all", user_ids: [], notice: "" }],
+        action_controls: [{
+          feature: autoTraderFeature,
+          control_id: "place-trade",
+          label: "Place trade",
+          mode: "coming_soon",
+        }, {
+          feature: "clock-work",
+          control_id: "ai-clock",
+          label: "AI Clock switch",
+          mode: "restricted",
+        }],
+      },
+    };
+    const blocked = await runGuard(
+      requireTradeAccessFeature,
+      [autoTraderFeature],
+      "00000000-0000-4000-8000-000000000099",
+      { access_feature: autoTraderFeature },
+    );
+    assert.equal(blocked.statusCode, 403);
+    assert.equal(blocked.body?.code, "FEATURE_ACTION_UNAVAILABLE");
+    assert.equal(blocked.body?.control_id, "place-trade");
+
+    const directAction = await runGuard(
+      requireFeatureAction("clock-work", "ai-clock"),
+      ["clock-work"],
+    );
+    assert.equal(directAction.nextCalled, false);
     savedFeatureSettings = null;
   });
 });

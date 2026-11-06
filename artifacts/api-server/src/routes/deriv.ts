@@ -66,7 +66,7 @@ import { assertAccessSessionActive, AccessSessionRevokedError } from "../lib/acc
 import { adminFeatureSettingsTable, db, derivCredentialsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { decryptPat } from "../lib/pat-crypto";
-import { requireAccessFeature, requireTradeAccessFeature } from "../middlewares/requireAccess.ts";
+import { requireAccessFeature, requireFeatureAction, requireTradeAccessFeature } from "../middlewares/requireAccess.ts";
 
 const router: IRouter = Router();
 class MissingDerivCredentialError extends Error {}
@@ -847,7 +847,11 @@ router.post("/deriv/clock-work/quotes", requireAccessFeature("clock-work"), asyn
   }
 });
 
-router.post("/deriv/clock-work/buy", requireAccessFeature("clock-work"), async (req, res) => {
+router.post(
+  "/deriv/clock-work/buy",
+  requireAccessFeature("clock-work"),
+  requireFeatureAction("clock-work", "place-trade"),
+  async (req, res) => {
   const parsed = BuyClockWorkContractsBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid Clock Work buy request" });
 
@@ -894,6 +898,7 @@ router.post("/deriv/clock-work/buy", requireAccessFeature("clock-work"), async (
       trade_outcome: tradeOutcomeForRouteError(error, status),
     });
   }
-});
+  },
+);
 
 export default router;
