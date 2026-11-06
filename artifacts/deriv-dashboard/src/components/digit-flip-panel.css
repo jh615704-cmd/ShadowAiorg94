@@ -260,6 +260,13 @@
 .df-trade-row small { display: block; margin-bottom: 3px; color: #788da1; font: 7px "DM Mono", monospace; }
 .df-trade-row strong { color: #75e4c9; font: 11px "DM Mono", monospace; text-align: right; }
 .df-trade-row strong.loss { color: #ff9c9c; }
+.df-setup-grid label > small {
+  display: block;
+  margin-top: 5px;
+  color: #92a9c0;
+  font-size: 9px;
+  line-height: 1.45;
+}
 
 @media (min-width: 760px) {
   .df-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }

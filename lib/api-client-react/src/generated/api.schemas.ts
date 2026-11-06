@@ -254,6 +254,16 @@ export interface AccessSession {
   last_seen_at: string | null;
 }
 
+export type AccessDeviceSummaryDeviceType = typeof AccessDeviceSummaryDeviceType[keyof typeof AccessDeviceSummaryDeviceType];
+
+
+export const AccessDeviceSummaryDeviceType = {
+  laptop_desktop: 'laptop_desktop',
+  tablet: 'tablet',
+  phone: 'phone',
+  other: 'other',
+} as const;
+
 export type AccessDeviceSummaryFormFactor = typeof AccessDeviceSummaryFormFactor[keyof typeof AccessDeviceSummaryFormFactor];
 
 
@@ -266,6 +276,9 @@ export const AccessDeviceSummaryFormFactor = {
 
 export interface AccessDeviceSummary {
   label: string;
+  browser: string;
+  operating_system: string;
+  device_type: AccessDeviceSummaryDeviceType;
   form_factor: AccessDeviceSummaryFormFactor;
   online: boolean;
   first_seen_at: string;

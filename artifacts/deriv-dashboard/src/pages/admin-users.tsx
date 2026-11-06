@@ -205,8 +205,9 @@ function KeyRow({
           {item.device_sessions?.length
             ? item.device_sessions.map((device, index) => (
               <span className="key-device-item" key={`${device.label}-${device.first_seen_at}-${index}`}>
-                <b>{device.label}</b>
-                <small>{device.form_factor} · {deviceSeenLabel(device.last_seen_at, device.online)}</small>
+                <b>{device.device_type === "laptop_desktop" ? "Laptop / desktop" : device.device_type[0]?.toUpperCase() + device.device_type.slice(1)}</b>
+                <small>{device.browser}</small>
+                <small>{device.operating_system} · {deviceSeenLabel(device.last_seen_at, device.online)}</small>
               </span>
             ))
             : <small>No active device sessions</small>}
@@ -609,11 +610,18 @@ export default function AdminUsersPage() {
       : saved);
   };
 
-  const stats = useMemo(() => [
-    { label: "TOTAL KEYS", value: keys.length, detail: `${userCount} user keys`, icon: KeyRound },
-    { label: "ONLINE NOW", value: onlineCount, detail: "Presence within 90 seconds", icon: Activity },
-    { label: "ACTIVE ACCESS", value: activeCount, detail: "Keys currently accepted", icon: Users },
-  ], [activeCount, keys.length, onlineCount, userCount]);
+  const stats = useMemo(() => {
+    const devices = keys.flatMap((key) => key.device_sessions ?? []);
+    const laptopDesktopCount = devices.filter((device) => device.device_type === "laptop_desktop").length;
+    const tabletCount = devices.filter((device) => device.device_type === "tablet").length;
+    const phoneCount = devices.filter((device) => device.device_type === "phone").length;
+    return [
+      { label: "TOTAL KEYS", value: keys.length, detail: `${userCount} user keys`, icon: KeyRound },
+      { label: "ONLINE NOW", value: onlineCount, detail: "Presence within 90 seconds", icon: Activity },
+      { label: "ACTIVE ACCESS", value: activeCount, detail: "Keys currently accepted", icon: Users },
+      { label: "REGISTERED DEVICES", value: devices.length, detail: `${laptopDesktopCount} laptop/desktop · ${tabletCount} tablet · ${phoneCount} phone`, icon: Activity },
+    ];
+  }, [activeCount, keys, onlineCount, userCount]);
 
   return (
     <AppShell title="ADMIN / ACCESS CONTROL">
@@ -839,7 +847,7 @@ export default function AdminUsersPage() {
               <button type="submit" className="primary-button admin-create-submit" disabled={!canCreate}><KeyRound size={16} />{createKey.isPending ? "Generating…" : `Generate ${kind === "admin" ? "admin" : "user"} key`}</button>
             </form>
           </div>
-            <div className="admin-safety-note admin-key-features-note"><div className="admin-safety-icon"><KeyRound size={20} /></div><h3>Key features</h3><ul><li>Grant EDGE, DigitFlip, Trade X, Bulk Trader, Clock Work, Cash Grab, Money Bank, Auto Trader, Auto Trader 2.0, Settings, or History independently.</li><li>Shadows 3 is an additional Cash Grab gate and immediate-stop control.</li><li>If a feature is not granted, the workspace shows “Restricted — admin access only.”</li><li>Edit access later to unlock a feature without issuing a replacement key.</li><li>Delete permanently revokes the key. Its name can be reused, but the old key can never sign in again.</li></ul></div>
+            <div className="admin-safety-note admin-key-features-note"><div className="admin-safety-icon"><KeyRound size={20} /></div><h3>Key features</h3><ul><li>Grant EDGE, DigitFlip, Trade X, Bulk Trader, Jackpot, Clock Work, Cash Grab, Money Bank, Auto Trader, Auto Trader 2.0, Settings, or History independently.</li><li>Set each feature and its actual listed switches or trade actions to Available, Restricted, Coming soon, or Under construction.</li><li>If a feature or action is unavailable to a user, it cannot be opened or used.</li><li>Edit access later to unlock a feature without issuing a replacement key.</li><li>Delete permanently revokes the key. Its name can be reused, but the old key can never sign in again.</li></ul></div>
         </section>
 
         <section className="panel admin-directory">

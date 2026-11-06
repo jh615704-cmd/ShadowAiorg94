@@ -7,6 +7,7 @@
  */
 
 export * from './accessDeviceSummary';
+export * from './accessDeviceSummaryDeviceType';
 export * from './accessDeviceSummaryFormFactor';
 export * from './accessFeature';
 export * from './accessKeyCreated';

@@ -344,6 +344,9 @@ export const ListAccessKeysResponseItem = zod.object({
   "created_at": zod.coerce.date(),
   "device_sessions": zod.array(zod.object({
   "label": zod.string(),
+  "browser": zod.string(),
+  "operating_system": zod.string(),
+  "device_type": zod.enum(['laptop_desktop', 'tablet', 'phone', 'other']),
   "form_factor": zod.enum(['desktop', 'tablet', 'phone', 'other']),
   "online": zod.boolean(),
   "first_seen_at": zod.coerce.date(),
@@ -425,6 +428,9 @@ export const UpdateAccessKeyResponse = zod.object({
   "created_at": zod.coerce.date(),
   "device_sessions": zod.array(zod.object({
   "label": zod.string(),
+  "browser": zod.string(),
+  "operating_system": zod.string(),
+  "device_type": zod.enum(['laptop_desktop', 'tablet', 'phone', 'other']),
   "form_factor": zod.enum(['desktop', 'tablet', 'phone', 'other']),
   "online": zod.boolean(),
   "first_seen_at": zod.coerce.date(),

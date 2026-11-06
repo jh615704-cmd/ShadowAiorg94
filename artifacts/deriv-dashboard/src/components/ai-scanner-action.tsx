@@ -14,6 +14,8 @@ type Props = {
   messageAutoDismissMs?: number;
 };
 
+const MIN_SCANNER_PROGRESS_MS = 1_100;
+
 export default function AiScannerAction({
   onScan,
   feature,
@@ -38,10 +40,13 @@ export default function AiScannerAction({
   );
   const isDisabled = disabled || actionUnavailable;
   const [scanning, setScanning] = useState(false);
+  const [showProgress, setShowProgress] = useState(false);
+  const [progressComplete, setProgressComplete] = useState(false);
   const [message, setMessage] = useState("");
   const [messageFading, setMessageFading] = useState(false);
   const dismissTimerRef = useRef<number | undefined>(undefined);
   const removeTimerRef = useRef<number | undefined>(undefined);
+  const progressTimerRef = useRef<number | undefined>(undefined);
 
   const clearMessageTimers = () => {
     if (dismissTimerRef.current !== undefined) {
@@ -51,6 +56,10 @@ export default function AiScannerAction({
     if (removeTimerRef.current !== undefined) {
       window.clearTimeout(removeTimerRef.current);
       removeTimerRef.current = undefined;
+    }
+    if (progressTimerRef.current !== undefined) {
+      window.clearTimeout(progressTimerRef.current);
+      progressTimerRef.current = undefined;
     }
   };
 
@@ -72,18 +81,32 @@ export default function AiScannerAction({
   const scan = async () => {
     if (scanning || isDisabled) return;
     clearMessageTimers();
+    const startedAt = Date.now();
     setScanning(true);
+    setShowProgress(true);
+    setProgressComplete(false);
     setMessageFading(false);
     setMessage("");
     try {
       const resultMessage = await onScan();
       setMessage(resultMessage);
+      setProgressComplete(true);
       scheduleMessageDismiss();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "The scan could not be completed.");
+      setProgressComplete(true);
       scheduleMessageDismiss();
     } finally {
       setScanning(false);
+      const remainingProgressMs = Math.max(0, MIN_SCANNER_PROGRESS_MS - (Date.now() - startedAt));
+      if (remainingProgressMs === 0) {
+        setShowProgress(false);
+      } else {
+        progressTimerRef.current = window.setTimeout(() => {
+          setShowProgress(false);
+          progressTimerRef.current = undefined;
+        }, remainingProgressMs);
+      }
     }
   };
 
@@ -104,10 +127,10 @@ export default function AiScannerAction({
         />
         <i aria-hidden="true" />
       </label>
-      {scanning && (
-        <div className="ai-scanner-progress" role="status" aria-live="polite" aria-label="AI Scanner Calculating">
+      {showProgress && (
+        <div className={`ai-scanner-progress${progressComplete ? " is-complete" : ""}`} role="status" aria-live="polite" aria-label="AI Scanner Calculating">
           <strong>AI Scanner Calculating</strong>
-          <span className="ai-scanner-progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={82}><i /></span>
+          <span className="ai-scanner-progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressComplete ? 100 : 82}><i /></span>
         </div>
       )}
       {message && (

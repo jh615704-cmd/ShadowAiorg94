@@ -294,10 +294,65 @@ test("restricted homepage feature cards and switches glow red without enabling c
 
 test("administrators do not see status labels or red card glows", async () => {
   const state = createState(adminSession());
-  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  state.accessKeys = [{
+    key_id: "44444444-4444-4444-8444-444444444444",
+    key_prefix: "fixture-user",
+    label: "Device inventory check",
+    kind: "user",
+    is_admin: false,
+    status: "active",
+    max_devices: 3,
+    features: ["edge"],
+    online: true,
+    online_devices: 1,
+    device_count: 3,
+    offline_seconds: 0,
+    created_at: new Date().toISOString(),
+    last_seen_at: new Date().toISOString(),
+    device_sessions: [
+      {
+        label: "Chrome 128 · Windows 10/11",
+        browser: "Chrome 128",
+        operating_system: "Windows 10/11",
+        device_type: "laptop_desktop",
+        form_factor: "desktop",
+        online: true,
+        first_seen_at: new Date().toISOString(),
+        last_seen_at: new Date().toISOString(),
+      },
+      {
+        label: "Safari 17 · iOS 17.5",
+        browser: "Safari 17",
+        operating_system: "iOS 17.5",
+        device_type: "phone",
+        form_factor: "phone",
+        online: false,
+        first_seen_at: new Date().toISOString(),
+        last_seen_at: new Date().toISOString(),
+      },
+    ],
+  }];
+  const { context, page, pageErrors } = await createMockPage(state, viewports[2]);
   try {
     await page.goto(`${baseUrl}/admin`);
     await page.getByRole("heading", { name: "Create a new key" }).waitFor();
+    assert.equal(await page.getByText("Shadows 3", { exact: true }).count(), 0);
+    await page.getByText("REGISTERED DEVICES", { exact: true }).waitFor();
+    await page.getByText("Laptop / desktop", { exact: true }).waitFor();
+    await page.getByText("Chrome 128", { exact: true }).waitFor();
+    await page.getByText(/iOS 17\.5/).waitFor();
+    await page.locator(".admin-feature-action-controls").getByText("AI Scanner", { exact: true }).first().waitFor();
+    await page.locator(".admin-feature-action-controls").getByText("Place trade", { exact: true }).first().waitFor();
+    for (const viewport of [
+      { name: "laptop", width: 1440, height: 900 },
+      { name: "compact laptop", width: 1280, height: 800 },
+      { name: "tablet landscape", width: 1024, height: 768 },
+    ]) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await assertNoHorizontalOverflow(page, viewport, "Admin Panel");
+      await assertWithinViewport(page, ".admin-console", viewport.width, "Admin Panel content");
+      await assertWithinViewport(page, ".admin-feature-control-card", viewport.width, "Admin feature controls");
+    }
     const statusChanges = [
       ["Clock Work", "coming_soon"],
       ["Cash Grab", "under_construction"],
@@ -364,6 +419,9 @@ test("global announcement reaches existing and new users, stays dismissed until 
     assert.equal(firstBroadcast.global_announcement_enabled, true);
     assert.equal(firstBroadcast.global_announcement, message);
     assert.ok(firstBroadcast.global_announcement_revision, "Saving creates a distinct broadcast revision.");
+    const saveCountdown = admin.page.getByTestId("admin-save-countdown");
+    await saveCountdown.waitFor({ state: "visible" });
+    assert.match(await saveCountdown.innerText(), /Saved\s*5\s*sec/, "A successful save should start a five-second confirmation.");
 
     const adminAnnouncement = admin.page.getByTestId("global-announcement");
     await adminAnnouncement.waitFor();
@@ -453,11 +511,20 @@ test("DigitFlip history stays visible after switching the feature off", async ()
     await digitFlipToggle.waitFor();
     await digitFlipSwitch.click();
     await page.getByTestId("digit-flip-panel").waitFor();
-    await page.getByRole("switch", { name: "AI Scanner" }).check();
+    const scannerSwitch = page.getByRole("switch", { name: "AI Scanner" });
+    await scannerSwitch.check();
+    const calculating = page.getByRole("status", { name: "AI Scanner Calculating" });
+    await calculating.waitFor({ state: "visible", timeout: 2_000 });
+    await page.getByRole("progressbar").waitFor({ state: "visible" });
 
     const history = page.locator(".digit-flip-history");
     await history.locator(".deriv-history-row").waitFor({ timeout: 10_000 });
     assert.match(await history.innerText(), /US\$0\.50/);
+    await page.waitForFunction(() => {
+      const switcher = document.querySelector('input[role="switch"][aria-label="AI Scanner"]');
+      return switcher instanceof HTMLInputElement && !switcher.checked;
+    }, undefined, { timeout: 10_000 });
+    assert.equal(state.tradeRequests.length, 1, "The scanner progress must not hold the submitted order.");
 
     await digitFlipSwitch.click();
     await page.getByTestId("digit-flip-panel").waitFor({ state: "hidden" });
@@ -2197,6 +2264,7 @@ test("Bulk Trader digits match Trade X pill styling and fit phone, tablet, lapto
 function createState(session) {
   return {
     session,
+    accessKeys: [],
     sessionRevoked: false,
     hasToken: false,
     allowFixtureTrades: false,
@@ -2393,7 +2461,7 @@ async function mockApiRequest(route, state, pathname, method) {
     return;
   }
   if (pathname === "/api/access/keys" && method === "GET") {
-    await fulfillJson(route, []);
+    await fulfillJson(route, state.accessKeys);
     return;
   }
   if (pathname === "/api/access/keys" && method === "POST") {

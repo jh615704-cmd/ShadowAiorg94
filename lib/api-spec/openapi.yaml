@@ -1309,9 +1309,12 @@ components:
                 $ref: "#/components/schemas/AccessDeviceSummary"
     AccessDeviceSummary:
       type: object
-      required: [label, form_factor, online, first_seen_at, last_seen_at]
+      required: [label, browser, operating_system, device_type, form_factor, online, first_seen_at, last_seen_at]
       properties:
         label: { type: string }
+        browser: { type: string }
+        operating_system: { type: string }
+        device_type: { type: string, enum: [laptop_desktop, tablet, phone, other] }
         form_factor: { type: string, enum: [desktop, tablet, phone, other] }
         online: { type: boolean }
         first_seen_at: { type: string, format: date-time }

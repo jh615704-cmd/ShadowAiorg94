@@ -40,6 +40,7 @@ export type DigitFlipPanelProps = {
   selectedParity: DigitFlipParity;
   duration: DigitFlipDuration;
   stake: number;
+  scannerStake: number;
   stakeMode: DigitFlipStakeMode;
   multiplier: number;
   takeProfit: number;
@@ -117,6 +118,7 @@ export default function DigitFlipPanel({
   selectedParity,
   duration,
   stake,
+  scannerStake,
   stakeMode,
   multiplier,
   takeProfit,
@@ -487,7 +489,7 @@ export default function DigitFlipPanel({
             </select>
           </label>
           <label>
-            <span>MULTIPLIER</span>
+              <span>LOSS MULTIPLIER</span>
             <input
               type="number"
               min="1"
@@ -496,8 +498,9 @@ export default function DigitFlipPanel({
               onChange={(event) =>
                 onMultiplierChange(Math.max(1, Number(event.target.value) || 1))
               }
-              disabled={disabled || running || stakeMode === "flat"}
+              disabled={disabled || running}
             />
+            <small>AI Scanner stake: {currency} {scannerStake.toFixed(2)}. Losses multiply it; wins keep it elevated until you clear DigitFlip history. Manual runs use this multiplier only in Martingale mode.</small>
           </label>
           <label>
             <span>TAKE PROFIT</span>

@@ -6091,6 +6091,7 @@ export default function XTraderPage() {
           selectedParity={digitFlipParity}
           duration={digitFlipDuration}
           stake={digitFlipStake}
+          scannerStake={digitFlipScannerStake}
           stakeMode={digitFlipStakeMode}
           multiplier={digitFlipMultiplier}
           takeProfit={digitFlipTakeProfit}
@@ -6398,7 +6399,8 @@ export default function XTraderPage() {
           marketSignals={cashGrabMarketSignals}
           quote={status.data?.last_tick?.symbol === cashGrabSymbol ? status.data?.last_tick?.quote ?? null : null}
           stake={cashGrabStake}
-          currentStake={cashGrabScannerStake}
+          currentStake={cashGrabRunning ? cashGrabCurrentStakeRef.current : cashGrabStake}
+          scannerStake={cashGrabScannerStake}
           duration={cashGrabDuration}
           stakeMode={cashGrabStakeMode}
           currency={currentAccount?.currency ?? "USD"}

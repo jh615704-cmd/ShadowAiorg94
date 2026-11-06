@@ -58,6 +58,7 @@ export interface CashGrabPanelProps {
   quote?: number | null;
   stake: number;
   currentStake?: number;
+  scannerStake?: number;
   duration: CashGrabDuration;
   stakeMode: CashGrabStakeMode;
   currency?: string;
@@ -125,6 +126,7 @@ export default function CashGrabPanel({
   quote = null,
   stake,
   currentStake = stake,
+  scannerStake = stake,
   duration,
   stakeMode,
   currency = "USD",
@@ -425,22 +427,20 @@ export default function CashGrabPanel({
           </label>
         </div>
 
-        {stakeMode === "multiply" && (
-          <label className="cash-grab-multiplier-field">
-            <span>MULTIPLIER AFTER A LOSS</span>
-            <input
-              type="number"
-              min="0.01"
-              step="any"
-              value={multiplier}
-              onChange={(event) => onMultiplierChange(Math.max(0.01, Number(event.target.value) || 0.01))}
-              disabled={interactionDisabled}
-              aria-label="Cash Grab stake multiplier after a loss"
-              data-testid="input-cash-grab-multiplier"
-            />
-            <small>Flat stake returns after a win. No maximum is set for the multiplier.</small>
-          </label>
-        )}
+        <label className="cash-grab-multiplier-field">
+          <span>AI SCANNER LOSS MULTIPLIER</span>
+          <input
+            type="number"
+            min="1"
+            step="0.1"
+            value={multiplier}
+            onChange={(event) => onMultiplierChange(Math.max(1, Number(event.target.value) || 1))}
+            disabled={interactionDisabled}
+            aria-label="Cash Grab AI Scanner loss multiplier"
+            data-testid="input-cash-grab-multiplier"
+          />
+          <small>Next AI Scanner stake: {currency} {scannerStake.toFixed(2)}. Losses multiply it; wins keep it elevated until you clear Cash Grab history. Cash Grab run mode still follows the selected stake mode.</small>
+        </label>
 
         <div className="cash-grab-limits" aria-label="Cash Grab session profit and loss limits">
           <label>
@@ -487,7 +487,7 @@ export default function CashGrabPanel({
         </div>
 
         <div className="cash-grab-ai-scanner">
-          <div><b>AI SCANNER</b></div>
+          <div><b>AI SCANNER</b><small>One trade per scan · the switch turns off after the order is sent.</small></div>
           <AiScannerAction feature="cash-grab" onScan={onAiScan} disabled={!canRunScanner} />
         </div>
 

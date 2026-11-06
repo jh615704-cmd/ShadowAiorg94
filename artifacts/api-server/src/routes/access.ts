@@ -36,30 +36,10 @@ import { disposeUser, withUserSerialized } from "../lib/deriv";
 import { logger } from "../lib/logger";
 import { publishGlobalAnnouncement, subscribeGlobalAnnouncements } from "../lib/global-announcement-events";
 import { requireAccess, requireAccessAdmin } from "../middlewares/requireAccess";
+import { summarizeUserAgent } from "../lib/device-summary";
 
 const router: IRouter = Router();
 const featureControlModes = new Set(["available", "restricted", "coming_soon", "under_construction"]);
-
-function summarizeUserAgent(userAgent: string | null) {
-  const ua = userAgent ?? "";
-  const browser = /Edg\//i.test(ua) ? "Edge"
-    : /Firefox\//i.test(ua) ? "Firefox"
-      : /Chrome\//i.test(ua) ? "Chrome"
-        : /Safari\//i.test(ua) ? "Safari"
-          : "Unknown browser";
-  const platform = /iPad|Tablet/i.test(ua) ? "Tablet"
-    : /iPhone|Android.*Mobile|Mobile/i.test(ua) ? "Phone"
-      : /Windows/i.test(ua) ? "Windows"
-        : /Macintosh|Mac OS/i.test(ua) ? "Mac"
-          : /Android/i.test(ua) ? "Android"
-            : /Linux/i.test(ua) ? "Linux"
-              : "Unknown device";
-  const form_factor = /iPad|Tablet/i.test(ua) ? "tablet"
-    : /iPhone|Android.*Mobile|Mobile/i.test(ua) ? "phone"
-      : /Windows|Macintosh|Mac OS|Linux/i.test(ua) ? "desktop"
-        : "other";
-  return { label: `${browser} · ${platform}`, form_factor };
-}
 
 async function deviceSummaries(accessKeyId: string) {
   const sessions = await db.select({

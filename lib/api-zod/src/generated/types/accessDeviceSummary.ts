@@ -5,10 +5,14 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AccessDeviceSummaryDeviceType } from './accessDeviceSummaryDeviceType';
 import type { AccessDeviceSummaryFormFactor } from './accessDeviceSummaryFormFactor';
 
 export interface AccessDeviceSummary {
   label: string;
+  browser: string;
+  operating_system: string;
+  device_type: AccessDeviceSummaryDeviceType;
   form_factor: AccessDeviceSummaryFormFactor;
   online: boolean;
   first_seen_at: Date;
