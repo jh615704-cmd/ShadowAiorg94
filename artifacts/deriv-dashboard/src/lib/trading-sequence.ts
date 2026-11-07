@@ -147,6 +147,33 @@ export function nextStakeFromLossHistory(
   return nextStake;
 }
 
+export function nextStakeFromSettlementSequence(
+  rows: readonly SettledTrade[],
+  baseStake: number,
+  multiplier: number,
+) {
+  if (!Number.isFinite(baseStake) || baseStake <= 0) return 0;
+  const safeMultiplier = Number.isFinite(multiplier) ? Math.max(1, multiplier) : 1;
+  const normalStake = Number(baseStake.toFixed(2));
+  let nextStake = normalStake;
+  const settledRows = rows
+    .filter((trade) => trade.status !== "open" && Number.isFinite(trade.profit))
+    .slice()
+    .sort((left, right) => (left.buy_time ?? 0) - (right.buy_time ?? 0));
+
+  for (const trade of settledRows) {
+    const followingStake = nextStakeAfterSettlement(
+      trade.profit,
+      nextStake,
+      normalStake,
+      safeMultiplier,
+    );
+    if (!Number.isFinite(followingStake) || followingStake <= 0) return 0;
+    nextStake = followingStake;
+  }
+  return nextStake;
+}
+
 export function findNewlySettledTrade(
   rows: SettledTrade[],
   knownIds: ReadonlySet<string>,

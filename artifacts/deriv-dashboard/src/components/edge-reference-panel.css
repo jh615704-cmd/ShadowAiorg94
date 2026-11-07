@@ -476,8 +476,82 @@
 .edge-ref-ai-scanner > div > b { color: #dff4ff; font-size: 11px; font-weight: 900; letter-spacing: .09em; }
 .edge-ref-ai-scanner > div > small { max-width: 560px; color: #a9c4db; font-size: 10px; line-height: 1.5; }
 .edge-ref-ai-scanner .ai-scanner-control { flex: 0 0 auto; }
+.edge-ref-ai-martingale {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(100px, .55fr) minmax(145px, .7fr);
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(96, 206, 255, .2);
+  border-radius: 10px;
+  background: rgba(5, 21, 38, .62);
+}
+.edge-ref-ai-martingale-toggle,
+.edge-ref-ai-martingale-multiplier,
+.edge-ref-ai-martingale-next {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.edge-ref-ai-martingale-toggle {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+.edge-ref-ai-martingale-toggle > span {
+  display: grid;
+  gap: 4px;
+}
+.edge-ref-ai-martingale-toggle b {
+  color: #dff4ff;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .07em;
+}
+.edge-ref-ai-martingale-toggle small {
+  color: #a9c4db;
+  font-size: 9px;
+  line-height: 1.35;
+}
+.edge-ref-ai-martingale-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: #2edcc6;
+}
+.edge-ref-ai-martingale-multiplier > span,
+.edge-ref-ai-martingale-next > span {
+  color: #a9c4db;
+  font-size: 9px;
+}
+.edge-ref-ai-martingale-multiplier > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.edge-ref-ai-martingale-multiplier input {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid rgba(96, 206, 255, .28);
+  border-radius: 7px;
+  color: #eff8ff;
+  background: #10243a;
+}
+.edge-ref-ai-martingale-multiplier b {
+  color: #6fe3d3;
+  font-size: 12px;
+}
+.edge-ref-ai-martingale-next b {
+  overflow-wrap: anywhere;
+  color: #dff4ff;
+  font-size: 12px;
+}
 
 @media (max-width: 640px) {
   .edge-ref-ai-scanner { align-items: stretch; flex-direction: column; }
   .edge-ref-ai-scanner .ai-scanner-control { width: 100%; }
+  .edge-ref-ai-martingale { grid-template-columns: minmax(0, 1fr) minmax(110px, .7fr); }
+  .edge-ref-ai-martingale-next { grid-column: 1 / -1; }
 }

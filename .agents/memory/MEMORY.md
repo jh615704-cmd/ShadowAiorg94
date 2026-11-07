@@ -49,4 +49,5 @@
 - [Clock Work evidence and risk](clock-work-evidence-risk.md) — require six completed five-tick samples and at least 58%; history clearing must not disrupt run settlement tracking.
 - [Jackpot entry evidence](jackpot-entry-evidence.md) — every placed side needs six fresh samples and at least 58% observed; do not imply guaranteed outcomes.
 - [Non-Auto-Trader entry thresholds](non-auto-trader-entry-thresholds.md) — keep the 50% floor scoped to its features; Jackpot and Clock Work have separate 58% rules.
+- [EDGE AI Scanner Martingale](edge-ai-scanner-martingale.md) — keep scanner Martingale opt-in and separate from the regular EDGE multiplier; reset to base after a settled win.
 - [Auto Magic entry policy](auto-magic-entry-policy.md) — one top-ranked market, >68% on 50+ expiry samples, untouched opposite-half digit; one batch per manual scan.

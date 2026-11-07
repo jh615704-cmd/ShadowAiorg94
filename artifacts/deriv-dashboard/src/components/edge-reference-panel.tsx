@@ -42,6 +42,11 @@ type EdgeReferencePanelProps = {
   onStrategyChange: (value: EdgeStrategy) => void;
   martingale: number;
   onMartingaleChange: (value: number) => void;
+  aiScannerMartingaleEnabled: boolean;
+  onAiScannerMartingaleEnabledChange: (enabled: boolean) => void;
+  aiScannerMultiplier: number;
+  onAiScannerMultiplierChange: (value: number) => void;
+  aiScannerStake: number;
   takeProfit: number;
   onTakeProfitChange: (value: number) => void;
   stopLoss: number;
@@ -92,6 +97,11 @@ export default function EdgeReferencePanel({
   onStrategyChange,
   martingale,
   onMartingaleChange,
+  aiScannerMartingaleEnabled,
+  onAiScannerMartingaleEnabledChange,
+  aiScannerMultiplier,
+  onAiScannerMultiplierChange,
+  aiScannerStake,
   takeProfit,
   onTakeProfitChange,
   stopLoss,
@@ -475,6 +485,51 @@ export default function EdgeReferencePanel({
           actionLabel="AI Scanner"
           messageAutoDismissMs={3000}
         />
+        <div className="edge-ref-ai-martingale" aria-label="EDGE AI Scanner Martingale">
+          <label className="edge-ref-ai-martingale-toggle">
+            <span>
+              <b>AI SCANNER MARTINGALE</b>
+              <small>Uses settled EDGE history and its own multiplier.</small>
+            </span>
+            <input
+              type="checkbox"
+              checked={aiScannerMartingaleEnabled}
+              onChange={(event) => onAiScannerMartingaleEnabledChange(event.target.checked)}
+              disabled={running}
+              aria-label="Enable EDGE AI Scanner Martingale"
+              data-testid="toggle-edge-ai-martingale"
+            />
+          </label>
+          <label className="edge-ref-ai-martingale-multiplier">
+            <span>Loss multiplier</span>
+            <div>
+              <input
+                type="number"
+                min="1"
+                max="10"
+                step="0.1"
+                value={aiScannerMultiplier}
+                onChange={(event) =>
+                  onAiScannerMultiplierChange(
+                    clampEdgeMultiplier(Number(event.target.value)),
+                  )
+                }
+                disabled={!aiScannerMartingaleEnabled || running}
+                aria-label="EDGE AI Scanner loss multiplier"
+                data-testid="input-edge-ai-martingale-multiplier"
+              />
+              <b>×</b>
+            </div>
+          </label>
+          <div className="edge-ref-ai-martingale-next">
+            <span>Next AI Scanner stake</span>
+            <b data-testid="text-edge-ai-scanner-stake">
+              {Number.isFinite(aiScannerStake) && aiScannerStake >= 0.35
+                ? `${aiScannerStake.toFixed(2)} ${currency}`
+                : "Unavailable"}
+            </b>
+          </div>
+        </div>
       </section>
 
       <section className="edge-ref-card edge-ref-setup">

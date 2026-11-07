@@ -57,6 +57,7 @@ import {
   createEdgeDurationAvailabilitySetup,
   nextStakeAfterSettlement,
   nextStakeFromLossHistory,
+  nextStakeFromSettlementSequence,
   rankBestEdgeTradeSignals,
   rankDigitsByDistribution,
   sessionStopReason,
@@ -545,6 +546,8 @@ export default function XTraderPage() {
   const [stake, setStake] = useState(1);
   const [strategy, setStrategy] = useState<"flat" | "martingale">("martingale");
   const [martingale, setMartingale] = useState(2);
+  const [edgeAiScannerMartingaleEnabled, setEdgeAiScannerMartingaleEnabled] = useState(false);
+  const [edgeAiScannerMultiplier, setEdgeAiScannerMultiplier] = useState(2);
   const [takeProfit, setTakeProfit] = useState(10);
   const [stopLoss, setStopLoss] = useState(10);
   const [autoSwitch, setAutoSwitch] = useState(false);
@@ -1059,7 +1062,11 @@ export default function XTraderPage() {
     || trade.contract_type === "DIGITDIFF"
     || trade.contract_type === "ACCU"
   ));
-  const edgeRows = edgeAllRows.filter((trade) => edgeClaimedHistoryIdsRef.current.has(trade.contract_id) && !edgeHiddenHistoryIds.has(trade.contract_id));
+  const edgeClaimedRows = edgeAllRows.filter((trade) => edgeClaimedHistoryIdsRef.current.has(trade.contract_id));
+  const edgeRows = edgeClaimedRows.filter((trade) => !edgeHiddenHistoryIds.has(trade.contract_id));
+  const edgeAiScannerStake = edgeAiScannerMartingaleEnabled
+    ? nextStakeFromSettlementSequence(edgeClaimedRows, stake, edgeAiScannerMultiplier)
+    : stake;
   const tradeXPendingRowsForAccount = tradeXPendingHistoryRows.filter((pending) =>
     pending.account_id === currentAccount?.id
     && !tradeXAllRows.some((trade) => String(trade.contract_id) === pending.contract_id),
@@ -4099,6 +4106,9 @@ export default function XTraderPage() {
       throw new Error("EDGE is already sending or settling a contract.");
     }
     if (!Number.isFinite(stake) || stake < 0.35) throw new Error("Set an EDGE stake of at least 0.35 first.");
+    if (!Number.isFinite(edgeAiScannerStake) || edgeAiScannerStake < 0.35) {
+      throw new Error("The calculated EDGE AI Scanner stake is invalid. No trade was sent.");
+    }
 
     const freshStatus = await status.refetch();
     if (!freshStatus.data?.connected || !freshStatus.data.authorized) {
@@ -4111,8 +4121,8 @@ export default function XTraderPage() {
       throw new Error("Live trading is disabled for this workspace.");
     }
     const freshBalance = getAccountBalance(freshStatus.data.account) ?? currentAccountBalanceRef.current;
-    if (freshBalance == null || stake > freshBalance) {
-      throw new Error("The selected EDGE stake exceeds the available account balance.");
+    if (freshBalance == null || edgeAiScannerStake > freshBalance) {
+      throw new Error("The calculated EDGE AI Scanner stake exceeds the available account balance.");
     }
     const signals = (freshStatus.data?.market_signals ?? []) as MarketSignal[];
     const rankedCandidates = rankBestEdgeTradeSignals(
@@ -4138,7 +4148,7 @@ export default function XTraderPage() {
         scannedCandidate.direction,
         scannedCandidate.symbol,
         scannedCandidate.digit,
-        stake,
+        edgeAiScannerStake,
       );
       let candidateDurations = edgeDurationAvailabilityRef.current?.key === setupKey
         && Date.now() - edgeDurationAvailabilityRef.current.checkedAt < 60_000
@@ -4148,7 +4158,7 @@ export default function XTraderPage() {
         const availability = await edgeDurationAvailabilityMutation.mutateAsync({
           data: {
             access_feature: "edge",
-            ...createEdgeDurationAvailabilitySetup(scannedCandidate, stake),
+            ...createEdgeDurationAvailabilitySetup(scannedCandidate, edgeAiScannerStake),
           },
         });
         candidateDurations = availability.supported_durations;
@@ -4215,13 +4225,13 @@ export default function XTraderPage() {
     edgeActionLockRef.current = true;
     edgeSettlementLockRef.current = true;
     try {
-      armMartingaleWatch(historySnapshot.rows, stake, 1);
+      armMartingaleWatch(historySnapshot.rows, edgeAiScannerStake, 1);
       let result;
       try {
         result = await bulkBuyMutation.mutateAsync({
           data: {
             access_feature: "edge",
-            amount: stake,
+            amount: edgeAiScannerStake,
             duration: selectedDuration,
             duration_unit: "t",
             contract_type: candidate.direction,
@@ -4248,7 +4258,7 @@ export default function XTraderPage() {
       edgeSettlementLockRef.current = false;
     }
     const side = candidate.direction === "DIGITOVER" ? "Over" : "Under";
-    return `Sent one ${side} ${candidate.digit} contract on ${candidate.symbol} for ${selectedDuration} ticks at ${stake.toFixed(2)} ${currentAccount?.currency ?? "USD"}. That side appeared in ${candidate.score.toFixed(1)}% of ${candidate.sampleCount} observed samples; this is not a win-rate guarantee.`;
+    return `Sent one ${side} ${candidate.digit} contract on ${candidate.symbol} for ${selectedDuration} ticks at ${edgeAiScannerStake.toFixed(2)} ${currentAccount?.currency ?? "USD"}. That side appeared in ${candidate.score.toFixed(1)}% of ${candidate.sampleCount} observed samples; this is not a win-rate guarantee.`;
   });
 
   const runCashGrabAiScanner = () => withAiScannerLock(async () => {
@@ -6185,6 +6195,11 @@ export default function XTraderPage() {
           onStrategyChange={setStrategy}
           martingale={martingale}
           onMartingaleChange={setMartingale}
+          aiScannerMartingaleEnabled={edgeAiScannerMartingaleEnabled}
+          onAiScannerMartingaleEnabledChange={setEdgeAiScannerMartingaleEnabled}
+          aiScannerMultiplier={edgeAiScannerMultiplier}
+          onAiScannerMultiplierChange={setEdgeAiScannerMultiplier}
+          aiScannerStake={edgeAiScannerStake}
           takeProfit={takeProfit}
           onTakeProfitChange={setTakeProfit}
           stopLoss={stopLoss}
