@@ -432,18 +432,44 @@ router.patch("/access/feature-settings", requireAccess, requireAccessAdmin, asyn
     return;
   }
   const [existing] = await db.select().from(adminFeatureSettingsTable).limit(1);
-  const previousSettings = existing?.settings;
+  const previousSettings = existing?.settings
+    && typeof existing.settings === "object"
+    && !Array.isArray(existing.settings)
+    ? existing.settings as Record<string, unknown>
+    : {};
   const previousRevision = previousSettings && typeof previousSettings === "object" && !Array.isArray(previousSettings)
     ? (previousSettings as Record<string, unknown>).global_announcement_revision
     : undefined;
+  const featureSettingsById = new Map<string, unknown>();
+  if (Array.isArray(previousSettings.features)) {
+    for (const item of previousSettings.features) {
+      if (item && typeof item === "object" && !Array.isArray(item) && typeof item.feature === "string") {
+        featureSettingsById.set(item.feature, item);
+      }
+    }
+  }
+  for (const feature of parsed.data.features) featureSettingsById.set(feature.feature, feature);
+
+  const actionControlsById = new Map<string, unknown>();
+  if (Array.isArray(previousSettings.action_controls)) {
+    for (const item of previousSettings.action_controls) {
+      if (
+        item && typeof item === "object" && !Array.isArray(item)
+        && typeof item.feature === "string" && typeof item.control_id === "string"
+      ) {
+        actionControlsById.set(`${item.feature}/${item.control_id}`, item);
+      }
+    }
+  }
+  for (const control of parsed.data.action_controls ?? []) {
+    actionControlsById.set(`${control.feature}/${control.control_id}`, control);
+  }
   const values = {
     settings: {
+      ...previousSettings,
       ...parsed.data,
-      action_controls: parsed.data.action_controls
-        ?? (existing?.settings && typeof existing.settings === "object" && !Array.isArray(existing.settings)
-          && Array.isArray((existing.settings as Record<string, unknown>).action_controls)
-          ? (existing.settings as Record<string, unknown>).action_controls
-          : []),
+      features: [...featureSettingsById.values()],
+      action_controls: [...actionControlsById.values()],
       global_announcement_revision: parsed.data.global_announcement_revision
         ?? (typeof previousRevision === "string" ? previousRevision : ""),
     },

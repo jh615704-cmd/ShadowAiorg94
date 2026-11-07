@@ -371,7 +371,19 @@ test("administrators do not see status labels or red card glows", async () => {
       response.url().includes("/api/access/feature-settings") && response.request().method() === "PATCH",
     );
     await jackpotRow.getByRole("button", { name: "Save" }).click();
-    const savedActions = await (await actionSave).json();
+    const actionSaveResponse = await actionSave;
+    const actionRequestBody = actionSaveResponse.request().postData() ?? "";
+    assert.ok(Buffer.byteLength(actionRequestBody) < 32 * 1024, "Action saves must stay under the API's 32 KB request limit.");
+    const submittedActionSettings = JSON.parse(actionRequestBody);
+    assert.equal(submittedActionSettings.features.length, 1, "Only the changed feature should be sent.");
+    assert.ok(submittedActionSettings.action_controls.length <= 2, "A save must include no more than the visible Jackpot switches.");
+    assert.ok(
+      submittedActionSettings.action_controls.every((action) =>
+        action.feature === "jackpot" && ["auto-market", "jackpot-ai"].includes(action.control_id),
+      ),
+      "A save must not resend hidden Jackpot controls.",
+    );
+    const savedActions = await actionSaveResponse.json();
     assert.equal(
       savedActions.action_controls.find((action) => action.feature === "jackpot" && action.control_id === "jackpot-ai")?.mode,
       "coming_soon",
@@ -448,7 +460,13 @@ test("global announcement reaches existing and new users, stays dismissed until 
       response.url().includes("/api/access/feature-settings") && response.request().method() === "PATCH",
     );
     await save.click();
-    const firstBroadcast = await (await firstSaveResponse).json();
+    const announcementSaveResponse = await firstSaveResponse;
+    const announcementRequestBody = announcementSaveResponse.request().postData() ?? "";
+    assert.ok(Buffer.byteLength(announcementRequestBody) < 32 * 1024, "Announcement saves must stay under the API's 32 KB request limit.");
+    const submittedAnnouncementSettings = JSON.parse(announcementRequestBody);
+    assert.deepEqual(submittedAnnouncementSettings.features, [], "Announcement saves should not resend unrelated feature settings.");
+    assert.equal("action_controls" in submittedAnnouncementSettings, false, "Announcement saves should not resend the action catalog.");
+    const firstBroadcast = await announcementSaveResponse.json();
     assert.equal(firstBroadcast.global_announcement_enabled, true);
     assert.equal(firstBroadcast.global_announcement, message);
     assert.ok(firstBroadcast.global_announcement_revision, "Saving creates a distinct broadcast revision.");
@@ -2465,7 +2483,15 @@ async function mockApiRequest(route, state, pathname, method) {
     return;
   }
   if (pathname === "/api/access/feature-settings" && method === "PATCH") {
-    Object.assign(state.featureSettings, request.postDataJSON());
+    const updates = request.postDataJSON();
+    const features = new Map(state.featureSettings.features.map((item) => [item.feature, item]));
+    for (const item of updates.features ?? []) features.set(item.feature, item);
+    const actions = new Map(state.featureSettings.action_controls.map((item) => [`${item.feature}/${item.control_id}`, item]));
+    for (const item of updates.action_controls ?? []) actions.set(`${item.feature}/${item.control_id}`, item);
+    Object.assign(state.featureSettings, updates, {
+      features: [...features.values()],
+      action_controls: [...actions.values()],
+    });
     state.featureSettings.updated_at = new Date().toISOString();
     await fulfillJson(route, state.featureSettings);
     return;

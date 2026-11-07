@@ -467,11 +467,11 @@ export default function AdminUsersPage() {
 
   const featureSettingsPayload = (
     base: AdminFeatureSettings,
-    featureOverrides: FeatureControl[] = base.features,
+    featureOverrides: FeatureControl[] = [],
     extra?: Partial<AdminFeatureSettings>,
   ) => ({
     features: featureOverrides,
-    action_controls: extra?.action_controls ?? base.action_controls,
+    ...(extra?.action_controls !== undefined ? { action_controls: extra.action_controls } : {}),
     global_announcement_enabled: extra?.global_announcement_enabled ?? base.global_announcement_enabled,
     global_announcement: extra?.global_announcement ?? base.global_announcement,
     global_announcement_revision: extra?.global_announcement_revision ?? base.global_announcement_revision,
@@ -483,13 +483,11 @@ export default function AdminUsersPage() {
     const savedSettings = featureSettingsQuery.data;
     const draftControl = featureSettingsDraft?.features.find((item) => item.feature === feature);
     if (!savedSettings || !draftControl) return;
-    const features = savedSettings.features.map((item) => item.feature === feature ? draftControl : item);
-    const action_controls = [
-      ...savedSettings.action_controls.filter((item) => item.feature !== feature),
-      ...(featureSettingsDraft?.action_controls.filter((item) => item.feature === feature) ?? []),
-    ];
+    const action_controls = (featureSettingsDraft?.action_controls ?? []).filter((item) =>
+      item.feature === feature && adminManagedActionIds[feature]?.includes(item.control_id),
+    );
     updateFeatureSettings.mutate(
-      { data: featureSettingsPayload(savedSettings, features, { action_controls }) },
+      { data: featureSettingsPayload(savedSettings, [draftControl], { action_controls }) },
       {
         onSuccess: (saved) => {
           showSaveCountdown();
@@ -523,7 +521,7 @@ export default function AdminUsersPage() {
     if (!base || !draft) return;
     updateFeatureSettings.mutate(
       {
-        data: featureSettingsPayload(base, base.features, {
+        data: featureSettingsPayload(base, [], {
           global_announcement_enabled: draft.global_announcement_enabled,
           global_announcement: draft.global_announcement,
           global_announcement_revision: crypto.randomUUID(),
@@ -567,7 +565,7 @@ export default function AdminUsersPage() {
     if (!base || !draft) return;
     updateFeatureSettings.mutate(
       {
-        data: featureSettingsPayload(base, base.features, {
+        data: featureSettingsPayload(base, [], {
           auto_trader_2_paused: draft.auto_trader_2_paused,
           auto_trader_2_pause_message: draft.auto_trader_2_pause_message,
         }),

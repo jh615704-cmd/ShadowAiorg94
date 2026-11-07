@@ -116,9 +116,9 @@ const db: any = {
         const matchingRows = recordsFor(table).filter((record) => matches(condition, record));
         for (const row of matchingRows) Object.assign(row, values);
         const query = Promise.resolve(matchingRows) as Promise<Array<Record<string, unknown>>> & {
-          returning: (selection?: Record<string, Column>) => Promise<Array<{ id: string }>>;
+          returning: (selection?: Record<string, Column>) => Promise<Array<Record<string, unknown>>>;
         };
-        query.returning = async () => matchingRows.map((row) => ({ id: String(row.id) }));
+        query.returning = async () => matchingRows;
         return query;
       },
     };
@@ -261,6 +261,78 @@ test("feature settings supply targeting defaults when no settings have been save
     assert.ok(settings.features.length > 0);
     assert.ok(settings.features.every((feature) => feature.audience === "all" && Array.isArray(feature.user_ids)));
   } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve());
+    });
+  }
+});
+
+test("feature setting patches merge only the supplied feature and action controls", async () => {
+  storedAdminSettings.length = 0;
+  storedAdminSettings.push({
+    id: 1,
+    settings: {
+      features: [
+        { feature: "edge", mode: "restricted", audience: "all", user_ids: [], countdown_at: null, notice: "Keep EDGE restricted" },
+        { feature: "jackpot", mode: "available", audience: "all", user_ids: [], countdown_at: null, notice: "" },
+      ],
+      action_controls: [
+        { feature: "edge", control_id: "history-clear", label: "Clear feature history", mode: "restricted" },
+        { feature: "edge", control_id: "history-filter-win", label: "History filter: Wins", mode: "under_construction" },
+      ],
+      global_announcement_enabled: false,
+      global_announcement: "",
+      global_announcement_revision: "",
+      auto_trader_2_paused: false,
+      auto_trader_2_pause_message: "Auto Trader 2.0 is temporarily paused by an administrator.",
+    },
+    updatedAt: new Date(),
+  });
+
+  const app = express();
+  app.use(express.json());
+  app.use((_req, res, next) => {
+    res.locals.accessKey = { keyHash: "not-primary-admin" };
+    res.locals.accessKeyId = "test-user-id";
+    next();
+  });
+  app.use(accessRouter);
+  const server = createServer(app);
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/access/feature-settings`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        features: [{ feature: "edge", mode: "coming_soon", audience: "all", user_ids: [], countdown_at: null, notice: "EDGE is being updated" }],
+        action_controls: [{ feature: "edge", control_id: "history-filter-all", label: "History filter: All", mode: "coming_soon" }],
+        global_announcement_enabled: false,
+        global_announcement: "",
+        auto_trader_2_paused: false,
+        auto_trader_2_pause_message: "Auto Trader 2.0 is temporarily paused by an administrator.",
+      }),
+    });
+    assert.equal(response.status, 200);
+
+    const settings = await response.json() as {
+      features: Array<{ feature: string; mode: string; notice: string }>;
+      action_controls: Array<{ feature: string; control_id: string; mode: string }>;
+    };
+    assert.equal(settings.features.find((item) => item.feature === "edge")?.mode, "coming_soon");
+    assert.equal(settings.features.find((item) => item.feature === "edge")?.notice, "EDGE is being updated");
+    const persistedFeatures = (storedAdminSettings[0].settings as Record<string, unknown>).features as Array<{ feature: string; mode: string }>;
+    assert.equal(persistedFeatures.find((item) => item.feature === "jackpot")?.mode, "available", "Untouched feature settings must remain stored.");
+    assert.equal(settings.action_controls.find((item) => item.feature === "edge" && item.control_id === "history-filter-all")?.mode, "coming_soon");
+    assert.equal(settings.action_controls.find((item) => item.feature === "edge" && item.control_id === "history-clear")?.mode, "restricted");
+    assert.equal(settings.action_controls.find((item) => item.feature === "edge" && item.control_id === "history-filter-win")?.mode, "under_construction");
+  } finally {
+    storedAdminSettings.length = 0;
     await new Promise<void>((resolve, reject) => {
       server.close((error) => error ? reject(error) : resolve());
     });
