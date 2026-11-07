@@ -1,3 +1,4 @@
+import { featureActionControlId } from "@workspace/api-zod";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Pause, Play } from "lucide-react";
 import { formatDerivQuote } from "../lib/format-deriv-quote";
@@ -226,7 +227,7 @@ export default function EdgeReferencePanel({
                     : `${wipeoutEstimate.losses} consecutive losses could leave too little balance for the next stake.`;
 
   return (
-    <section className="edge-reference-layout">
+    <section className="edge-reference-layout" data-feature-scope="edge">
       <section className="edge-ref-card edge-ref-scanner">
         <div className="edge-ref-heading">
           <div className="edge-ref-title">
@@ -262,6 +263,7 @@ export default function EdgeReferencePanel({
       >
         <button
           type="button"
+          data-feature-action="edge/market-picker"
           className="edge-ref-market-trigger"
           onClick={() => setMarketPickerOpen((open) => !open)}
           aria-expanded={marketPickerOpen}
@@ -286,6 +288,7 @@ export default function EdgeReferencePanel({
             </small>
           </span>
           <input
+            data-feature-action="edge/auto-select-best"
             type="checkbox"
             checked={autoSelectBest}
             onChange={(event) => {
@@ -319,6 +322,7 @@ export default function EdgeReferencePanel({
             </span>
             <span className="edge-toggle">
               <input
+                data-feature-action="edge/sniper-over-under"
                 type="checkbox"
                 checked={sniperOverUnder}
                 onChange={(event) =>
@@ -336,6 +340,7 @@ export default function EdgeReferencePanel({
             {rankedMarkets.map((option, index) => (
               <button
                 type="button"
+                data-feature-action={`edge/${featureActionControlId("market", option.value)}`}
                 className={`edge-ref-market-option ${symbol === option.value ? "selected" : ""}`}
                 key={option.value}
                 onClick={() => {
@@ -376,6 +381,7 @@ export default function EdgeReferencePanel({
       <div className="edge-ref-direction">
         <button
           className={direction === "DIGITOVER" ? "active over" : ""}
+          data-feature-action="edge/direction-over"
           onClick={() => onDirectionChange("DIGITOVER")}
           disabled={running}
         >
@@ -383,6 +389,7 @@ export default function EdgeReferencePanel({
         </button>
         <button
           className={direction === "DIGITUNDER" ? "active under" : ""}
+          data-feature-action="edge/direction-under"
           onClick={() => onDirectionChange("DIGITUNDER")}
           disabled={running}
         >
@@ -400,6 +407,7 @@ export default function EdgeReferencePanel({
             return (
               <button
                 type="button"
+                data-feature-action={`edge/digit-${digit}`}
                 key={digit}
                 className={`${barrier === digit ? "active " : ""}${isMarketDigit ? "market" : ""}`}
                 onClick={() => onBarrierChange(digit)}
@@ -579,6 +587,7 @@ export default function EdgeReferencePanel({
 
       <div className="edge-ref-run-row">
         <button
+          data-feature-action={running ? "edge/stop" : "edge/start"}
           className={`edge-ref-run ${running ? "running" : ""}`}
           onClick={() => void (running ? onStop() : onStart())}
           disabled={!isConnected || (!running && !canTrade)}
@@ -595,6 +604,7 @@ export default function EdgeReferencePanel({
         </button>
         <button
           type="button"
+          data-feature-action="edge/reset"
           className="edge-ref-session-reset"
           onClick={onReset}
           aria-label="Reset session P/L, trades, and stake to base"

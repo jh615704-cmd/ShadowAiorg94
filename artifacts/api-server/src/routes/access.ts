@@ -11,6 +11,7 @@ import {
   UpdateAdminFeatureSettingsBody,
   UpdateAccessKeyBody,
   ListAccessKeysResponse,
+  FEATURE_ACTION_CATALOG,
 } from "@workspace/api-zod";
 import {
   ACCESS_FEATURES,
@@ -78,7 +79,7 @@ function defaultFeatureSettings() {
         countdown_at: null,
         notice: "",
       })),
-    action_controls: [],
+    action_controls: FEATURE_ACTION_CATALOG.map((control) => ({ ...control, mode: "available" })),
     global_announcement_enabled: false,
     global_announcement: "",
     global_announcement_revision: "",
@@ -107,7 +108,7 @@ function normalizeFeatureSettings(value: Record<string, unknown> | undefined, up
       notice: typeof saved.notice === "string" ? saved.notice.slice(0, 500) : "",
     };
   });
-  const actionControls = (Array.isArray(value?.action_controls) ? value.action_controls : [])
+  const storedActionControls = (Array.isArray(value?.action_controls) ? value.action_controls : [])
     .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item))
     .filter((item) =>
       typeof item.feature === "string"
@@ -125,6 +126,19 @@ function normalizeFeatureSettings(value: Record<string, unknown> | undefined, up
       label: String(item.label).slice(0, 120),
       mode: item.mode,
     }));
+  const storedActionsByKey = new Map(storedActionControls.map((control) => [
+    `${control.feature}/${control.control_id}`,
+    control,
+  ]));
+  const actionControls = FEATURE_ACTION_CATALOG.map((fallback) => {
+    const saved = storedActionsByKey.get(`${fallback.feature}/${fallback.control_id}`);
+    return {
+      ...fallback,
+      mode: typeof saved?.mode === "string" && featureControlModes.has(saved.mode)
+        ? saved.mode
+        : "available",
+    };
+  });
   return GetAdminFeatureSettingsResponse.parse({
     features,
     action_controls: actionControls,

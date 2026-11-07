@@ -5905,11 +5905,11 @@ export default function XTraderPage() {
         <div><Zap size={18} /><span><b>Jackpot</b><small>Jackpot Analysis</small></span></div>
         <div className="xt-feature-actions">
           {!canUseJackpot && <span className="xt-feature-locked">RESTRICTED</span>}
-          <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("jackpot"); setGuidePage(0); setGuideOpen(true); }}>
+          <button className="xt-guide-button" data-feature-action="jackpot/open-guide" type="button" onClick={() => { setGuideMode("jackpot"); setGuidePage(0); setGuideOpen(true); }}>
             <BookOpen size={14} />Guide
           </button>
           <label className="xt-switch">
-            <input type="checkbox" checked={jackpotEnabled} onChange={(event) => toggleJackpot(event.target.checked)} aria-label="Toggle Jackpot" disabled={!canUseJackpot || !isConnected} />
+            <input type="checkbox" data-feature-action="jackpot/feature-toggle" checked={jackpotEnabled} onChange={(event) => toggleJackpot(event.target.checked)} aria-label="Toggle Jackpot" disabled={!canUseJackpot || !isConnected} />
             <span />
           </label>
         </div>
@@ -5919,11 +5919,11 @@ export default function XTraderPage() {
         <div><Clock3 size={18} /><span><b>Clock Work</b><small><FeatureStatusText control={featureControl("clock-work")} isAdmin={isAdmin} fallback={canUseClockWork ? "Ai Clock · Higher / Lower · 5 ticks" : "Restricted — admin access only"} /></small></span></div>
         <div className="xt-feature-actions">
           {!canUseClockWork && <span className="xt-feature-locked">RESTRICTED</span>}
-          <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("clock-work"); setGuidePage(0); setGuideOpen(true); }}>
+          <button className="xt-guide-button" data-feature-action="clock-work/open-guide" type="button" onClick={() => { setGuideMode("clock-work"); setGuidePage(0); setGuideOpen(true); }}>
             <BookOpen size={14} />Guide
           </button>
           <label className="xt-switch">
-            <input type="checkbox" checked={clockWorkEnabled} onChange={(event) => toggleClockWork(event.target.checked)} aria-label="Toggle Clock Work" disabled={!canUseClockWork || !isConnected} />
+            <input type="checkbox" data-feature-action="clock-work/feature-toggle" checked={clockWorkEnabled} onChange={(event) => toggleClockWork(event.target.checked)} aria-label="Toggle Clock Work" disabled={!canUseClockWork || !isConnected} />
             <span />
           </label>
         </div>
@@ -5933,11 +5933,11 @@ export default function XTraderPage() {
         <div><Activity size={18} /><span><b>Cash Grab</b><small><FeatureStatusText control={featureControl("cash-grab")} isAdmin={isAdmin} fallback={canUseCashGrab ? "Rise/Fall contracts · one at a time" : "Restricted — admin access only"} /></small></span></div>
         <div className="xt-feature-actions">
           {!canUseCashGrab && <span className="xt-feature-locked">RESTRICTED</span>}
-          <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("cash-grab"); setGuidePage(0); setGuideOpen(true); }}>
+          <button className="xt-guide-button" data-feature-action="cash-grab/open-guide" type="button" onClick={() => { setGuideMode("cash-grab"); setGuidePage(0); setGuideOpen(true); }}>
             <BookOpen size={14} />Guide
           </button>
           <label className="xt-switch">
-            <input type="checkbox" checked={cashGrabEnabled} onChange={(event) => toggleCashGrab(event.target.checked)} aria-label="Toggle Cash Grab" disabled={!canUseCashGrab || !isConnected} />
+            <input type="checkbox" data-feature-action="cash-grab/feature-toggle" checked={cashGrabEnabled} onChange={(event) => toggleCashGrab(event.target.checked)} aria-label="Toggle Cash Grab" disabled={!canUseCashGrab || !isConnected} />
             <span />
           </label>
         </div>
@@ -5947,12 +5947,13 @@ export default function XTraderPage() {
         <div><Bot size={18} /><span><b>Money Bank</b><small><FeatureStatusText control={featureControl("money-bank")} isAdmin={isAdmin} fallback={canUseMoneyBank ? "Accumulator" : "Restricted — admin access only"} /></small></span></div>
         <div className="xt-feature-actions">
           {!canUseMoneyBank && <span className="xt-feature-locked">RESTRICTED</span>}
-          <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("money-bank"); setGuidePage(0); setGuideOpen(true); }}>
+          <button className="xt-guide-button" data-feature-action="money-bank/open-guide" type="button" onClick={() => { setGuideMode("money-bank"); setGuidePage(0); setGuideOpen(true); }}>
             <BookOpen size={14} />Guide
           </button>
           <label className="xt-switch">
            <input
               type="checkbox"
+              data-feature-action="money-bank/feature-toggle"
               checked={edge2Enabled}
               onChange={(event) => toggleMoneyBank(event.target.checked)}
               aria-label="Toggle Money Bank"
@@ -5967,11 +5968,11 @@ export default function XTraderPage() {
         <div><Activity size={18} /><span><b>Bulk Trader</b><small><FeatureStatusText control={featureControl("bulk-trader")} isAdmin={isAdmin} fallback={canUseBulkTrader ? "Send 1–6 contracts across four trade types" : "Restricted — admin access only"} /></small></span></div>
         <div className="xt-feature-actions">
           {!canUseBulkTrader && <span className="xt-feature-locked">RESTRICTED</span>}
-          <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("bulk-trader"); setGuidePage(0); setGuideOpen(true); }}>
+          <button className="xt-guide-button" data-feature-action="bulk-trader/open-guide" type="button" onClick={() => { setGuideMode("bulk-trader"); setGuidePage(0); setGuideOpen(true); }}>
             <BookOpen size={14} />Guide
           </button>
           <label className="xt-switch">
-            <input type="checkbox" checked={bulkTraderEnabled} onChange={(event) => toggleBulkTrader(event.target.checked)} aria-label="Toggle Bulk Trader" disabled={!canUseBulkTrader || !isConnected} />
+          <input type="checkbox" data-feature-action="bulk-trader/feature-toggle" checked={bulkTraderEnabled} onChange={(event) => toggleBulkTrader(event.target.checked)} aria-label="Toggle Bulk Trader" disabled={!canUseBulkTrader || !isConnected} />
             <span />
           </label>
         </div>
@@ -5981,9 +5982,9 @@ export default function XTraderPage() {
         <div><Zap size={18} /><span><b>DigitFlip</b><small><FeatureStatusText control={featureControl("digit-flip")} isAdmin={isAdmin} fallback={canUseDigitFlip ? "Even / Odd parity trading with live estimates" : "Restricted — admin access only"} /></small></span></div>
         <div className="xt-feature-actions">
           {!canUseDigitFlip && <span className="xt-feature-locked">RESTRICTED</span>}
-          <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("digit-flip"); setGuidePage(0); setGuideOpen(true); }}><BookOpen size={14} />Guide</button>
+          <button className="xt-guide-button" data-feature-action="digit-flip/open-guide" type="button" onClick={() => { setGuideMode("digit-flip"); setGuidePage(0); setGuideOpen(true); }}><BookOpen size={14} />Guide</button>
           <label className="xt-switch">
-            <input type="checkbox" checked={digitFlipEnabled} onChange={(event) => toggleDigitFlip(event.target.checked)} aria-label="Toggle DigitFlip" disabled={!canUseDigitFlip} />
+            <input type="checkbox" data-feature-action="digit-flip/feature-toggle" checked={digitFlipEnabled} onChange={(event) => toggleDigitFlip(event.target.checked)} aria-label="Toggle DigitFlip" disabled={!canUseDigitFlip} />
             <span />
           </label>
         </div>
@@ -5993,12 +5994,13 @@ export default function XTraderPage() {
         <div><Activity size={18} /><span><b>Trade X</b><small><FeatureStatusText control={featureControl("trade-x")} isAdmin={isAdmin} fallback={canUseTradeX ? "Digit Differs distribution and selected-digit trading" : "Restricted — admin access only"} /></small></span></div>
         <div className="xt-feature-actions">
           {!canUseTradeX && <span className="xt-feature-locked">RESTRICTED</span>}
-          <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("trade-x"); setGuidePage(0); setGuideOpen(true); }}>
+          <button className="xt-guide-button" data-feature-action="trade-x/open-guide" type="button" onClick={() => { setGuideMode("trade-x"); setGuidePage(0); setGuideOpen(true); }}>
             <BookOpen size={14} />Guide
           </button>
           <label className="xt-switch">
             <input
               type="checkbox"
+              data-feature-action="trade-x/feature-toggle"
               checked={tradeXEnabled}
               onChange={(event) => toggleTradeX(event.target.checked)}
               aria-label="Toggle Trade X"
@@ -6013,12 +6015,13 @@ export default function XTraderPage() {
         <div><Bot size={18} /><span><b>EDGE 🏔️</b><small><FeatureStatusText control={featureControl("edge")} isAdmin={isAdmin} fallback={canUseEdge ? "Over / Under digit automation" : "Restricted — admin access only"} /></small></span></div>
         <div className="xt-feature-actions">
           {!canUseEdge && <span className="xt-feature-locked">RESTRICTED</span>}
-          <button className="xt-guide-button" type="button" onClick={() => { setGuideMode("edge"); setGuidePage(0); setGuideOpen(true); }}>
+          <button className="xt-guide-button" data-feature-action="edge/open-guide" type="button" onClick={() => { setGuideMode("edge"); setGuidePage(0); setGuideOpen(true); }}>
             <BookOpen size={14} />Guide
           </button>
           <label className="xt-switch">
             <input
               type="checkbox"
+              data-feature-action="edge/feature-toggle"
               checked={xTraderEnabled}
               onChange={(event) => toggleXTrader(event.target.checked)}
               aria-label="Toggle EDGE"
@@ -6091,7 +6094,6 @@ export default function XTraderPage() {
           selectedParity={digitFlipParity}
           duration={digitFlipDuration}
           stake={digitFlipStake}
-          scannerStake={digitFlipScannerStake}
           stakeMode={digitFlipStakeMode}
           multiplier={digitFlipMultiplier}
           takeProfit={digitFlipTakeProfit}
@@ -6310,7 +6312,6 @@ export default function XTraderPage() {
             tradeType="DIGITDIFF"
             stake={tradeXStake}
             multiplier={tradeXMultiplier}
-            nextScannerStake={tradeXScannerStake}
             selectedDigit={tradeXEntryDigit}
             duration={tradeXDuration}
             distribution={tradeXDistribution}
@@ -6400,7 +6401,6 @@ export default function XTraderPage() {
           quote={status.data?.last_tick?.symbol === cashGrabSymbol ? status.data?.last_tick?.quote ?? null : null}
           stake={cashGrabStake}
           currentStake={cashGrabRunning ? cashGrabCurrentStakeRef.current : cashGrabStake}
-          scannerStake={cashGrabScannerStake}
           duration={cashGrabDuration}
           stakeMode={cashGrabStakeMode}
           currency={currentAccount?.currency ?? "USD"}
@@ -6538,19 +6538,19 @@ export default function XTraderPage() {
           jackpotAiAvailable={featureActionIsAvailable("jackpot", "jackpot-ai")}
           autoMarketAvailable={featureActionIsAvailable("jackpot", "auto-market")}
           autoSideAvailable={featureActionIsAvailable("jackpot", "auto-side-selection")}
-          placeTradeAvailable={featureActionIsAvailable("jackpot", "place-trade")}
+          placeTradeAvailable={featureActionIsAvailable("jackpot", "place-batch")}
           onAiEnabledChange={toggleJackpotAi}
           aiStatus={jackpotAiStatus}
           batchStatus={jackpotBatchStatus}
           batchLoading={jackpotBuyMutation.isPending}
           canPlaceBatch={jackpotDisabledReason === null
-            && featureActionIsAvailable("jackpot", "place-trade")
+            && featureActionIsAvailable("jackpot", "place-batch")
             && (!jackpotAutoBestMode || featureActionIsAvailable("jackpot", "auto-market"))
             && (!(jackpotRiseFallEnabled && jackpotRiseFallSide === "AUTO")
               && !(jackpotEvenOddEnabled && jackpotEvenOddSide === "AUTO")
               || featureActionIsAvailable("jackpot", "auto-side-selection"))}
           disabledReason={jackpotDisabledReason
-            ?? (!featureActionIsAvailable("jackpot", "place-trade")
+            ?? (!featureActionIsAvailable("jackpot", "place-batch")
               ? "Place trade is unavailable by administrator settings."
               : jackpotAutoBestMode && !featureActionIsAvailable("jackpot", "auto-market")
                 ? "Auto market selection is unavailable by administrator settings."
@@ -6623,12 +6623,12 @@ export default function XTraderPage() {
             busy={clockWorkBusy || clockWorkBuyMutation.isPending}
             disabled={clockWorkControlsDisabled}
             aiControlAvailable={featureActionIsAvailable("clock-work", "ai-clock")}
-            tradeControlAvailable={featureActionIsAvailable("clock-work", "place-trade")}
+          tradeControlAvailable={featureActionIsAvailable("clock-work", "start")}
             aiStatus={clockWorkAiStatus}
             statusMessage={clockWorkStatusMessage}
             currency={currentAccount?.currency ?? "USD"}
             onStart={() => {
-              if (clockWorkControlsDisabled || !featureActionIsAvailable("clock-work", "place-trade")) return;
+              if (clockWorkControlsDisabled || !featureActionIsAvailable("clock-work", "start")) return;
               clockWorkRunContractIdsRef.current.clear();
               clockWorkRunAccountIdRef.current = currentAccount ? String(currentAccount.id) : null;
               clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);

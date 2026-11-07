@@ -217,7 +217,7 @@ export function MoneyBankPanel({
   };
 
   return (
-    <section className="money-bank-panel" aria-label="Money Bank Accumulator">
+    <section className="money-bank-panel" aria-label="Money Bank Accumulator" data-feature-scope="money-bank">
       <header className="money-bank-header">
         <div className="money-bank-brand">
           <div className="money-bank-mark"><TrendingUp size={18} /></div>
@@ -285,6 +285,7 @@ export function MoneyBankPanel({
                 <button
                   key={rate}
                   type="button"
+                  data-feature-action={`money-bank/growth-rate-${rate}`}
                   className={growthRate === rate ? "active" : ""}
                   onClick={() => onGrowthRateChange(rate)}
                   disabled={controlsDisabled}
@@ -318,6 +319,7 @@ export function MoneyBankPanel({
               {[1, 5].map((ticks) => (
                 <button
                   type="button"
+                  data-feature-action={`money-bank/quick-tick-target-${ticks}-ticks`}
                   key={ticks}
                   className={takeProfitTicks === ticks ? "active" : ""}
                   onClick={() => onTakeProfitTicksChange(ticks)}
@@ -340,10 +342,10 @@ export function MoneyBankPanel({
               <ShieldCheck size={18} />
             </div>
             <div className="money-bank-segmented">
-              <button type="button" className={strategy === "budget" ? "active" : ""} onClick={() => onStrategyChange("budget")} disabled={controlsDisabled}>
+              <button type="button" data-feature-action="money-bank/strategy-budget" className={strategy === "budget" ? "active" : ""} onClick={() => onStrategyChange("budget")} disabled={controlsDisabled}>
                 <b>Auto (Budget)</b><small>Keep the cycle inside budget</small>
               </button>
-              <button type="button" className={strategy === "manual" ? "active" : ""} onClick={() => onStrategyChange("manual")} disabled={controlsDisabled}>
+              <button type="button" data-feature-action="money-bank/strategy-manual" className={strategy === "manual" ? "active" : ""} onClick={() => onStrategyChange("manual")} disabled={controlsDisabled}>
                 <b>Manual base</b><small>Choose BASE yourself</small>
               </button>
             </div>
@@ -403,7 +405,7 @@ export function MoneyBankPanel({
                <label><span>Loss Limit ($)</span><div className="money-bank-input-wrap"><b>$</b><input type="number" min="0" step="1" placeholder="Optional" value={lossLimit ?? ""} onChange={(event) => onLossLimitChange(event.target.value === "" ? null : Math.max(0, Number(event.target.value) || 0))} disabled={controlsDisabled} /></div></label>
             </div>
             <div className="money-bank-toggle-list">
-                 <label><span><b>Reinvest profit</b></span><input type="checkbox" checked={reinvestProfit} onChange={(event) => onReinvestProfitChange(event.target.checked)} disabled={controlsDisabled} /><i /></label>
+                 <label><span><b>Reinvest profit</b></span><input type="checkbox" data-feature-action="money-bank/reinvest-profit" checked={reinvestProfit} onChange={(event) => onReinvestProfitChange(event.target.checked)} disabled={controlsDisabled} /><i /></label>
                 {reinvestProfit && (
                   <div className="money-bank-reinvest-details">
                     <label><span>Profit to reinvest</span><select value={reinvestPercent} onChange={(event) => onReinvestPercentChange(Number(event.target.value))} disabled={controlsDisabled}>{[10, 25, 45, 50, 65, 75, 85, 95, 100].map((percent) => <option key={percent} value={percent}>{percent}%</option>)}</select></label>
@@ -417,7 +419,7 @@ export function MoneyBankPanel({
       </div>
 
       <div className="money-bank-actions">
-        <button type="button" className={`money-bank-start ${running ? "stop" : ""}`} onClick={submitStart} disabled={!isConnected || starting || closing || (!running && tradeSlotBlocked)}>
+        <button type="button" data-feature-action="money-bank/start-stop" className={`money-bank-start ${running ? "stop" : ""}`} onClick={submitStart} disabled={!isConnected || starting || closing || (!running && tradeSlotBlocked)}>
           {closing ? <><RefreshCw size={15} className="money-bank-spin" /> Closing contracts…</> : starting ? <><RefreshCw size={15} className="money-bank-spin" /> Preparing Accumulator…</> : running ? <><Square size={15} /> Stop Accumulator</> : <><Play size={15} /> Start Accumulator</>}
         </button>
       </div>
@@ -431,7 +433,7 @@ export function MoneyBankPanel({
           clearArmed={historyClearArmed}
           fading={historyFading}
           onClear={clearHistory}
-          actions={<button type="button" onClick={downloadHistory} disabled={!visibleTrades.length}><Download size={13} />Download</button>}
+          actions={<button type="button" data-feature-action="money-bank/history-download" onClick={downloadHistory} disabled={!visibleTrades.length}><Download size={13} />Download</button>}
         />
     </section>
   );

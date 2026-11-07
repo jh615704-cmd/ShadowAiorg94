@@ -1,3 +1,4 @@
+import { featureActionControlId } from "@workspace/api-zod";
 import { useState } from "react";
 import {
   Activity,
@@ -58,7 +59,6 @@ export interface CashGrabPanelProps {
   quote?: number | null;
   stake: number;
   currentStake?: number;
-  scannerStake?: number;
   duration: CashGrabDuration;
   stakeMode: CashGrabStakeMode;
   currency?: string;
@@ -126,7 +126,6 @@ export default function CashGrabPanel({
   quote = null,
   stake,
   currentStake = stake,
-  scannerStake = stake,
   duration,
   stakeMode,
   currency = "USD",
@@ -209,7 +208,7 @@ export default function CashGrabPanel({
   };
 
   return (
-    <section className="df-panel cash-grab-df-panel" aria-label="Cash Grab Rise/Fall trading panel" data-testid="cash-grab-panel">
+    <section className="df-panel cash-grab-df-panel" aria-label="Cash Grab Rise/Fall trading panel" data-testid="cash-grab-panel" data-feature-scope="cash-grab">
       <header className="df-card df-scanner">
         <div className="df-card-heading">
           <div className="df-title">
@@ -250,6 +249,7 @@ export default function CashGrabPanel({
           <span className="df-toggle-state">{statusLabel(autoSwitchSafestPairStatus)}</span>
           <span className="df-toggle">
             <input
+              data-feature-action="cash-grab/auto-switch-safe-markets"
               type="checkbox"
               checked={autoSwitchSafestPair}
               onChange={(event) => onAutoSwitchSafestPairChange(event.target.checked)}
@@ -269,6 +269,7 @@ export default function CashGrabPanel({
           <span className={`df-toggle-state${autoDirection ? " working" : ""}`}>{autoDirection ? "WORKING" : "OFF"}</span>
           <span className="df-toggle">
             <input
+              data-feature-action="cash-grab/auto-direction"
               type="checkbox"
               checked={autoDirection}
               onChange={(event) => onAutoDirectionChange(event.target.checked)}
@@ -283,6 +284,7 @@ export default function CashGrabPanel({
       <section className={`df-card df-market-card ${marketMenuOpen ? "open" : ""}`}>
         <button
           type="button"
+          data-feature-action="cash-grab/market-picker"
           className="df-market-trigger"
           onClick={() => setMarketMenuOpen((open) => !open)}
           disabled={!isConnected || interactionDisabled}
@@ -300,6 +302,7 @@ export default function CashGrabPanel({
           <div className="df-market-menu" role="listbox" aria-label="Cash Grab markets">
             <button
               type="button"
+              data-feature-action="cash-grab/market-auto-best"
               className={`df-market-option df-market-smart ${autoSelectBest ? "selected" : ""}`}
               onClick={() => { onAutoSelectBestChange(true); setMarketMenuOpen(false); }}
               disabled={autoSwitchSafestPair}
@@ -317,6 +320,7 @@ export default function CashGrabPanel({
               return (
                 <button
                   type="button"
+                  data-feature-action={`cash-grab/${featureActionControlId("market", item.value)}`}
                   key={item.value}
                   className={`df-market-option ${!autoSelectBest && symbol === item.value ? "selected" : ""}`}
                   onClick={() => chooseSymbol(item.value)}
@@ -439,7 +443,6 @@ export default function CashGrabPanel({
             aria-label="Cash Grab AI Scanner loss multiplier"
             data-testid="input-cash-grab-multiplier"
           />
-          <small>Next AI Scanner stake: {currency} {scannerStake.toFixed(2)}. Losses multiply it; wins keep it elevated until you clear Cash Grab history. Cash Grab run mode still follows the selected stake mode.</small>
         </label>
 
         <div className="cash-grab-limits" aria-label="Cash Grab session profit and loss limits">
@@ -487,7 +490,7 @@ export default function CashGrabPanel({
         </div>
 
         <div className="cash-grab-ai-scanner">
-          <div><b>AI SCANNER</b><small>One trade per scan · the switch turns off after the order is sent.</small></div>
+          <div><b>AI SCANNER</b></div>
           <AiScannerAction feature="cash-grab" onScan={onAiScan} disabled={!canRunScanner} />
         </div>
 

@@ -95,7 +95,7 @@ export default function ClockWorkPanel({
   const startDisabled = disabled || busy || !tradeControlAvailable;
 
   return (
-    <section className={`cw-panel ${enabled ? "cw-live" : ""}`} data-testid="clock-work-panel">
+    <section className={`cw-panel ${enabled ? "cw-live" : ""}`} data-testid="clock-work-panel" data-feature-scope="clock-work">
       <header className="cw-header">
         <div className="cw-brand-mark"><Clock3 size={18} /></div>
         <div className="cw-heading">
@@ -237,7 +237,7 @@ export default function ClockWorkPanel({
         </section>
 
         <section className={`cw-ai-card ${aiEnabled ? "is-enabled" : ""}`}>
-          <div className="cw-ai-heading">
+          <div className="cw-ai-heading" data-feature-action="clock-work/ai-clock">
             <div className="cw-ai-title">
               <span className="cw-ai-icon"><Bot size={18} /></span>
               <span><b>Ai Clock</b></span>

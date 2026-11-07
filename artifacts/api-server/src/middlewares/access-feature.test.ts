@@ -180,14 +180,14 @@ describe("Trading access-key feature path", () => {
     savedFeatureSettings = null;
   });
 
-  it("blocks a feature trade when its admin-managed Place trade action is unavailable", async () => {
+  it("blocks a feature trade when its admin-managed Go Live action is unavailable", async () => {
     savedFeatureSettings = {
       settings: {
         features: [{ feature: autoTraderFeature, mode: "available", audience: "all", user_ids: [], notice: "" }],
         action_controls: [{
           feature: autoTraderFeature,
-          control_id: "place-trade",
-          label: "Place trade",
+          control_id: "go-live",
+          label: "Go Live",
           mode: "coming_soon",
         }, {
           feature: "clock-work",
@@ -205,7 +205,7 @@ describe("Trading access-key feature path", () => {
     );
     assert.equal(blocked.statusCode, 403);
     assert.equal(blocked.body?.code, "FEATURE_ACTION_UNAVAILABLE");
-    assert.equal(blocked.body?.control_id, "place-trade");
+    assert.equal(blocked.body?.control_id, "go-live");
 
     const directAction = await runGuard(
       requireFeatureAction("clock-work", "ai-clock"),

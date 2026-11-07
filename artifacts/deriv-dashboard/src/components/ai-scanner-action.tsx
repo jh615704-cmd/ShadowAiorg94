@@ -5,6 +5,7 @@ import {
   useGetAccessSession,
   useGetAdminFeatureSettings,
 } from "@workspace/api-client-react";
+import { featureActionAttributes } from "@workspace/api-zod";
 
 type Props = {
   onScan: () => Promise<string>;
@@ -115,6 +116,7 @@ export default function AiScannerAction({
       <label className={`ai-scanner-switch${scanning ? " is-scanning" : ""}${isDisabled ? " is-disabled" : ""}`}>
         <span>{actionLabel}</span>
         <input
+          {...featureActionAttributes(feature, "ai-scanner")}
           type="checkbox"
           role="switch"
           checked={scanning}

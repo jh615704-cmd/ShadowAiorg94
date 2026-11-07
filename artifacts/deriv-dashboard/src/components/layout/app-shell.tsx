@@ -10,6 +10,10 @@ import {
   type AdminFeatureSettings,
 } from '@workspace/api-client-react';
 import {
+  FEATURE_ACTION_CATALOG,
+  featureActionControlIdFromTestId,
+} from '@workspace/api-zod';
+import {
   Bot,
   Gauge,
   ShieldCheck,
@@ -25,6 +29,7 @@ import { DerivAccountSwitcher } from '@/components/deriv-account-switcher';
 import { useAccessSessionLogout } from '@/hooks/use-access-session-logout';
 import { FeatureStatusText } from '@/components/feature-status';
 import { GlobalFeatureAnnouncement } from '@/components/layout/global-feature-announcement';
+import './feature-action-controls.css';
 
 interface AppShellProps {
   children: ReactNode;
@@ -71,6 +76,96 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
       stream.close();
     };
   }, [accessSession.data?.key_id, queryClient]);
+  useEffect(() => {
+    const knownControls = new Set(FEATURE_ACTION_CATALOG.map((control) => `${control.feature}/${control.control_id}`));
+    const modes = new Map(
+      (featureSettings.data?.action_controls ?? []).map((control) => [
+        `${control.feature}/${control.control_id}`,
+        control.mode,
+      ]),
+    );
+    const statusLabel = (mode: string) => mode === "restricted"
+      ? "Restricted — admin access only"
+      : mode === "coming_soon"
+        ? "Coming soon"
+        : "Under construction";
+    const normalizeActionLabel = (value: string) =>
+      value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const updateControls = () => {
+      document.querySelectorAll<HTMLElement>(
+        "[data-feature-scope] button, [data-feature-scope] input[type='checkbox'], [data-feature-scope] [role='switch'], section[id$='-feature'] button, section[id$='-feature'] input[type='checkbox'], section[id$='-feature'] [role='switch'], [data-feature-action]",
+      ).forEach((control) => {
+        if (!control.hasAttribute("data-feature-action")) {
+          const featureScope = control.closest<HTMLElement>("[data-feature-scope]");
+          const featureSection = control.closest<HTMLElement>("section[id$='-feature']");
+          const scope = featureScope?.dataset.featureScope
+            ?? featureSection?.id.replace(/-feature$/, "");
+          const testId = control.dataset.testid;
+          if (scope) {
+            const accessibleLabel = control.getAttribute("aria-label")
+              ?? control.getAttribute("title")
+              ?? control.textContent
+              ?? "";
+            const normalizedLabel = normalizeActionLabel(accessibleLabel);
+            const byLabel = FEATURE_ACTION_CATALOG.filter((item) =>
+              item.feature === scope
+              && (
+                normalizeActionLabel(item.label) === normalizedLabel
+                || normalizeActionLabel(item.label).endsWith(` ${normalizedLabel}`)
+              ),
+            );
+            const controlId = (testId ? featureActionControlIdFromTestId(scope, testId) : undefined)
+              ?? (byLabel.length === 1 ? byLabel[0].control_id : undefined);
+            const key = controlId ? `${scope}/${controlId}` : "";
+            if (controlId && knownControls.has(key)) control.setAttribute("data-feature-action", key);
+          }
+        }
+        const mode = isAdmin ? undefined : modes.get(control.dataset.featureAction ?? "");
+        const blocked = mode !== undefined && mode !== "available";
+        if (blocked) {
+          if (!control.hasAttribute("data-feature-action-original-title")) {
+            control.setAttribute("data-feature-action-original-title", control.getAttribute("title") ?? "");
+            control.setAttribute("data-feature-action-original-aria-disabled", control.getAttribute("aria-disabled") ?? "");
+          }
+          control.setAttribute("data-feature-action-blocked", mode);
+          control.setAttribute("aria-disabled", "true");
+          control.setAttribute("title", statusLabel(mode));
+          return;
+        }
+        if (!control.hasAttribute("data-feature-action-blocked")) return;
+        const originalTitle = control.getAttribute("data-feature-action-original-title") ?? "";
+        const originalAriaDisabled = control.getAttribute("data-feature-action-original-aria-disabled") ?? "";
+        control.removeAttribute("data-feature-action-blocked");
+        control.removeAttribute("data-feature-action-original-title");
+        control.removeAttribute("data-feature-action-original-aria-disabled");
+        if (originalTitle) control.setAttribute("title", originalTitle);
+        else control.removeAttribute("title");
+        if (originalAriaDisabled) control.setAttribute("aria-disabled", originalAriaDisabled);
+        else control.removeAttribute("aria-disabled");
+      });
+    };
+    const preventBlockedAction = (event: Event) => {
+      if (!(event.target instanceof Element)) return;
+      if (!event.target.closest("[data-feature-action-blocked]")) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    };
+    updateControls();
+    const observer = new MutationObserver(updateControls);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-feature-action"],
+    });
+    document.addEventListener("click", preventBlockedAction, true);
+    document.addEventListener("change", preventBlockedAction, true);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("click", preventBlockedAction, true);
+      document.removeEventListener("change", preventBlockedAction, true);
+    };
+  }, [accessSession.data?.is_admin, featureSettings.data?.action_controls]);
   const { logout } = useAccessSessionLogout();
   const isAdmin = accessSession.data?.is_admin === true;
   const features = accessSession.data?.features ?? [];

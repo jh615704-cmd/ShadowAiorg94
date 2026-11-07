@@ -162,7 +162,7 @@ export default function JackpotPanel({
             : "READY";
 
   return (
-    <section className="jackpot-panel" aria-label="Jackpot trading feature" data-testid="jackpot-panel">
+    <section className="jackpot-panel" aria-label="Jackpot trading feature" data-testid="jackpot-panel" data-feature-scope="jackpot">
       <header className="jackpot-header">
         <div className="jackpot-brand">
           <span className="jackpot-mark" aria-hidden="true"><Zap size={18} /></span>

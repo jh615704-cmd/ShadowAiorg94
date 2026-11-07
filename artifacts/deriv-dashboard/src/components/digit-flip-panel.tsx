@@ -1,3 +1,4 @@
+import { featureActionControlId } from "@workspace/api-zod";
 import { useMemo, useState } from "react";
 import {
   ChevronDown,
@@ -40,7 +41,6 @@ export type DigitFlipPanelProps = {
   selectedParity: DigitFlipParity;
   duration: DigitFlipDuration;
   stake: number;
-  scannerStake: number;
   stakeMode: DigitFlipStakeMode;
   multiplier: number;
   takeProfit: number;
@@ -93,6 +93,7 @@ function Switch({
       <span className="df-toggle-state">{checked ? "ON" : "OFF"}</span>
       <span className="df-toggle">
         <input
+          data-feature-action={`digit-flip/${label === "Flip Switch" ? "assault-switch" : "magic-switch"}`}
           type="checkbox"
           checked={checked}
           onChange={(event) => onChange(event.target.checked)}
@@ -118,7 +119,6 @@ export default function DigitFlipPanel({
   selectedParity,
   duration,
   stake,
-  scannerStake,
   stakeMode,
   multiplier,
   takeProfit,
@@ -224,6 +224,7 @@ export default function DigitFlipPanel({
     <section
       className={`df-panel ${enabled ? "df-panel-active" : ""} ${disabled ? "df-panel-disabled" : ""}`}
       data-testid="digit-flip-panel"
+      data-feature-scope="digit-flip"
     >
       <section className="df-card df-scanner">
         <div className="df-card-heading">
@@ -261,6 +262,7 @@ export default function DigitFlipPanel({
       >
         <button
           type="button"
+          data-feature-action="digit-flip/market-picker"
           className="df-market-trigger"
           onClick={() => setMarketPickerOpen((value) => !value)}
           aria-expanded={marketPickerOpen}
@@ -281,6 +283,7 @@ export default function DigitFlipPanel({
           <div className="df-market-menu">
             <button
               type="button"
+              data-feature-action="digit-flip/market-type-auto"
               className={`df-market-option df-market-smart ${marketType === "auto" ? "selected" : ""}`}
               onClick={() => {
                 onMarketTypeChange("auto");
@@ -299,6 +302,7 @@ export default function DigitFlipPanel({
               return (
                 <button
                   type="button"
+                  data-feature-action={`digit-flip/${featureActionControlId("market", option.value)}`}
                   className={`df-market-option ${(marketType === "auto" ? displayedSymbol : symbol) === option.value ? "selected" : ""}`}
                   key={option.value}
                   onClick={() => {
@@ -389,6 +393,7 @@ export default function DigitFlipPanel({
       <section className="df-card df-parity-toggle">
         <button
           type="button"
+          data-feature-action="digit-flip/parity-even"
           className={selectedParity === "DIGITEVEN" ? "selected even" : "even"}
           onClick={() => onParityChange("DIGITEVEN")}
           disabled={disabled}
@@ -397,6 +402,7 @@ export default function DigitFlipPanel({
         </button>
         <button
           type="button"
+          data-feature-action="digit-flip/parity-odd"
           className={selectedParity === "DIGITODD" ? "selected odd" : "odd"}
           onClick={() => onParityChange("DIGITODD")}
           disabled={disabled}
@@ -500,7 +506,6 @@ export default function DigitFlipPanel({
               }
               disabled={disabled || running}
             />
-            <small>AI Scanner stake: {currency} {scannerStake.toFixed(2)}. Losses multiply it; wins keep it elevated until you clear DigitFlip history. Manual runs use this multiplier only in Martingale mode.</small>
           </label>
           <label>
             <span>TAKE PROFIT</span>
@@ -554,6 +559,7 @@ export default function DigitFlipPanel({
         <div className="df-action-row">
           <button
             type="button"
+            data-feature-action="digit-flip/start-stop"
             className={running ? "df-stop" : "df-run"}
             onClick={onRunStop}
             disabled={disabled || isPlacingTrade || (!running && entryBlocked)}

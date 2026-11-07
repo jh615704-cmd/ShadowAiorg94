@@ -1,3 +1,4 @@
+import { featureActionControlId } from "@workspace/api-zod";
 import { useMemo } from "react";
 import { Activity, BarChart3, Play, RefreshCw } from "lucide-react";
 import AiScannerAction from "./ai-scanner-action";
@@ -154,7 +155,7 @@ export default function BulkTraderPanel({
   const predictionTitle = type === "over-under" ? "DIGIT THRESHOLD" : "DIGIT TO AVOID";
 
   return (
-    <section className="bulk-trader-panel" data-testid="panel-bulk-trader">
+    <section className="bulk-trader-panel" data-testid="panel-bulk-trader" data-feature-scope="bulk-trader">
       <header className="bulk-trader-head">
         <div className="bulk-trader-identity">
           <span className="bulk-trader-mark"><Activity size={18} /></span>
@@ -178,7 +179,7 @@ export default function BulkTraderPanel({
             <div className="bulk-market-ranking" aria-label="Live market ranking">
               {rankedSymbols.slice(0, 3).map((item, index) => {
                 const signal = marketSignals.find((entry) => entry.symbol === item.value);
-                return <button type="button" key={item.value} className={item.value === symbol ? "selected" : ""} onClick={() => onSymbolChange(item.value)} disabled={!isConnected || isPlacingTrade}><b>{index + 1}</b><span>{item.label.replace(" Index", "")}</span><strong>{signal ? displayPercentage(signal.observedPercentage) : "—"}</strong></button>;
+                return <button type="button" data-feature-action={`bulk-trader/${featureActionControlId("market", item.value)}`} key={item.value} className={item.value === symbol ? "selected" : ""} onClick={() => onSymbolChange(item.value)} disabled={!isConnected || isPlacingTrade}><b>{index + 1}</b><span>{item.label.replace(" Index", "")}</span><strong>{signal ? displayPercentage(signal.observedPercentage) : "—"}</strong></button>;
               })}
             </div>
           </div>

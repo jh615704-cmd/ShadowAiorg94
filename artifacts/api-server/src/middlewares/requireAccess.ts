@@ -1,5 +1,6 @@
 import type { RequestHandler } from "express";
 import { db, adminFeatureSettingsTable } from "@workspace/db";
+import { FEATURE_ACTION_CATALOG } from "@workspace/api-zod";
 import {
   findSessionByToken,
   featureList,
@@ -138,6 +139,48 @@ export const requireAccessFeature = (feature: string): RequestHandler => async (
   next();
 };
 
+function tradeActionControlId(feature: string, path: string, body: Record<string, unknown>): string | undefined {
+  const contractType = typeof body.contract_type === "string" ? body.contract_type : "";
+  if (
+    body.automated === true
+    && ["edge", "digit-flip", "trade-x", "bulk-trader", "cash-grab"].includes(feature)
+  ) return "ai-scanner";
+  if (feature === "auto-trader" && body.automated === true) return "auto-magic";
+  if (path === "/deriv/dual-buy") return "trade-dual";
+  if (path === "/deriv/jackpot/buy") return "place-batch";
+  if (feature === "auto-trader" && path === "/deriv/bulk-buy") {
+    const symbol = typeof body.symbol === "string" ? body.symbol.toLowerCase().replaceAll("_", "-") : "";
+    const digit = typeof body.barrier === "number" ? String(body.barrier) : "";
+    const count = body.count;
+    if (symbol && digit && (count === 3 || count === 6)) return `trade-${count}x-${symbol}-${digit}`;
+  }
+  if (feature === "bulk-trader" || path === "/deriv/bulk-buy") {
+    if (contractType === "DIGITOVER") return "trade-over";
+    if (contractType === "DIGITUNDER") return "trade-under";
+    if (contractType === "DIGITEVEN") return "trade-even";
+    if (contractType === "DIGITODD") return "trade-odd";
+    if (contractType === "DIGITDIFF") return "trade-differs";
+  }
+  if (feature === "edge") {
+    if (contractType === "DIGITOVER") return "trade-over";
+    if (contractType === "DIGITUNDER") return "trade-under";
+    return "start";
+  }
+  if (feature === "digit-flip") return "start-stop";
+  if (feature === "trade-x") return "place-differs";
+  if (feature === "cash-grab") return "start";
+  if (feature === "jackpot") return "place-batch";
+  if (feature === "clock-work") return "start";
+  if (feature === "money-bank") return "start-stop";
+  if (feature === "auto-trader-2") return "start";
+  if (feature === "auto-trader") {
+    if (contractType === "DIGITOVER") return "trade-over";
+    if (contractType === "DIGITUNDER") return "trade-under";
+    return "go-live";
+  }
+  return undefined;
+}
+
 export const requireTradeAccessFeature: RequestHandler = async (req, res, next) => {
   const feature = req.body && typeof req.body === "object" ? req.body.access_feature : undefined;
   if (typeof feature !== "string" || !TRADING_ACCESS_FEATURES.includes(feature as typeof TRADING_ACCESS_FEATURES[number])) {
@@ -160,13 +203,18 @@ export const requireTradeAccessFeature: RequestHandler = async (req, res, next) 
     res.status(403).json({ error: featureBlock.message, code: "FEATURE_UNAVAILABLE", feature });
     return;
   }
-  const actionBlock = await blockedFeatureAction(feature, "place-trade");
+  const controlId = tradeActionControlId(feature, req.path, req.body as Record<string, unknown>);
+  if (!controlId || !FEATURE_ACTION_CATALOG.some((control) => control.feature === feature && control.control_id === controlId)) {
+    res.status(400).json({ error: "The trade action could not be matched to an available feature control." });
+    return;
+  }
+  const actionBlock = await blockedFeatureAction(feature, controlId);
   if (actionBlock) {
     res.status(403).json({
       error: actionBlock.message,
       code: "FEATURE_ACTION_UNAVAILABLE",
       feature,
-      control_id: "place-trade",
+      control_id: controlId,
     });
     return;
   }

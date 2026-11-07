@@ -20,6 +20,7 @@ import {
   type FeatureControl,
   type AccessKeySummary,
 } from "@workspace/api-client-react";
+import { FEATURE_ACTION_CATALOG } from "@workspace/api-zod";
 import { AppShell } from "@/components/layout/app-shell";
 import AdminIntelligencePanel from "@/components/admin-intelligence-panel";
 import { useToast } from "@/hooks/use-toast";
@@ -84,22 +85,7 @@ const featureOptions = Object.values(AccessFeature)
     };
   });
 
-const featureActionCatalog: Omit<AdminFeatureSettings["action_controls"][number], "mode">[] = [
-  ...(["edge", "digit-flip", "trade-x", "bulk-trader", "cash-grab"] as const).map((feature) => ({
-    feature,
-    control_id: "ai-scanner",
-    label: "AI Scanner",
-  })),
-  ...(["edge", "digit-flip", "trade-x", "bulk-trader", "jackpot", "clock-work", "cash-grab", "money-bank", "auto-trader", "auto-trader-2"] as const).map((feature) => ({
-    feature,
-    control_id: "place-trade",
-    label: "Place trade",
-  })),
-  { feature: "jackpot", control_id: "jackpot-ai", label: "Jackpot AI" },
-  { feature: "jackpot", control_id: "auto-market", label: "Auto market switch" },
-  { feature: "jackpot", control_id: "auto-side-selection", label: "Auto side selection" },
-  { feature: "clock-work", control_id: "ai-clock", label: "AI Clock switch" },
-];
+const featureActionCatalog = FEATURE_ACTION_CATALOG;
 
 function errorMessage(error: unknown) {
   return getUserFacingErrorMessage(error, "The request could not be completed.");
@@ -289,6 +275,7 @@ export default function AdminUsersPage() {
   });
   const [featureSettingsDraft, setFeatureSettingsDraft] = useState<AdminFeatureSettings | null>(null);
   const [featureUserSearch, setFeatureUserSearch] = useState<Record<string, string>>({});
+  const [actionControlSearch, setActionControlSearch] = useState("");
   const keys = keysQuery.data ?? [];
   const userKeys = keys.filter((key) => key.kind === "user");
   const onlineCount = keys.filter((key) => key.online).length;
@@ -725,10 +712,21 @@ export default function AdminUsersPage() {
                       )}
                       <div className="admin-feature-action-controls" aria-label={`${featureLabel} switches and buttons`}>
                         <div className="admin-feature-action-heading">
-                          <strong>Switches and trade actions</strong>
+                          <strong>Switches and buttons</strong>
                           <small>Any non-Available setting blocks that control for users.</small>
                         </div>
-                        {controlsForFeature.map((action) => (
+                        <label className="admin-control-field admin-action-search">
+                          <span>Find a switch or button</span>
+                          <input
+                            type="search"
+                            value={actionControlSearch}
+                            onChange={(event) => setActionControlSearch(event.target.value)}
+                            placeholder="Search this feature's controls"
+                          />
+                        </label>
+                        {controlsForFeature
+                          .filter((action) => `${action.label} ${action.control_id}`.toLowerCase().includes(actionControlSearch.trim().toLowerCase()))
+                          .map((action) => (
                           <label className="admin-control-field" key={action.control_id}>
                             <span>{action.label}</span>
                             <select

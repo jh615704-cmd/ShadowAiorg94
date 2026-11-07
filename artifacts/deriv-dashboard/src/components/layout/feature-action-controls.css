@@ -1,0 +1,5 @@
+[data-feature-action-blocked] {
+  cursor: not-allowed !important;
+  filter: saturate(.45) !important;
+  opacity: .48 !important;
+}

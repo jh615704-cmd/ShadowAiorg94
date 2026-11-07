@@ -834,7 +834,7 @@ function AutoTraderContent() {
 
   return (
     <AppShell title="AUTO TRADER">
-      <main className="auto-trader-page">
+      <main className="auto-trader-page" data-feature-scope="auto-trader">
         <section className="at-heading">
           <div className="at-heading-copy">
             <div className="at-kicker"><span className="at-icon"><Radar size={18} /></span> DERIV SYNTHETIC INDICES <span className="at-kicker-line" /></div>

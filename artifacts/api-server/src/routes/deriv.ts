@@ -406,7 +406,7 @@ router.post("/deriv/proposals", async (req, res) => {
   }
 });
 
-router.post("/deriv/edge-available-durations", requireTradeAccessFeature, async (req, res) => {
+router.post("/deriv/edge-available-durations", requireAccessFeature("edge"), async (req, res) => {
   const parsed = GetEdgeAvailableDurationsBody.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid EDGE duration availability request" });
@@ -850,7 +850,7 @@ router.post("/deriv/clock-work/quotes", requireAccessFeature("clock-work"), asyn
 router.post(
   "/deriv/clock-work/buy",
   requireAccessFeature("clock-work"),
-  requireFeatureAction("clock-work", "place-trade"),
+  requireFeatureAction("clock-work", "start"),
   async (req, res) => {
   const parsed = BuyClockWorkContractsBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid Clock Work buy request" });

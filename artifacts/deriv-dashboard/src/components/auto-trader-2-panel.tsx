@@ -143,7 +143,7 @@ export default function AutoTrader2Panel({
   }, currency);
 
   return (
-    <section className="at2-panel" aria-label="Auto Trader 2.0 trading panel" data-testid="auto-trader-2-panel">
+    <section className="at2-panel" aria-label="Auto Trader 2.0 trading panel" data-testid="auto-trader-2-panel" data-feature-scope="auto-trader-2">
       <header className="at2-header">
         <div className="at2-heading">
           <span className="at2-mark"><Activity size={15} aria-hidden="true" /></span>
@@ -230,7 +230,7 @@ export default function AutoTrader2Panel({
                 aria-pressed={autoContractType}
                 onClick={() => onAutoContractTypeChange(!autoContractType)}
                 disabled={controlsLocked}
-                data-testid="at2-contract-type-auto"
+                data-testid="at2-contract-type-rise-fall-auto"
               >A · Auto</button>
             </div>
             <small className="at2-auto-direction-note">
@@ -260,7 +260,7 @@ export default function AutoTrader2Panel({
                 aria-pressed={autoContractType}
                 onClick={() => onAutoContractTypeChange(!autoContractType)}
                 disabled={controlsLocked}
-                data-testid="at2-contract-type-auto"
+                data-testid="at2-contract-type-even-odd-auto"
               >A · Auto</button>
             </div>
             <small className="at2-auto-direction-note">

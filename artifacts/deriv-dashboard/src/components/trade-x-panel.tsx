@@ -36,7 +36,6 @@ export interface TradeXPanelProps {
   tradeType: TradeXTradeType;
   stake: number;
   multiplier: number;
-  nextScannerStake: number;
   selectedDigit: number;
   duration: TradeXDuration;
   distribution?: readonly TradeXDigitDistribution[];
@@ -86,7 +85,6 @@ export default function TradeXPanel({
   tradeType,
   stake,
   multiplier,
-  nextScannerStake,
   selectedDigit,
   duration,
   distribution = [],
@@ -184,6 +182,7 @@ export default function TradeXPanel({
     <section
       className={`tx-panel ${enabled ? "tx-panel-active" : "tx-panel-paused"} ${disabled ? "tx-panel-disabled" : ""}`}
       data-testid="trade-x-panel"
+      data-feature-scope="trade-x"
     >
       <header className="tx-header">
         <div className="tx-heading">
@@ -323,7 +322,6 @@ export default function TradeXPanel({
                   data-testid="input-trade-x-multiplier"
                 />
               </span>
-              <small className="tx-field-help">Next AI Scanner stake: ${nextScannerStake.toFixed(2)}. Losses increase it; wins keep it until Trade X history is cleared.</small>
             </label>
           </div>
         </section>

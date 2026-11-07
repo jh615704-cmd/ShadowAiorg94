@@ -27,6 +27,26 @@ type Props = {
 };
 
 export default function DerivHistory({ title, strategy, className, rows, sessionRows = rows, currency, clearArmed = false, fading = false, onClear, sessionPnl, sessionTradeCount, summaryMode = "full", actions }: Props) {
+  const normalizedTitle = title.toLowerCase();
+  const actionFeature = normalizedTitle.includes("digitflip") || normalizedTitle.includes("digit flip")
+    ? "digit-flip"
+    : normalizedTitle.includes("trade x")
+      ? "trade-x"
+      : normalizedTitle.includes("bulk trader")
+        ? "bulk-trader"
+        : normalizedTitle.includes("jackpot")
+          ? "jackpot"
+          : normalizedTitle.includes("clock work")
+            ? "clock-work"
+            : normalizedTitle.includes("cash grab")
+              ? "cash-grab"
+              : normalizedTitle.includes("money bank")
+                ? "money-bank"
+                : normalizedTitle.includes("auto trader 2")
+                  ? "auto-trader-2"
+                  : normalizedTitle.includes("edge")
+                    ? "edge"
+                    : null;
   const [filter, setFilter] = useState<"all" | "win" | "loss">("all");
   const listRef = useRef<HTMLDivElement>(null);
   const [listHeight, setListHeight] = useState<number>();
@@ -79,7 +99,7 @@ export default function DerivHistory({ title, strategy, className, rows, session
         <div className="deriv-history-title"><Activity size={18} /><span><b>Feature history</b><small>{title} · {strategy}</small></span></div>
         <div className="deriv-history-actions">
           {actions}
-          {onClear && <button type="button" onClick={onClear} disabled={(!uniqueRows.length && summary.trades === 0 && summary.pnl === 0) || fading} aria-label={clearArmed ? `Tap again to clear ${title} session` : `Clear ${title} session`}><Trash2 size={15} />{clearArmed ? "Tap again" : "Clear session"}</button>}
+          {onClear && <button type="button" data-feature-action={actionFeature ? `${actionFeature}/history-clear` : undefined} onClick={onClear} disabled={(!uniqueRows.length && summary.trades === 0 && summary.pnl === 0) || fading} aria-label={clearArmed ? `Tap again to clear ${title} session` : `Clear ${title} session`}><Trash2 size={15} />{clearArmed ? "Tap again" : "Clear session"}</button>}
         </div>
       </header>
       {summaryMode !== "hidden" && <div className={`deriv-history-session ${summaryMode === "pnl-only" ? "pnl-only" : ""}`}>
@@ -95,7 +115,7 @@ export default function DerivHistory({ title, strategy, className, rows, session
         </div>}
       </div>}
       <nav className="deriv-history-filters" aria-label={`Filter ${title} history`}>
-        {(["all", "win", "loss"] as const).map((value) => <button type="button" key={value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)} aria-pressed={filter === value}>{value === "all" ? `All (${uniqueRows.length})` : value === "win" ? `Wins (${historyWins})` : `Losses (${historyLosses})`}</button>)}
+        {(["all", "win", "loss"] as const).map((value) => <button type="button" data-feature-action={actionFeature ? `${actionFeature}/history-filter-${value}` : undefined} key={value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)} aria-pressed={filter === value}>{value === "all" ? `All (${uniqueRows.length})` : value === "win" ? `Wins (${historyWins})` : `Losses (${historyLosses})`}</button>)}
       </nav>
       <div ref={listRef} className="deriv-history-list" style={listHeight == null ? undefined : { maxHeight: `${listHeight}px` }}>
         {!visible.length ? <div className="deriv-history-empty">{uniqueRows.length ? "No contracts match this filter." : "Deriv contracts will appear here when this feature trades."}</div> : visible.map((row) => {
