@@ -337,12 +337,45 @@ test("administrators do not see status labels or red card glows", async () => {
     await page.goto(`${baseUrl}/admin`);
     await page.getByRole("heading", { name: "Create a new key" }).waitFor();
     assert.equal(await page.getByText("Shadows 3", { exact: true }).count(), 0);
-    await page.getByText("REGISTERED DEVICES", { exact: true }).waitFor();
-    await page.getByText("Laptop / desktop", { exact: true }).waitFor();
-    await page.getByText("Chrome 128", { exact: true }).waitFor();
-    await page.getByText(/iOS 17\.5/).waitFor();
-    await page.locator(".admin-feature-action-controls").getByText("AI Scanner", { exact: true }).first().waitFor();
-    await page.locator(".admin-feature-action-controls").getByText("Place trade", { exact: true }).first().waitFor();
+    assert.equal(await page.getByText("REGISTERED DEVICES", { exact: true }).count(), 0);
+    assert.equal(await page.getByText("Laptop / desktop", { exact: true }).count(), 0);
+    assert.equal(await page.getByText("Chrome 128", { exact: true }).count(), 0);
+    assert.equal(await page.getByText(/iOS 17\.5/).count(), 0);
+    const managedActions = [
+      ["Jackpot", "Auto Best Market"],
+      ["Jackpot", "Jackpot AI"],
+      ["Clock Work", "AI Clock switch"],
+      ["Cash Grab", "Auto-switch Safeguard"],
+      ["Cash Grab", "Auto Direction switch"],
+      ["Cash Grab", "AI Scanner"],
+      ["Bulk Trader", "AI Scanner"],
+      ["DigitFlip", "Flip switch"],
+      ["DigitFlip", "Auto Switch Best Pair"],
+      ["DigitFlip", "AI Scanner"],
+      ["Trade X", "AI Scanner"],
+      ["EDGE", "Sniper Over/Under switch"],
+      ["EDGE", "AI Scanner"],
+    ];
+    assert.equal(await page.locator(".admin-feature-action-controls select").count(), managedActions.length);
+    for (const [featureName, actionLabel] of managedActions) {
+      const row = page.locator(".admin-feature-control-row").filter({ hasText: featureName });
+      const action = row.locator(".admin-feature-action-controls label").filter({ hasText: actionLabel });
+      const statusSelect = action.locator("select");
+      await statusSelect.waitFor();
+      assert.equal(await statusSelect.locator("option").count(), 4, `${featureName} / ${actionLabel} must support all four statuses`);
+    }
+    const jackpotRow = page.locator(".admin-feature-control-row").filter({ hasText: "Jackpot" });
+    const jackpotAi = jackpotRow.locator(".admin-feature-action-controls label").filter({ hasText: "Jackpot AI" }).locator("select");
+    await jackpotAi.selectOption("coming_soon");
+    const actionSave = page.waitForResponse((response) =>
+      response.url().includes("/api/access/feature-settings") && response.request().method() === "PATCH",
+    );
+    await jackpotRow.getByRole("button", { name: "Save" }).click();
+    const savedActions = await (await actionSave).json();
+    assert.equal(
+      savedActions.action_controls.find((action) => action.feature === "jackpot" && action.control_id === "jackpot-ai")?.mode,
+      "coming_soon",
+    );
     for (const viewport of [
       { name: "laptop", width: 1440, height: 900 },
       { name: "compact laptop", width: 1280, height: 800 },

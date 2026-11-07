@@ -3003,22 +3003,6 @@ body { overflow-x: hidden; }
 }
 .key-row > * { min-width: 0; }
 .key-row-device-data { gap: 5px; }
-.key-device-list { display: grid; gap: 5px; margin-top: 3px; }
-.key-device-item {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-  padding: 7px 8px;
-  border: 1px solid rgba(115, 170, 205, .18);
-  border-radius: 7px;
-  background: rgba(5, 24, 42, .55);
-}
-.key-device-item b {
-  overflow-wrap: anywhere;
-  color: #dceeff;
-  font-size: 10px;
-}
-.key-device-item small { overflow-wrap: anywhere; line-height: 1.4; }
 .admin-feature-control-fields {
   grid-template-columns: minmax(180px, 1.2fr) repeat(3, minmax(150px, 1fr));
 }
@@ -3051,7 +3035,6 @@ body { overflow-x: hidden; }
   .admin-heading-actions > * { justify-content: center; }
   .key-row { grid-template-columns: minmax(0, 1fr); }
   .key-row-actions { grid-column: auto; }
-  .key-device-list { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
 }
 @media (prefers-reduced-motion: reduce) {
   .admin-save-countdown > i b { animation-duration: .01ms; }

@@ -86,6 +86,23 @@ const featureOptions = Object.values(AccessFeature)
   });
 
 const featureActionCatalog = FEATURE_ACTION_CATALOG;
+const adminManagedActionIds: Partial<Record<FeatureControl["feature"], readonly string[]>> = {
+  jackpot: ["auto-market", "jackpot-ai"],
+  "clock-work": ["ai-clock"],
+  "cash-grab": ["auto-switch-safe-markets", "auto-direction", "ai-scanner"],
+  "bulk-trader": ["ai-scanner"],
+  "digit-flip": ["assault-switch", "magic-switch", "ai-scanner"],
+  "trade-x": ["ai-scanner"],
+  edge: ["sniper-over-under", "ai-scanner"],
+};
+const adminActionLabels: Record<string, string> = {
+  "jackpot/auto-market": "Auto Best Market",
+  "jackpot/jackpot-ai": "Jackpot AI",
+  "clock-work/ai-clock": "AI Clock switch",
+  "cash-grab/auto-switch-safe-markets": "Auto-switch Safeguard",
+  "digit-flip/assault-switch": "Flip switch",
+  "digit-flip/magic-switch": "Auto Switch Best Pair",
+};
 
 function errorMessage(error: unknown) {
   return getUserFacingErrorMessage(error, "The request could not be completed.");
@@ -105,14 +122,6 @@ function toDateTimeLocal(value: Date | string | null): string {
   if (!Number.isFinite(date.getTime())) return "";
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 16);
-}
-
-function deviceSeenLabel(value: Date | string, online: boolean) {
-  if (online) return "Online now";
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isFinite(date.getTime())
-    ? `Last active ${date.toLocaleString()}`
-    : "Last active time unavailable";
 }
 
 function StatusBadge({ item }: { item: AccessKeySummary }) {
@@ -187,17 +196,6 @@ function KeyRow({
         <span>{item.kind === "admin" ? "Administrator" : "User"}</span>
         <strong>{item.device_count} / {item.max_devices === 0 ? "Unlimited" : item.max_devices}</strong>
         <small>devices · {item.online_devices} online</small>
-        <div className="key-device-list" aria-label={`Devices used by ${item.label}`}>
-          {item.device_sessions?.length
-            ? item.device_sessions.map((device, index) => (
-              <span className="key-device-item" key={`${device.label}-${device.first_seen_at}-${index}`}>
-                <b>{device.device_type === "laptop_desktop" ? "Laptop / desktop" : device.device_type[0]?.toUpperCase() + device.device_type.slice(1)}</b>
-                <small>{device.browser}</small>
-                <small>{device.operating_system} · {deviceSeenLabel(device.last_seen_at, device.online)}</small>
-              </span>
-            ))
-            : <small>No active device sessions</small>}
-        </div>
       </div>
       <div className="key-row-data"><StatusBadge item={item} /><small>{formatOffline(item.offline_seconds, item.online)}</small></div>
       {editing ? (
@@ -275,7 +273,6 @@ export default function AdminUsersPage() {
   });
   const [featureSettingsDraft, setFeatureSettingsDraft] = useState<AdminFeatureSettings | null>(null);
   const [featureUserSearch, setFeatureUserSearch] = useState<Record<string, string>>({});
-  const [actionControlSearch, setActionControlSearch] = useState("");
   const keys = keysQuery.data ?? [];
   const userKeys = keys.filter((key) => key.kind === "user");
   const onlineCount = keys.filter((key) => key.online).length;
@@ -598,15 +595,10 @@ export default function AdminUsersPage() {
   };
 
   const stats = useMemo(() => {
-    const devices = keys.flatMap((key) => key.device_sessions ?? []);
-    const laptopDesktopCount = devices.filter((device) => device.device_type === "laptop_desktop").length;
-    const tabletCount = devices.filter((device) => device.device_type === "tablet").length;
-    const phoneCount = devices.filter((device) => device.device_type === "phone").length;
     return [
       { label: "TOTAL KEYS", value: keys.length, detail: `${userCount} user keys`, icon: KeyRound },
       { label: "ONLINE NOW", value: onlineCount, detail: "Presence within 90 seconds", icon: Activity },
       { label: "ACTIVE ACCESS", value: activeCount, detail: "Keys currently accepted", icon: Users },
-      { label: "REGISTERED DEVICES", value: devices.length, detail: `${laptopDesktopCount} laptop/desktop · ${tabletCount} tablet · ${phoneCount} phone`, icon: Activity },
     ];
   }, [activeCount, keys, onlineCount, userCount]);
 
@@ -649,7 +641,10 @@ export default function AdminUsersPage() {
                   const comparable = (item: FeatureControl | undefined) => item
                     ? JSON.stringify({ ...item, user_ids: [...item.user_ids].sort() })
                     : "";
-                  const controlsForFeature = featureActionCatalog.filter((item) => item.feature === control.feature);
+                  const controlsForFeature = featureActionCatalog.filter((item) =>
+                    item.feature === control.feature
+                    && adminManagedActionIds[control.feature]?.includes(item.control_id),
+                  );
                   const actionMode = (controls: AdminFeatureSettings["action_controls"], controlId: string) =>
                     controls.find((item) => item.feature === control.feature && item.control_id === controlId)?.mode ?? "available";
                   const savedActions = featureSettingsQuery.data?.action_controls ?? [];
@@ -710,37 +705,28 @@ export default function AdminUsersPage() {
                           {!userKeys.length && <small className="admin-feature-user-limit">No user keys have been created yet. New users are included automatically when All users is selected.</small>}
                         </div>
                       )}
-                      <div className="admin-feature-action-controls" aria-label={`${featureLabel} switches and buttons`}>
-                        <div className="admin-feature-action-heading">
-                          <strong>Switches and buttons</strong>
-                          <small>Any non-Available setting blocks that control for users.</small>
+                      {controlsForFeature.length > 0 && (
+                        <div className="admin-feature-action-controls" aria-label={`${featureLabel} switches and buttons`}>
+                          <div className="admin-feature-action-heading">
+                            <strong>Switches and buttons</strong>
+                            <small>Any non-Available setting blocks that control for users.</small>
+                          </div>
+                          {controlsForFeature.map((action) => (
+                            <label className="admin-control-field" key={action.control_id}>
+                              <span>{adminActionLabels[`${action.feature}/${action.control_id}`] ?? action.label}</span>
+                              <select
+                                value={actionMode(featureSettingsDraft.action_controls, action.control_id)}
+                                onChange={(event) => editFeatureAction(control.feature, action.control_id, event.target.value as AdminFeatureSettings["action_controls"][number]["mode"])}
+                              >
+                                <option value="available">Available</option>
+                                <option value="restricted">Restricted — Admin Access Only</option>
+                                <option value="coming_soon">Coming soon</option>
+                                <option value="under_construction">Under Construction</option>
+                              </select>
+                            </label>
+                          ))}
                         </div>
-                        <label className="admin-control-field admin-action-search">
-                          <span>Find a switch or button</span>
-                          <input
-                            type="search"
-                            value={actionControlSearch}
-                            onChange={(event) => setActionControlSearch(event.target.value)}
-                            placeholder="Search this feature's controls"
-                          />
-                        </label>
-                        {controlsForFeature
-                          .filter((action) => `${action.label} ${action.control_id}`.toLowerCase().includes(actionControlSearch.trim().toLowerCase()))
-                          .map((action) => (
-                          <label className="admin-control-field" key={action.control_id}>
-                            <span>{action.label}</span>
-                            <select
-                              value={actionMode(featureSettingsDraft.action_controls, action.control_id)}
-                              onChange={(event) => editFeatureAction(control.feature, action.control_id, event.target.value as AdminFeatureSettings["action_controls"][number]["mode"])}
-                            >
-                              <option value="available">Available</option>
-                              <option value="restricted">Restricted — admin access only</option>
-                              <option value="coming_soon">Coming soon</option>
-                              <option value="under_construction">Under construction</option>
-                            </select>
-                          </label>
-                        ))}
-                      </div>
+                      )}
                       <div className="admin-feature-control-actions">
                         <button type="button" className="secondary-button" onClick={() => saveFeatureControl(control.feature)} disabled={!changed || !savedControl || updateFeatureSettings.isPending}>
                           <Save size={14} />{updateFeatureSettings.isPending ? "Saving…" : "Save"}
