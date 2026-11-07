@@ -35,6 +35,16 @@ function signal(
   };
 }
 
+function signalWithRecentDigits(symbol: string, counts: readonly number[]): AiScannerMarketSignal {
+  const recentDigits = counts.flatMap((count, digit) =>
+    Array.from({ length: count }, () => digit),
+  );
+  return {
+    ...signal(symbol, recentDigits.length, []),
+    recent_digits: recentDigits,
+  };
+}
+
 function quotesForOutcomes(outcomes: readonly boolean[], duration = 1): number[] {
   const quotes = [100];
   for (const wins of outcomes) {
@@ -177,15 +187,16 @@ test("DigitFlip settlement processing ignores unclaimed, open, known, and proces
   assert.deepEqual(settlements.map((trade) => trade.contract_id), ["owned-earlier", "owned-later"]);
 });
 
-test("Trade X ranks the least frequent observed digit across eligible markets", () => {
+test("Trade X AI Scanner selects the coldest digit, not a more frequent manual choice", () => {
   const candidate = chooseTradeXScannerCandidate([
-    signal("R_10", 30, [{ digit: 2, over_percentage: 80, under_percentage: 12 }]),
-    signal("JD25", 80, [{ digit: 7, over_percentage: 44, under_percentage: 52 }]),
+    signalWithRecentDigits("R_10", [10, 10, 10, 10, 20, 10, 10, 5, 10, 5]),
+    signalWithRecentDigits("JD25", [10, 10, 10, 10, 20, 10, 10, 3, 10, 7]),
   ], ["R_10", "JD25"]);
 
   assert.equal(candidate?.symbol, "JD25");
   assert.equal(candidate?.digit, 7);
-  assert.equal(candidate?.observedRate, 96);
+  assert.equal(candidate?.observedRate, 97);
+  assert.equal(candidate?.sampleCount, 100);
 });
 
 test("Trade X AI scanner only returns a valid, sufficiently observed digit", () => {

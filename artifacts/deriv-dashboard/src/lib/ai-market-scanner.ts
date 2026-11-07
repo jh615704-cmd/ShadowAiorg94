@@ -13,6 +13,7 @@ export type AiScannerMarketSignal = {
   rise_percentage?: number | null;
   fall_percentage?: number | null;
   recent_quotes?: number[];
+  recent_digits?: number[];
   digit_outcomes?: Array<{
     digit: number;
     over_percentage: number;
@@ -270,6 +271,30 @@ export function chooseTradeXScannerCandidate(
   }
   const candidates: TradeXScannerCandidate[] = [];
   for (const signal of eligibleSignals(signals, symbols, minimumSample)) {
+    if (signal.recent_digits !== undefined) {
+      const recentDigits = signal.recent_digits;
+      if (
+        recentDigits.length < minimumSample
+        || recentDigits.some((digit) => !Number.isInteger(digit) || digit < 0 || digit > 9)
+      ) continue;
+
+      for (let digit = 0; digit <= 9; digit += 1) {
+        const occurrences = recentDigits.filter((observedDigit) => observedDigit === digit).length;
+        const observedRate = ((recentDigits.length - occurrences) / recentDigits.length) * 100;
+        if (observedRate < minimumObservedRate) continue;
+        candidates.push({
+          symbol: signal.symbol,
+          digit,
+          observedRate,
+          sampleCount: recentDigits.length,
+        });
+      }
+      continue;
+    }
+
+    // Retain compatibility with older signal payloads that only include
+    // per-digit Over/Under percentages. The highest Differs rate is the
+    // lowest observed digit frequency.
     for (const outcome of signal.digit_outcomes ?? []) {
       if (!Number.isInteger(outcome.digit) || outcome.digit < 0 || outcome.digit > 9) continue;
       const overRate = Number(outcome.over_percentage);

@@ -4380,7 +4380,7 @@ export default function XTraderPage() {
     const candidate = chooseTradeXScannerCandidate(signals, symbols);
     if (!candidate) {
       throw new Error(
-        `No ${tradeXMarketType} Digit Differs setup reached ${TRADE_X_SCANNER_MIN_OBSERVED_RATE}% observed frequency in at least ${AI_SCANNER_MIN_SAMPLE} samples. No trade was sent; observed history does not guarantee the next outcome.`,
+        `No sufficiently sampled ${tradeXMarketType} coldest-digit setup met the ${TRADE_X_SCANNER_MIN_OBSERVED_RATE}% observed-rate floor. No trade was sent; recent history cannot guarantee the next outcome.`,
       );
     }
     setTradeXSymbol(candidate.symbol);
@@ -4391,7 +4391,7 @@ export default function XTraderPage() {
     }
     const sent = await executeTradeX(1, tradeXDuration, candidate.digit, candidate.symbol, tradeXScannerStake);
     if (!sent) throw new Error("The setup was selected, but the existing Trade X checks blocked the order.");
-    return `Sent one ${candidate.symbol} Digit Differs ${candidate.digit} trade at ${tradeXScannerStake.toFixed(2)}. The digit differed in ${candidate.observedRate.toFixed(1)}% of ${candidate.sampleCount} sampled moves; that history is not a prediction.`;
+    return `Sent one ${candidate.symbol} Digit Differs ${candidate.digit} trade using the coldest digit in ${candidate.sampleCount} recent samples. It differed in ${candidate.observedRate.toFixed(1)}% of that history; this cannot guarantee the next outcome.`;
   });
 
 
