@@ -165,7 +165,7 @@ test("Auto Trader and Auto Trader 2.0 grants stay independent during key creatio
   }
 });
 
-test("the workspace stays unlocked during a short departure and locks on return after 30 minutes", async () => {
+test("the workspace stays unlocked briefly and shows the access countdown after one hour away", async () => {
   const state = createState(userSession(["settings"]));
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {
@@ -177,13 +177,16 @@ test("the workspace stays unlocked during a short departure and locks on return 
     assert.equal(await page.getByRole("heading", { name: "Login to Shadow Ai" }).count(), 0, "A brief departure should not lock the workspace.");
     assert.equal(state.logoutCount, 0, "A brief departure should keep the access session active.");
     await page.evaluate(() => {
-      localStorage.setItem("shadow-access-away-started", String(Date.now() - 30 * 60 * 1_000 - 1));
+      localStorage.setItem("shadow-access-away-started", String(Date.now() - 60 * 60 * 1_000 - 1));
       window.dispatchEvent(new Event("pageshow"));
     });
 
-    await page.getByRole("heading", { name: "Login to Shadow Ai" }).waitFor();
-    await page.getByText(/Workspace locked because you were away for more than 30 minutes/).waitFor();
-    assert.equal(state.logoutCount, 1, "Returning after more than 30 minutes away should end the active access session.");
+    await page.getByTestId("access-exit-transition").waitFor();
+    assert.match(await page.getByTestId("access-exit-countdown").innerText(), /^[1-5]$/);
+    assert.equal(await page.getByRole("heading", { name: "Login to Shadow Ai" }).count(), 0);
+    assert.equal(state.logoutCount, 1, "Returning after one hour away should end the active access session.");
+    await page.getByRole("heading", { name: "Login to Shadow Ai" }).waitFor({ timeout: 8_000 });
+    await page.getByText(/Workspace locked after one hour away/).waitFor();
     await page.reload();
     await page.getByRole("heading", { name: "Login to Shadow Ai" }).waitFor();
     assert.ok(state.sessionRevoked, "Returning to the app should not restore the previous session.");
@@ -210,7 +213,7 @@ test("the workspace does not lock just because the bot browser window loses focu
   }
 });
 
-test("the workspace locks after two hours without interaction while the page stays open", async () => {
+test("the workspace shows a five-second lock countdown after one idle hour", async () => {
   const state = createState(userSession(["settings"]));
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {
@@ -218,13 +221,63 @@ test("the workspace locks after two hours without interaction while the page sta
     await page.locator(".xt-feature-card-restricted").first().waitFor();
     await page.evaluate(() => {
       localStorage.setItem("shadow-access-session-active", "1");
-      localStorage.setItem("shadow-access-last-activity", String(Date.now() - 2 * 60 * 60 * 1_000 - 1_000));
+      localStorage.setItem("shadow-access-last-activity", String(Date.now() - 60 * 60 * 1_000 - 1_000));
     });
 
-    await page.getByRole("heading", { name: "Login to Shadow Ai" }).waitFor({ timeout: 5_000 });
-    await page.getByText(/Workspace locked after 2 hours without activity/).waitFor();
-    assert.equal(state.logoutCount, 1, "Two hours without interaction should end the active session.");
+    await page.getByTestId("access-exit-transition").waitFor({ timeout: 5_000 });
+    assert.match(await page.getByTestId("access-exit-countdown").innerText(), /^[1-5]$/);
+    assert.equal(await page.getByRole("heading", { name: "Login to Shadow Ai" }).count(), 0);
+    await page.getByRole("heading", { name: "Login to Shadow Ai" }).waitFor({ timeout: 8_000 });
+    await page.getByText(/Workspace locked after one hour without activity/).waitFor();
+    assert.equal(state.logoutCount, 1, "One hour without interaction should end the active session.");
     assert.deepEqual(pageErrors, [], "The idle lock should not cause browser errors.");
+    assert.deepEqual(state.unhandledApis, []);
+  } finally {
+    await context.close();
+  }
+});
+
+test("manual logout shows a two-second countdown before access-key login", async () => {
+  const state = createState(userSession(["settings"]));
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/`);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const logoutButton = page.getByTestId("button-logout");
+    await logoutButton.waitFor();
+    await logoutButton.click();
+
+    await page.getByTestId("access-exit-transition").waitFor();
+    assert.equal(await page.getByText("SECURE LOGOUT").count(), 1);
+    assert.equal(await page.getByTestId("access-exit-countdown").innerText(), "2");
+    assert.equal(await page.getByRole("heading", { name: "Login to Shadow Ai" }).count(), 0);
+    assert.equal(state.logoutCount, 1);
+    await page.getByRole("heading", { name: "Login to Shadow Ai" }).waitFor({ timeout: 6_000 });
+    assert.deepEqual(pageErrors, [], "Manual logout should not cause browser errors.");
+    assert.deepEqual(state.unhandledApis, []);
+  } finally {
+    await context.close();
+  }
+});
+
+test("Deriv status automatically recovers from brief errors without requiring a refresh", async () => {
+  const state = createState(userSession(["edge"]));
+  state.hasToken = true;
+  state.statusFailuresRemaining = 2;
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/app`);
+    await page.waitForTimeout(4_000);
+    const statusCalls = state.apiCalls.filter((call) => call.path === "/api/deriv/status").length;
+
+    assert.equal(state.statusFailuresRemaining, 0, "The status query should retry transient failures automatically.");
+    assert.ok(statusCalls >= 3, "The status query should retry and then receive a successful response.");
+    assert.equal(
+      await page.getByText(/Deriv account status/).count(),
+      0,
+      "Brief status failures must not leave a stale-status warning on the dashboard.",
+    );
+    assert.deepEqual(pageErrors, []);
     assert.deepEqual(state.unhandledApis, []);
   } finally {
     await context.close();
@@ -1564,6 +1617,9 @@ test("Auto Trader reflects Deriv tick and settlement events without polling dela
     await page.goto(`${baseUrl}/auto-trader`);
     await page.getByTestId("row-trade-auto-trader-live-settlement").waitFor();
     await page.getByTestId("button-go-live").click();
+    await page.evaluate(() => {
+      localStorage.setItem("shadow-access-last-activity", String(Date.now() - 59 * 60 * 1_000));
+    });
     await page.getByTestId("card-market-R_10").waitFor();
     await page.waitForFunction(() =>
       window.__getDerivEventSourceUrls().some((url) => String(url).includes("market_ticks=true")),
@@ -1666,6 +1722,11 @@ test("Auto Magic waits for Go Live and requires settlement plus Rescan for anoth
       document.querySelector('[data-testid="status-auto-magic"]')?.textContent?.includes("Waiting for every accepted contract"),
     );
 
+    assert.equal(
+      await page.getByTestId("access-exit-transition").count(),
+      0,
+      "A healthy automatic trade before the one-hour inactivity deadline must not lock the workspace.",
+    );
     assert.equal(state.tradeRequests.length, 1, "Auto Magic should send one batch for the current scan.");
     assert.equal(state.tradeRequests[0].path, "/api/deriv/bulk-buy");
     assert.equal(state.tradeRequests[0].body.count, 6);
@@ -2331,6 +2392,7 @@ function createState(session) {
     heldHistoryResponses: [],
     createdKeyBody: null,
     statusVersion: 0,
+    statusFailuresRemaining: 0,
     statusTickEpochBase: null,
     activeContractCount: 0,
     marketSignalOverrides: {},
@@ -2558,6 +2620,11 @@ async function mockApiRequest(route, state, pathname, method) {
     return;
   }
   if (pathname === "/api/deriv/status" && method === "GET") {
+    if (state.statusFailuresRemaining > 0) {
+      state.statusFailuresRemaining -= 1;
+      await fulfillJson(route, { error: "Temporary Deriv status failure" }, 503);
+      return;
+    }
     state.statusVersion += 1;
     await fulfillJson(route, makeDerivStatus(
       state.statusVersion,

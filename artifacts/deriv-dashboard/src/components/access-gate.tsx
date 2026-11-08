@@ -9,13 +9,15 @@ import {
   useLogoutAccessSession,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { KeyRound, Loader2, LockKeyhole, MessageCircle, ShieldCheck } from "lucide-react";
+import { KeyRound, Loader2, LockKeyhole, LogOut, MessageCircle, ShieldCheck } from "lucide-react";
 import {
   ACCESS_AWAY_LOCK_MS,
   ACCESS_AWAY_STARTED,
   ACCESS_ACTIVE_MARKER,
+  ACCESS_IDLE_EXIT_DELAY_MS,
   ACCESS_IDLE_LOCK_MS,
   ACCESS_LAST_ACTIVITY,
+  ACCESS_LOGOUT_EXIT_DELAY_MS,
   ACCESS_REVOCATION_EXIT_DELAY_MS,
   clearAccessAway,
   clearAccessActivity,
@@ -53,9 +55,24 @@ export function AccessGate({ children }: { children: ReactNode }) {
     Date.now(),
     window.localStorage.getItem(ACCESS_AWAY_STARTED),
   ));
-  const [lockReason, setLockReason] = useState("");
-  const [exitDeadline, setExitDeadline] = useState<number | null>(null);
-  const [exitCountdown, setExitCountdown] = useState(10);
+  const [lockReason, setLockReason] = useState(() => {
+    if (!accessRejected) return "";
+    const awayStarted = Number(window.localStorage.getItem(ACCESS_AWAY_STARTED));
+    return Number.isFinite(awayStarted)
+      && awayStarted > 0
+      && Date.now() - awayStarted >= ACCESS_AWAY_LOCK_MS
+      ? "Workspace locked after one hour away. Enter your access key again."
+      : "Workspace locked after one hour without activity. Enter your access key again.";
+  });
+  const [exitDeadline, setExitDeadline] = useState<number | null>(() =>
+    accessRejected ? Date.now() + ACCESS_IDLE_EXIT_DELAY_MS : null,
+  );
+  const [exitCountdown, setExitCountdown] = useState(() =>
+    accessRejected ? ACCESS_IDLE_EXIT_DELAY_MS / 1_000 : ACCESS_REVOCATION_EXIT_DELAY_MS / 1_000,
+  );
+  const [exitKind, setExitKind] = useState<"idle" | "logout" | "revocation" | null>(() =>
+    accessRejected ? "idle" : null,
+  );
   const [logoutPending, setLogoutPending] = useState(false);
   const accessRejectedRef = useRef(accessRejected);
   const sessionWasActiveRef = useRef(false);
@@ -88,14 +105,16 @@ export function AccessGate({ children }: { children: ReactNode }) {
   }, [accessRejected]);
 
   const lockAfterAway = useCallback((
-    message = "Workspace locked after 2 hours without activity. Enter your access key again.",
+    message = "Workspace locked after one hour without activity. Enter your access key again.",
   ) => {
     if (accessRejectedRef.current || !sessionWasActiveRef.current) return;
     accessRejectedRef.current = true;
     sessionWasActiveRef.current = false;
     setAccessRejected(true);
     setLockReason(message);
-    setExitDeadline(null);
+    setExitKind("idle");
+    setExitCountdown(ACCESS_IDLE_EXIT_DELAY_MS / 1_000);
+    setExitDeadline(Date.now() + ACCESS_IDLE_EXIT_DELAY_MS);
     setLogoutPending(true);
     // Keep a stale marker until the server confirms logout, so a reload during
     // a network failure still fails closed and asks for the key again.
@@ -110,10 +129,9 @@ export function AccessGate({ children }: { children: ReactNode }) {
         logoutInFlightRef.current = false;
         setLogoutPending(false);
         queryClient.clear();
-        setLocation("/");
       },
     });
-  }, [logoutAccess, queryClient, setLocation]);
+  }, [logoutAccess, queryClient]);
 
   const beginRevocationCountdown = useCallback((reason: string) => {
     if (forcedExitRef.current) return;
@@ -122,7 +140,8 @@ export function AccessGate({ children }: { children: ReactNode }) {
     sessionWasActiveRef.current = false;
     setAccessRejected(true);
     setLockReason(`No more trades — ${reason}.`);
-    setExitCountdown(10);
+    setExitKind("revocation");
+    setExitCountdown(ACCESS_REVOCATION_EXIT_DELAY_MS / 1_000);
     setExitDeadline(Date.now() + ACCESS_REVOCATION_EXIT_DELAY_MS);
     clearAccessActivity();
     void queryClient.removeQueries();
@@ -177,13 +196,15 @@ export function AccessGate({ children }: { children: ReactNode }) {
       setExitCountdown(remaining);
       if (remaining === 0) {
         setExitDeadline(null);
+        setExitKind(null);
+        void queryClient.removeQueries();
         setLocation("/");
       }
     };
     updateCountdown();
     const timer = window.setInterval(updateCountdown, 250);
     return () => window.clearInterval(timer);
-  }, [exitDeadline, setLocation]);
+  }, [exitDeadline, queryClient, setLocation]);
 
   useEffect(() => {
     if (!accessSession.data || accessRejected) return;
@@ -205,9 +226,9 @@ export function AccessGate({ children }: { children: ReactNode }) {
     const getLockMessage = () => {
       const awayStarted = Number(window.localStorage.getItem(ACCESS_AWAY_STARTED));
       if (Number.isFinite(awayStarted) && awayStarted > 0 && Date.now() - awayStarted >= ACCESS_AWAY_LOCK_MS) {
-        return "Workspace locked because you were away for more than 30 minutes. Enter your access key again.";
+        return "Workspace locked after one hour away. Enter your access key again.";
       }
-      return "Workspace locked after 2 hours without activity. Enter your access key again.";
+      return "Workspace locked after one hour without activity. Enter your access key again.";
     };
 
     const onUserActivity = () => {
@@ -291,12 +312,22 @@ export function AccessGate({ children }: { children: ReactNode }) {
       accessRejectedRef.current = true;
       setAccessRejected(true);
       setLockReason("Workspace locked. Enter your access key again.");
-      setExitDeadline(null);
-      clearAccessActivity();
+      setExitKind("logout");
+      setExitCountdown(ACCESS_LOGOUT_EXIT_DELAY_MS / 1_000);
+      setExitDeadline(Date.now() + ACCESS_LOGOUT_EXIT_DELAY_MS);
+      setLogoutPending(true);
+      window.localStorage.setItem(ACCESS_ACTIVE_MARKER, "1");
+      window.localStorage.setItem(ACCESS_LAST_ACTIVITY, "0");
+      window.localStorage.removeItem(ACCESS_AWAY_STARTED);
       void queryClient.removeQueries();
     };
+    const onLogoutSettled = () => setLogoutPending(false);
     window.addEventListener("shadow-access-key-locked", onManualLock);
-    return () => window.removeEventListener("shadow-access-key-locked", onManualLock);
+    window.addEventListener("shadow-access-key-logout-settled", onLogoutSettled);
+    return () => {
+      window.removeEventListener("shadow-access-key-locked", onManualLock);
+      window.removeEventListener("shadow-access-key-logout-settled", onLogoutSettled);
+    };
   }, [queryClient]);
 
   useEffect(() => {
@@ -307,14 +338,32 @@ export function AccessGate({ children }: { children: ReactNode }) {
 
   if (location === "/sign-in" || location.startsWith("/sign-in/")) return <>{children}</>;
   if (exitDeadline !== null) {
+    const ExitIcon = exitKind === "logout" ? LogOut : LockKeyhole;
+    const title = exitKind === "revocation"
+      ? "NO MORE TRADES"
+      : exitKind === "logout"
+        ? "SECURE LOGOUT"
+        : "SESSION LOCKED";
     return (
-      <div className="access-gate" role="alert" aria-live="assertive">
+      <div
+        className={`access-gate access-gate-countdown${exitKind === "revocation" ? " is-revoked" : ""}`}
+        role={exitKind === "revocation" ? "alert" : "status"}
+        aria-live={exitKind === "revocation" ? "assertive" : "polite"}
+        aria-atomic="true"
+        data-testid="access-exit-transition"
+      >
         <div className="access-gate-orbit" aria-hidden="true" />
-        <div className="access-gate-card access-gate-revoked">
-          <div className="access-gate-lock access-gate-lock-revoked"><LockKeyhole size={25} /></div>
-          <strong>NO MORE TRADES</strong>
+        <div className={`access-gate-card access-gate-transition-card${exitKind === "revocation" ? " access-gate-revoked" : ""}`}>
+          <div className={`access-gate-lock access-gate-transition-icon${exitKind === "revocation" ? " access-gate-lock-revoked" : ""}`}>
+            <ExitIcon size={25} />
+          </div>
+          <strong>{title}</strong>
           <p>{lockReason}</p>
-          <span>Returning to access-key login in <b>{exitCountdown}</b> seconds.</span>
+          <div className="access-gate-exit-countdown">
+            <span>Returning to access-key login in</span>
+            <b data-testid="access-exit-countdown">{exitCountdown}</b>
+            <span>seconds</span>
+          </div>
         </div>
       </div>
     );
@@ -382,7 +431,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="access-gate">
+    <div className={`access-gate${lockReason ? " access-gate-login-enter" : ""}`}>
       <div className="access-gate-orbit" aria-hidden="true" />
       <div className="access-gate-card">
         <div className="brand-lockup access-gate-brand">

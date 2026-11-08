@@ -133,6 +133,7 @@ import ClockWorkPanel from "../components/clock-work-panel";
 import DerivHistory from "../components/deriv-history";
 import type { DerivHistoryRow } from "../lib/deriv-history";
 import { getAccountBalance } from "../lib/account-balance";
+import { DERIV_STATUS_QUERY_RECOVERY_OPTIONS, DERIV_STATUS_WARNING_GRACE_MS } from "../lib/deriv-status-query";
 import {
   readMoneyBankHistoryClaims,
   saveMoneyBankHistoryClaims,
@@ -494,7 +495,14 @@ export default function XTraderPage() {
   const connectedToken = Boolean(tokenStatus.data?.has_token);
   const accounts = useGetDerivAccounts({ query: { enabled: connectedToken && canUseDeriv, retry: false, refetchInterval: 10_000, queryKey: getGetDerivAccountsQueryKey() } });
   const storedPatInvalid = errorMessage(accounts.error).includes("saved Deriv token is no longer readable");
-  const status = useGetDerivStatus(undefined, { query: { enabled: connectedToken && canUseDeriv, retry: false, refetchInterval: 500, queryKey: getGetDerivStatusQueryKey() } });
+  const status = useGetDerivStatus(undefined, {
+    query: {
+      ...DERIV_STATUS_QUERY_RECOVERY_OPTIONS,
+      enabled: connectedToken && canUseDeriv,
+      refetchInterval: 500,
+      queryKey: getGetDerivStatusQueryKey(),
+    },
+  });
   const history = useGetDerivHistory(undefined, {
     query: {
       enabled: connectedToken && canViewHistory,
@@ -1004,20 +1012,20 @@ export default function XTraderPage() {
       if (statusIssueRef.current === accessKeyId) return undefined;
       const timeout = window.setTimeout(() => {
         statusIssueRef.current = accessKeyId;
-        addNotification(
+        upsertNotification(
           "connection",
-          "Deriv status updates paused",
-          "The dashboard has not received fresh account status. Check the connection before starting another action.",
+          "Deriv account status",
+          "The dashboard is retrying automatically. New trade actions remain subject to a fresh, authorized account status.",
         );
-      }, 5_000);
+      }, DERIV_STATUS_WARNING_GRACE_MS);
       return () => window.clearTimeout(timeout);
     }
     if (statusIssueRef.current === accessKeyId && status.isSuccess) {
       statusIssueRef.current = null;
-      addNotification("connection", "Deriv status updates restored", "Fresh account status is being received again.");
+      upsertNotification("connection", "Deriv account status", "Fresh Deriv account status is being received again.");
     }
     return undefined;
-  }, [accessKeyId, addNotification, notificationsReady, status.isSuccess, statusUpdatesUnavailable]);
+  }, [accessKeyId, notificationsReady, status.isSuccess, statusUpdatesUnavailable, upsertNotification]);
 
   const handleLogout = () => {
     clearNotifications();

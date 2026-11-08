@@ -31,6 +31,7 @@ import AutoTrader2Panel from "@/components/auto-trader-2-panel";
 import type { DerivHistoryRow } from "@/components/deriv-history";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getAccountBalance } from "@/lib/account-balance";
+import { DERIV_STATUS_QUERY_RECOVERY_OPTIONS } from "@/lib/deriv-status-query";
 import { reportAdminDiagnostic } from "@/lib/admin-diagnostics";
 import {
   getAutoTrader2StopReason,
@@ -225,8 +226,8 @@ function AutoTrader2Content() {
   const status = useGetDerivStatus(undefined, {
     query: {
       queryKey: getGetDerivStatusQueryKey(),
+      ...DERIV_STATUS_QUERY_RECOVERY_OPTIONS,
       enabled: hasAccess && hasToken,
-      retry: false,
       refetchInterval: running || aiEnabled ? 1_000 : hasAccess && hasToken ? 4_000 : false,
     },
   });

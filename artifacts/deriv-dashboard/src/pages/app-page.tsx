@@ -13,6 +13,7 @@ import {
 import { AppShell } from '@/components/layout/app-shell';
 import { PatOnboarding } from '@/components/pat-onboarding';
 import { getAccountBalance } from '@/lib/account-balance';
+import { DERIV_STATUS_QUERY_RECOVERY_OPTIONS } from '@/lib/deriv-status-query';
 
 const money = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const time = new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -43,7 +44,14 @@ export default function AppPage() {
   const hasToken = Boolean(tokenStatusQuery.data?.has_token);
 
   const accountsQuery = useGetDerivAccounts({ query: { queryKey: getGetDerivAccountsQueryKey(), refetchInterval: 5000, enabled: hasToken } });
-  const statusQuery = useGetDerivStatus(undefined, { query: { queryKey: getGetDerivStatusQueryKey(), refetchInterval: 500, enabled: hasToken } });
+  const statusQuery = useGetDerivStatus(undefined, {
+    query: {
+      ...DERIV_STATUS_QUERY_RECOVERY_OPTIONS,
+      queryKey: getGetDerivStatusQueryKey(),
+      refetchInterval: 500,
+      enabled: hasToken,
+    },
+  });
    const historyQuery = useGetDerivHistory(undefined, { query: { queryKey: getGetDerivHistoryQueryKey(), refetchInterval: 5000, enabled: hasToken } });
   const loadErrorMessage = [accountsQuery.error, statusQuery.error]
     .map((error) => error ? getUserFacingErrorMessage(error, "") : "")

@@ -1119,6 +1119,19 @@ html.dark { color-scheme: dark; }.dark body { background: #091419; }.dark .app-f
 .access-gate-revoked > span { color: #8ba1a2; font-size: 11px; }
 .access-gate-revoked > span b { color: #ffb17c; font: 800 15px var(--app-font-mono); }
 .access-gate-lock-revoked { margin-top: 0; border-color: #754447; color: #ff837e; background: #3a2528; box-shadow: inset 0 0 25px rgba(236, 101, 93, .12); }
+.access-gate-countdown { position: fixed; inset: 0; z-index: 80; background: radial-gradient(ellipse at 50% 30%, rgba(15, 97, 143, .24), transparent 45%), #061529; animation: access-gate-transition-in .32s ease both; }
+.access-gate-countdown.is-revoked { background: radial-gradient(ellipse at 50% 30%, rgba(130, 42, 49, .24), transparent 45%), #100f1a; }
+.access-gate-countdown .access-gate-orbit { opacity: .34; animation: access-gate-orbit-pulse 3.2s ease-in-out infinite; }
+.access-gate-transition-card { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; border-color: rgba(64, 191, 235, .34); background: rgba(8, 29, 54, .96); animation: access-gate-card-in .42s cubic-bezier(.2,.8,.2,1) both; }
+.access-gate-transition-card > strong { color: #70dff7; font: 800 11px var(--app-font-mono); letter-spacing: .16em; }
+.access-gate-transition-card > p { margin: 3px 0 9px; color: #b8cce1; }
+.access-gate-transition-icon { margin: 0; border-color: rgba(53, 184, 230, .42); color: #6bdcf5; background: rgba(9, 61, 100, .65); box-shadow: inset 0 0 25px rgba(29, 167, 224, .16), 0 0 28px rgba(29, 167, 224, .08); }
+.access-gate-exit-countdown { display: flex; align-items: center; justify-content: center; gap: 9px; color: #91abc4; font-size: 11px; }
+.access-gate-exit-countdown b { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid rgba(63, 188, 234, .4); border-radius: 14px; background: linear-gradient(145deg, rgba(11, 77, 119, .8), rgba(9, 40, 74, .9)); color: #e1faff; box-shadow: 0 0 24px rgba(30, 174, 226, .14), inset 0 1px rgba(255,255,255,.08); font: 800 19px var(--app-font-mono); animation: access-gate-countdown-pulse 1s ease-in-out infinite; }
+.access-gate-countdown.is-revoked .access-gate-transition-card { border-color: rgba(236, 101, 93, .34); background: rgba(36, 24, 32, .96); }
+.access-gate-countdown.is-revoked .access-gate-transition-card > strong { color: #ff938b; }
+.access-gate-countdown.is-revoked .access-gate-exit-countdown b { border-color: rgba(236, 101, 93, .42); background: linear-gradient(145deg, rgba(112, 41, 49, .8), rgba(55, 27, 38, .9)); color: #ffe5e1; box-shadow: 0 0 24px rgba(236, 101, 93, .12); }
+.access-gate-login-enter .access-gate-card { animation: access-gate-login-in .42s cubic-bezier(.2,.8,.2,1) both; }
 .access-gate-locked-note { margin: 15px 0 0; padding: 10px 12px; border: 1px solid rgba(236, 101, 93, .32); border-radius: 7px; color: #ffc1bc; background: rgba(111, 37, 43, .2); font-size: 11px; line-height: 1.45; }
 .access-gate-brand { margin-bottom: 46px; color: #f3fbf9; }
 .access-gate-eyebrow { display: flex; align-items: center; gap: 7px; color: #35d6b6; font: 9px var(--app-font-mono); letter-spacing: .13em; }
@@ -1149,7 +1162,24 @@ html.dark { color-scheme: dark; }.dark body { background: #091419; }.dark .app-f
 .admin-unlimited-toggle, .key-edit-unlimited { display: flex; align-items: center; gap: 7px; color: #527b7a; font: 9px var(--app-font-mono); }.admin-unlimited-toggle input, .key-edit-unlimited input { accent-color: #18a894; }.key-edit-limit input:disabled, .admin-field input:disabled { cursor: not-allowed; opacity: .55; }
 @keyframes access-gate-fade-out { from { opacity: 1; } to { opacity: 0; visibility: hidden; pointer-events: none; } }
 @keyframes access-gate-card-fade-out { from { transform: translateY(0) scale(1); opacity: 1; } to { transform: translateY(-8px) scale(.985); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .access-gate-exit, .access-gate-unlocking { animation-duration: .01ms; animation-delay: 0ms; } }
+@keyframes access-gate-transition-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes access-gate-card-in { from { opacity: 0; transform: translateY(12px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes access-gate-login-in { from { opacity: 0; transform: translateY(10px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes access-gate-orbit-pulse { 0%, 100% { transform: translate(28%, -35%) scale(.98); opacity: .2; } 50% { transform: translate(28%, -35%) scale(1.04); opacity: .42; } }
+@keyframes access-gate-countdown-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+@media (prefers-reduced-motion: reduce) {
+  .access-gate-exit,
+  .access-gate-unlocking,
+  .access-gate-countdown,
+  .access-gate-countdown .access-gate-orbit,
+  .access-gate-transition-card,
+  .access-gate-exit-countdown b,
+  .access-gate-login-enter .access-gate-card {
+    animation-duration: .01ms;
+    animation-delay: 0ms;
+    animation-iteration-count: 1;
+  }
+}
 
 /* Responsive workspace pass
    The app uses the viewport as the source of truth so it adapts naturally

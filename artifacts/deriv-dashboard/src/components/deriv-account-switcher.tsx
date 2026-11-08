@@ -19,6 +19,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { DERIV_STATUS_QUERY_RECOVERY_OPTIONS } from "@/lib/deriv-status-query";
 import { useToast } from "@/hooks/use-toast";
 import { getAccountBalance } from "@/lib/account-balance";
 
@@ -62,6 +63,7 @@ export function DerivAccountSwitcher({
   });
   const statusQuery = useGetDerivStatus(undefined, {
     query: {
+      ...DERIV_STATUS_QUERY_RECOVERY_OPTIONS,
       queryKey: getGetDerivStatusQueryKey(),
       enabled: enabled && hasToken,
       refetchInterval: 1_000,

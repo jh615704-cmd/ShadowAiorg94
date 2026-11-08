@@ -1,5 +1,7 @@
-export const ACCESS_IDLE_LOCK_MS = 2 * 60 * 60 * 1_000;
-export const ACCESS_AWAY_LOCK_MS = 30 * 60 * 1_000;
+export const ACCESS_IDLE_LOCK_MS = 60 * 60 * 1_000;
+export const ACCESS_AWAY_LOCK_MS = ACCESS_IDLE_LOCK_MS;
+export const ACCESS_IDLE_EXIT_DELAY_MS = 5_000;
+export const ACCESS_LOGOUT_EXIT_DELAY_MS = 2_000;
 export const ACCESS_REVOCATION_EXIT_DELAY_MS = 10_000;
 export const ACCESS_ACTIVE_MARKER = "shadow-access-session-active";
 export const ACCESS_LAST_ACTIVITY = "shadow-access-last-activity";

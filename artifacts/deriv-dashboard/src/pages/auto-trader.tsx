@@ -28,6 +28,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { DerivAccountSwitcher } from "@/components/deriv-account-switcher";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getAccountBalance } from "@/lib/account-balance";
+import { DERIV_STATUS_QUERY_RECOVERY_OPTIONS } from "@/lib/deriv-status-query";
 import { formatSignedDerivProfit, getDerivOpenLiveProfit, isDerivHistoryOpen, summarizeDerivWinLoss, uniqueDerivHistoryRows } from "@/lib/deriv-history";
 import { validateAutoTraderBatch } from "@/lib/trade-entry-guards";
 import "./auto-trader.css";
@@ -131,9 +132,9 @@ function AutoTraderContent() {
   });
   const status = useGetDerivStatus(undefined, {
     query: {
+      ...DERIV_STATUS_QUERY_RECOVERY_OPTIONS,
       queryKey: getGetDerivStatusQueryKey(),
       enabled: hasAutoTraderAccess && hasToken,
-      retry: false,
       refetchInterval: scanning ? 5_000 : false,
     },
   });
