@@ -44,7 +44,7 @@
 - [Auto Trader 2 live trade feedback](auto-trader-2-live-trade-feedback.md) — keep visible trade updates push-driven and settlement waits abortable; don't restore frequent history polling.
 - [Auto Trader tick scope](auto-trader-tick-scope.md) — 1–5 tick responsiveness changes apply only to Auto Trader; preserve Deriv duration and market cadence.
 - [Global announcement broadcast](global-announcement-broadcast.md) — every access-key session, including the primary admin, receives each new broadcast revision.
-- [Workspace idle lock](workspace-idle-lock.md) — lock the entire trading workspace after two hours away; keep access revocation's short exit countdown separate.
+- [Workspace idle lock](workspace-idle-lock.md) — require the access key after one hour without interaction, including time away; keep revocation exits separate.
 - [Vite preview cache isolation](vite-preview-cache-isolation.md) — keep isolated E2E Vite caches separate from the live dashboard server to prevent stale-chunk 504s.
 - [Clock Work evidence and risk](clock-work-evidence-risk.md) — require six completed five-tick samples and at least 58%; history clearing must not disrupt run settlement tracking.
 - [Jackpot entry evidence](jackpot-entry-evidence.md) — every placed side needs six fresh samples and at least 58% observed; do not imply guaranteed outcomes.
