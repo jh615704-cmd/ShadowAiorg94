@@ -59,6 +59,7 @@ export function DerivAccountSwitcher({
       queryKey: getGetDerivAccountsQueryKey(),
       enabled: enabled && hasToken,
       refetchInterval: 10_000,
+      refetchIntervalInBackground: true,
     },
   });
   const statusQuery = useGetDerivStatus(undefined, {
@@ -66,7 +67,8 @@ export function DerivAccountSwitcher({
       ...DERIV_STATUS_QUERY_RECOVERY_OPTIONS,
       queryKey: getGetDerivStatusQueryKey(),
       enabled: enabled && hasToken,
-      refetchInterval: 1_000,
+      refetchInterval: 5_000,
+      refetchIntervalInBackground: true,
     },
   });
   const selectAccount = useSelectDerivAccount();

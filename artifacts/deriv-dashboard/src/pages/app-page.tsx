@@ -43,16 +43,17 @@ export default function AppPage() {
   // They will return error if no token, which is handled gracefully.
   const hasToken = Boolean(tokenStatusQuery.data?.has_token);
 
-  const accountsQuery = useGetDerivAccounts({ query: { queryKey: getGetDerivAccountsQueryKey(), refetchInterval: 5000, enabled: hasToken } });
+  const accountsQuery = useGetDerivAccounts({ query: { queryKey: getGetDerivAccountsQueryKey(), refetchInterval: 5000, refetchIntervalInBackground: true, enabled: hasToken } });
   const statusQuery = useGetDerivStatus(undefined, {
     query: {
       ...DERIV_STATUS_QUERY_RECOVERY_OPTIONS,
       queryKey: getGetDerivStatusQueryKey(),
-      refetchInterval: 500,
+      refetchInterval: 5_000,
+      refetchIntervalInBackground: true,
       enabled: hasToken,
     },
   });
-   const historyQuery = useGetDerivHistory(undefined, { query: { queryKey: getGetDerivHistoryQueryKey(), refetchInterval: 5000, enabled: hasToken } });
+   const historyQuery = useGetDerivHistory(undefined, { query: { queryKey: getGetDerivHistoryQueryKey(), refetchInterval: 5000, refetchIntervalInBackground: true, enabled: hasToken } });
   const loadErrorMessage = [accountsQuery.error, statusQuery.error]
     .map((error) => error ? getUserFacingErrorMessage(error, "") : "")
     .find((message) => Boolean(message));

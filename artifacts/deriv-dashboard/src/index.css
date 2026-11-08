@@ -1128,9 +1128,12 @@ html.dark { color-scheme: dark; }.dark body { background: #091419; }.dark .app-f
 .access-gate-transition-icon { margin: 0; border-color: rgba(53, 184, 230, .42); color: #6bdcf5; background: rgba(9, 61, 100, .65); box-shadow: inset 0 0 25px rgba(29, 167, 224, .16), 0 0 28px rgba(29, 167, 224, .08); }
 .access-gate-exit-countdown { display: flex; align-items: center; justify-content: center; gap: 9px; color: #91abc4; font-size: 11px; }
 .access-gate-exit-countdown b { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid rgba(63, 188, 234, .4); border-radius: 14px; background: linear-gradient(145deg, rgba(11, 77, 119, .8), rgba(9, 40, 74, .9)); color: #e1faff; box-shadow: 0 0 24px rgba(30, 174, 226, .14), inset 0 1px rgba(255,255,255,.08); font: 800 19px var(--app-font-mono); animation: access-gate-countdown-pulse 1s ease-in-out infinite; }
+.access-gate-exit-progress { width: min(100%, 280px); height: 3px; overflow: hidden; border-radius: 999px; background: rgba(83, 143, 181, .22); }
+.access-gate-exit-progress span { display: block; width: 100%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #35d6b6, #55c9f3); box-shadow: 0 0 12px rgba(66, 195, 230, .48); transform-origin: left center; animation: access-gate-exit-progress linear both; }
 .access-gate-countdown.is-revoked .access-gate-transition-card { border-color: rgba(236, 101, 93, .34); background: rgba(36, 24, 32, .96); }
 .access-gate-countdown.is-revoked .access-gate-transition-card > strong { color: #ff938b; }
 .access-gate-countdown.is-revoked .access-gate-exit-countdown b { border-color: rgba(236, 101, 93, .42); background: linear-gradient(145deg, rgba(112, 41, 49, .8), rgba(55, 27, 38, .9)); color: #ffe5e1; box-shadow: 0 0 24px rgba(236, 101, 93, .12); }
+.access-gate-countdown.is-revoked .access-gate-exit-progress span { background: linear-gradient(90deg, #f19483, #f8c177); }
 .access-gate-login-enter .access-gate-card { animation: access-gate-login-in .42s cubic-bezier(.2,.8,.2,1) both; }
 .access-gate-locked-note { margin: 15px 0 0; padding: 10px 12px; border: 1px solid rgba(236, 101, 93, .32); border-radius: 7px; color: #ffc1bc; background: rgba(111, 37, 43, .2); font-size: 11px; line-height: 1.45; }
 .access-gate-brand { margin-bottom: 46px; color: #f3fbf9; }
@@ -1167,6 +1170,7 @@ html.dark { color-scheme: dark; }.dark body { background: #091419; }.dark .app-f
 @keyframes access-gate-login-in { from { opacity: 0; transform: translateY(10px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes access-gate-orbit-pulse { 0%, 100% { transform: translate(28%, -35%) scale(.98); opacity: .2; } 50% { transform: translate(28%, -35%) scale(1.04); opacity: .42; } }
 @keyframes access-gate-countdown-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+@keyframes access-gate-exit-progress { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 @media (prefers-reduced-motion: reduce) {
   .access-gate-exit,
   .access-gate-unlocking,
@@ -1174,6 +1178,7 @@ html.dark { color-scheme: dark; }.dark body { background: #091419; }.dark .app-f
   .access-gate-countdown .access-gate-orbit,
   .access-gate-transition-card,
   .access-gate-exit-countdown b,
+  .access-gate-exit-progress span,
   .access-gate-login-enter .access-gate-card {
     animation-duration: .01ms;
     animation-delay: 0ms;
@@ -2846,78 +2851,92 @@ body { overflow-x: hidden; }
   width: 100%;
 }
 .global-feature-announcement {
+  position: relative;
   display: grid;
-  grid-template-columns: 10px minmax(0, 1fr) 30px;
+  grid-template-columns: 8px minmax(0, 1fr) 34px;
   align-items: center;
-  gap: 12px;
-  min-height: 64px;
+  gap: 13px;
+  min-height: 58px;
+  overflow: hidden;
   margin: 0;
   padding: 8px clamp(14px, 3vw, 34px);
-  border: 0;
-  border-bottom: 1px solid rgba(101, 237, 155, .28);
-  background: linear-gradient(90deg, rgba(4, 19, 13, .98), rgba(9, 36, 23, .98) 50%, rgba(4, 19, 13, .98));
-  color: #d8ffe7;
+  border: 1px solid rgba(72, 177, 224, .25);
+  border-radius: 11px;
+  background: linear-gradient(105deg, rgba(5, 24, 44, .98), rgba(8, 39, 65, .98) 54%, rgba(5, 25, 45, .98));
+  color: #d9efff;
   font-size: 13px;
   line-height: 1.5;
-  box-shadow: inset 0 -1px 0 rgba(89, 207, 142, .12);
-  transition: opacity 340ms ease, transform 340ms ease;
+  box-shadow: inset 0 1px rgba(170, 226, 255, .05), 0 8px 24px rgba(0, 8, 20, .18);
+  animation: global-announcement-enter .35s cubic-bezier(.2,.8,.2,1) both;
+  transition: opacity 340ms ease, transform 340ms ease, border-color 180ms ease;
+}
+.global-feature-announcement::before {
+  position: absolute;
+  top: 17%;
+  bottom: 17%;
+  left: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, #54d7f2, #43d6bb);
+  box-shadow: 0 0 14px rgba(67, 202, 223, .48);
+  content: "";
 }
 .global-feature-announcement.is-inline {
   flex: 1 1 220px;
   min-width: 150px;
   max-width: min(560px, 48vw);
-  grid-template-columns: 8px minmax(0, 1fr) 28px;
+  grid-template-columns: 7px minmax(0, 1fr) 28px;
   gap: 8px;
   min-height: 38px;
   padding: 5px 6px 5px 10px;
-  border: 1px solid rgba(75, 210, 139, .34);
-  border-radius: 10px;
-  background: linear-gradient(110deg, rgba(5, 54, 36, .96), rgba(8, 40, 35, .96));
-  color: #d8ffe7;
+  border-color: rgba(72, 177, 224, .3);
+  border-radius: 9px;
+  background: linear-gradient(110deg, rgba(5, 34, 58, .98), rgba(8, 39, 61, .97));
+  color: #d9efff;
   font-size: 10px;
   line-height: 1.35;
-  box-shadow: inset 0 1px rgba(165, 255, 197, .06), 0 6px 18px rgba(0, 0, 0, .16);
+  box-shadow: inset 0 1px rgba(170, 226, 255, .06), 0 6px 18px rgba(0, 0, 0, .16);
 }
 .global-feature-announcement.is-inline .global-announcement-indicator {
   width: 7px;
   height: 7px;
-  background: #65ed9b;
-  box-shadow: 0 0 10px rgba(101, 237, 155, .72);
+  background: #55d7f2;
+  box-shadow: 0 0 10px rgba(85, 215, 242, .7);
 }
 .global-feature-announcement.is-inline .global-announcement-copy {
-  color: #d8ffe7;
+  color: #d9efff;
   text-align: left;
   overflow-wrap: anywhere;
 }
 .global-feature-announcement.is-inline .global-announcement-copy strong {
-  color: #86f2a8;
+  color: #77e7dc;
 }
 .global-feature-announcement.is-inline .global-announcement-dismiss {
   width: 27px;
   height: 27px;
-  color: #baf9cd;
+  color: #acd8ec;
 }
 .global-feature-announcement.is-inline .global-announcement-dismiss:hover {
-  border-color: rgba(112, 235, 151, .34);
+  border-color: rgba(85, 215, 242, .34);
   color: #fff;
-  background: rgba(105, 235, 151, .14);
+  background: rgba(85, 215, 242, .12);
 }
 .global-announcement-indicator {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: #65ed9b;
-  box-shadow: 0 0 12px rgba(101, 237, 155, .68);
+  background: #55d7f2;
+  box-shadow: 0 0 12px rgba(85, 215, 242, .62);
 }
 .global-announcement-copy {
   min-width: 0;
   margin: 0;
-  color: #d8ffe7;
-  text-align: center;
+  color: #d9efff;
+  text-align: left;
   overflow-wrap: anywhere;
 }
 .global-announcement-copy strong {
-  color: #86f2a8;
+  color: #77e7dc;
   font-weight: 800;
 }
 .global-announcement-dismiss {
@@ -2928,24 +2947,28 @@ body { overflow-x: hidden; }
   padding: 0;
   border: 1px solid transparent;
   border-radius: 5px;
-  color: #baf9cd;
+  color: #acd8ec;
   background: transparent;
   cursor: pointer;
   transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
 }
 .global-announcement-dismiss:hover {
-  border-color: rgba(112, 235, 151, .34);
+  border-color: rgba(85, 215, 242, .34);
   color: #fff;
-  background: rgba(105, 235, 151, .14);
+  background: rgba(85, 215, 242, .12);
 }
 .global-announcement-dismiss:focus-visible {
-  outline: 2px solid #70df9c;
+  outline: 2px solid #55d7f2;
   outline-offset: 2px;
 }
 .global-feature-announcement.is-fading {
   opacity: 0;
   transform: translateY(-5px);
   pointer-events: none;
+}
+@keyframes global-announcement-enter {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 @media (max-width: 620px) {
   .global-feature-announcement {
@@ -2967,8 +2990,10 @@ body { overflow-x: hidden; }
 }
 @media (prefers-reduced-motion: reduce) {
   .global-feature-announcement,
+  .global-feature-announcement::before,
   .global-announcement-dismiss {
     transition-duration: .01ms;
+    animation-duration: .01ms;
   }
 }
 

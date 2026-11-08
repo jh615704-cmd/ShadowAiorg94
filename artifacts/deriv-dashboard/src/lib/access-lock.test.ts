@@ -9,9 +9,9 @@ import {
   isAccessAwayLockDue,
 } from "./access-lock.ts";
 
-test("idle and away locks are one hour, with distinct exit and revocation countdowns", () => {
-  assert.equal(ACCESS_IDLE_LOCK_MS, 60 * 60 * 1_000);
-  assert.equal(ACCESS_AWAY_LOCK_MS, 60 * 60 * 1_000);
+test("idle and away locks are three hours, with distinct exit and revocation countdowns", () => {
+  assert.equal(ACCESS_IDLE_LOCK_MS, 3 * 60 * 60 * 1_000);
+  assert.equal(ACCESS_AWAY_LOCK_MS, 3 * 60 * 60 * 1_000);
   assert.equal(ACCESS_IDLE_EXIT_DELAY_MS, 5_000);
   assert.equal(ACCESS_LOGOUT_EXIT_DELAY_MS, 2_000);
   assert.equal(ACCESS_REVOCATION_EXIT_DELAY_MS, 10_000);
@@ -21,7 +21,7 @@ test("the away lock requires a prior active session marker", () => {
   assert.equal(isAccessAwayLockDue(null, "0", ACCESS_IDLE_LOCK_MS * 2), false);
 });
 
-test("the one-hour lock treats missing activity as stale", () => {
+test("the three-hour lock treats missing activity as stale", () => {
   const lastActivity = 1_000;
   assert.equal(isAccessAwayLockDue("1", String(lastActivity), lastActivity + ACCESS_IDLE_LOCK_MS - 1), false);
   assert.equal(isAccessAwayLockDue("1", String(lastActivity), lastActivity + ACCESS_IDLE_LOCK_MS), true);
@@ -34,7 +34,7 @@ test("the away lock ignores activity from another visible tab", () => {
   assert.equal(isAccessAwayLockDue("1", String(lastActivity), lastActivity + ACCESS_IDLE_LOCK_MS), true);
 });
 
-test("a departure stays unlocked briefly and locks after one hour away", () => {
+test("a departure stays unlocked briefly and locks after three hours away", () => {
   const awayStarted = 10_000;
   const lastActivity = awayStarted;
   assert.equal(

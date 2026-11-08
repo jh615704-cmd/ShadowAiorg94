@@ -128,7 +128,7 @@ function AutoTraderContent() {
   const autoMagicAttemptedRef = useRef(false);
   const [scannerSignals, setScannerSignals] = useState<AutoMagicSignal[]>([]);
   const accounts = useGetDerivAccounts({
-    query: { queryKey: getGetDerivAccountsQueryKey(), enabled: hasAutoTraderAccess && hasToken, retry: false, refetchInterval: 10_000 },
+    query: { queryKey: getGetDerivAccountsQueryKey(), enabled: hasAutoTraderAccess && hasToken, retry: false, refetchInterval: 10_000, refetchIntervalInBackground: true },
   });
   const status = useGetDerivStatus(undefined, {
     query: {
@@ -136,10 +136,11 @@ function AutoTraderContent() {
       queryKey: getGetDerivStatusQueryKey(),
       enabled: hasAutoTraderAccess && hasToken,
       refetchInterval: scanning ? 5_000 : false,
+      refetchIntervalInBackground: true,
     },
   });
   const history = useGetDerivHistory(undefined, {
-    query: { queryKey: getGetDerivHistoryQueryKey(), enabled: hasAutoTraderAccess && hasToken, retry: false, refetchInterval: false },
+    query: { queryKey: getGetDerivHistoryQueryKey(), enabled: hasAutoTraderAccess && hasToken, retry: false, refetchInterval: false, refetchIntervalInBackground: true },
   });
   const bulkBuy = useBulkBuyDerivContracts();
   const batchSubmitLockRef = useRef(false);
@@ -488,6 +489,7 @@ function AutoTraderContent() {
   const connected = Boolean(status.data?.connected && status.data?.authorized && hasToken);
   const scanActionsDisabled = !connected
     || scanResetPending
+    || autoMagicStatus === "placing"
     || autoMagicStatus === "settling"
     || (autoMagicEnabled && autoMagicStatus === "review");
   const autoMagicStatusText = !autoMagicEnabled
@@ -513,10 +515,14 @@ function AutoTraderContent() {
                   : "OFF";
   const handleAutoMagicToggle = (enabled: boolean) => {
     setAutoMagicEnabled(enabled);
-    setAutoMagicRunActive(false);
-    if (autoMagicStatus === "settling" || autoMagicStatus === "review") return;
+    if (autoMagicStatus === "placing" || autoMagicStatus === "settling" || autoMagicStatus === "review") {
+      setAutoMagicRunActive(false);
+      return;
+    }
+    const canArmCurrentScan = enabled && scanning && !autoMagicAttemptedRef.current;
+    setAutoMagicRunActive(canArmCurrentScan);
     setAutoMagicStatus(enabled
-      ? autoMagicAttemptedRef.current ? "rescan" : "ready"
+      ? autoMagicAttemptedRef.current ? "rescan" : scanning ? "waiting" : "ready"
       : "off");
   };
 
@@ -666,6 +672,8 @@ function AutoTraderContent() {
     }
     return { kind: "accepted", contractIds: fresh.map((contract) => contract.id) };
   };
+  const placeTradeRef = useRef(placeTrade);
+  placeTradeRef.current = placeTrade;
 
   useEffect(() => {
     if (
@@ -717,7 +725,7 @@ function AutoTraderContent() {
     autoMagicAttemptedRef.current = true;
     setAutoMagicRunActive(false);
     setAutoMagicStatus("placing");
-    void placeTrade(market, candidate.barrier, autoMagicCount)
+    void placeTradeRef.current(market, candidate.barrier, autoMagicCount)
       .then((outcome) => {
         if (outcome.kind === "accepted" && outcome.contractIds.length > 0) {
           setAutoMagicBatchIds(outcome.contractIds);
@@ -759,7 +767,6 @@ function AutoTraderContent() {
     hasAutoTraderAccess,
     latestDigits,
     marketTicks,
-    placeTrade,
     scanning,
     scannerSignals,
     stake,

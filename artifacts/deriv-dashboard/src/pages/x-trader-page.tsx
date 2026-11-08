@@ -493,13 +493,14 @@ export default function XTraderPage() {
   const canViewHistory = canUseDeriv || (hasFeature("history") && featureIsAvailable("history"));
   const tokenStatus = useGetDerivTokenStatus({ query: { enabled: canUseDeriv, retry: false, queryKey: getGetDerivTokenStatusQueryKey() } });
   const connectedToken = Boolean(tokenStatus.data?.has_token);
-  const accounts = useGetDerivAccounts({ query: { enabled: connectedToken && canUseDeriv, retry: false, refetchInterval: 10_000, queryKey: getGetDerivAccountsQueryKey() } });
+  const accounts = useGetDerivAccounts({ query: { enabled: connectedToken && canUseDeriv, retry: false, refetchInterval: 10_000, refetchIntervalInBackground: true, queryKey: getGetDerivAccountsQueryKey() } });
   const storedPatInvalid = errorMessage(accounts.error).includes("saved Deriv token is no longer readable");
   const status = useGetDerivStatus(undefined, {
     query: {
       ...DERIV_STATUS_QUERY_RECOVERY_OPTIONS,
       enabled: connectedToken && canUseDeriv,
-      refetchInterval: 500,
+      refetchInterval: 5_000,
+      refetchIntervalInBackground: true,
       queryKey: getGetDerivStatusQueryKey(),
     },
   });
@@ -516,6 +517,7 @@ export default function XTraderPage() {
           ? 2_000
           : 5_000;
       },
+      refetchIntervalInBackground: true,
       queryKey: getGetDerivHistoryQueryKey(),
     },
   });
@@ -1015,7 +1017,7 @@ export default function XTraderPage() {
         upsertNotification(
           "connection",
           "Deriv account status",
-          "The dashboard is retrying automatically. New trade actions remain subject to a fresh, authorized account status.",
+          "The dashboard is retrying automatically. New orders still require a confirmed account status.",
         );
       }, DERIV_STATUS_WARNING_GRACE_MS);
       return () => window.clearTimeout(timeout);

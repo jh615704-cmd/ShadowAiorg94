@@ -61,8 +61,8 @@ export function AccessGate({ children }: { children: ReactNode }) {
     return Number.isFinite(awayStarted)
       && awayStarted > 0
       && Date.now() - awayStarted >= ACCESS_AWAY_LOCK_MS
-      ? "Workspace locked after one hour away. Enter your access key again."
-      : "Workspace locked after one hour without activity. Enter your access key again.";
+      ? "Workspace locked after three hours away. Enter your access key again."
+      : "Workspace locked after three hours without activity. Enter your access key again.";
   });
   const [exitDeadline, setExitDeadline] = useState<number | null>(() =>
     accessRejected ? Date.now() + ACCESS_IDLE_EXIT_DELAY_MS : null,
@@ -99,13 +99,18 @@ export function AccessGate({ children }: { children: ReactNode }) {
   const [isUnlocking, setIsUnlocking] = useState(false);
   const unlockTimerRef = useRef<number | null>(null);
   const deviceId = useMemo(() => getDeviceId(), []);
+  const exitDurationMs = exitKind === "logout"
+    ? ACCESS_LOGOUT_EXIT_DELAY_MS
+    : exitKind === "revocation"
+      ? ACCESS_REVOCATION_EXIT_DELAY_MS
+      : ACCESS_IDLE_EXIT_DELAY_MS;
 
   useEffect(() => {
     accessRejectedRef.current = accessRejected;
   }, [accessRejected]);
 
   const lockAfterAway = useCallback((
-    message = "Workspace locked after one hour without activity. Enter your access key again.",
+    message = "Workspace locked after three hours without activity. Enter your access key again.",
   ) => {
     if (accessRejectedRef.current || !sessionWasActiveRef.current) return;
     accessRejectedRef.current = true;
@@ -226,9 +231,9 @@ export function AccessGate({ children }: { children: ReactNode }) {
     const getLockMessage = () => {
       const awayStarted = Number(window.localStorage.getItem(ACCESS_AWAY_STARTED));
       if (Number.isFinite(awayStarted) && awayStarted > 0 && Date.now() - awayStarted >= ACCESS_AWAY_LOCK_MS) {
-        return "Workspace locked after one hour away. Enter your access key again.";
+        return "Workspace locked after three hours away. Enter your access key again.";
       }
-      return "Workspace locked after one hour without activity. Enter your access key again.";
+      return "Workspace locked after three hours without activity. Enter your access key again.";
     };
 
     const onUserActivity = () => {
@@ -359,6 +364,9 @@ export function AccessGate({ children }: { children: ReactNode }) {
           </div>
           <strong>{title}</strong>
           <p>{lockReason}</p>
+          <div className="access-gate-exit-progress" aria-hidden="true" data-testid="access-exit-progress">
+            <span style={{ animationDuration: `${exitDurationMs}ms` }} />
+          </div>
           <div className="access-gate-exit-countdown">
             <span>Returning to access-key login in</span>
             <b data-testid="access-exit-countdown">{exitCountdown}</b>

@@ -165,7 +165,7 @@ test("Auto Trader and Auto Trader 2.0 grants stay independent during key creatio
   }
 });
 
-test("the workspace stays unlocked briefly and shows the access countdown after one hour away", async () => {
+test("the workspace stays unlocked briefly and shows the access countdown after three hours away", async () => {
   const state = createState(userSession(["settings"]));
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {
@@ -177,16 +177,17 @@ test("the workspace stays unlocked briefly and shows the access countdown after 
     assert.equal(await page.getByRole("heading", { name: "Login to Shadow Ai" }).count(), 0, "A brief departure should not lock the workspace.");
     assert.equal(state.logoutCount, 0, "A brief departure should keep the access session active.");
     await page.evaluate(() => {
-      localStorage.setItem("shadow-access-away-started", String(Date.now() - 60 * 60 * 1_000 - 1));
+      localStorage.setItem("shadow-access-away-started", String(Date.now() - 3 * 60 * 60 * 1_000 - 1));
       window.dispatchEvent(new Event("pageshow"));
     });
 
     await page.getByTestId("access-exit-transition").waitFor();
     assert.match(await page.getByTestId("access-exit-countdown").innerText(), /^[1-5]$/);
+    await page.getByTestId("access-exit-progress").waitFor();
     assert.equal(await page.getByRole("heading", { name: "Login to Shadow Ai" }).count(), 0);
-    assert.equal(state.logoutCount, 1, "Returning after one hour away should end the active access session.");
+    assert.equal(state.logoutCount, 1, "Returning after three hours away should end the active access session.");
     await page.getByRole("heading", { name: "Login to Shadow Ai" }).waitFor({ timeout: 8_000 });
-    await page.getByText(/Workspace locked after one hour away/).waitFor();
+    await page.getByText(/Workspace locked after three hours away/).waitFor();
     await page.reload();
     await page.getByRole("heading", { name: "Login to Shadow Ai" }).waitFor();
     assert.ok(state.sessionRevoked, "Returning to the app should not restore the previous session.");
@@ -213,7 +214,7 @@ test("the workspace does not lock just because the bot browser window loses focu
   }
 });
 
-test("the workspace shows a five-second lock countdown after one idle hour", async () => {
+test("the workspace shows a five-second lock countdown after three idle hours", async () => {
   const state = createState(userSession(["settings"]));
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {
@@ -221,15 +222,15 @@ test("the workspace shows a five-second lock countdown after one idle hour", asy
     await page.locator(".xt-feature-card-restricted").first().waitFor();
     await page.evaluate(() => {
       localStorage.setItem("shadow-access-session-active", "1");
-      localStorage.setItem("shadow-access-last-activity", String(Date.now() - 60 * 60 * 1_000 - 1_000));
+      localStorage.setItem("shadow-access-last-activity", String(Date.now() - 3 * 60 * 60 * 1_000 - 1_000));
     });
 
     await page.getByTestId("access-exit-transition").waitFor({ timeout: 5_000 });
     assert.match(await page.getByTestId("access-exit-countdown").innerText(), /^[1-5]$/);
     assert.equal(await page.getByRole("heading", { name: "Login to Shadow Ai" }).count(), 0);
     await page.getByRole("heading", { name: "Login to Shadow Ai" }).waitFor({ timeout: 8_000 });
-    await page.getByText(/Workspace locked after one hour without activity/).waitFor();
-    assert.equal(state.logoutCount, 1, "One hour without interaction should end the active session.");
+    await page.getByText(/Workspace locked after three hours without activity/).waitFor();
+    assert.equal(state.logoutCount, 1, "Three hours without interaction should end the active session.");
     assert.deepEqual(pageErrors, [], "The idle lock should not cause browser errors.");
     assert.deepEqual(state.unhandledApis, []);
   } finally {
@@ -250,6 +251,7 @@ test("manual logout shows a two-second countdown before access-key login", async
     await page.getByTestId("access-exit-transition").waitFor();
     assert.equal(await page.getByText("SECURE LOGOUT").count(), 1);
     assert.equal(await page.getByTestId("access-exit-countdown").innerText(), "2");
+    await page.getByTestId("access-exit-progress").waitFor();
     assert.equal(await page.getByRole("heading", { name: "Login to Shadow Ai" }).count(), 0);
     assert.equal(state.logoutCount, 1);
     await page.getByRole("heading", { name: "Login to Shadow Ai" }).waitFor({ timeout: 6_000 });
@@ -1725,7 +1727,7 @@ test("Auto Magic waits for Go Live and requires settlement plus Rescan for anoth
     assert.equal(
       await page.getByTestId("access-exit-transition").count(),
       0,
-      "A healthy automatic trade before the one-hour inactivity deadline must not lock the workspace.",
+      "A healthy automatic trade before the three-hour inactivity deadline must not lock the workspace.",
     );
     assert.equal(state.tradeRequests.length, 1, "Auto Magic should send one batch for the current scan.");
     assert.equal(state.tradeRequests[0].path, "/api/deriv/bulk-buy");
@@ -1788,6 +1790,55 @@ test("Auto Magic waits for Go Live and requires settlement plus Rescan for anoth
     assert.equal(state.tradeRequests[1].body.count, 6);
     assert.deepEqual(state.unhandledApis, []);
     assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+});
+
+test("Auto Magic can arm an already-running scan without a reset", async () => {
+  const state = createState(userSession(["auto-trader"]));
+  state.hasToken = true;
+  state.allowFixtureTrades = true;
+  const historicalDigits = [0, ...Array(50).fill(0)];
+  state.marketSignalOverrides = {
+    R_10: {
+      sample_count: historicalDigits.length,
+      recent_digits: historicalDigits,
+      last_digit: 0,
+    },
+  };
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/auto-trader`);
+    await page.getByTestId("button-settings").click();
+    await page.getByTestId("button-go-live").click();
+    await page.waitForFunction(() =>
+      window.__getDerivEventSourceUrls().some((url) => String(url).includes("market_ticks=true")),
+    );
+
+    await page.locator(".at-auto-magic-switch-row").click();
+    assert.equal(await page.getByTestId("switch-auto-magic").isChecked(), true);
+    const firstOrderRequest = page.waitForRequest((request) =>
+      request.url().endsWith("/api/deriv/bulk-buy") && request.method() === "POST",
+    );
+    await page.evaluate(({ digits, sequence }) => {
+      window.__dispatchDerivEvent("market-tick", {
+        symbol: "R_10",
+        tick_sequence: sequence,
+        recent_digits: digits,
+        tick_epoch: 1_700_000_001,
+      });
+    }, { digits: historicalDigits, sequence: state.statusVersion + 1 });
+    await firstOrderRequest;
+    await page.waitForFunction(() =>
+      document.querySelector('[data-testid="status-auto-magic"]')?.textContent?.includes("Waiting for every accepted contract"),
+    );
+
+    assert.equal(state.tradeRequests.length, 1, "Enabling Auto Magic mid-scan should arm one qualifying batch.");
+    assert.equal(state.tradeRequests[0].body.symbol, "R_10");
+    assert.equal(state.tradeRequests[0].body.barrier, 5);
+    assert.deepEqual(pageErrors, []);
+    assert.deepEqual(state.unhandledApis, []);
   } finally {
     await context.close();
   }

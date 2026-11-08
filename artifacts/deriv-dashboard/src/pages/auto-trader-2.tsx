@@ -221,7 +221,7 @@ function AutoTrader2Content() {
   buyRef.current = buyMutation;
 
   const accounts = useGetDerivAccounts({
-    query: { queryKey: getGetDerivAccountsQueryKey(), enabled: hasAccess && hasToken, retry: false, refetchInterval: hasAccess && hasToken ? 10_000 : false },
+    query: { queryKey: getGetDerivAccountsQueryKey(), enabled: hasAccess && hasToken, retry: false, refetchInterval: hasAccess && hasToken ? 10_000 : false, refetchIntervalInBackground: true },
   });
   const status = useGetDerivStatus(undefined, {
     query: {
@@ -229,10 +229,11 @@ function AutoTrader2Content() {
       ...DERIV_STATUS_QUERY_RECOVERY_OPTIONS,
       enabled: hasAccess && hasToken,
       refetchInterval: running || aiEnabled ? 1_000 : hasAccess && hasToken ? 4_000 : false,
+      refetchIntervalInBackground: true,
     },
   });
   const history = useGetDerivHistory(undefined, {
-    query: { queryKey: derivHistoryQueryKey, enabled: hasAccess && hasToken, retry: false, refetchInterval: false },
+    query: { queryKey: derivHistoryQueryKey, enabled: hasAccess && hasToken, retry: false, refetchInterval: false, refetchIntervalInBackground: true },
   });
   const statusRef = useRef(status);
   statusRef.current = status;

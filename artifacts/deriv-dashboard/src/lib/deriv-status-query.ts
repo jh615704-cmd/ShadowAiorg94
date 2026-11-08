@@ -1,4 +1,4 @@
-export const DERIV_STATUS_WARNING_GRACE_MS = 15_000;
+export const DERIV_STATUS_WARNING_GRACE_MS = 60_000;
 
 export const DERIV_STATUS_QUERY_RECOVERY_OPTIONS = {
   retry: 2,
