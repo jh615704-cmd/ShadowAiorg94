@@ -24,6 +24,7 @@ import {
   isAccessAwayLockDue,
   markAccessAway,
   markAccessActivity,
+  isAccessSessionStillLocked,
 } from "@/lib/access-lock";
 
 const DEVICE_STORAGE_KEY = "jdy-edge-device-id";
@@ -128,12 +129,17 @@ export function AccessGate({ children }: { children: ReactNode }) {
     void queryClient.removeQueries();
     if (logoutInFlightRef.current) return;
     logoutInFlightRef.current = true;
+    let clearQueriesAfterLogout = false;
     logoutAccess.mutate(undefined, {
-      onSuccess: () => clearAccessActivity(),
+      onSuccess: () => {
+        if (!isAccessSessionStillLocked()) return;
+        clearQueriesAfterLogout = true;
+        clearAccessActivity();
+      },
       onSettled: () => {
         logoutInFlightRef.current = false;
         setLogoutPending(false);
-        queryClient.clear();
+        if (clearQueriesAfterLogout || isAccessSessionStillLocked()) queryClient.clear();
       },
     });
   }, [logoutAccess, queryClient]);
@@ -162,13 +168,21 @@ export function AccessGate({ children }: { children: ReactNode }) {
     if (!initialAwayLockRef.current || logoutInFlightRef.current) return;
     initialAwayLockRef.current = false;
     logoutInFlightRef.current = true;
+    window.localStorage.setItem(ACCESS_ACTIVE_MARKER, "1");
+    window.localStorage.setItem(ACCESS_LAST_ACTIVITY, "0");
+    window.localStorage.removeItem(ACCESS_AWAY_STARTED);
     setLogoutPending(true);
+    let clearQueriesAfterLogout = false;
     logoutAccess.mutate(undefined, {
-      onSuccess: () => clearAccessActivity(),
+      onSuccess: () => {
+        if (!isAccessSessionStillLocked()) return;
+        clearQueriesAfterLogout = true;
+        clearAccessActivity();
+      },
       onSettled: () => {
         logoutInFlightRef.current = false;
         setLogoutPending(false);
-        queryClient.clear();
+        if (clearQueriesAfterLogout || isAccessSessionStillLocked()) queryClient.clear();
       },
     });
   }, [logoutAccess, queryClient]);
@@ -200,6 +214,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
       const remaining = Math.max(0, Math.ceil((exitDeadline - Date.now()) / 1_000));
       setExitCountdown(remaining);
       if (remaining === 0) {
+        if (exitKind === "logout" || exitKind === "idle") setLogoutPending(false);
         setExitDeadline(null);
         setExitKind(null);
         void queryClient.removeQueries();
@@ -209,7 +224,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
     updateCountdown();
     const timer = window.setInterval(updateCountdown, 250);
     return () => window.clearInterval(timer);
-  }, [exitDeadline, queryClient, setLocation]);
+  }, [exitDeadline, exitKind, queryClient, setLocation]);
 
   useEffect(() => {
     if (!accessSession.data || accessRejected) return;

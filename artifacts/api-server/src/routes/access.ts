@@ -17,7 +17,6 @@ import {
   ACCESS_FEATURES,
   accessCookie,
   activeDeviceCount,
-  clearAccessCookie,
   decryptAccessKey,
   deviceHash,
   encryptAccessKey,
@@ -358,7 +357,8 @@ router.post("/access/logout", requireAccess, async (req, res): Promise<void> => 
     .set({ revokedAt: new Date() })
     .where(eq(accessKeySessionsTable.id, res.locals.accessSessionId));
   disposeRevokedSession(res.locals.userId);
-  res.append("Set-Cookie", clearAccessCookie(secureCookie(req.get("x-forwarded-proto"))));
+  // The revoked session cookie is unusable. Do not expire it in this response:
+  // a delayed logout response could otherwise clear a newer login cookie.
   res.json({ success: true });
 });
 

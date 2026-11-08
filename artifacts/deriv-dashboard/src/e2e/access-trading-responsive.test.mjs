@@ -240,6 +240,7 @@ test("the workspace shows a five-second lock countdown after three idle hours", 
 
 test("manual logout shows a two-second countdown before access-key login", async () => {
   const state = createState(userSession(["settings"]));
+  state.logoutResponseDelayMs = 4_000;
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {
     await page.goto(`${baseUrl}/`);
@@ -254,7 +255,22 @@ test("manual logout shows a two-second countdown before access-key login", async
     await page.getByTestId("access-exit-progress").waitFor();
     assert.equal(await page.getByRole("heading", { name: "Login to Shadow Ai" }).count(), 0);
     assert.equal(state.logoutCount, 1);
-    await page.getByRole("heading", { name: "Login to Shadow Ai" }).waitFor({ timeout: 6_000 });
+    const accessKeyInput = page.locator("#edge-access-key");
+    await accessKeyInput.waitFor({ timeout: 5_000 });
+    assert.equal(await accessKeyInput.isEnabled(), true, "The new access key should be accepted after the two-second countdown.");
+    assert.equal(state.logoutCompletedCount, 0, "The login screen must not wait for a delayed logout response.");
+    await accessKeyInput.fill("replacement-key");
+    await page.locator(".access-terms input").check();
+    await page.getByRole("button", { name: "Unlock workspace" }).click();
+    await page.getByTestId("button-logout").waitFor();
+
+    const logoutDeadline = Date.now() + 5_000;
+    while (state.logoutCompletedCount === 0 && Date.now() < logoutDeadline) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    assert.equal(state.logoutCompletedCount, 1, "The original logout request should still finish in the background.");
+    assert.equal(state.sessionRevoked, false, "A delayed logout must not revoke the replacement session.");
+    assert.equal(await page.getByTestId("button-logout").count(), 1, "A late logout response must not log out the replacement session.");
     assert.deepEqual(pageErrors, [], "Manual logout should not cause browser errors.");
     assert.deepEqual(state.unhandledApis, []);
   } finally {
@@ -2429,6 +2445,9 @@ function createState(session) {
     session,
     accessKeys: [],
     sessionRevoked: false,
+    logoutResponseDelayMs: 0,
+    logoutCompletedCount: 0,
+    loginCount: 0,
     hasToken: false,
     allowFixtureTrades: false,
     tradeSequence: 0,
@@ -2570,6 +2589,12 @@ async function mockApiRequest(route, state, pathname, method) {
   state.apiCalls.push({ path: pathname, method });
   const request = route.request();
 
+  if (pathname === "/api/access/login" && method === "POST") {
+    state.loginCount += 1;
+    state.sessionRevoked = false;
+    await fulfillJson(route, state.session);
+    return;
+  }
   if (pathname === "/api/access/session" && method === "GET") {
     await fulfillJson(
       route,
@@ -2628,8 +2653,13 @@ async function mockApiRequest(route, state, pathname, method) {
   }
   if (pathname === "/api/access/logout" && method === "POST") {
     state.logoutCount += 1;
-    state.sessionRevoked = true;
+    const loginCountAtLogout = state.loginCount;
+    if (state.logoutResponseDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, state.logoutResponseDelayMs));
+    }
+    if (state.loginCount === loginCountAtLogout) state.sessionRevoked = true;
     await fulfillJson(route, { success: true });
+    state.logoutCompletedCount += 1;
     return;
   }
   if (pathname === "/api/access/keys" && method === "GET") {

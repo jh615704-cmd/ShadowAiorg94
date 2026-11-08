@@ -47,3 +47,8 @@ export function clearAccessActivity() {
   window.localStorage.removeItem(ACCESS_LAST_ACTIVITY);
   window.localStorage.removeItem(ACCESS_AWAY_STARTED);
 }
+
+export function isAccessSessionStillLocked() {
+  return window.localStorage.getItem(ACCESS_ACTIVE_MARKER) === "1"
+    && window.localStorage.getItem(ACCESS_LAST_ACTIVITY) === "0";
+}
