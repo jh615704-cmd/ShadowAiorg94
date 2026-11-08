@@ -1860,6 +1860,100 @@ test("Auto Magic can arm an already-running scan without a reset", async () => {
   }
 });
 
+test("trading routes keep status polling and live feeds active in the background", async () => {
+  const routes = [
+    {
+      path: "/app",
+      features: ["edge", "digit-flip", "trade-x", "bulk-trader", "jackpot", "clock-work", "cash-grab", "money-bank"],
+      checkAccounts: true,
+      checkHistory: true,
+    },
+    {
+      path: "/dashboard",
+      features: ["digit-flip"],
+      checkHistory: true,
+    },
+    {
+      path: "/auto-trader",
+      features: ["auto-trader"],
+      startScan: true,
+      eventSource: "market_ticks=true",
+    },
+    {
+      path: "/auto-trader-2",
+      features: ["auto-trader-2"],
+      eventSource: "/api/deriv/events",
+    },
+  ];
+
+  for (const route of routes) {
+    const state = createState(userSession(route.features));
+    state.hasToken = true;
+    const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+    const countRequests = (path) => state.apiCalls.filter((call) => call.path === path && call.method === "GET").length;
+    const waitForRequestCount = async (path, minimum, timeoutMs = 12_000) => {
+      const deadline = Date.now() + timeoutMs;
+      while (countRequests(path) < minimum) {
+        if (Date.now() >= deadline) {
+          throw new Error(`${route.path} did not make ${minimum} background GET requests to ${path}.`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+    };
+
+    try {
+      await page.goto(`${baseUrl}${route.path}`);
+      await waitForRequestCount("/api/deriv/status", 1);
+
+      if (route.startScan) {
+        await page.getByTestId("button-settings").click();
+        await page.getByTestId("button-go-live").click();
+      }
+      if (route.eventSource) {
+        await page.waitForFunction((fragment) =>
+          window.__getDerivEventSourceUrls().some((url) => String(url).includes(fragment)),
+        route.eventSource);
+      }
+
+      const statusBeforeBackground = countRequests("/api/deriv/status");
+      const historyBeforeBackground = countRequests("/api/deriv/history");
+      const accountsBeforeBackground = countRequests("/api/deriv/accounts");
+      await page.evaluate(() => {
+        Object.defineProperty(document, "visibilityState", {
+          configurable: true,
+          get: () => "hidden",
+        });
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      await waitForRequestCount("/api/deriv/status", statusBeforeBackground + 1);
+      if (route.checkHistory) await waitForRequestCount("/api/deriv/history", historyBeforeBackground + 1);
+      if (route.checkAccounts) await waitForRequestCount("/api/deriv/accounts", accountsBeforeBackground + 1);
+
+      if (route.eventSource) {
+        assert.ok(
+          (await page.evaluate(() => window.__getDerivEventSourceUrls()))
+            .some((url) => String(url).includes(route.eventSource)),
+          `${route.path} should keep its live Deriv event feed open while hidden.`,
+        );
+      }
+      await page.evaluate(() => {
+        Object.defineProperty(document, "visibilityState", {
+          configurable: true,
+          get: () => "visible",
+        });
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      assert.equal(state.logoutCount, 0, `${route.path} should not log out during a brief background check.`);
+      assert.deepEqual(state.tradeRequests, [], `${route.path} background checks must not place trades.`);
+      assert.deepEqual(state.unhandledApis, [], `${route.path} should not make unexpected API calls.`);
+      assert.deepEqual(pageErrors, [], `${route.path} should remain free of browser errors.`);
+    } finally {
+      await context.close();
+    }
+  }
+});
+
 test("Trade X and Auto Trader controls fit phone, tablet, laptop, and 4K viewports", async () => {
   const state = createState(userSession(["edge", "trade-x", "auto-trader", "auto-trader-2", "money-bank"]));
   state.hasToken = true;
