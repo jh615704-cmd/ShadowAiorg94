@@ -1,9 +1,19 @@
-/* Keep trading feature surfaces aligned with Cash Grab's deep-blue palette. */
+/* Keep the home and trading features on the reference's black-and-turquoise palette. */
 :root {
-  --shadow-reference-gradient: linear-gradient(132deg, #1038e8 0%, #0b57dc 45%, #078dc9 72%, #00bed5 100%);
+  --shadow-reference-gradient:
+    radial-gradient(ellipse at 8% 0%, rgba(0, 220, 235, .18), transparent 34%),
+    radial-gradient(ellipse at 100% 58%, rgba(0, 151, 164, .13), transparent 43%),
+    linear-gradient(148deg, #030709 0%, #071216 50%, #082326 78%, #03090b 100%);
   --shadow-feature-frame:
-    radial-gradient(ellipse at 100% 100%, rgba(0, 215, 226, .25), transparent 60%),
-    linear-gradient(135deg, #173fc0 0%, #0d55b5 54%, #087687 100%);
+    radial-gradient(ellipse at 100% 0%, rgba(0, 220, 235, .14), transparent 48%),
+    linear-gradient(135deg, #0c181b 0%, #0b2428 56%, #061113 100%);
+  --shadow-feature-card:
+    linear-gradient(135deg, rgba(0, 220, 235, .08), rgba(0, 113, 124, .04)),
+    #0a171a;
+  --shadow-feature-page:
+    radial-gradient(ellipse at 100% 0%, rgba(0, 220, 235, .16), transparent 46%),
+    radial-gradient(ellipse at 0% 100%, rgba(0, 129, 143, .12), transparent 52%),
+    linear-gradient(145deg, #030709 0%, #071518 55%, #061012 100%);
 }
 
 body,
@@ -24,13 +34,11 @@ body,
 
 .xt-app {
   --trading-blue-frame: var(--shadow-feature-frame);
-  --trading-blue-card:
-    linear-gradient(135deg, rgba(36, 102, 255, .16), rgba(0, 189, 207, .1)),
-    #102743;
+  --trading-blue-card: var(--shadow-feature-card);
   --trading-blue-inset:
-    linear-gradient(135deg, rgba(25, 82, 223, .16), rgba(0, 149, 176, .12)),
-    linear-gradient(145deg, #102743, #0a1d34);
-  --trading-blue-line: rgba(105, 161, 222, .2);
+    linear-gradient(135deg, rgba(0, 220, 235, .07), rgba(0, 113, 124, .035)),
+    linear-gradient(145deg, #0a171a, #071113);
+  --trading-blue-line: rgba(50, 205, 218, .22);
   background: var(--shadow-reference-gradient);
 }
 
@@ -52,9 +60,7 @@ body,
 
 .auto-trader-page,
 .auto-trader-2-page {
-  background:
-    radial-gradient(ellipse at 100% 100%, rgba(0, 215, 226, .23), transparent 55%),
-    linear-gradient(135deg, #1038e8 0%, #0b57dc 48%, #0788bd 76%, #087687 100%);
+  background: var(--shadow-feature-page);
 }
 
 .xt-app .tx-panel :is(
@@ -75,7 +81,7 @@ body,
 
 .xt-app .tx-panel :is(.tx-field select, .tx-input-prefix, .tx-segment, .tx-duration-button, .tx-mode-button, .tx-smart-control select) {
   border-color: var(--trading-blue-line) !important;
-  background: #0c1e36 !important;
+  background: #081518 !important;
   color: #eaf5ff !important;
 }
 
@@ -165,7 +171,7 @@ body,
 
 .xt-app .money-bank-panel :is(.money-bank-rate-grid button, .money-bank-segmented button):not(.active) {
   border-color: var(--trading-blue-line) !important;
-  background: #0c1e36 !important;
+  background: #081518 !important;
 }
 
 .xt-app .edge-reference-layout :is(
@@ -188,7 +194,7 @@ body,
 
 .xt-app .edge-reference-layout .edge-ref-session > div {
   border-color: var(--trading-blue-line) !important;
-  background: #0c1e36 !important;
+  background: #081518 !important;
 }
 
 .tick-choice-group {

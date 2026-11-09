@@ -204,7 +204,8 @@ test("access-key login rejects invalid keys and opens the workspace across devic
       const homeBackground = await page.locator(".xt-app").evaluate(
         (element) => getComputedStyle(element).backgroundImage,
       );
-      assert.match(homeBackground, /rgb\(16, 56, 232\)/, `The home gradient should render at ${viewport.name} size.`);
+      assert.match(homeBackground, /rgb\(3, 7, 9\)/, `The home background should stay near-black at ${viewport.name} size.`);
+      assert.match(homeBackground, /rgba\(0, 220, 235, 0\.18\)/, `The home background should retain turquoise accents at ${viewport.name} size.`);
       await assertNoHorizontalOverflow(page, viewport, `${viewport.name} authenticated home`);
     }
 
@@ -217,7 +218,8 @@ test("access-key login rejects invalid keys and opens the workspace across devic
       const featurePage = page.locator(selector);
       await featurePage.waitFor({ timeout: 10_000 });
       const background = await featurePage.evaluate((element) => getComputedStyle(element).backgroundImage);
-      assert.match(background, /rgb\(16, 56, 232\)/, `${label} should use the reference blue-to-cyan palette.`);
+      assert.match(background, /rgb\(3, 7, 9\)/, `${label} should use a near-black background.`);
+      assert.match(background, /rgba\(0, 220, 235, 0\.16\)/, `${label} should use the reference's turquoise accents.`);
       await assertNoHorizontalOverflow(page, viewports[0], `phone ${label} background`);
     }
 
