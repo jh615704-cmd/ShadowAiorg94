@@ -165,6 +165,70 @@ test("Auto Trader and Auto Trader 2.0 grants stay independent during key creatio
   }
 });
 
+test("access-key login rejects invalid keys and opens the workspace across device sizes", async () => {
+  const state = createState(null);
+  state.loginSession = userSession(["settings"]);
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    const accessKeyInput = page.locator("#edge-access-key");
+    const unlockButton = page.getByRole("button", { name: "Unlock workspace" });
+    for (const [index, viewport] of bulkViewports.entries()) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      if (index > 0) state.sessionRevoked = true;
+      await page.goto(`${baseUrl}/`);
+      await accessKeyInput.waitFor();
+
+      const gridAnimation = await page.locator(".access-gate-login-grid").evaluate(
+        (element) => getComputedStyle(element).animationName,
+      );
+      assert.equal(gridAnimation, "access-gate-reference-grid", `The login backdrop should animate at ${viewport.name} size.`);
+      assert.equal(await unlockButton.isDisabled(), true, `Login must require a key and terms at ${viewport.name} size.`);
+      await assertNoHorizontalOverflow(page, viewport, `${viewport.name} access-key login`);
+
+      await accessKeyInput.fill("rejected-fixture-key");
+      await page.locator(".access-terms input").check();
+      assert.equal(await unlockButton.isEnabled(), true, `The key and terms should enable login at ${viewport.name} size.`);
+      await unlockButton.click();
+      await page.getByRole("alert").waitFor();
+      assert.equal(state.loginCount, index * 2 + 1, `The rejected key should reach the API at ${viewport.name} size.`);
+      assert.equal(await accessKeyInput.inputValue(), "rejected-fixture-key", "A rejected key should remain available for correction.");
+
+      const acceptedKey = `accepted-fixture-key-${viewport.name}`;
+      await accessKeyInput.fill(acceptedKey);
+      await page.getByRole("button", { name: "Unlock workspace" }).click();
+      await page.getByTestId("button-logout").waitFor({ timeout: 10_000 });
+      assert.equal(state.loginCount, (index + 1) * 2, `The accepted key should complete login at ${viewport.name} size.`);
+      assert.equal(state.loginBodies[index * 2 + 1].access_key, acceptedKey);
+      assert.match(state.loginBodies[index * 2 + 1].device_id, /^browser-/);
+      assert.equal(await accessKeyInput.count(), 0, "The access key should not remain visible after login.");
+      const homeBackground = await page.locator(".xt-app").evaluate(
+        (element) => getComputedStyle(element).backgroundImage,
+      );
+      assert.match(homeBackground, /rgb\(16, 56, 232\)/, `The home gradient should render at ${viewport.name} size.`);
+      await assertNoHorizontalOverflow(page, viewport, `${viewport.name} authenticated home`);
+    }
+
+    await page.setViewportSize({ width: viewports[0].width, height: viewports[0].height });
+    for (const [route, selector, label] of [
+      ["/auto-trader", ".auto-trader-page", "Auto Trader"],
+      ["/auto-trader-2", ".auto-trader-2-page", "Auto Trader 2.0"],
+    ]) {
+      await page.goto(`${baseUrl}${route}`);
+      const featurePage = page.locator(selector);
+      await featurePage.waitFor({ timeout: 10_000 });
+      const background = await featurePage.evaluate((element) => getComputedStyle(element).backgroundImage);
+      assert.match(background, /rgb\(16, 56, 232\)/, `${label} should use the reference blue-to-cyan palette.`);
+      await assertNoHorizontalOverflow(page, viewports[0], `phone ${label} background`);
+    }
+
+    assert.deepEqual(state.unhandledApis, []);
+    assert.deepEqual(state.tradeRequests, [], "An access-key regression check must not place trades.");
+    assert.deepEqual(pageErrors, [], "Access-key login should render without browser errors.");
+  } finally {
+    await context.close();
+  }
+});
+
 test("the workspace stays unlocked briefly and shows the access countdown after three hours away", async () => {
   const state = createState(userSession(["settings"]));
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
@@ -184,6 +248,7 @@ test("the workspace stays unlocked briefly and shows the access countdown after 
     await page.getByTestId("access-exit-transition").waitFor();
     assert.match(await page.getByTestId("access-exit-countdown").innerText(), /^[1-5]$/);
     await page.getByTestId("access-exit-progress").waitFor();
+    await assertNoHorizontalOverflow(page, viewports[0], "phone idle-lock transition");
     assert.equal(await page.getByRole("heading", { name: "Login to Shadow Ai" }).count(), 0);
     assert.equal(state.logoutCount, 1, "Returning after three hours away should end the active access session.");
     await page.getByRole("heading", { name: "Login to Shadow Ai" }).waitFor({ timeout: 8_000 });
@@ -253,6 +318,7 @@ test("manual logout shows a two-second countdown before access-key login", async
     assert.equal(await page.getByText("SECURE LOGOUT").count(), 1);
     assert.equal(await page.getByTestId("access-exit-countdown").innerText(), "2");
     await page.getByTestId("access-exit-progress").waitFor();
+    await assertNoHorizontalOverflow(page, viewports[0], "phone logout transition");
     assert.equal(await page.getByRole("heading", { name: "Login to Shadow Ai" }).count(), 0);
     assert.equal(state.logoutCount, 1);
     const accessKeyInput = page.locator("#edge-access-key");
@@ -2542,6 +2608,8 @@ function createState(session) {
     logoutResponseDelayMs: 0,
     logoutCompletedCount: 0,
     loginCount: 0,
+    loginBodies: [],
+    loginSession: null,
     hasToken: false,
     allowFixtureTrades: false,
     tradeSequence: 0,
@@ -2685,15 +2753,22 @@ async function mockApiRequest(route, state, pathname, method) {
 
   if (pathname === "/api/access/login" && method === "POST") {
     state.loginCount += 1;
+    const loginBody = request.postDataJSON();
+    state.loginBodies.push(loginBody);
+    if (loginBody.access_key === "rejected-fixture-key") {
+      await fulfillJson(route, { error: "That access key could not be accepted." }, 401);
+      return;
+    }
     state.sessionRevoked = false;
+    if (state.loginSession) state.session = state.loginSession;
     await fulfillJson(route, state.session);
     return;
   }
   if (pathname === "/api/access/session" && method === "GET") {
     await fulfillJson(
       route,
-      state.sessionRevoked ? { error: "The access session is no longer active." } : state.session,
-      state.sessionRevoked ? 401 : 200,
+      state.sessionRevoked || !state.session ? { error: "The access session is no longer active." } : state.session,
+      state.sessionRevoked || !state.session ? 401 : 200,
     );
     return;
   }

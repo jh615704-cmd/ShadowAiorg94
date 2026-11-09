@@ -24,11 +24,13 @@
 }
 
 .access-gate-login-grid {
-  inset: 0;
+  inset: -38px;
   background-image:
     linear-gradient(rgba(47, 90, 127, .19) 1px, transparent 1px),
     linear-gradient(90deg, rgba(47, 90, 127, .19) 1px, transparent 1px);
   background-size: 38px 38px;
+  contain: paint;
+  will-change: transform;
   animation: access-gate-reference-grid 14s linear infinite;
 }
 
@@ -40,6 +42,7 @@
   border-radius: 50%;
   background: radial-gradient(circle, rgba(0, 197, 222, .08), transparent 68%);
   transform: translateX(-50%);
+  will-change: transform, opacity;
   animation: access-gate-reference-glow 6s ease-in-out infinite alternate;
 }
 
@@ -48,6 +51,7 @@
   width: 100%;
   height: 100%;
   opacity: .5;
+  will-change: transform;
   animation: access-gate-reference-network 9s ease-in-out infinite alternate;
 }
 
@@ -63,7 +67,6 @@
   stroke-width: 1.7;
   stroke-dasharray: 3 82;
   stroke-linecap: round;
-  filter: drop-shadow(0 0 3px rgba(32, 214, 223, .68));
   animation: access-gate-reference-flow 4.2s linear infinite;
 }
 
@@ -79,7 +82,6 @@
 
 .access-gate-login-network .network-nodes circle {
   fill: #20d6df;
-  filter: drop-shadow(0 0 5px rgba(32, 214, 223, .8));
   transform-box: fill-box;
   transform-origin: center;
   animation: access-gate-reference-node 2.8s ease-in-out infinite;
@@ -95,7 +97,6 @@
 
 .access-gate-login-network .network-particles circle {
   fill: #adffff;
-  filter: drop-shadow(0 0 7px rgba(59, 235, 245, .95));
 }
 
 .access-gate-login .access-gate-card {
@@ -111,6 +112,7 @@
     0 28px 85px rgba(0, 0, 0, .52),
     inset 0 1px rgba(194, 237, 255, .045),
     0 0 40px rgba(0, 148, 202, .05);
+  backdrop-filter: none;
   animation: access-gate-reference-card-in .58s cubic-bezier(.2, .8, .2, 1) both;
 }
 
@@ -476,8 +478,8 @@
 }
 
 @keyframes access-gate-reference-grid {
-  from { background-position: 0 0, 0 0; }
-  to { background-position: 38px 38px, 38px 38px; }
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(38px, 38px, 0); }
 }
 
 @keyframes access-gate-reference-flow {
@@ -493,7 +495,26 @@
 @media (max-width: 520px) {
   .access-gate-login {
     align-items: start;
-    padding: 12px;
+    min-height: 100svh;
+    padding:
+      max(12px, env(safe-area-inset-top))
+      max(12px, env(safe-area-inset-right))
+      max(12px, env(safe-area-inset-bottom))
+      max(12px, env(safe-area-inset-left));
+  }
+
+  .access-gate-login-network {
+    animation: none;
+    opacity: .34;
+  }
+
+  .access-gate-login-network .network-flow,
+  .access-gate-login-network .network-particles {
+    display: none;
+  }
+
+  .access-gate-login-network .network-nodes circle {
+    animation: none;
   }
 
   .access-gate-login .access-gate-card {
@@ -518,6 +539,27 @@
 
   .access-gate-login .access-brand-copy small {
     font-size: 7px;
+  }
+
+  .access-gate-countdown {
+    min-height: 100svh;
+    padding:
+      max(14px, env(safe-area-inset-top))
+      max(14px, env(safe-area-inset-right))
+      max(14px, env(safe-area-inset-bottom))
+      max(14px, env(safe-area-inset-left));
+    overscroll-behavior: contain;
+  }
+
+  .access-gate-countdown .access-gate-transition-card {
+    width: min(100%, 430px);
+    padding: 22px 18px;
+    border-radius: 20px;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, .36), inset 0 1px rgba(255, 255, 255, .04);
+  }
+
+  .access-gate-exit-progress span {
+    will-change: transform;
   }
 }
 

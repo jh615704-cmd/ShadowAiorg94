@@ -1,13 +1,37 @@
 /* Keep trading feature surfaces aligned with Cash Grab's deep-blue palette. */
+:root {
+  --shadow-reference-gradient: linear-gradient(132deg, #1038e8 0%, #0b57dc 45%, #078dc9 72%, #00bed5 100%);
+  --shadow-feature-frame:
+    radial-gradient(ellipse at 100% 100%, rgba(0, 215, 226, .25), transparent 60%),
+    linear-gradient(135deg, #173fc0 0%, #0d55b5 54%, #087687 100%);
+}
+
+body,
+.app-frame {
+  background: var(--shadow-reference-gradient);
+  color: #e8f3ff;
+}
+
+.dark body,
+.dark .app-frame {
+  background: var(--shadow-reference-gradient);
+}
+
+.main-shell,
+.dark .main-shell {
+  background: transparent;
+}
+
 .xt-app {
-  --trading-blue-frame:
-    radial-gradient(ellipse at 88% 0%, rgba(48, 133, 223, .17), transparent 52%),
-    linear-gradient(135deg, #122d4e, #0c1e36 78%);
+  --trading-blue-frame: var(--shadow-feature-frame);
   --trading-blue-card:
-    linear-gradient(135deg, rgba(255, 255, 255, .025), transparent 44%),
+    linear-gradient(135deg, rgba(36, 102, 255, .16), rgba(0, 189, 207, .1)),
     #102743;
-  --trading-blue-inset: linear-gradient(145deg, #102743, #0a1d34);
+  --trading-blue-inset:
+    linear-gradient(135deg, rgba(25, 82, 223, .16), rgba(0, 149, 176, .12)),
+    linear-gradient(145deg, #102743, #0a1d34);
   --trading-blue-line: rgba(105, 161, 222, .2);
+  background: var(--shadow-reference-gradient);
 }
 
 .xt-app :is(
@@ -16,10 +40,21 @@
   .money-bank-panel,
   .edge-reference-layout,
   .xt-cockpit,
-  .xt-history
+  .xt-history,
+  .df-panel,
+  .jackpot-panel,
+  .cw-panel,
+  .at2-panel
 ) {
   border-color: var(--trading-blue-line) !important;
   background: var(--trading-blue-frame) !important;
+}
+
+.auto-trader-page,
+.auto-trader-2-page {
+  background:
+    radial-gradient(ellipse at 100% 100%, rgba(0, 215, 226, .23), transparent 55%),
+    linear-gradient(135deg, #1038e8 0%, #0b57dc 48%, #0788bd 76%, #087687 100%);
 }
 
 .xt-app .tx-panel :is(
