@@ -9,7 +9,20 @@ import {
   useLogoutAccessSession,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { KeyRound, Loader2, LockKeyhole, LogOut, MessageCircle, ShieldCheck } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  Eye,
+  EyeOff,
+  Fingerprint,
+  KeyRound,
+  Loader2,
+  LockKeyhole,
+  LogOut,
+  MessageCircle,
+  Shield,
+  ShieldCheck,
+} from "lucide-react";
 import {
   ACCESS_AWAY_LOCK_MS,
   ACCESS_AWAY_STARTED,
@@ -26,6 +39,7 @@ import {
   markAccessActivity,
   isAccessSessionStillLocked,
 } from "@/lib/access-lock";
+import "./access-gate-reference.css";
 
 const DEVICE_STORAGE_KEY = "jdy-edge-device-id";
 
@@ -96,6 +110,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
   const login = useLoginAccessKey();
   const [accessKey, setAccessKey] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [showAccessKey, setShowAccessKey] = useState(false);
   const [error, setError] = useState("");
   const [isUnlocking, setIsUnlocking] = useState(false);
   const unlockTimerRef = useRef<number | null>(null);
@@ -454,40 +469,121 @@ export function AccessGate({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className={`access-gate${lockReason ? " access-gate-login-enter" : ""}`}>
+    <div className={`access-gate access-gate-login${lockReason ? " access-gate-login-enter" : ""}`}>
       <div className="access-gate-orbit" aria-hidden="true" />
+      <div className="access-gate-login-grid" aria-hidden="true" />
+      <div className="access-gate-login-glow" aria-hidden="true" />
+      <svg className="access-gate-login-network" viewBox="0 0 1000 1500" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <g>
+          <path d="M55 170 225 250 340 165 485 270 635 175 820 260 955 155" />
+          <path d="M15 475 175 390 330 500 470 390 620 500 780 405 990 520" />
+          <path d="M10 815 165 710 335 840 480 720 650 835 805 715 990 850" />
+          <path d="M0 1190 165 1060 335 1190 490 1085 645 1205 820 1080 1000 1190" />
+          <path d="M225 250 175 390 165 710 165 1060" />
+          <path d="M485 270 470 390 480 720 490 1085" />
+          <path d="M820 260 780 405 805 715 820 1080" />
+          <path d="M340 165 330 500 335 840 335 1190" />
+          <path d="M635 175 620 500 650 835 645 1205" />
+          <path d="M55 170 175 390 330 500 480 720 650 835 820 1080 990 1190" />
+          <path d="M955 155 780 405 620 500 480 720 335 840 165 1060 0 1190" />
+        </g>
+        <g>
+          <circle cx="55" cy="170" r="3" />
+          <circle cx="225" cy="250" r="3" />
+          <circle cx="340" cy="165" r="2.5" />
+          <circle cx="485" cy="270" r="3" />
+          <circle cx="635" cy="175" r="2.5" />
+          <circle cx="820" cy="260" r="3" />
+          <circle cx="955" cy="155" r="2.5" />
+          <circle cx="175" cy="390" r="3" />
+          <circle cx="330" cy="500" r="2.5" />
+          <circle cx="470" cy="390" r="3" />
+          <circle cx="620" cy="500" r="2.5" />
+          <circle cx="780" cy="405" r="3" />
+          <circle cx="165" cy="710" r="2.5" />
+          <circle cx="335" cy="840" r="3" />
+          <circle cx="480" cy="720" r="2.5" />
+          <circle cx="650" cy="835" r="3" />
+          <circle cx="805" cy="715" r="2.5" />
+          <circle cx="165" cy="1060" r="3" />
+          <circle cx="335" cy="1190" r="2.5" />
+          <circle cx="490" cy="1085" r="3" />
+          <circle cx="645" cy="1205" r="2.5" />
+          <circle cx="820" cy="1080" r="3" />
+        </g>
+      </svg>
       <div className="access-gate-card">
         <div className="brand-lockup access-gate-brand">
-          <span className="brand-mark">S</span>
-          <span className="access-brand-copy"><strong>Shadow Ai Trading</strong><small>AI Trading</small></span>
+          <span className="access-gate-brand-icon" aria-hidden="true"><Shield size={23} strokeWidth={2.5} /></span>
+          <span className="access-brand-copy">
+            <strong>Shadow AI <span className="access-gate-version">v4.8</span></strong>
+            <small>AUTONOMOUS ALGORITHMIC TRADING</small>
+          </span>
         </div>
-        <div className="access-gate-risk"><b>TRADING RISK</b><p>Options and CFDs are risky. You may lose some or all of your money; currency conversion can affect results. Never trade with borrowed money or money you cannot afford to lose.</p></div>
-        <div className="access-gate-lock"><ShieldCheck size={25} /></div>
-        <h1>Login to Shadow Ai</h1>
-        <p className="access-gate-intro">Use your access key to open your private trading workspace.</p>
+        <div className="access-gate-risk">
+          <AlertTriangle size={14} strokeWidth={2.5} aria-hidden="true" />
+          <div>
+            <b>HIGH TRADING RISK NOTICE</b>
+            <p>
+              Options and leveraged CFDs carry significant risk. You may lose
+              capital exceeding initial deposits. Ensure you understand
+              algorithmic execution mechanics before deploying capital.
+            </p>
+          </div>
+        </div>
+        <div className="access-gate-lock" aria-hidden="true"><Fingerprint size={26} strokeWidth={1.8} /></div>
+        <h1>Login to Shadow AI</h1>
+        <p className="access-gate-intro">Authenticate with your private access key to initialize workspace</p>
         {lockReason && <div className="access-gate-locked-note" role="status">{lockReason}</div>}
-        <a className="access-message-link" href="https://t.me/JDY_HATED" target="_blank" rel="noreferrer"><MessageCircle size={16} /> Message me now</a>
+        <a className="access-message-link" href="https://t.me/JDY_HATED" target="_blank" rel="noreferrer">
+          <MessageCircle size={16} fill="currentColor" strokeWidth={1.5} />
+          Message Support / Get Access Key
+        </a>
+        <div className="access-gate-divider"><span>SECURE GATEWAY</span></div>
         {error && <div className="access-gate-error" role="alert">{error}</div>}
         <form onSubmit={handleSubmit} className="access-gate-form">
           <label htmlFor="edge-access-key">ACCESS KEY</label>
           <div className="access-gate-input">
-            <KeyRound size={17} />
+            <KeyRound size={16} aria-hidden="true" />
             <input
               id="edge-access-key"
-              type="password"
+              type={showAccessKey ? "text" : "password"}
               value={accessKey}
               onChange={(event) => setAccessKey(event.target.value)}
-              placeholder="Enter your access key"
+              placeholder="shdw_live_XXXXXXXX..."
               autoComplete="off"
-              autoFocus
               disabled={login.isPending || logoutPending}
             />
+            <button
+              className="access-gate-show-key"
+              type="button"
+              aria-label={showAccessKey ? "Hide access key" : "Show access key"}
+              aria-pressed={showAccessKey}
+              onClick={() => setShowAccessKey((current) => !current)}
+              disabled={login.isPending || logoutPending}
+            >
+              {showAccessKey ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
           </div>
-          <label className="access-terms"><input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} disabled={login.isPending} /><span>I acknowledge and agree to the terms and conditions of Shadow Ai Trading.</span></label>
+          <label className="access-terms">
+            <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} disabled={login.isPending} />
+            <span>
+              I acknowledge and agree to the algorithmic trading terms, automated
+              risk protocols, and privacy policies of Shadow AI Trading.
+            </span>
+          </label>
           <button type="submit" disabled={login.isPending || logoutPending || !accessKey.trim() || !termsAccepted}>
-            {logoutPending ? <><Loader2 className="spin" size={16} /> Locking previous session…</> : login.isPending ? <><Loader2 className="spin" size={16} /> Checking key…</> : "Unlock workspace"}
+            {logoutPending
+              ? <><Loader2 className="spin" size={16} /> Locking previous session…</>
+              : login.isPending
+                ? <><Loader2 className="spin" size={16} /> Checking key…</>
+                : <><span>Unlock Workspace</span><ArrowRight size={16} strokeWidth={2.4} /></>}
           </button>
         </form>
+        <footer className="access-gate-footer">
+          <span className="access-gate-nodes"><i /> Nodes Online</span>
+          <span>Secure connection</span>
+        </footer>
       </div>
     </div>
   );
