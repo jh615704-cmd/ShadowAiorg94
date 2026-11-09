@@ -1,6 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chooseAutoMagicCandidate } from "./auto-magic-strategy.ts";
+import {
+  AUTO_MAGIC_6X_MIN_OBSERVED_WIN_RATE,
+  chooseAutoMagicCandidate,
+  getAutoMagicBatchCount,
+} from "./auto-magic-strategy.ts";
+
+test("Auto Magic chooses its hidden batch size from the observed win rate", () => {
+  assert.equal(getAutoMagicBatchCount(70), 3);
+  assert.equal(getAutoMagicBatchCount(AUTO_MAGIC_6X_MIN_OBSERVED_WIN_RATE - 0.1), 3);
+  assert.equal(getAutoMagicBatchCount(AUTO_MAGIC_6X_MIN_OBSERVED_WIN_RATE), 6);
+  assert.equal(getAutoMagicBatchCount(95), 6);
+});
 
 const signal = (symbol: string, digits: number[]) => ({
   symbol,

@@ -1216,6 +1216,12 @@ export default function XTraderPage() {
     (trade) => !clockWorkHiddenHistoryIds.has(trade.contract_id),
   );
   const clockWorkRunHasUnsettledResults = clockWorkRunSummary.hasUnsettled;
+  const clockWorkRunNextStake = getClockWorkNextStake(
+    clockWorkRunSummary.rows,
+    clockWorkRunContractIdsRef.current,
+    clockWorkStake,
+    clockWorkLossMultiplier,
+  );
   const cashGrabSymbols = markets.map(([value, label]) => ({ value, label }));
   const clockWorkSymbols = markets.map(([value, label]) => ({ value, label }));
   const clockWorkLatestTick = status.data?.last_tick;
@@ -6542,6 +6548,7 @@ export default function XTraderPage() {
           evenOddEnabled={jackpotEvenOddEnabled}
           onEvenOddEnabledChange={setJackpotEvenOddEnabled}
           stake={jackpotNextStake}
+          baseStake={jackpotStake}
           onStakeChange={(value) => {
             const next = roundTradeStakeToCents(Math.max(0, value));
             setJackpotStake(next);
@@ -6559,6 +6566,8 @@ export default function XTraderPage() {
           onTakeProfitChange={(value) => setJackpotTakeProfit(Math.max(0, value))}
           lossLimit={jackpotLossLimit}
           onLossLimitChange={(value) => setJackpotLossLimit(Math.max(0, value))}
+          sessionPnl={jackpotSessionPnl}
+          lossEstimatePending={jackpotBatchContractIds.length > 0 || jackpotNeedsHistoryCheck}
           aiEnabled={jackpotAiEnabled}
           jackpotAiAvailable={featureActionIsAvailable("jackpot", "jackpot-ai")}
           autoMarketAvailable={featureActionIsAvailable("jackpot", "auto-market")}
@@ -6633,6 +6642,8 @@ export default function XTraderPage() {
             lossLimit={clockWorkLossLimit}
             onLossLimitChange={(value) => setClockWorkLossLimit(roundTradeStakeToCents(Math.max(0, value)))}
             sessionPnl={clockWorkRunPnl}
+            nextStake={clockWorkRunNextStake}
+            runHasUnsettledResults={clockWorkRunHasUnsettledResults}
             onAiEnabledChange={(enabled) => {
               setClockWorkAiEnabled(enabled);
               clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);

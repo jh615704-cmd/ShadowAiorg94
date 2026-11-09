@@ -195,6 +195,7 @@
 .jackpot-number-suffix b { color: #83bce9; font: 800 .75rem/1 var(--app-font-mono, monospace); }
 .jackpot-number-suffix input { height: 35px; border: 0; background: transparent; text-align: right; }
 .jackpot-limit-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; }
+.jackpot-loss-warning { margin: 9px 0 0; padding: 9px 10px; border: 1px solid rgba(76,164,233,.2); border-radius: 8px; background: rgba(10,37,62,.62); color: #c3d9ed; font-size: .65rem; line-height: 1.45; }
 .jackpot-batch-state { display: flex; grid-column: 1 / -1; align-items: center; gap: 11px; padding: 12px 14px; border-color: rgba(76,164,233,.31); background: linear-gradient(100deg, rgba(18,62,101,.58), rgba(9,29,51,.87)); }
 .jackpot-batch-state.blocked { border-color: rgba(255,169,123,.32); background: linear-gradient(100deg, rgba(91,55,43,.34), rgba(30,34,47,.8)); }
 .jackpot-batch-icon { display: grid; width: 31px; height: 31px; flex: 0 0 auto; place-items: center; border: 1px solid rgba(100,182,242,.25); border-radius: 9px; color: #9ed4ff; background: rgba(39,113,176,.2); }

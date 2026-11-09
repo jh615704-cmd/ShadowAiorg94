@@ -1,4 +1,5 @@
 import { Activity, BadgeHelp, CircleAlert, Layers3, ShieldCheck, Sparkles, Zap } from "lucide-react";
+import { getLossLimitRunwayMessage } from "../lib/loss-runway";
 import DerivHistory, { type DerivHistoryRow } from "./deriv-history";
 import "./jackpot-panel.css";
 
@@ -47,6 +48,7 @@ export interface JackpotPanelProps {
   onContractCountChange: (value: number) => void;
   duration: number;
   onDurationChange: (value: number) => void;
+  baseStake: number;
   multiplyAfterLoss: boolean;
   onMultiplyAfterLossChange: (enabled: boolean) => void;
   multiplier: number;
@@ -55,6 +57,8 @@ export interface JackpotPanelProps {
   onTakeProfitChange: (value: number) => void;
   lossLimit: number;
   onLossLimitChange: (value: number) => void;
+  sessionPnl: number;
+  lossEstimatePending: boolean;
   aiEnabled: boolean;
   jackpotAiAvailable: boolean;
   autoMarketAvailable: boolean;
@@ -114,6 +118,7 @@ export default function JackpotPanel({
   onContractCountChange,
   duration,
   onDurationChange,
+  baseStake,
   multiplyAfterLoss,
   onMultiplyAfterLossChange,
   multiplier,
@@ -122,6 +127,8 @@ export default function JackpotPanel({
   onTakeProfitChange,
   lossLimit,
   onLossLimitChange,
+  sessionPnl,
+  lossEstimatePending,
   aiEnabled,
   jackpotAiAvailable,
   autoMarketAvailable,
@@ -147,6 +154,18 @@ export default function JackpotPanel({
   const groupMarkets = markets.filter((market) => market.group === marketGroup);
   const selectedMarket = markets.find((market) => market.value === symbol);
   const isBlocked = !isConnected || tradeSlotBlocked;
+  const lossWarning = lossEstimatePending
+    ? "Waiting for the accepted Jackpot batch to settle before updating the loss estimate."
+    : getLossLimitRunwayMessage({
+        balance: null,
+        baseStake: baseStake * contractCount,
+        nextStake: stake * contractCount,
+        stakeMode: multiplyAfterLoss ? "multiply" : "flat",
+        multiplier: multiplyAfterLoss ? multiplier : 1,
+        takeProfit,
+        lossLimit,
+        sessionPnl,
+      }, currency);
   const statusText = !isConnected
     ? "CONNECT DERIV"
     : tradeSlotBlocked
@@ -321,6 +340,7 @@ export default function JackpotPanel({
               <label className="jackpot-field"><span>Take profit · {currency}</span><input type="number" min="0" step="0.01" value={takeProfit} onChange={(event) => onTakeProfitChange(Number(event.target.value))} aria-label={`Jackpot session take-profit limit in ${currency}`} data-testid="input-jackpot-take-profit" /></label>
               <label className="jackpot-field"><span>Loss limit · {currency}</span><input type="number" min="0" step="0.01" value={lossLimit} onChange={(event) => onLossLimitChange(Number(event.target.value))} aria-label={`Jackpot session loss limit in ${currency}`} data-testid="input-jackpot-loss-limit" /></label>
             </div>
+            <p className="jackpot-loss-warning" role="note" data-testid="jackpot-loss-warning">{lossWarning}</p>
             <label className="jackpot-switch-row jackpot-ai-switch">
               <span><b>Jackpot AI</b></span>
               <input type="checkbox" checked={aiEnabled} onChange={(event) => onAiEnabledChange(event.target.checked)} disabled={!jackpotAiAvailable && !aiEnabled} aria-label="Enable Jackpot AI" data-testid="switch-jackpot-ai" />

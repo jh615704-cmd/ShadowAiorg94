@@ -26,6 +26,8 @@ export interface ClockWorkPanelProps {
   lossLimit: number;
   onLossLimitChange: (value: number) => void;
   sessionPnl: number;
+  nextStake: number | null;
+  runHasUnsettledResults: boolean;
   running: boolean;
   busy: boolean;
   disabled: boolean;
@@ -81,6 +83,8 @@ export default function ClockWorkPanel({
   lossLimit,
   onLossLimitChange,
   sessionPnl,
+  nextStake,
+  runHasUnsettledResults,
   running,
   busy,
   disabled,
@@ -93,6 +97,20 @@ export default function ClockWorkPanel({
   onStop,
 }: ClockWorkPanelProps) {
   const startDisabled = disabled || busy || !tradeControlAvailable;
+  const lossWarning = runHasUnsettledResults
+    ? "Waiting for settled Clock Work results before updating the loss estimate."
+    : nextStake == null
+      ? "The next Clock Work stake could not be verified, so the loss estimate is unavailable."
+      : getLossLimitRunwayMessage({
+          balance: null,
+          baseStake: stake,
+          nextStake,
+          stakeMode: "multiply",
+          multiplier: lossMultiplier,
+          takeProfit,
+          lossLimit,
+          sessionPnl,
+        }, currency);
 
   return (
     <section className={`cw-panel ${enabled ? "cw-live" : ""}`} data-testid="clock-work-panel" data-feature-scope="clock-work">
@@ -223,16 +241,7 @@ export default function ClockWorkPanel({
             </label>
           </div>
           <p className="cw-risk-note" role="note" data-testid="clock-work-loss-warning">
-            {getLossLimitRunwayMessage({
-              balance: null,
-              baseStake: stake,
-              nextStake: stake,
-              stakeMode: "multiply",
-              multiplier: lossMultiplier,
-              takeProfit,
-              lossLimit,
-              sessionPnl,
-            }, currency)}
+            {lossWarning}
           </p>
         </section>
 

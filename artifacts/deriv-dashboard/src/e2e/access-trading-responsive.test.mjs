@@ -876,6 +876,76 @@ test("Jackpot manual count sends exactly four Rise/Fall contracts in one batch",
   }
 });
 
+test("Jackpot loss runway updates after a losing batch and resets stake progression after a win", async () => {
+  const state = createState(userSession(["jackpot"]));
+  state.hasToken = true;
+  state.allowFixtureTrades = true;
+  seedJackpotMarketHistory(state);
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/app`);
+    await page.getByRole("heading", { name: "Trading Strategies" }).waitFor();
+    await page.getByRole("checkbox", { name: "Toggle Jackpot" }).check();
+    const panel = page.getByTestId("jackpot-panel");
+    await panel.getByTestId("input-jackpot-loss-limit").fill("100");
+    await panel.getByTestId("button-jackpot-count-2").click();
+    await panel.locator("label.jackpot-multiply").click();
+
+    const warning = panel.getByTestId("jackpot-loss-warning");
+    assert.equal(
+      await warning.innerText(),
+      "7 consecutive full-stake losses could reach the $100.00 session loss limit.",
+      "The estimate should include the full two-contract batch and its loss multiplier.",
+    );
+
+    await panel.getByTestId("button-jackpot-place-batch").click();
+    await panel.locator(".jackpot-history .deriv-history-row").nth(1).waitFor({ timeout: 10_000 });
+    state.history = state.history.map((trade) => ({
+      ...trade,
+      current_value: 0,
+      payout: 0,
+      profit: -trade.buy_price,
+      status: "lost",
+      sell_time: Math.floor(Date.now() / 1_000),
+    }));
+    state.activeContractCount = 0;
+    await page.waitForFunction(() =>
+      document.querySelector('[data-testid="jackpot-loss-warning"]')?.textContent
+        === "6 consecutive full-stake losses could reach the $100.00 session loss limit.",
+    undefined, { timeout: 15_000 });
+
+    const placeButton = panel.getByTestId("button-jackpot-place-batch");
+    await page.waitForFunction(() => {
+      const button = document.querySelector('[data-testid="button-jackpot-place-batch"]');
+      return button instanceof HTMLButtonElement && !button.disabled;
+    }, undefined, { timeout: 10_000 });
+    await placeButton.click();
+    await panel.locator(".jackpot-history .deriv-history-row").nth(3).waitFor({ timeout: 10_000 });
+    const secondBatchIds = state.history.slice(0, 2).map((trade) => trade.contract_id);
+    state.history = state.history.map((trade) => secondBatchIds.includes(trade.contract_id)
+      ? {
+          ...trade,
+          current_value: trade.buy_price * 2,
+          payout: trade.buy_price * 2,
+          profit: trade.buy_price,
+          status: "won",
+          sell_time: Math.floor(Date.now() / 1_000),
+        }
+      : trade);
+    state.activeContractCount = 0;
+
+    await page.waitForFunction(() =>
+      document.querySelector('[data-testid="jackpot-loss-warning"]')?.textContent
+        === "7 consecutive full-stake losses could reach the $100.00 session loss limit.",
+    undefined, { timeout: 15_000 });
+    assert.equal(state.tradeRequests.filter((request) => request.path === "/api/deriv/jackpot/buy").length, 2);
+    assert.deepEqual(pageErrors, []);
+    assert.deepEqual(state.unhandledApis, []);
+  } finally {
+    await context.close();
+  }
+});
+
 test("clearing Jackpot session resets settled loss-limit P/L without deleting Deriv history", async () => {
   const state = createState(userSession(["jackpot"]));
   state.hasToken = true;
@@ -1778,9 +1848,15 @@ test("Auto Magic waits for Go Live and requires settlement plus Rescan for anoth
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {
     await page.goto(`${baseUrl}/auto-trader`);
-    await page.getByTestId("button-settings").click();
-    await page.getByTestId("radio-auto-magic-6x").check();
     const autoMagicSwitch = page.getByTestId("switch-auto-magic");
+    const autoMagicControl = page.getByTestId("panel-auto-magic");
+    assert.equal(await autoMagicControl.locator("input[type=radio]").count(), 0, "Auto Magic must not expose a batch-size selector.");
+    assert.doesNotMatch(await autoMagicControl.innerText(), /3×|6×/);
+    assert.equal(await page.getByTestId("panel-settings").count(), 0, "Auto Magic should be outside the settings panel.");
+    assert.ok(
+      await autoMagicControl.evaluate((element) => element.closest(".at-scan-actions") !== null),
+      "Auto Magic should sit beside Guide, Rescan, and Go Live.",
+    );
     await page.locator(".at-auto-magic-switch-row").click();
     assert.equal(await autoMagicSwitch.isChecked(), true);
     assert.equal(await page.getByTestId("button-go-live").isEnabled(), true, "Auto Magic should not disable Go Live in the ready state.");
@@ -1815,7 +1891,7 @@ test("Auto Magic waits for Go Live and requires settlement plus Rescan for anoth
     );
     assert.equal(state.tradeRequests.length, 1, "Auto Magic should send one batch for the current scan.");
     assert.equal(state.tradeRequests[0].path, "/api/deriv/bulk-buy");
-    assert.equal(state.tradeRequests[0].body.count, 6);
+    assert.equal(state.tradeRequests[0].body.count, 6, "A high qualifying observed rate should select the larger hidden batch.");
     assert.equal(state.tradeRequests[0].body.symbol, "R_10");
     assert.equal(state.tradeRequests[0].body.barrier, 5);
     assert.equal(state.tradeRequests[0].body.contract_type, "DIGITDIFF");

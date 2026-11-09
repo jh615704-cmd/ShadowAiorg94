@@ -404,17 +404,18 @@
 .at-settings-toggle.open > svg:last-child { transform: rotate(90deg); }
 .at-settings-fields { display: grid; gap: 10px; padding-top: 13px; }
 .at-settings-fields label { display: grid; gap: 6px; color: #9fb4cb; font-size: 9px; font-weight: 700; }
-.at-auto-magic-block {
-  grid-column: 1 / -1;
+.at-auto-magic-control {
   display: grid;
-  gap: 8px;
+  align-content: center;
+  gap: 3px;
   min-width: 0;
-  padding: 10px;
+  max-width: 230px;
+  padding: 5px 8px;
   border: 1px solid #284563;
   border-radius: 7px;
   background: #0b2138;
 }
-.at-settings-fields .at-auto-magic-switch-row {
+.at-auto-magic-control .at-auto-magic-switch-row {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -471,51 +472,13 @@
   font: 800 8px "DM Mono", monospace;
 }
 .at-auto-magic-switch-row.enabled .at-auto-magic-state { color: #73e3c1; }
-.at-auto-magic-batch {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-.at-auto-magic-batch legend {
-  grid-column: 1 / -1;
-  margin-bottom: 1px;
-  color: #8fa7c2;
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-}
-.at-settings-fields .at-auto-magic-batch label {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 30px;
-  border: 1px solid #2c4a66;
-  border-radius: 5px;
-  background: #0a1d31;
-  color: #c7d6e8;
-  font: 800 9px "DM Mono", monospace;
-  cursor: pointer;
-}
-.at-auto-magic-batch label:has(input:checked) {
-  border-color: #46a88f;
-  background: rgba(22, 121, 102, .18);
-  color: #b8f4e1;
-}
-.at-auto-magic-batch input { margin: 0; accent-color: #61d5b2; }
-.at-auto-magic-batch:disabled { opacity: .6; }
 .at-auto-magic-status {
   margin: 0;
   color: #91a8c1;
-  font-size: 8px;
-  line-height: 1.45;
+  font-size: 7px;
+  line-height: 1.3;
 }
-.at-auto-magic-status { color: #c5d6e8; }
+.at-auto-magic-control .at-auto-magic-status { color: #c5d6e8; }
 .at-duration-note { color: #849bb6; font-size: 8px; font-weight: 500; line-height: 1.4; }
 .at-inline-input { display: flex; justify-content: space-between; align-items: center; height: 32px; padding: 0 8px; border: 1px solid #2a4968; border-radius: 5px; background: #091d32; }
 .at-inline-input input { width: 75%; border: 0; outline: 0; background: transparent; color: #e3eefb; font: 10px "DM Mono", monospace; }
@@ -675,6 +638,10 @@
 .auto-trader-page .at-scan-actions button {
   min-height: 40px;
 }
+.auto-trader-page .at-auto-magic-control {
+  align-self: stretch;
+  justify-content: center;
+}
 
 @media (max-width: 1120px) {
   .at-workspace-grid { grid-template-columns: minmax(0, 1fr); }
@@ -692,11 +659,13 @@
   .at-market-grid { grid-template-columns: minmax(0, 1fr); }
   .at-scan-actions { width: 100%; }
   .at-scan-actions button { flex: 1 1 140px; }
+  .at-auto-magic-control { flex: 1 0 100%; max-width: none; }
   .at-digit-trades button { min-height: 28px; }
 }
 @media (max-width: 560px) {
   .at-heading-actions { align-items: stretch; }
   .at-heading-actions > * { min-height: 42px; }
+  .at-auto-magic-control { flex-basis: 100%; }
   .at-order-topline { flex-wrap: wrap; }
   .at-settings-toggle { min-height: 42px; }
   .at-settings-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }

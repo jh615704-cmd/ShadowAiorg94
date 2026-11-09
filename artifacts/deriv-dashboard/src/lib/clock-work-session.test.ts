@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { getClockWorkNextStake, getClockWorkRunSummary } from "./clock-work-session.ts";
+import { getLossLimitRunwayMessage } from "./loss-runway.ts";
 
 const row = (
   contract_id: string,
@@ -86,6 +87,64 @@ test("Clock Work multiplies after each settled loss and resets to base after a w
     1.88,
     "Two losses multiply in sequence, then a win resets the base before the next loss.",
   );
+});
+
+test("Clock Work loss runway changes after a loss and resets stake progression after a win", () => {
+  const trade = (
+    contract_id: string,
+    status: string,
+    profit: number,
+    buy_price: number,
+  ) => ({
+    contract_id,
+    account_id: "account-1",
+    status,
+    profit,
+    contract_type: "HIGHER",
+    symbol: "R_75",
+    account_type: "demo",
+    barrier: 0,
+    duration: 5,
+    duration_unit: "t",
+    buy_price,
+    current_value: 0,
+    payout: 0,
+    currency: "USD",
+  });
+  const loss = trade("loss", "lost", -1, 1);
+  const lossIds = new Set(["loss"]);
+  const stakeAfterLoss = getClockWorkNextStake([loss], lossIds, 1, 2);
+  assert.equal(stakeAfterLoss, 2);
+  assert.equal(getLossLimitRunwayMessage({
+    balance: null,
+    baseStake: 1,
+    nextStake: stakeAfterLoss!,
+    stakeMode: "multiply",
+    multiplier: 2,
+    takeProfit: 0,
+    lossLimit: 100,
+    sessionPnl: -1,
+  }, "USD"), "6 consecutive full-stake losses could reach the $100.00 session loss limit.");
+
+  const win = trade("win", "won", 2, 2);
+  const settledRows = [loss, win];
+  const stakeAfterWin = getClockWorkNextStake(
+    settledRows,
+    new Set(["loss", "win"]),
+    1,
+    2,
+  );
+  assert.equal(stakeAfterWin, 1);
+  assert.equal(getLossLimitRunwayMessage({
+    balance: null,
+    baseStake: 1,
+    nextStake: stakeAfterWin!,
+    stakeMode: "multiply",
+    multiplier: 2,
+    takeProfit: 0,
+    lossLimit: 100,
+    sessionPnl: settledRows.reduce((total, row) => total + row.profit, 0),
+  }, "USD"), "7 consecutive full-stake losses could reach the $100.00 session loss limit.");
 });
 
 test("Clock Work does not calculate the next stake from missing, open, or invalid results", () => {

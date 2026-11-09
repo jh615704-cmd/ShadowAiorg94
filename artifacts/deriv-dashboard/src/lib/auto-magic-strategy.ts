@@ -2,6 +2,14 @@ import { getAutoTraderOppositeDigitGroup } from "./auto-trader-ticks.ts";
 
 export const AUTO_MAGIC_MIN_SAMPLE = 50;
 export const AUTO_MAGIC_MIN_OBSERVED_WIN_RATE = 68;
+export const AUTO_MAGIC_6X_MIN_OBSERVED_WIN_RATE = 80;
+
+export function getAutoMagicBatchCount(observedWinRate: number): 3 | 6 {
+  return Number.isFinite(observedWinRate)
+    && observedWinRate >= AUTO_MAGIC_6X_MIN_OBSERVED_WIN_RATE
+    ? 6
+    : 3;
+}
 
 export type AutoMagicSignal = {
   symbol: string;

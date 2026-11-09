@@ -23,7 +23,7 @@ import {
 import type { DerivHistoryItem } from "@workspace/api-client-react";
 import { mergeDerivTradeUpdate } from "@/lib/deriv-trade-feed";
 import { collectAutoTraderTickChanges, getAutoTraderOppositeDigitGroup, type AutoTraderMarketTickSignal } from "@/lib/auto-trader-ticks";
-import { chooseAutoMagicCandidate, type AutoMagicSignal } from "@/lib/auto-magic-strategy";
+import { chooseAutoMagicCandidate, getAutoMagicBatchCount, type AutoMagicSignal } from "@/lib/auto-magic-strategy";
 import { AppShell } from "@/components/layout/app-shell";
 import { DerivAccountSwitcher } from "@/components/deriv-account-switcher";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -67,7 +67,7 @@ const filterOptions: Array<[FilterKey, string, number]> = [
 ];
 const storagePrefix = "deriv-auto-trader-contracts:";
 const guideCopy = [
-  ["Auto Trader overview", "This workspace shows live last-digit counts for supported Deriv markets and lets you place manual Digit Differs orders or use Auto Magic.", "Auto Magic can send one selected 3×/6× batch after you enable it and press Go Live. Press Rescan after settlement for another scan. Historical samples do not guarantee future results."],
+  ["Auto Trader overview", "This workspace shows live last-digit counts for supported Deriv markets and lets you place manual Digit Differs orders or use Auto Magic.", "Enable Auto Magic, then choose Go Live or Rescan to let it select a qualifying setup. After an accepted batch settles, press Rescan to arm another scan. Historical samples do not guarantee future results."],
   ["Confirm your account", "Check the account name, account type, connection, and balance in the header before using the controls.", "A real account uses real funds. Demo trading is recommended while you learn."],
   ["Start and rescan", "Go Live counts new market ticks. Rescan resets the counts to a fresh live baseline while keeping your selected market filter and visible market list in place.", "Stop pauses the scan; it does not cancel contracts already accepted by Deriv."],
   ["Filter the market list", "Use All Markets, Volatility, Jump, or Volatility 1s to narrow the instruments shown. Each market keeps its own count during a scan.", "Rescanning does not change the selected filter."],
@@ -121,7 +121,6 @@ function AutoTraderContent() {
   const [scanResetPending, setScanResetPending] = useState(false);
   const scanRestartLockRef = useRef(false);
   const [autoMagicEnabled, setAutoMagicEnabled] = useState(false);
-  const [autoMagicCount, setAutoMagicCount] = useState<3 | 6>(3);
   const [autoMagicStatus, setAutoMagicStatus] = useState<AutoMagicStatus>("off");
   const [autoMagicRunActive, setAutoMagicRunActive] = useState(false);
   const [autoMagicBatchIds, setAutoMagicBatchIds] = useState<string[]>([]);
@@ -705,6 +704,7 @@ function AutoTraderContent() {
 
     const market = liveMarkets.find((item) => item.symbol === candidate.symbol);
     if (!market) return;
+    const batchCount = getAutoMagicBatchCount(candidate.observedWinRate);
     const orderError = validateAutoTraderBatch({
       stake: amount,
       balance: accountBalance,
@@ -712,7 +712,7 @@ function AutoTraderContent() {
       supportedSymbols: markets.map((item) => item.symbol),
       digit: candidate.barrier,
       duration,
-      count: autoMagicCount,
+      count: batchCount,
     });
     if (orderError) {
       setAutoMagicStatus("settings");
@@ -725,7 +725,7 @@ function AutoTraderContent() {
     autoMagicAttemptedRef.current = true;
     setAutoMagicRunActive(false);
     setAutoMagicStatus("placing");
-    void placeTradeRef.current(market, candidate.barrier, autoMagicCount)
+    void placeTradeRef.current(market, candidate.barrier, batchCount)
       .then((outcome) => {
         if (outcome.kind === "accepted" && outcome.contractIds.length > 0) {
           setAutoMagicBatchIds(outcome.contractIds);
@@ -757,7 +757,6 @@ function AutoTraderContent() {
   }, [
     accountBalance,
     accountId,
-    autoMagicCount,
     autoMagicEnabled,
     autoMagicRunActive,
     connected,
@@ -897,51 +896,6 @@ function AutoTraderContent() {
                   <label htmlFor="at-duration-ticks">Duration (ticks)<div className="at-inline-input"><input id="at-duration-ticks" type="number" min="1" max="5" step="1" value={durationTicks} onChange={(event) => setDurationTicks(event.target.value)} aria-label="Duration in ticks" data-testid="input-duration-ticks" /><span>1–5</span></div><small className="at-duration-note">Tick 0 is entry; settlement is evaluated on the selected numbered tick.</small></label>
                   <label>Take profit target<div className="at-inline-input"><input type="number" min="0" step="0.01" value={takeProfit} onChange={(event) => setTakeProfit(event.target.value)} data-testid="input-take-profit" /><span>{currency}</span></div></label>
                   <label>Stop loss limit<div className="at-inline-input"><input type="number" min="0" step="0.01" value={stopLoss} onChange={(event) => setStopLoss(event.target.value)} data-testid="input-stop-loss" /><span>{currency}</span></div></label>
-                  <div className="at-auto-magic-block" data-testid="panel-auto-magic">
-                    <label className={`at-auto-magic-switch-row${autoMagicEnabled ? " enabled" : ""}`}>
-                      <input
-                        type="checkbox"
-                        role="switch"
-                        checked={autoMagicEnabled}
-                        onChange={(event) => handleAutoMagicToggle(event.target.checked)}
-                        disabled={!connected || bulkBuy.isPending}
-                        aria-label="Auto Magic"
-                        data-testid="switch-auto-magic"
-                      />
-                      <span className="at-auto-magic-switch-track" aria-hidden="true" />
-                      <strong>Auto Magic</strong>
-                      <b className="at-auto-magic-state">{autoMagicEnabled ? "ON" : "OFF"}</b>
-                    </label>
-                    <fieldset
-                      className="at-auto-magic-batch"
-                      disabled={autoMagicRunActive || autoMagicStatus === "placing" || autoMagicStatus === "settling"}
-                    >
-                      <legend>Contracts per batch</legend>
-                      <label>
-                        <input
-                          type="radio"
-                          name="auto-magic-count"
-                          value="3"
-                          checked={autoMagicCount === 3}
-                          onChange={() => setAutoMagicCount(3)}
-                          data-testid="radio-auto-magic-3x"
-                        />
-                        <span>3×</span>
-                      </label>
-                      <label>
-                        <input
-                          type="radio"
-                          name="auto-magic-count"
-                          value="6"
-                          checked={autoMagicCount === 6}
-                          onChange={() => setAutoMagicCount(6)}
-                          data-testid="radio-auto-magic-6x"
-                        />
-                        <span>6×</span>
-                      </label>
-                    </fieldset>
-                    <p className="at-auto-magic-status" role="status" data-testid="status-auto-magic">{autoMagicStatusText}</p>
-                  </div>
                   <div className="at-deferred-note"><ShieldAlert size={14} /> Take-profit and stop-loss are reference targets only.</div>
                 </div>
               )}
@@ -1052,6 +1006,23 @@ function AutoTraderContent() {
                 <p>Live last-digit distribution · Deriv market signals</p>
               </div>
               <div className="at-scan-actions">
+                <div className="at-auto-magic-control" data-testid="panel-auto-magic">
+                  <label className={`at-auto-magic-switch-row${autoMagicEnabled ? " enabled" : ""}`}>
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      checked={autoMagicEnabled}
+                      onChange={(event) => handleAutoMagicToggle(event.target.checked)}
+                      disabled={!connected || bulkBuy.isPending}
+                      aria-label="Auto Magic"
+                      data-testid="switch-auto-magic"
+                    />
+                    <span className="at-auto-magic-switch-track" aria-hidden="true" />
+                    <strong>Auto Magic</strong>
+                    <b className="at-auto-magic-state">{autoMagicEnabled ? "ON" : "OFF"}</b>
+                  </label>
+                  <p className="at-auto-magic-status" role="status" data-testid="status-auto-magic">{autoMagicStatusText}</p>
+                </div>
                 <button type="button" className="at-guide-button" onClick={() => { setGuidePage(0); setGuideOpen(true); }} data-testid="button-open-guide">
                   <BookOpen size={15} /> Guide
                 </button>
