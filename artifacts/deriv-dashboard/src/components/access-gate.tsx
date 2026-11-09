@@ -474,7 +474,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
       <div className="access-gate-login-grid" aria-hidden="true" />
       <div className="access-gate-login-glow" aria-hidden="true" />
       <svg className="access-gate-login-network" viewBox="0 0 1000 1500" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-        <g>
+        <g className="network-lines">
           <path d="M55 170 225 250 340 165 485 270 635 175 820 260 955 155" />
           <path d="M15 475 175 390 330 500 470 390 620 500 780 405 990 520" />
           <path d="M10 815 165 710 335 840 480 720 650 835 805 715 990 850" />
@@ -487,7 +487,20 @@ export function AccessGate({ children }: { children: ReactNode }) {
           <path d="M55 170 175 390 330 500 480 720 650 835 820 1080 990 1190" />
           <path d="M955 155 780 405 620 500 480 720 335 840 165 1060 0 1190" />
         </g>
-        <g>
+        <g className="network-flow">
+          <path d="M55 170 225 250 340 165 485 270 635 175 820 260 955 155" />
+          <path d="M15 475 175 390 330 500 470 390 620 500 780 405 990 520" />
+          <path d="M10 815 165 710 335 840 480 720 650 835 805 715 990 850" />
+          <path d="M0 1190 165 1060 335 1190 490 1085 645 1205 820 1080 1000 1190" />
+          <path d="M225 250 175 390 165 710 165 1060" />
+          <path d="M485 270 470 390 480 720 490 1085" />
+          <path d="M820 260 780 405 805 715 820 1080" />
+          <path d="M340 165 330 500 335 840 335 1190" />
+          <path d="M635 175 620 500 650 835 645 1205" />
+          <path d="M55 170 175 390 330 500 480 720 650 835 820 1080 990 1190" />
+          <path d="M955 155 780 405 620 500 480 720 335 840 165 1060 0 1190" />
+        </g>
+        <g className="network-nodes">
           <circle cx="55" cy="170" r="3" />
           <circle cx="225" cy="250" r="3" />
           <circle cx="340" cy="165" r="2.5" />
@@ -510,6 +523,20 @@ export function AccessGate({ children }: { children: ReactNode }) {
           <circle cx="490" cy="1085" r="3" />
           <circle cx="645" cy="1205" r="2.5" />
           <circle cx="820" cy="1080" r="3" />
+        </g>
+        <g className="network-particles">
+          <circle r="4">
+            <animateMotion dur="8s" repeatCount="indefinite" path="M55 170 L225 250 L340 165 L485 270 L635 175 L820 260 L955 155" />
+            <animate attributeName="opacity" values="0;.9;.9;0" keyTimes="0;.1;.85;1" dur="8s" repeatCount="indefinite" />
+          </circle>
+          <circle r="3.5">
+            <animateMotion begin="1.7s" dur="9.5s" repeatCount="indefinite" path="M10 815 L165 710 L335 840 L480 720 L650 835 L805 715 L990 850" />
+            <animate attributeName="opacity" values="0;.8;.8;0" keyTimes="0;.1;.85;1" begin="1.7s" dur="9.5s" repeatCount="indefinite" />
+          </circle>
+          <circle r="3.5">
+            <animateMotion begin="3.2s" dur="11s" repeatCount="indefinite" path="M955 155 L780 405 L620 500 L480 720 L335 840 L165 1060 L0 1190" />
+            <animate attributeName="opacity" values="0;.75;.75;0" keyTimes="0;.1;.85;1" begin="3.2s" dur="11s" repeatCount="indefinite" />
+          </circle>
         </g>
       </svg>
       <div className="access-gate-card">

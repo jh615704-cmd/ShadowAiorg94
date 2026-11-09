@@ -964,7 +964,7 @@ function AutoTraderContent() {
                 <div className="at-daily-stat" data-testid="stat-daily-trades"><span>TRADES</span><strong>{todayIds.size}</strong></div>
                 <div className="at-daily-stat" data-testid="stat-daily-wins"><span>WINS</span><strong>{wins}</strong></div>
                 <div className="at-daily-stat" data-testid="stat-daily-losses"><span>LOSSES</span><strong>{losses}</strong></div>
-                <div className="at-daily-stat" data-testid="stat-daily-win-rate"><span>WIN RATE</span><strong>{winRate}</strong><small data-testid="stat-daily-win-sample">n={outcomeSummary.sampleSize} settled</small></div>
+                <div className="at-daily-stat" data-testid="stat-daily-win-rate"><span>WIN RATE</span><strong>{winRate}</strong></div>
               </div>
             </section>
 

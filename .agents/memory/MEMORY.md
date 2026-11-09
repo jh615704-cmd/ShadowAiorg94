@@ -14,6 +14,7 @@
 - [DigitFlip scanner isolation](digitflip-scanner-isolation.md) — parity samples and visible history must remain separate from EDGE and Trade X.
 - [Trade X and Bulk Trader digit grids](trade-x-distribution-style.md) — reuse Trade X’s smooth navy 5×2 pill treatment in Bulk Trader, preserving its contract markers and readable frequency/streak values.
 - [EDGE visual verification](edge-visual-verification.md) — the access gate blocks authenticated cockpit screenshots unless a valid access-key session is available.
+- [Login background motion](login-background-motion.md) — keep the access-key backdrop visibly animated like the user's reference, not just slowly drifting.
 - [API test runtime](api-test-runtime.md) — run API TypeScript tests through the workspace TSX runner because source imports use bundler-style extensionless paths.
 - [PostgreSQL pool instrumentation](pg-pool-callback-overload.md) — preserve both promise and callback forms; `pool.query()` relies on callback-style `connect()`.
 - [Admin PAT separation](admin-pat-separation.md) — workspace Deriv secret rotation does not change per-user PATs; verify secret presence and API health, then reconnect expired user credentials.

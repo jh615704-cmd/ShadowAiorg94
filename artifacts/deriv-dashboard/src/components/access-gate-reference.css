@@ -19,17 +19,17 @@
 .access-gate-login-glow,
 .access-gate-login-network {
   position: absolute;
-  z-index: -1;
+  z-index: 0;
   pointer-events: none;
 }
 
 .access-gate-login-grid {
   inset: 0;
   background-image:
-    linear-gradient(rgba(47, 90, 127, .15) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(47, 90, 127, .15) 1px, transparent 1px);
-  background-size: 42px 42px;
-  mask-image: radial-gradient(ellipse at center, #000 16%, transparent 91%);
+    linear-gradient(rgba(47, 90, 127, .19) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(47, 90, 127, .19) 1px, transparent 1px);
+  background-size: 38px 38px;
+  animation: access-gate-reference-grid 14s linear infinite;
 }
 
 .access-gate-login-glow {
@@ -40,27 +40,62 @@
   border-radius: 50%;
   background: radial-gradient(circle, rgba(0, 197, 222, .08), transparent 68%);
   transform: translateX(-50%);
-  animation: access-gate-reference-glow 9s ease-in-out infinite alternate;
+  animation: access-gate-reference-glow 6s ease-in-out infinite alternate;
 }
 
 .access-gate-login-network {
   inset: 0;
   width: 100%;
   height: 100%;
-  opacity: .36;
-  animation: access-gate-reference-network 18s ease-in-out infinite alternate;
+  opacity: .5;
+  animation: access-gate-reference-network 9s ease-in-out infinite alternate;
 }
 
-.access-gate-login-network path {
+.access-gate-login-network .network-lines path {
   fill: none;
-  stroke: rgba(28, 176, 206, .28);
+  stroke: rgba(28, 176, 206, .22);
   stroke-width: 1.2;
 }
 
-.access-gate-login-network circle {
+.access-gate-login-network .network-flow path {
+  fill: none;
+  stroke: rgba(42, 219, 231, .84);
+  stroke-width: 1.7;
+  stroke-dasharray: 3 82;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 3px rgba(32, 214, 223, .68));
+  animation: access-gate-reference-flow 4.2s linear infinite;
+}
+
+.access-gate-login-network .network-flow path:nth-child(3n + 2) {
+  animation-duration: 5.1s;
+  animation-delay: -1.7s;
+}
+
+.access-gate-login-network .network-flow path:nth-child(3n + 3) {
+  animation-duration: 6.2s;
+  animation-delay: -3.1s;
+}
+
+.access-gate-login-network .network-nodes circle {
   fill: #20d6df;
   filter: drop-shadow(0 0 5px rgba(32, 214, 223, .8));
-  animation: access-gate-reference-node 3.6s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: access-gate-reference-node 2.8s ease-in-out infinite;
+}
+
+.access-gate-login-network .network-nodes circle:nth-child(3n + 2) {
+  animation-delay: -.9s;
+}
+
+.access-gate-login-network .network-nodes circle:nth-child(3n + 3) {
+  animation-delay: -1.8s;
+}
+
+.access-gate-login-network .network-particles circle {
+  fill: #adffff;
+  filter: drop-shadow(0 0 7px rgba(59, 235, 245, .95));
 }
 
 .access-gate-login .access-gate-card {
@@ -431,18 +466,28 @@
 }
 
 @keyframes access-gate-reference-glow {
-  from { opacity: .55; transform: translateX(-50%) scale(.96); }
-  to { opacity: 1; transform: translateX(-50%) scale(1.04); }
+  from { opacity: .52; transform: translateX(-50%) scale(.9); }
+  to { opacity: 1; transform: translateX(-50%) scale(1.1); }
 }
 
 @keyframes access-gate-reference-network {
-  from { transform: translate3d(-4px, 0, 0) scale(1.01); }
-  to { transform: translate3d(4px, -8px, 0) scale(1.04); }
+  from { transform: translate3d(-18px, 8px, 0) scale(1); }
+  to { transform: translate3d(18px, -14px, 0) scale(1.05); }
+}
+
+@keyframes access-gate-reference-grid {
+  from { background-position: 0 0, 0 0; }
+  to { background-position: 38px 38px, 38px 38px; }
+}
+
+@keyframes access-gate-reference-flow {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -328; }
 }
 
 @keyframes access-gate-reference-node {
-  0%, 100% { opacity: .55; }
-  50% { opacity: 1; }
+  0%, 100% { opacity: .48; transform: scale(.8); }
+  50% { opacity: 1; transform: scale(1.45); }
 }
 
 @media (max-width: 520px) {
@@ -489,11 +534,18 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .access-gate-login-grid,
   .access-gate-login-glow,
   .access-gate-login-network,
-  .access-gate-login-network circle,
+  .access-gate-login-network .network-flow path,
+  .access-gate-login-network .network-nodes circle,
+  .access-gate-login-network .network-particles,
   .access-gate-nodes i,
   .access-gate-login .access-gate-card {
     animation: none !important;
+  }
+
+  .access-gate-login-network .network-particles {
+    display: none;
   }
 }
