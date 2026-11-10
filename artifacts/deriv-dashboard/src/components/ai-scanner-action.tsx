@@ -12,6 +12,8 @@ type Props = {
   feature: string;
   disabled?: boolean;
   actionLabel?: string;
+  description?: string;
+  className?: string;
   messageAutoDismissMs?: number;
 };
 
@@ -22,6 +24,8 @@ export default function AiScannerAction({
   feature,
   disabled = false,
   actionLabel = "AI Scanner",
+  description,
+  className,
   messageAutoDismissMs = 3_000,
 }: Props) {
   const accessSession = useGetAccessSession({
@@ -112,9 +116,16 @@ export default function AiScannerAction({
   };
 
   return (
-    <div className="ai-scanner-control">
+    <div className={`ai-scanner-control${className ? ` ${className}` : ""}`}>
       <label className={`ai-scanner-switch${scanning ? " is-scanning" : ""}${isDisabled ? " is-disabled" : ""}`}>
-        <span>{actionLabel}</span>
+        {description ? (
+          <span className="ai-scanner-switch-copy">
+            <span>{actionLabel}</span>
+            <small>{description}</small>
+          </span>
+        ) : (
+          <span>{actionLabel}</span>
+        )}
         <input
           {...featureActionAttributes(feature, "ai-scanner")}
           type="checkbox"

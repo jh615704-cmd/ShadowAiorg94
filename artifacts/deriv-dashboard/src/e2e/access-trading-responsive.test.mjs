@@ -2580,6 +2580,11 @@ test("Bulk Trader digits match Trade X pill styling and fit phone, tablet, lapto
 
     const panel = page.getByTestId("panel-bulk-trader");
     await panel.waitFor();
+    const scannerControl = panel.locator(".bulk-ai-scanner-control");
+    const scannerSwitch = panel.getByRole("switch", { name: "AI Scanner" });
+    await scannerControl.waitFor();
+    assert.equal(await scannerSwitch.count(), 1, "Bulk Trader should keep one accessible AI Scanner switch.");
+    assert.equal(await scannerControl.getByText("Scan the latest market signals").count(), 1);
     assert.equal(await page.getByTestId("bulk-duration-note").count(), 0, "Bulk Trader should not show the 1T entry-tick explanation.");
     assert.equal(await page.getByTestId("button-duration-1").getAttribute("aria-pressed"), "true");
     await page.waitForFunction(() =>
@@ -2591,6 +2596,9 @@ test("Bulk Trader digits match Trade X pill styling and fit phone, tablet, lapto
       await panel.scrollIntoViewIfNeeded();
       await assertNoHorizontalOverflow(page, viewport, "Bulk Trader");
       await assertWithinViewport(page, '[data-testid="panel-bulk-trader"]', viewport.width, "Bulk Trader panel");
+      const scannerBounds = await scannerControl.boundingBox();
+      assert.ok(scannerBounds && scannerBounds.width >= 180 && scannerBounds.height >= 58, `The scanner control should remain comfortably tappable at ${viewport.name}.`);
+      assert.ok(scannerBounds.x >= -1 && scannerBounds.x + scannerBounds.width <= viewport.width + 1, `The scanner control should fit at ${viewport.name}.`);
 
       const distribution = page.locator(".bulk-trader-digit-row");
       await distribution.scrollIntoViewIfNeeded();
