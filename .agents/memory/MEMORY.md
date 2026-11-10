@@ -37,6 +37,7 @@
 - [Workspace dependency audits](workspace-dependency-audits.md) — a clear production audit can miss vulnerable packages in another artifact's development dependency tree.
 - [Trading feature blue surfaces](trading-feature-blue-surfaces.md) — use Cash Grab’s smooth deep blue on feature shells and nested cards, not only outer wrappers.
 - [Responsive trading controls](responsive-trading-controls.md) — keep trading panels and future controls usable across laptop, tablet, and phone sizes.
+- [AI Scanner visual parity](ai-scanner-style-parity.md) — use the shared scanner control and prevent parent form styles from changing its appearance.
 - [Deriv quote display](deriv-quote-display.md) — Cash Grab, DigitFlip, and EDGE quotes use at least four integer digits and exactly two decimals.
 - [Trading history results](trading-history-results.md) — isolate rows by feature/account; keep acknowledged contracts visible through settlement after stopping or switching off.
 - [Auto Trader guide boundary](auto-trader-guide-boundary.md) — explain controls and observed data without exposing private strategy logic or implying guaranteed outcomes.

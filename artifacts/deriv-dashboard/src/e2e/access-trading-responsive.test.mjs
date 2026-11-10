@@ -2568,7 +2568,7 @@ test("Trade X history appears at acknowledgement, survives a stale snapshot, and
 });
 
 test("Bulk Trader digits match Trade X pill styling and fit phone, tablet, laptop, and 4K widths", async () => {
-  const state = createState(userSession(["bulk-trader"]));
+  const state = createState(userSession(["bulk-trader", "digit-flip"]));
   state.hasToken = true;
   const { context, page, pageErrors } = await createMockPage(state, bulkViewports[0]);
   try {
@@ -2580,11 +2580,34 @@ test("Bulk Trader digits match Trade X pill styling and fit phone, tablet, lapto
 
     const panel = page.getByTestId("panel-bulk-trader");
     await panel.waitFor();
-    const scannerControl = panel.locator(".bulk-ai-scanner-control");
-    const scannerSwitch = panel.getByRole("switch", { name: "AI Scanner" });
+    const scannerControl = panel.locator(".ai-scanner-control");
+    const scannerInput = panel.getByRole("switch", { name: "AI Scanner" });
+    const scannerSwitch = scannerControl.locator(".ai-scanner-switch");
     await scannerControl.waitFor();
-    assert.equal(await scannerSwitch.count(), 1, "Bulk Trader should keep one accessible AI Scanner switch.");
-    assert.equal(await scannerControl.getByText("Scan the latest market signals").count(), 1);
+    assert.equal(await scannerInput.count(), 1, "Bulk Trader should keep one accessible AI Scanner switch.");
+    assert.equal(await scannerControl.locator(".ai-scanner-switch-copy").count(), 0, "Bulk Trader should use DigitFlip's single-line scanner label.");
+    const readScannerAppearance = (element) => element.evaluate((label) => {
+      const style = getComputedStyle(label);
+      const track = label.querySelector(":scope > i");
+      const trackStyle = track instanceof HTMLElement ? getComputedStyle(track) : null;
+      return {
+        display: style.display,
+        minHeight: style.minHeight,
+        minWidth: style.minWidth,
+        padding: style.padding,
+        borderColor: style.borderColor,
+        borderRadius: style.borderRadius,
+        backgroundImage: style.backgroundImage,
+        color: style.color,
+        fontSize: style.fontSize,
+        fontWeight: style.fontWeight,
+        letterSpacing: style.letterSpacing,
+        textTransform: style.textTransform,
+        trackSize: trackStyle ? `${trackStyle.width} × ${trackStyle.height}` : null,
+        trackColor: trackStyle?.backgroundColor ?? null,
+      };
+    });
+    const bulkScannerAppearance = await readScannerAppearance(scannerSwitch);
     assert.equal(await page.getByTestId("bulk-duration-note").count(), 0, "Bulk Trader should not show the 1T entry-tick explanation.");
     assert.equal(await page.getByTestId("button-duration-1").getAttribute("aria-pressed"), "true");
     await page.waitForFunction(() =>
@@ -2596,9 +2619,17 @@ test("Bulk Trader digits match Trade X pill styling and fit phone, tablet, lapto
       await panel.scrollIntoViewIfNeeded();
       await assertNoHorizontalOverflow(page, viewport, "Bulk Trader");
       await assertWithinViewport(page, '[data-testid="panel-bulk-trader"]', viewport.width, "Bulk Trader panel");
-      const scannerBounds = await scannerControl.boundingBox();
-      assert.ok(scannerBounds && scannerBounds.width >= 180 && scannerBounds.height >= 58, `The scanner control should remain comfortably tappable at ${viewport.name}.`);
-      assert.ok(scannerBounds.x >= -1 && scannerBounds.x + scannerBounds.width <= viewport.width + 1, `The scanner control should fit at ${viewport.name}.`);
+      const scannerBounds = await scannerSwitch.boundingBox();
+      const scannerStyle = await scannerSwitch.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return { display: style.display, minHeight: style.minHeight, borderRadius: style.borderRadius, textTransform: style.textTransform };
+      });
+      assert.ok(scannerBounds && scannerBounds.width >= 154 && scannerBounds.height >= 42, `The scanner switch should match DigitFlip's standard control size at ${viewport.name}.`);
+      assert.ok(scannerBounds.x >= -1 && scannerBounds.x + scannerBounds.width <= viewport.width + 1, `The scanner switch should fit at ${viewport.name}.`);
+      assert.equal(scannerStyle.display, bulkScannerAppearance.display);
+      assert.equal(scannerStyle.minHeight, "42px");
+      assert.equal(scannerStyle.borderRadius, "9px");
+      assert.equal(scannerStyle.textTransform, "uppercase");
 
       const distribution = page.locator(".bulk-trader-digit-row");
       await distribution.scrollIntoViewIfNeeded();
@@ -2677,6 +2708,18 @@ test("Bulk Trader digits match Trade X pill styling and fit phone, tablet, lapto
       assert.match(selectedPillStyle.selectedMark, /✓/, "The selected digit should have a clean, compact selected marker.");
       await page.screenshot({ path: path.join(screenshotsDir, `bulk-trader-${viewport.name}.png`) });
     }
+
+    await page.locator(".xt-feature-card-bulk .xt-switch").click();
+    await panel.waitFor({ state: "hidden" });
+    await page.locator(".xt-feature-card-digit-flip .xt-switch").click();
+    const digitFlipPanel = page.getByTestId("digit-flip-panel");
+    await digitFlipPanel.waitFor();
+    const digitFlipScanner = digitFlipPanel.locator(".ai-scanner-switch");
+    assert.deepEqual(
+      await readScannerAppearance(digitFlipScanner),
+      bulkScannerAppearance,
+      "Bulk Trader and DigitFlip should render the scanner with identical styles and switch-track geometry.",
+    );
 
     assert.deepEqual(state.unhandledApis, [], `Unexpected API requests: ${JSON.stringify(state.unhandledApis)}`);
     assert.deepEqual(state.tradeRequests, [], "Bulk Trader layout checks must not submit any trade.");
