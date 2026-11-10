@@ -42,6 +42,8 @@ export default function DerivHistory({ title, strategy, className, rows, session
               ? "cash-grab"
               : normalizedTitle.includes("money bank")
                 ? "money-bank"
+                : normalizedTitle.includes("speedbot")
+                  ? "speedbot"
                 : normalizedTitle.includes("auto trader 2")
                   ? "auto-trader-2"
                   : normalizedTitle.includes("edge")

@@ -1,0 +1,235 @@
+.speedbot-panel {
+  display: grid;
+  gap: 16px;
+  padding: clamp(16px, 2.4vw, 24px);
+  border: 1px solid rgba(58, 181, 255, 0.28);
+  border-radius: 20px;
+  background:
+    radial-gradient(ellipse at 8% 0%, rgba(0, 173, 255, 0.13), transparent 42%),
+    linear-gradient(145deg, #071a32 0%, #071225 58%, #091d36 100%);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.26), inset 0 1px rgba(255, 255, 255, 0.035);
+  color: #eaf5ff;
+}
+
+.speedbot-header,
+.speedbot-title,
+.speedbot-run-button {
+  display: flex;
+  align-items: center;
+}
+
+.speedbot-header {
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.speedbot-title {
+  min-width: 0;
+  gap: 12px;
+}
+
+.speedbot-title > span:last-child {
+  display: grid;
+  gap: 3px;
+}
+
+.speedbot-title b {
+  font-size: 17px;
+  letter-spacing: 0.01em;
+}
+
+.speedbot-title small,
+.speedbot-disclaimer {
+  color: #a9bfd4;
+  font-size: 12px;
+}
+
+.speedbot-mark {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid rgba(48, 193, 255, 0.3);
+  border-radius: 12px;
+  background: rgba(0, 161, 255, 0.13);
+  color: #45ccff;
+}
+
+.speedbot-run-button {
+  justify-content: center;
+  min-height: 40px;
+  gap: 8px;
+  padding: 0 15px;
+  border: 1px solid rgba(42, 184, 255, 0.42);
+  border-radius: 12px;
+  background: linear-gradient(135deg, #0474d2, #0759bd);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 140ms ease, transform 140ms ease, opacity 140ms ease;
+}
+
+.speedbot-run-button:hover:not(:disabled) {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+}
+
+.speedbot-run-button.is-running {
+  border-color: rgba(255, 120, 120, 0.35);
+  background: linear-gradient(135deg, #9d3348, #782435);
+}
+
+.speedbot-run-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.speedbot-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-height: 20px;
+  padding: 11px 13px;
+  border: 1px solid rgba(47, 180, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(8, 37, 65, 0.72);
+  color: #c8e9ff;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.speedbot-status.is-waiting {
+  color: #d8d5ff;
+  border-color: rgba(151, 129, 255, 0.25);
+}
+
+.speedbot-status-dot {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: #3bd2ff;
+  box-shadow: 0 0 12px rgba(59, 210, 255, 0.58);
+}
+
+.speedbot-status.is-waiting .speedbot-status-dot {
+  background: #a799ff;
+  box-shadow: 0 0 12px rgba(167, 153, 255, 0.45);
+}
+
+.speedbot-settings {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.speedbot-settings label {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  color: #a9bfd4;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.speedbot-settings input,
+.speedbot-settings select {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 11px;
+  border: 1px solid rgba(92, 158, 211, 0.28);
+  border-radius: 10px;
+  outline: none;
+  background: #091a2e;
+  color: #eaf5ff;
+  font: inherit;
+  font-size: 14px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.speedbot-settings input:focus,
+.speedbot-settings select:focus {
+  border-color: #32b8ff;
+  box-shadow: 0 0 0 3px rgba(50, 184, 255, 0.12);
+}
+
+.speedbot-settings input:disabled,
+.speedbot-settings select:disabled {
+  opacity: 0.58;
+}
+
+.speedbot-live-readout {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.speedbot-live-readout > span {
+  display: grid;
+  gap: 5px;
+  padding: 11px 12px;
+  border: 1px solid rgba(92, 158, 211, 0.16);
+  border-radius: 11px;
+  background: rgba(5, 20, 37, 0.64);
+}
+
+.speedbot-live-readout small {
+  color: #819cb5;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+}
+
+.speedbot-live-readout b {
+  overflow: hidden;
+  color: #eaf5ff;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.speedbot-disclaimer {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.speedbot-history {
+  margin-top: 2px;
+}
+
+@media (max-width: 900px) {
+  .speedbot-settings {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .speedbot-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .speedbot-run-button {
+    width: 100%;
+  }
+
+  .speedbot-settings {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .speedbot-live-readout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .speedbot-run-button {
+    transition: none;
+  }
+}

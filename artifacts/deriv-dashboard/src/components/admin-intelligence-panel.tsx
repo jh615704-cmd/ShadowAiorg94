@@ -14,6 +14,7 @@ const featureLabels: Record<string, string> = {
   "jdy-ai-3": "JDY AI 3",
   "auto-trader": "Auto Trader",
   "auto-trader-2": "Auto Trader 2",
+  speedbot: "Speedbot",
   settings: "Settings",
   history: "History",
   admin: "Admin",

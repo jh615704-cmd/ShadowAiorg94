@@ -1,0 +1,52 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { chooseSpeedbotCandidate, getSpeedbotSessionStopReason } from "./speedbot-strategy.ts";
+import type { AutoMagicSignal } from "./auto-magic-strategy.ts";
+
+function signal(digits: number[]): AutoMagicSignal {
+  return { symbol: "1HZ10V", sample_count: digits.length, recent_digits: digits };
+}
+
+test("Speedbot waits for at least 50 duration-matched expiry samples", () => {
+  const digits = Array.from({ length: 50 }, (_, index) => index % 10);
+  const candidate = chooseSpeedbotCandidate({
+    signal: signal(digits),
+    latestDigit: 5,
+    scanFrequencies: Array(10).fill(0),
+    duration: 1,
+  });
+  assert.equal(candidate, null);
+});
+
+test("Speedbot uses the same strict observed-rate gate as Auto Magic", () => {
+  const digits = Array.from({ length: 52 }, (_, index) => (index % 2 === 0 ? 5 : 6));
+  const candidate = chooseSpeedbotCandidate({
+    signal: signal(digits),
+    latestDigit: 5,
+    scanFrequencies: Array(10).fill(0),
+    duration: 1,
+  });
+  assert.ok(candidate);
+  assert.ok(candidate.observedWinRate > 68);
+});
+
+test("Speedbot selects an unseen opposite-half barrier from qualifying evidence", () => {
+  const digits = Array.from({ length: 53 }, (_, index) => index % 10 === 0 || index === 52 ? 5 : 6);
+  const candidate = chooseSpeedbotCandidate({
+    signal: signal(digits),
+    latestDigit: 5,
+    scanFrequencies: Array(10).fill(0),
+    duration: 1,
+  });
+  assert.ok(candidate);
+  assert.ok(candidate.observedWinRate > 68);
+  assert.ok(candidate.sampleCount >= 50);
+  assert.ok(candidate.barrier >= 0 && candidate.barrier <= 4);
+});
+
+test("Speedbot stops entries at its configured session targets", () => {
+  assert.equal(getSpeedbotSessionStopReason(10, 10, 10), "take-profit");
+  assert.equal(getSpeedbotSessionStopReason(-10, 10, 10), "loss-limit");
+  assert.equal(getSpeedbotSessionStopReason(-2, 10, 10), null);
+  assert.equal(getSpeedbotSessionStopReason(Number.NaN, 10, 10), "loss-limit");
+});

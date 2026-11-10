@@ -1274,7 +1274,7 @@ components:
             $ref: "#/components/schemas/AccessFeature"
     AccessFeature:
       type: string
-      enum: [edge, digit-flip, trade-x, bulk-trader, jackpot, clock-work, cash-grab, money-bank, jdy-ai-3, auto-trader, auto-trader-2, settings, history, admin]
+      enum: [edge, digit-flip, trade-x, bulk-trader, jackpot, clock-work, cash-grab, money-bank, jdy-ai-3, auto-trader, auto-trader-2, speedbot, settings, history, admin]
     AccessSession:
       type: object
       required: [key_id, key_prefix, label, kind, is_admin, status, max_devices, features, online, last_seen_at]
@@ -1347,7 +1347,7 @@ components:
       properties:
         feature:
           type: string
-          enum: [edge, digit-flip, trade-x, bulk-trader, jackpot, clock-work, cash-grab, money-bank, jdy-ai-3, auto-trader, auto-trader-2, settings, history]
+          enum: [edge, digit-flip, trade-x, bulk-trader, jackpot, clock-work, cash-grab, money-bank, jdy-ai-3, auto-trader, auto-trader-2, speedbot, settings, history]
         mode:
           type: string
           enum: [available, restricted, coming_soon, under_construction]
@@ -1809,7 +1809,7 @@ components:
       properties:
         access_feature:
           type: string
-          enum: [edge, digit-flip, trade-x, bulk-trader, clock-work, cash-grab, money-bank, jdy-ai-3, auto-trader, auto-trader-2]
+          enum: [edge, digit-flip, trade-x, bulk-trader, clock-work, cash-grab, money-bank, jdy-ai-3, auto-trader, auto-trader-2, speedbot]
         amount:
           type: number
           exclusiveMinimum: 0

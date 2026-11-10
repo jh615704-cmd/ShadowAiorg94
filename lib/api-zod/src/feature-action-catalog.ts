@@ -206,6 +206,7 @@ const historyFeatures: AccessFeature[] = [
   "cash-grab",
   "money-bank",
   "auto-trader-2",
+  "speedbot",
 ];
 
 for (const feature of historyFeatures) {
@@ -217,7 +218,7 @@ for (const feature of historyFeatures) {
   ]);
 }
 
-for (const feature of ["edge", "digit-flip", "trade-x", "bulk-trader", "jackpot", "clock-work", "cash-grab", "money-bank"] as const) {
+for (const feature of ["edge", "digit-flip", "trade-x", "bulk-trader", "jackpot", "clock-work", "cash-grab", "money-bank", "speedbot"] as const) {
   addMany(feature, [
     ["feature-toggle", "Show or hide feature"],
     ["open-guide", "Open feature guide"],
@@ -227,6 +228,16 @@ for (const feature of ["edge", "digit-flip", "trade-x", "bulk-trader", "jackpot"
     ["guide-start", "Start from feature guide"],
   ]);
 }
+
+addMany("speedbot", [
+  ["start", "Start Speedbot"],
+  ["stop", "Stop Speedbot"],
+  ["market", "Select Speedbot market"],
+  ["stake", "Set Speedbot stake"],
+  ["duration", "Set Speedbot duration"],
+  ["take-profit", "Set Speedbot take-profit limit"],
+  ["loss-limit", "Set Speedbot loss limit"],
+]);
 
 addMany("edge", [
   ["ai-scanner", "AI Scanner"],

@@ -113,7 +113,8 @@ export type DerivHistoryFeature =
   | "cash-grab"
   | "clock-work"
   | "jackpot"
-  | "money-bank";
+  | "money-bank"
+  | "speedbot";
 
 export function claimDerivHistoryFeatureContractIds(
   owners: Map<string, DerivHistoryFeature>,

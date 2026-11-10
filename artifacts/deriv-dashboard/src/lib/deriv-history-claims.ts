@@ -9,6 +9,7 @@ export const DERIV_HISTORY_FEATURES = [
   "clock-work",
   "jackpot",
   "money-bank",
+  "speedbot",
 ] as const satisfies readonly DerivHistoryFeature[];
 
 export type DerivHistoryClaims = Record<DerivHistoryFeature, string[]>;
@@ -27,6 +28,7 @@ function emptyClaims(): DerivHistoryClaims {
     "clock-work": [],
     jackpot: [],
     "money-bank": [],
+    speedbot: [],
   };
 }
 

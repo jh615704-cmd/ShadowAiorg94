@@ -173,6 +173,7 @@ function tradeActionControlId(feature: string, path: string, body: Record<string
   if (feature === "clock-work") return "start";
   if (feature === "money-bank") return "start-stop";
   if (feature === "auto-trader-2") return "start";
+  if (feature === "speedbot") return "start";
   if (feature === "auto-trader") {
     if (contractType === "DIGITOVER") return "trade-over";
     if (contractType === "DIGITUNDER") return "trade-under";

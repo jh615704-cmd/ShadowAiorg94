@@ -55,6 +55,7 @@ const featureLabels: Partial<Record<AccessFeatureValue, string>> = {
   "money-bank": "Money Bank",
   "auto-trader": "Auto Trader",
   "auto-trader-2": "Auto Trader 2.0",
+  speedbot: "Speedbot",
   settings: "Settings",
   history: "History",
 };
@@ -70,6 +71,7 @@ const featureDescriptions: Partial<Record<AccessFeatureValue, string>> = {
   "money-bank": "Accumulator automation with recovery controls",
   "auto-trader": "Live market scanner and Digit Differs orders",
   "auto-trader-2": "Automated contract selection and session controls",
+  speedbot: "Fast, single-contract Digit Differs automation",
   settings: "View and manage the Deriv connection",
   history: "Read recent trading activity",
 };
