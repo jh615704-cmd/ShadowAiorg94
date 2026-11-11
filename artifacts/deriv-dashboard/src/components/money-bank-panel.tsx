@@ -6,6 +6,7 @@ import {
   type MoneyBankStrategy,
 } from "../lib/money-bank-math";
 import { MoneyBankMarketChart } from "./money-bank-market-chart";
+import { MoneyBankKnockoutStats } from "./money-bank-knockout-stats";
 import DerivHistory, { type DerivHistoryRow } from "./deriv-history";
 import "./money-bank-panel.css";
 
@@ -45,6 +46,7 @@ export type MoneyBankTrade = DerivHistoryRow & {
 type MoneyBankPanelProps = {
   isConnected: boolean;
   isDemoAccount: boolean;
+  accountId?: string | null;
   demoAccountId?: string | null;
   tradeSlotBlocked: boolean;
   running: boolean;
@@ -94,6 +96,7 @@ const money = (value: number, currency = "USD") =>
 export function MoneyBankPanel({
   isConnected,
   isDemoAccount,
+  accountId,
   demoAccountId,
   tradeSlotBlocked,
   running,
@@ -390,6 +393,13 @@ export function MoneyBankPanel({
                 </div>
               ))}
             </div>
+            <MoneyBankKnockoutStats
+              accountId={accountId}
+              amount={selectedStake}
+              connected={isConnected}
+              duration={takeProfitTicks}
+              symbol={symbol}
+            />
           </section>
 
           <section className="money-bank-card money-bank-risk-card">

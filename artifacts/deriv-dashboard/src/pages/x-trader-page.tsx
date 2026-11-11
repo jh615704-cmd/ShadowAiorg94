@@ -6833,6 +6833,7 @@ export default function XTraderPage() {
         <MoneyBankPanel
           isConnected={isConnected}
           isDemoAccount={currentAccountType === "demo"}
+          accountId={currentAccountId}
           demoAccountId={currentAccountType === "demo" ? currentAccountId : null}
           tradeSlotBlocked={tradeSlotBlocked}
           running={moneyBankRunning}

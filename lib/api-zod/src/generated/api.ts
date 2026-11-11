@@ -966,6 +966,97 @@ export const ScanDerivAccumulatorKnockoutResponse = zod.object({
 
 
 /**
+ * Uses current Deriv Accumulator barriers and a held-out split of recent live quotes. It never places a trade or gates entry.
+ * @summary Compare Money Bank knockout estimates with later live samples
+ */
+
+
+export const getMoneyBankKnockoutStatisticsQuerySymbolRegExp = new RegExp('^1HZ(10|15|25|30|50|75|90|100)V$');
+
+export const getMoneyBankKnockoutStatisticsQueryDurationMax = 30;
+
+
+
+export const GetMoneyBankKnockoutStatisticsQueryParams = zod.object({
+  "symbol": zod.coerce.string().min(1).regex(getMoneyBankKnockoutStatisticsQuerySymbolRegExp),
+  "amount": zod.coerce.number().min(1),
+  "duration": zod.coerce.number().int().min(1).max(getMoneyBankKnockoutStatisticsQueryDurationMax)
+})
+
+export const getMoneyBankKnockoutStatisticsResponseDurationTicksMax = 30;
+
+export const getMoneyBankKnockoutStatisticsResponseQuoteCountMin = 0;
+export const getMoneyBankKnockoutStatisticsResponseQuoteCountMax = 200;
+
+export const getMoneyBankKnockoutStatisticsResponseTickSequenceMin = 0;
+
+export const getMoneyBankKnockoutStatisticsResponseWindowStartEpochMin = 0;
+
+export const getMoneyBankKnockoutStatisticsResponseWindowEndEpochMin = 0;
+
+export const getMoneyBankKnockoutStatisticsResponseCapturedAtEpochMin = 0;
+
+export const getMoneyBankKnockoutStatisticsResponseTickAgeSecondsMin = 0;
+
+export const getMoneyBankKnockoutStatisticsResponseRatesItemTrainingWindowsMin = 0;
+
+export const getMoneyBankKnockoutStatisticsResponseRatesItemTrainingKnockoutsMin = 0;
+
+export const getMoneyBankKnockoutStatisticsResponseRatesItemHoldoutWindowsMin = 0;
+
+export const getMoneyBankKnockoutStatisticsResponseRatesItemObservedKnockoutsMin = 0;
+
+export const getMoneyBankKnockoutStatisticsResponseRatesItemEstimatedKnockoutsMin = 0;
+
+export const getMoneyBankKnockoutStatisticsResponseRatesItemEstimateLowerCountMin = 0;
+
+export const getMoneyBankKnockoutStatisticsResponseRatesItemEstimateUpperCountMin = 0;
+
+export const getMoneyBankKnockoutStatisticsResponseRatesItemEstimatedKnockoutRateMin = 0;
+export const getMoneyBankKnockoutStatisticsResponseRatesItemEstimatedKnockoutRateMax = 1;
+
+export const getMoneyBankKnockoutStatisticsResponseRatesItemObservedKnockoutRateMin = 0;
+export const getMoneyBankKnockoutStatisticsResponseRatesItemObservedKnockoutRateMax = 1;
+
+export const getMoneyBankKnockoutStatisticsResponseRatesItemHoldoutGapPercentagePointsMin = -100;
+export const getMoneyBankKnockoutStatisticsResponseRatesItemHoldoutGapPercentagePointsMax = 100;
+
+export const getMoneyBankKnockoutStatisticsResponseRatesMin = 5;
+export const getMoneyBankKnockoutStatisticsResponseRatesMax = 5;
+
+
+
+export const GetMoneyBankKnockoutStatisticsResponse = zod.object({
+  "symbol": zod.string(),
+  "duration_ticks": zod.number().int().min(1).max(getMoneyBankKnockoutStatisticsResponseDurationTicksMax),
+  "quote_count": zod.number().int().min(getMoneyBankKnockoutStatisticsResponseQuoteCountMin).max(getMoneyBankKnockoutStatisticsResponseQuoteCountMax),
+  "tick_sequence": zod.number().int().min(getMoneyBankKnockoutStatisticsResponseTickSequenceMin),
+  "window_start_epoch": zod.number().int().min(getMoneyBankKnockoutStatisticsResponseWindowStartEpochMin).nullable(),
+  "window_end_epoch": zod.number().int().min(getMoneyBankKnockoutStatisticsResponseWindowEndEpochMin).nullable(),
+  "captured_at_epoch": zod.number().int().min(getMoneyBankKnockoutStatisticsResponseCapturedAtEpochMin),
+  "tick_age_seconds": zod.number().int().min(getMoneyBankKnockoutStatisticsResponseTickAgeSecondsMin).nullable(),
+  "freshness": zod.enum(['fresh', 'waiting_for_quote', 'stale_data']),
+  "confidence_level": zod.literal(0.95),
+  "rates": zod.array(zod.object({
+  "growth_rate": zod.union([zod.literal(1),zod.literal(2),zod.literal(3),zod.literal(4),zod.literal(5)]),
+  "barrier": zod.number().nullable(),
+  "status": zod.enum(['ready', 'insufficient_evidence', 'barrier_unavailable', 'waiting_for_quote', 'stale_data']),
+  "training_windows": zod.number().int().min(getMoneyBankKnockoutStatisticsResponseRatesItemTrainingWindowsMin),
+  "training_knockouts": zod.number().int().min(getMoneyBankKnockoutStatisticsResponseRatesItemTrainingKnockoutsMin),
+  "holdout_windows": zod.number().int().min(getMoneyBankKnockoutStatisticsResponseRatesItemHoldoutWindowsMin),
+  "observed_knockouts": zod.number().int().min(getMoneyBankKnockoutStatisticsResponseRatesItemObservedKnockoutsMin),
+  "estimated_knockouts": zod.number().min(getMoneyBankKnockoutStatisticsResponseRatesItemEstimatedKnockoutsMin).nullable(),
+  "estimate_lower_count": zod.number().min(getMoneyBankKnockoutStatisticsResponseRatesItemEstimateLowerCountMin).nullable(),
+  "estimate_upper_count": zod.number().min(getMoneyBankKnockoutStatisticsResponseRatesItemEstimateUpperCountMin).nullable(),
+  "estimated_knockout_rate": zod.number().min(getMoneyBankKnockoutStatisticsResponseRatesItemEstimatedKnockoutRateMin).max(getMoneyBankKnockoutStatisticsResponseRatesItemEstimatedKnockoutRateMax).nullable(),
+  "observed_knockout_rate": zod.number().min(getMoneyBankKnockoutStatisticsResponseRatesItemObservedKnockoutRateMin).max(getMoneyBankKnockoutStatisticsResponseRatesItemObservedKnockoutRateMax).nullable(),
+  "holdout_gap_percentage_points": zod.number().min(getMoneyBankKnockoutStatisticsResponseRatesItemHoldoutGapPercentagePointsMin).max(getMoneyBankKnockoutStatisticsResponseRatesItemHoldoutGapPercentagePointsMax).nullable().describe('Observed holdout rate minus the earlier training estimate, in percentage points.'),
+  "message": zod.string().nullable()
+})).min(getMoneyBankKnockoutStatisticsResponseRatesMin).max(getMoneyBankKnockoutStatisticsResponseRatesMax)
+})
+
+
+/**
  * @summary Select the account used by the authenticated WebSocket
  */
 

@@ -767,6 +767,58 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /deriv/accumulator-knockout-statistics:
+    get:
+      operationId: getMoneyBankKnockoutStatistics
+      tags: [deriv]
+      summary: Compare Money Bank knockout estimates with later live samples
+      description: Uses current Deriv Accumulator barriers and a held-out split of recent live quotes. It never places a trade or gates entry.
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            pattern: "^1HZ(10|15|25|30|50|75|90|100)V$"
+        - name: amount
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: 1
+        - name: duration
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+      responses:
+        "200":
+          description: Rate-specific model estimates and their later-sample observations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MoneyBankKnockoutStatistics"
+        "400":
+          description: Invalid Money Bank statistics request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Money Bank feature access is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Deriv statistics could not be read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /deriv/select-account:
     post:
       operationId: selectDerivAccount
@@ -1771,6 +1823,95 @@ components:
           type: boolean
         market_matches:
           type: boolean
+    MoneyBankKnockoutStatisticsRate:
+      type: object
+      required: [growth_rate, barrier, status, training_windows, training_knockouts, holdout_windows, observed_knockouts, estimated_knockouts, estimate_lower_count, estimate_upper_count, estimated_knockout_rate, observed_knockout_rate, holdout_gap_percentage_points, message]
+      properties:
+        growth_rate:
+          type: integer
+          enum: [1, 2, 3, 4, 5]
+        barrier:
+          type: [number, "null"]
+        status:
+          type: string
+          enum: [ready, insufficient_evidence, barrier_unavailable, waiting_for_quote, stale_data]
+        training_windows:
+          type: integer
+          minimum: 0
+        training_knockouts:
+          type: integer
+          minimum: 0
+        holdout_windows:
+          type: integer
+          minimum: 0
+        observed_knockouts:
+          type: integer
+          minimum: 0
+        estimated_knockouts:
+          type: [number, "null"]
+          minimum: 0
+        estimate_lower_count:
+          type: [number, "null"]
+          minimum: 0
+        estimate_upper_count:
+          type: [number, "null"]
+          minimum: 0
+        estimated_knockout_rate:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 1
+        observed_knockout_rate:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 1
+        holdout_gap_percentage_points:
+          type: [number, "null"]
+          minimum: -100
+          maximum: 100
+          description: Observed holdout rate minus the earlier training estimate, in percentage points.
+        message:
+          type: [string, "null"]
+    MoneyBankKnockoutStatistics:
+      type: object
+      required: [symbol, duration_ticks, quote_count, tick_sequence, window_start_epoch, window_end_epoch, captured_at_epoch, tick_age_seconds, freshness, confidence_level, rates]
+      properties:
+        symbol:
+          type: string
+        duration_ticks:
+          type: integer
+          minimum: 1
+          maximum: 30
+        quote_count:
+          type: integer
+          minimum: 0
+          maximum: 200
+        tick_sequence:
+          type: integer
+          minimum: 0
+        window_start_epoch:
+          type: [integer, "null"]
+          minimum: 0
+        window_end_epoch:
+          type: [integer, "null"]
+          minimum: 0
+        captured_at_epoch:
+          type: integer
+          minimum: 0
+        tick_age_seconds:
+          type: [integer, "null"]
+          minimum: 0
+        freshness:
+          type: string
+          enum: [fresh, waiting_for_quote, stale_data]
+        confidence_level:
+          type: number
+          enum: [0.95]
+        rates:
+          type: array
+          minItems: 5
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/MoneyBankKnockoutStatisticsRate"
     DerivProposalRequest:
       type: object
       required: [ok, message]

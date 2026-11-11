@@ -62,10 +62,12 @@ import type {
   ErrorResponse,
   GetDerivHistoryParams,
   GetDerivStatusParams,
+  GetMoneyBankKnockoutStatisticsParams,
   HealthStatus,
   JackpotPairBuyInput,
   MoneyBankKnockoutScannerInput,
   MoneyBankKnockoutScannerResponse,
+  MoneyBankKnockoutStatistics,
   StreamDerivTradeUpdatesParams,
   SuccessResponse,
   TokenDeleteResponse,
@@ -2251,6 +2253,91 @@ export const useScanDerivAccumulatorKnockout = <TError = ErrorType<ErrorResponse
       > => {
       return useMutation(getScanDerivAccumulatorKnockoutMutationOptions(options));
     }
+
+export const getGetMoneyBankKnockoutStatisticsUrl = (params: GetMoneyBankKnockoutStatisticsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/deriv/accumulator-knockout-statistics?${stringifiedParams}` : `/api/deriv/accumulator-knockout-statistics`
+}
+
+/**
+ * Uses current Deriv Accumulator barriers and a held-out split of recent live quotes. It never places a trade or gates entry.
+ * @summary Compare Money Bank knockout estimates with later live samples
+ */
+export const getMoneyBankKnockoutStatistics = async (params: GetMoneyBankKnockoutStatisticsParams, options?: Parameters<typeof customFetch>[1]): Promise<MoneyBankKnockoutStatistics> => {
+
+  return customFetch<MoneyBankKnockoutStatistics>(getGetMoneyBankKnockoutStatisticsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMoneyBankKnockoutStatisticsQueryKey = (params?: GetMoneyBankKnockoutStatisticsParams,) => {
+    return [
+    `/api/deriv/accumulator-knockout-statistics`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetMoneyBankKnockoutStatisticsQueryOptions = <TData = Awaited<ReturnType<typeof getMoneyBankKnockoutStatistics>>, TError = ErrorType<ErrorResponse>>(params: GetMoneyBankKnockoutStatisticsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMoneyBankKnockoutStatistics>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMoneyBankKnockoutStatisticsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMoneyBankKnockoutStatistics>>> = ({ signal }) => getMoneyBankKnockoutStatistics(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMoneyBankKnockoutStatistics>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMoneyBankKnockoutStatisticsQueryResult = NonNullable<Awaited<ReturnType<typeof getMoneyBankKnockoutStatistics>>>
+export type GetMoneyBankKnockoutStatisticsQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Compare Money Bank knockout estimates with later live samples
+ */
+
+export function useGetMoneyBankKnockoutStatistics<TData = Awaited<ReturnType<typeof getMoneyBankKnockoutStatistics>>, TError = ErrorType<ErrorResponse>>(
+ params: GetMoneyBankKnockoutStatisticsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMoneyBankKnockoutStatistics>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMoneyBankKnockoutStatisticsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getSelectDerivAccountUrl = () => {
 

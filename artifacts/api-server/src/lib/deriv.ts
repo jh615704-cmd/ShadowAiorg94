@@ -2,6 +2,14 @@ import WebSocket from "ws";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { logger } from "./logger";
 import { assertTradingProtection, getTradingProtectionSettings } from "./trading-protection";
+import {
+  estimateMoneyBankKnockouts,
+  MONEY_BANK_KNOCKOUT_MIN_HOLDOUT_WINDOWS,
+  MONEY_BANK_KNOCKOUT_MIN_TRAINING_WINDOWS,
+  MONEY_BANK_KNOCKOUT_QUOTE_WINDOW,
+  MONEY_BANK_KNOCKOUT_RATES,
+} from "./money-bank-knockout-estimate";
+import type { MoneyBankKnockoutStatistics } from "@workspace/api-zod";
 
 const API_BASE = "https://api.derivws.com";
 const appId = process.env.DERIV_APP_ID;
@@ -174,6 +182,17 @@ type MoneyBankKnockoutScannerState = {
   cycleStartQuote: number;
   knockoutArmed: boolean;
 };
+
+type MoneyBankKnockoutStatisticsInput = {
+  symbol: string;
+  amount: number;
+  duration: number;
+};
+
+const supportedMoneyBankSymbols = new Set([
+  "1HZ10V", "1HZ15V", "1HZ25V", "1HZ30V",
+  "1HZ50V", "1HZ75V", "1HZ90V", "1HZ100V",
+]);
 
 export type DerivMarketTickUpdate = {
   symbol: string;
@@ -1547,6 +1566,194 @@ export async function scanAccumulatorKnockout(
   }
   runtime.moneyBankKnockoutScanner = scanner;
   return moneyBankKnockoutResponse(input, scanner);
+}
+
+type MoneyBankKnockoutStatisticsRate = MoneyBankKnockoutStatistics["rates"][number];
+
+function emptyMoneyBankKnockoutStatisticsRate(
+  growthRate: MoneyBankKnockoutStatisticsRate["growth_rate"],
+  status: MoneyBankKnockoutStatisticsRate["status"],
+  message: string,
+): MoneyBankKnockoutStatisticsRate {
+  return {
+    growth_rate: growthRate,
+    barrier: null,
+    status,
+    training_windows: 0,
+    training_knockouts: 0,
+    holdout_windows: 0,
+    observed_knockouts: 0,
+    estimated_knockouts: null,
+    estimate_lower_count: null,
+    estimate_upper_count: null,
+    estimated_knockout_rate: null,
+    observed_knockout_rate: null,
+    holdout_gap_percentage_points: null,
+    message,
+  };
+}
+
+export async function getMoneyBankKnockoutStatistics(
+  input: MoneyBankKnockoutStatisticsInput,
+): Promise<MoneyBankKnockoutStatistics> {
+  if (!supportedMoneyBankSymbols.has(input.symbol)) {
+    throw new Error("Money Bank statistics support Volatility 1-second markets only.");
+  }
+  if (!Number.isFinite(input.amount) || input.amount < 1) {
+    throw new Error("Money Bank statistics require an Accumulator stake of at least 1.");
+  }
+  if (!Number.isInteger(input.duration) || input.duration < 1 || input.duration > 30) {
+    throw new Error("Money Bank statistics need a duration from 1 to 30 ticks.");
+  }
+
+  const initialMarket = getState().marketHistory.get(input.symbol);
+  const initialQuotes = (initialMarket?.quoteHistory ?? [])
+    .slice(-MONEY_BANK_KNOCKOUT_QUOTE_WINDOW);
+  const initialEpoch = initialQuotes.at(-1)?.epoch ?? null;
+  const initialAge = initialEpoch == null
+    ? null
+    : Math.max(0, Math.floor(Math.abs(Date.now() / 1000 - initialEpoch)));
+  if (initialQuotes.length < 2 || initialEpoch == null || initialAge == null || initialAge > 5) {
+    const freshness: MoneyBankKnockoutStatistics["freshness"] = initialEpoch == null
+      ? "waiting_for_quote"
+      : "stale_data";
+    const status: MoneyBankKnockoutStatisticsRate["status"] = freshness === "stale_data"
+      ? "stale_data"
+      : "waiting_for_quote";
+    const now = Math.floor(Date.now() / 1000);
+    return {
+      symbol: input.symbol,
+      duration_ticks: input.duration,
+      quote_count: initialQuotes.length,
+      tick_sequence: initialMarket?.tickSequence ?? 0,
+      window_start_epoch: initialQuotes[0]?.epoch ?? null,
+      window_end_epoch: initialEpoch,
+      captured_at_epoch: now,
+      tick_age_seconds: initialAge,
+      freshness,
+      confidence_level: 0.95,
+      rates: MONEY_BANK_KNOCKOUT_RATES.map((rate) =>
+        emptyMoneyBankKnockoutStatisticsRate(rate, status, freshness === "stale_data"
+          ? "The latest live quote is stale. Wait for the selected market to update."
+          : "Waiting for live quotes from the selected market."),
+      ),
+    };
+  }
+
+  if (input.duration < 5) {
+    const now = Math.floor(Date.now() / 1000);
+    return {
+      symbol: input.symbol,
+      duration_ticks: input.duration,
+      quote_count: initialQuotes.length,
+      tick_sequence: initialMarket?.tickSequence ?? 0,
+      window_start_epoch: initialQuotes[0]?.epoch ?? null,
+      window_end_epoch: initialEpoch,
+      captured_at_epoch: now,
+      tick_age_seconds: initialAge,
+      freshness: "fresh",
+      confidence_level: 0.95,
+      rates: MONEY_BANK_KNOCKOUT_RATES.map((rate) =>
+        emptyMoneyBankKnockoutStatisticsRate(
+          rate,
+          "barrier_unavailable",
+          "Deriv requires at least 5 ticks for an Accumulator quote.",
+        ),
+      ),
+    };
+  }
+
+  const barrierResults = await Promise.all(MONEY_BANK_KNOCKOUT_RATES.map(async (growthRate) => {
+    try {
+      const proposal = await requestFreshProposal({
+        amount: input.amount,
+        duration: input.duration,
+        duration_unit: "t",
+        contract_type: "ACCU",
+        growth_rate: growthRate / 100,
+        symbol: input.symbol,
+      }, { trackLatest: false });
+      return { growthRate, proposal };
+    } catch (error) {
+      logger.warn(
+        { err: error, symbol: input.symbol, growthRate },
+        "Money Bank knockout statistics could not obtain a current Accumulator barrier",
+      );
+      return { growthRate, proposal: null };
+    }
+  }));
+
+  const capturedAtEpoch = Math.floor(Date.now() / 1000);
+  const market = getState().marketHistory.get(input.symbol);
+  const quoteWindow = (market?.quoteHistory ?? []).slice(-MONEY_BANK_KNOCKOUT_QUOTE_WINDOW);
+  const latestQuote = quoteWindow.at(-1);
+  const tickAgeSeconds = latestQuote
+    ? Math.max(0, Math.floor(Math.abs(capturedAtEpoch - latestQuote.epoch)))
+    : null;
+  const freshness: MoneyBankKnockoutStatistics["freshness"] = !latestQuote
+    ? "waiting_for_quote"
+    : tickAgeSeconds != null && tickAgeSeconds <= 5
+      ? "fresh"
+      : "stale_data";
+  const rates: MoneyBankKnockoutStatistics["rates"] = barrierResults.map(({ growthRate, proposal }) => {
+    if (!proposal) {
+      return emptyMoneyBankKnockoutStatisticsRate(
+        growthRate,
+        freshness === "fresh" ? "barrier_unavailable" : freshness,
+        freshness === "fresh"
+          ? "Deriv did not provide a current barrier for this growth rate."
+          : "The live quote is stale. Refresh the market before reviewing estimates.",
+      );
+    }
+
+    const barrier = proposal.contract_details?.tick_size_barrier;
+    const proposalEpoch = proposal.spot_time;
+    const barrierIsFresh = Number.isFinite(barrier)
+      && barrier! > 0
+      && Number.isFinite(proposalEpoch)
+      && latestQuote != null
+      && Math.abs(proposalEpoch! - latestQuote.epoch) <= 5;
+    if (freshness !== "fresh" || !barrierIsFresh) {
+      return {
+        ...emptyMoneyBankKnockoutStatisticsRate(
+          growthRate,
+          freshness === "fresh" ? "stale_data" : freshness,
+          freshness === "fresh"
+            ? "The Deriv barrier and live quote are not from the same fresh window."
+            : "The live quote is stale. Refresh the market before reviewing estimates.",
+        ),
+        barrier: Number.isFinite(barrier) && barrier! > 0 ? barrier! : null,
+      };
+    }
+
+    const estimate = estimateMoneyBankKnockouts({
+      quotes: quoteWindow.map((tick: { quote: number }) => tick.quote),
+      barrier: barrier!,
+      durationTicks: input.duration,
+    });
+    return {
+      growth_rate: growthRate,
+      barrier: barrier!,
+      ...estimate,
+      message: estimate.status === "insufficient_evidence"
+        ? `Need at least ${MONEY_BANK_KNOCKOUT_MIN_TRAINING_WINDOWS} earlier and ${MONEY_BANK_KNOCKOUT_MIN_HOLDOUT_WINDOWS} later windows.`
+        : null,
+    };
+  });
+
+  return {
+    symbol: input.symbol,
+    duration_ticks: input.duration,
+    quote_count: quoteWindow.length,
+    tick_sequence: market?.tickSequence ?? 0,
+    window_start_epoch: quoteWindow[0]?.epoch ?? null,
+    window_end_epoch: latestQuote?.epoch ?? null,
+    captured_at_epoch: capturedAtEpoch,
+    tick_age_seconds: tickAgeSeconds,
+    freshness,
+    confidence_level: 0.95,
+    rates,
+  };
 }
 
 function scheduleReconnect() {

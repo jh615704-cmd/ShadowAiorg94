@@ -787,6 +787,135 @@ export interface MoneyBankKnockoutScannerResponse {
   market_matches: boolean;
 }
 
+export type MoneyBankKnockoutStatisticsRateGrowthRate = typeof MoneyBankKnockoutStatisticsRateGrowthRate[keyof typeof MoneyBankKnockoutStatisticsRateGrowthRate];
+
+
+export const MoneyBankKnockoutStatisticsRateGrowthRate = {
+  NUMBER_1: 1,
+  NUMBER_2: 2,
+  NUMBER_3: 3,
+  NUMBER_4: 4,
+  NUMBER_5: 5,
+} as const;
+
+export type MoneyBankKnockoutStatisticsRateStatus = typeof MoneyBankKnockoutStatisticsRateStatus[keyof typeof MoneyBankKnockoutStatisticsRateStatus];
+
+
+export const MoneyBankKnockoutStatisticsRateStatus = {
+  ready: 'ready',
+  insufficient_evidence: 'insufficient_evidence',
+  barrier_unavailable: 'barrier_unavailable',
+  waiting_for_quote: 'waiting_for_quote',
+  stale_data: 'stale_data',
+} as const;
+
+export interface MoneyBankKnockoutStatisticsRate {
+  growth_rate: MoneyBankKnockoutStatisticsRateGrowthRate;
+  /** @nullable */
+  barrier: number | null;
+  status: MoneyBankKnockoutStatisticsRateStatus;
+  /** @minimum 0 */
+  training_windows: number;
+  /** @minimum 0 */
+  training_knockouts: number;
+  /** @minimum 0 */
+  holdout_windows: number;
+  /** @minimum 0 */
+  observed_knockouts: number;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  estimated_knockouts: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  estimate_lower_count: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  estimate_upper_count: number | null;
+  /**
+     * @minimum 0
+     * @maximum 1
+     * @nullable
+     */
+  estimated_knockout_rate: number | null;
+  /**
+     * @minimum 0
+     * @maximum 1
+     * @nullable
+     */
+  observed_knockout_rate: number | null;
+  /**
+     * Observed holdout rate minus the earlier training estimate, in percentage points.
+     * @minimum -100
+     * @maximum 100
+     * @nullable
+     */
+  holdout_gap_percentage_points: number | null;
+  /** @nullable */
+  message: string | null;
+}
+
+export type MoneyBankKnockoutStatisticsFreshness = typeof MoneyBankKnockoutStatisticsFreshness[keyof typeof MoneyBankKnockoutStatisticsFreshness];
+
+
+export const MoneyBankKnockoutStatisticsFreshness = {
+  fresh: 'fresh',
+  waiting_for_quote: 'waiting_for_quote',
+  stale_data: 'stale_data',
+} as const;
+
+export type MoneyBankKnockoutStatisticsConfidenceLevel = typeof MoneyBankKnockoutStatisticsConfidenceLevel[keyof typeof MoneyBankKnockoutStatisticsConfidenceLevel];
+
+
+export const MoneyBankKnockoutStatisticsConfidenceLevel = {
+  '095': 0.95,
+} as const;
+
+export interface MoneyBankKnockoutStatistics {
+  symbol: string;
+  /**
+     * @minimum 1
+     * @maximum 30
+     */
+  duration_ticks: number;
+  /**
+     * @minimum 0
+     * @maximum 200
+     */
+  quote_count: number;
+  /** @minimum 0 */
+  tick_sequence: number;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  window_start_epoch: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  window_end_epoch: number | null;
+  /** @minimum 0 */
+  captured_at_epoch: number;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  tick_age_seconds: number | null;
+  freshness: MoneyBankKnockoutStatisticsFreshness;
+  confidence_level: MoneyBankKnockoutStatisticsConfidenceLevel;
+  /**
+     * @minItems 5
+     * @maxItems 5
+     */
+  rates: MoneyBankKnockoutStatisticsRate[];
+}
+
 export interface DerivProposalRequest {
   ok: boolean;
   message: string;
@@ -1281,6 +1410,23 @@ export type StreamDerivTradeUpdatesParams = {
  * Include real Deriv tick updates for the Auto Trader scanner.
  */
 market_ticks?: boolean;
+};
+
+export type GetMoneyBankKnockoutStatisticsParams = {
+/**
+ * @minLength 1
+ * @pattern ^1HZ(10|15|25|30|50|75|90|100)V$
+ */
+symbol: string;
+/**
+ * @minimum 1
+ */
+amount: number;
+/**
+ * @minimum 1
+ * @maximum 30
+ */
+duration: number;
 };
 
 export type GetDerivHistoryParams = {

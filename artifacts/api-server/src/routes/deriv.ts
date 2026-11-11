@@ -21,6 +21,8 @@ import {
   BuyClockWorkContractsResponse,
   ScanDerivAccumulatorKnockoutBody,
   ScanDerivAccumulatorKnockoutResponse,
+  GetMoneyBankKnockoutStatisticsQueryParams,
+  GetMoneyBankKnockoutStatisticsResponse,
   SelectDerivAccountBody,
   SelectDerivAccountResponse,
   SelectDerivSymbolBody,
@@ -40,6 +42,7 @@ import {
   clearHistory,
   requestProposal,
   getEdgeAvailableDurations,
+  getMoneyBankKnockoutStatistics,
   scanAccumulatorKnockout,
   buyContract,
   sellContract,
@@ -460,6 +463,37 @@ router.post("/deriv/accumulator-knockout-scan", async (req, res) => {
     return res.status(409).json({
       error: error instanceof Error ? error.message : "Money Bank Auto Knockout could not verify the selected market.",
     });
+  }
+});
+
+router.get("/deriv/accumulator-knockout-statistics", requireAccessFeature("money-bank"), async (req, res): Promise<void> => {
+  res.set("Cache-Control", "no-store");
+  const parsed = GetMoneyBankKnockoutStatisticsQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid Money Bank statistics request" });
+    return;
+  }
+
+  try {
+    const result = GetMoneyBankKnockoutStatisticsResponse.parse(
+      await withCredential(
+        res.locals.userId,
+        () => getMoneyBankKnockoutStatistics(parsed.data),
+        true,
+      ),
+    );
+    res.json(result);
+  } catch (error) {
+    if (isCapacityError(error)) {
+      res.status(503).json({ error: error.message });
+      return;
+    }
+    if (isCredentialError(error)) {
+      res.status(credentialHttpStatus(error)).json({ error: error.message });
+      return;
+    }
+    req.log.warn({ err: error }, "Money Bank knockout statistics request failed");
+    res.status(503).json({ error: "Unable to read current Money Bank market statistics." });
   }
 });
 

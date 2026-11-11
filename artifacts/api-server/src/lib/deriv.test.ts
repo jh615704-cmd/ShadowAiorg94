@@ -671,6 +671,55 @@ describe("Deriv market subscriptions", { concurrency: false }, () => {
   });
 });
 
+describe("Money Bank knockout statistics", { concurrency: false }, () => {
+  test("quotes all five current barriers, compares later windows, and never buys", async () => {
+    await withSelectedAccount("money-bank-knockout-statistics-user", async () => {
+      await deriv.selectSymbol("1HZ90V");
+      const socket = latestSocket();
+      const quotes = Array.from({ length: 200 }, (_, index) =>
+        index < 140 || index % 2 === 0 ? 75.5 : 75.5001,
+      );
+      emitAccumulatorTicks(socket, quotes);
+
+      const result = await deriv.getMoneyBankKnockoutStatistics({
+        symbol: "1HZ90V",
+        amount: 1,
+        duration: 5,
+      });
+
+      assert.deepEqual(result.rates.map((rate) => rate.growth_rate), [1, 2, 3, 4, 5]);
+      assert.equal(result.quote_count, 200);
+      assert.equal(result.freshness, "fresh");
+      assert.ok(result.rates.every((rate) => rate.status === "ready"));
+      assert.ok(result.rates.every((rate) => rate.barrier === 0.00005));
+      assert.equal(result.rates[0]?.observed_knockouts, 10);
+      assert.equal(result.rates[0]?.holdout_gap_percentage_points, 100);
+
+      const proposalRequests = socket.sent.filter((message) => message.proposal);
+      assert.equal(proposalRequests.length, 5);
+      assert.deepEqual(proposalRequests.map((message) => message.growth_rate), [0.01, 0.02, 0.03, 0.04, 0.05]);
+      assert.equal(socket.sent.some((message) => message.buy), false);
+    });
+  });
+
+  test("reports unavailable barriers below Deriv's minimum duration without sending requests", async () => {
+    await withSelectedAccount("money-bank-short-knockout-duration-user", async () => {
+      await deriv.selectSymbol("1HZ90V");
+      const socket = latestSocket();
+      emitAccumulatorTicks(socket, [75.5, 75.50001, 75.5]);
+
+      const result = await deriv.getMoneyBankKnockoutStatistics({
+        symbol: "1HZ90V",
+        amount: 1,
+        duration: 3,
+      });
+
+      assert.ok(result.rates.every((rate) => rate.status === "barrier_unavailable"));
+      assert.equal(socket.sent.some((message) => message.proposal || message.buy), false);
+    });
+  });
+});
+
 describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {
   test("keeps entry blocked until a delayed pre-buy portfolio check is confirmed", async () => {
     await withSelectedAccount("portfolio-ready-refresh-user", async () => {

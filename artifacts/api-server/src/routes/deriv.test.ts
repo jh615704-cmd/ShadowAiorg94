@@ -30,6 +30,9 @@ let bulkBuyInvocations = 0;
 const bulkBuyDurations: number[] = [];
 let dualBuyInvocations = 0;
 let jackpotBuyInvocations = 0;
+let knockoutStatisticsInvocations = 0;
+const knockoutStatisticsInputs: Array<{ symbol: string; amount: number; duration: number }> = [];
+let routeAccessFeatures = ["clock-work", "edge", "trade-x", "bulk-trader", "jackpot", "auto-trader", "money-bank", "speedbot"];
 const jackpotBuyInputs: Array<{
   amount: number;
   duration: number;
