@@ -130,6 +130,10 @@ import CashGrabPanel, {
   type CashGrabTrade,
 } from "../components/cash-grab-panel";
 import ClockWorkPanel from "../components/clock-work-panel";
+import SpeedbotPanel from "../components/speedbot-panel";
+import { useSpeedbotScanner } from "../hooks/use-speedbot-scanner";
+import type { AutoMagicCandidate } from "../lib/auto-magic-strategy";
+import { getSpeedbotSessionStopReason } from "../lib/speedbot-strategy";
 import DerivHistory from "../components/deriv-history";
 import type { DerivHistoryRow } from "../lib/deriv-history";
 import { getAccountBalance } from "../lib/account-balance";
@@ -486,10 +490,11 @@ export default function XTraderPage() {
   const canUseClockWork = hasFeature("clock-work") && featureIsAvailable("clock-work");
   const canUseCashGrab = hasFeature("cash-grab") && featureIsAvailable("cash-grab");
   const canUseMoneyBank = hasFeature("money-bank") && featureIsAvailable("money-bank");
+  const canUseSpeedbot = hasFeature("speedbot") && featureIsAvailable("speedbot");
   const canUseAutoTrader = hasFeature("auto-trader") && featureIsAvailable("auto-trader");
   const canUseAutoTrader2 = hasFeature("auto-trader-2") && featureIsAvailable("auto-trader-2");
   const canUseSettings = hasFeature("settings") && featureIsAvailable("settings");
-  const canUseDeriv = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseJackpot || canUseClockWork || canUseCashGrab || canUseMoneyBank || canUseAutoTrader || canUseAutoTrader2;
+  const canUseDeriv = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseJackpot || canUseClockWork || canUseCashGrab || canUseMoneyBank || canUseSpeedbot || canUseAutoTrader || canUseAutoTrader2;
   const canViewHistory = canUseDeriv || (hasFeature("history") && featureIsAvailable("history"));
   const tokenStatus = useGetDerivTokenStatus({ query: { enabled: canUseDeriv, retry: false, queryKey: getGetDerivTokenStatusQueryKey() } });
   const connectedToken = Boolean(tokenStatus.data?.has_token);
@@ -532,6 +537,7 @@ export default function XTraderPage() {
   const dualBuyMutation = useDualBuyDerivContracts();
   const digitFlipBuyMutation = useBuyDerivContract();
   const moneyBankBuyMutation = useBuyDerivContract();
+  const speedbotBuyMutation = useBuyDerivContract();
   const moneyBankSellMutation = useSellDerivContract();
   const cashGrabSellMutation = useSellDerivContract();
   const clockWorkBuyMutation = useBuyClockWorkContracts();
@@ -540,6 +546,7 @@ export default function XTraderPage() {
     || dualBuyMutation.isPending
     || digitFlipBuyMutation.isPending
     || moneyBankBuyMutation.isPending
+    || speedbotBuyMutation.isPending
     || clockWorkBuyMutation.isPending
     || jackpotBuyMutation.isPending;
 
@@ -658,6 +665,19 @@ export default function XTraderPage() {
   const [clockWorkAiStatus, setClockWorkAiStatus] = useState("Ai Clock is off.");
   const [clockWorkHistoryClearArmed, setClockWorkHistoryClearArmed] = useState(false);
   const [clockWorkHiddenHistoryIds, setClockWorkHiddenHistoryIds] = useState<Set<string>>(new Set());
+  const [speedbotEnabled, setSpeedbotEnabled] = useState(false);
+  const [speedbotSymbol, setSpeedbotSymbol] = useState("1HZ90V");
+  const [speedbotDuration, setSpeedbotDuration] = useState(1);
+  const [speedbotStake, setSpeedbotStake] = useState(0.35);
+  const [speedbotTakeProfit, setSpeedbotTakeProfit] = useState(10);
+  const [speedbotLossLimit, setSpeedbotLossLimit] = useState(10);
+  const [speedbotRunning, setSpeedbotRunning] = useState(false);
+  const [speedbotStatusMessage, setSpeedbotStatusMessage] = useState<string | null>(null);
+  const [speedbotNeedsHistoryCheck, setSpeedbotNeedsHistoryCheck] = useState(false);
+  const [speedbotHistoryCheckLoading, setSpeedbotHistoryCheckLoading] = useState(false);
+  const [speedbotPendingContractIds, setSpeedbotPendingContractIds] = useState<string[]>([]);
+  const [speedbotHistoryClearArmed, setSpeedbotHistoryClearArmed] = useState(false);
+  const [speedbotHiddenHistoryIds, setSpeedbotHiddenHistoryIds] = useState<Set<string>>(new Set());
   const [cashGrabDirection, setCashGrabDirection] = useState<CashGrabDirection>("CALL");
   const [cashGrabSymbol, setCashGrabSymbol] = useState("R_75");
   const [cashGrabStake, setCashGrabStake] = useState(.35);
@@ -804,6 +824,22 @@ export default function XTraderPage() {
   const cashGrabClaimedHistoryIdsRef = useRef(new Set<string>());
   const clockWorkClaimedHistoryIdsRef = useRef(new Set<string>());
   const jackpotClaimedHistoryIdsRef = useRef(new Set<string>());
+  const speedbotClaimedHistoryIdsRef = useRef(new Set<string>());
+  const speedbotRunningRef = useRef(false);
+  const speedbotActionLockRef = useRef(false);
+  const speedbotPendingContractIdsRef = useRef(new Set<string>());
+  const speedbotRunContractIdsRef = useRef(new Set<string>());
+  const speedbotRunAccountIdRef = useRef<string | null>(null);
+  const speedbotPendingAttemptRef = useRef<{
+    accountId: string;
+    symbol: string;
+    barrier: number;
+    stake: number;
+    duration: number;
+    startedAt: number;
+    knownIds: Set<string>;
+  } | null>(null);
+  const speedbotCandidateHandlerRef = useRef<(candidate: AutoMagicCandidate) => void>(() => {});
   const jackpotRunContractIdsRef = useRef(new Set<string>());
   const jackpotRunAccountIdRef = useRef<string | null>(null);
   const moneyBankClaimedHistoryIdsRef = useRef(new Set<string>());
@@ -850,6 +886,12 @@ export default function XTraderPage() {
   const currentAccountCurrency = currentAccount?.currency ?? null;
   const isConnectedRef = useRef(isConnected);
   isConnectedRef.current = isConnected;
+  const speedbotScanner = useSpeedbotScanner({
+    running: speedbotRunning,
+    symbol: speedbotSymbol,
+    duration: speedbotDuration,
+    onCandidate: (candidate) => speedbotCandidateHandlerRef.current(candidate),
+  });
   const accessKeyId = accessSession.data?.key_id;
   const {
     notifications,
@@ -1117,6 +1159,48 @@ export default function XTraderPage() {
   const cashGrabScannerStake = nextStakeFromLossHistory(cashGrabRows, cashGrabStake, cashGrabMultiplier);
   const clockWorkSessionRows = clockWorkAllRows.filter((trade) => clockWorkClaimedHistoryIdsRef.current.has(trade.contract_id));
   const clockWorkRows = clockWorkSessionRows.filter((trade) => !clockWorkHiddenHistoryIds.has(trade.contract_id));
+  const speedbotAllRows = rows.filter((trade) => (
+    trade.contract_type === "DIGITDIFF"
+    && speedbotClaimedHistoryIdsRef.current.has(String(trade.contract_id))
+    && String(trade.account_id) === String(currentAccount?.id ?? "")
+  ));
+  const speedbotRows = speedbotAllRows.filter((trade) => !speedbotHiddenHistoryIds.has(String(trade.contract_id)));
+  const speedbotRunRows = rows.filter((trade) => (
+    speedbotRunAccountIdRef.current != null
+    && String(trade.account_id) === speedbotRunAccountIdRef.current
+    && speedbotRunContractIdsRef.current.has(String(trade.contract_id))
+  ));
+  const speedbotVisibleRunRows = speedbotRunRows.filter(
+    (trade) => !speedbotHiddenHistoryIds.has(String(trade.contract_id)),
+  );
+  const speedbotSessionPnl = realizedProfit(speedbotRunRows);
+  const speedbotStopReason = getSpeedbotSessionStopReason(
+    speedbotSessionPnl,
+    speedbotTakeProfit,
+    speedbotLossLimit,
+  );
+  const speedbotStatus = speedbotNeedsHistoryCheck
+    ? "Deriv did not confirm the last order. Refresh order status before starting again."
+    : speedbotPendingContractIds.length
+      ? "One Speedbot contract is awaiting Deriv settlement. No additional order will be sent."
+      : speedbotStatusMessage ?? speedbotScanner.status;
+  useEffect(() => {
+    if (!speedbotPendingContractIds.length) return;
+    const settledIds = new Set(
+      speedbotAllRows
+        .filter((trade) => (
+          speedbotPendingContractIds.includes(String(trade.contract_id))
+          && !isDerivHistoryOpen(trade.status)
+        ))
+        .map((trade) => String(trade.contract_id)),
+    );
+    if (!settledIds.size) return;
+    const nextIds = new Set(
+      speedbotPendingContractIds.filter((contractId) => !settledIds.has(contractId)),
+    );
+    speedbotPendingContractIdsRef.current = nextIds;
+    setSpeedbotPendingContractIds([...nextIds]);
+  }, [speedbotAllRows, speedbotPendingContractIds]);
   const jackpotAllRows = rows.filter((trade) => (
     (trade.contract_type === "CALL"
       || trade.contract_type === "PUT"
@@ -1476,6 +1560,20 @@ export default function XTraderPage() {
     cashGrabClaimedHistoryIdsRef.current.clear();
     clockWorkClaimedHistoryIdsRef.current.clear();
     jackpotClaimedHistoryIdsRef.current.clear();
+    speedbotClaimedHistoryIdsRef.current.clear();
+    speedbotPendingContractIdsRef.current.clear();
+    speedbotRunContractIdsRef.current.clear();
+    speedbotRunAccountIdRef.current = currentAccount?.id == null ? null : String(currentAccount.id);
+    speedbotPendingAttemptRef.current = null;
+    speedbotRunningRef.current = false;
+    setSpeedbotEnabled(false);
+    setSpeedbotRunning(false);
+    setSpeedbotStatusMessage(null);
+    setSpeedbotNeedsHistoryCheck(false);
+    setSpeedbotHistoryCheckLoading(false);
+    setSpeedbotPendingContractIds([]);
+    setSpeedbotHistoryClearArmed(false);
+    setSpeedbotHiddenHistoryIds(new Set());
     jackpotRunContractIdsRef.current.clear();
     moneyBankClaimedHistoryIdsRef.current.clear();
     const accountId = currentAccount?.id ?? null;
@@ -1507,6 +1605,7 @@ export default function XTraderPage() {
       ["cash-grab", cashGrabClaimedHistoryIdsRef.current, savedFeatureClaims["cash-grab"]],
       ["clock-work", clockWorkClaimedHistoryIdsRef.current, savedFeatureClaims["clock-work"]],
       ["jackpot", jackpotClaimedHistoryIdsRef.current, savedFeatureClaims.jackpot],
+      ["speedbot", speedbotClaimedHistoryIdsRef.current, savedFeatureClaims.speedbot],
       ["money-bank", moneyBankClaimedHistoryIdsRef.current, savedMoneyBankContractIds],
     ] as const satisfies readonly [DerivHistoryFeature, Set<string>, readonly string[]][];
     for (const [feature, target, contractIds] of claimsToRestore) {
@@ -3568,6 +3667,12 @@ export default function XTraderPage() {
     setCashGrabEnabled(false);
   };
 
+  const deactivateSpeedbot = () => {
+    speedbotRunningRef.current = false;
+    setSpeedbotEnabled(false);
+    setSpeedbotRunning(false);
+  };
+
   const toggleCashGrab = (enabled: boolean) => {
     if (enabled && !isConnected) {
       setConnectionMessage({ kind: "error", text: "Connect Deriv before enabling Cash Grab." });
@@ -3578,6 +3683,7 @@ export default function XTraderPage() {
       stopCashGrab();
       return;
     }
+    deactivateSpeedbot();
     setJackpotEnabled(false);
     deactivateMoneyBank();
     stop();
@@ -3643,6 +3749,25 @@ export default function XTraderPage() {
       return next;
     });
     setJackpotBatchStatus("Session cleared.");
+    setHistoryFading(false);
+  };
+
+  const clearSpeedbotHistory = async () => {
+    if (!speedbotHistoryClearArmed) {
+      setSpeedbotHistoryClearArmed(true);
+      window.setTimeout(() => setSpeedbotHistoryClearArmed(false), 2_500);
+      return;
+    }
+    setSpeedbotHistoryClearArmed(false);
+    setHistoryFading(true);
+    await sleep(260);
+    const settledRows = speedbotRows.filter((trade) => !isDerivHistoryOpen(trade.status));
+    removeSettledFeatureClaims("speedbot", speedbotClaimedHistoryIdsRef.current, settledRows);
+    setSpeedbotHiddenHistoryIds((current) => {
+      const next = new Set(current);
+      settledRows.forEach((trade) => next.add(String(trade.contract_id)));
+      return next;
+    });
     setHistoryFading(false);
   };
 
@@ -3838,6 +3963,7 @@ export default function XTraderPage() {
       stop();
       return;
     }
+    deactivateSpeedbot();
     setJackpotEnabled(false);
     deactivateMoneyBank();
     deactivateCashGrab();
@@ -3863,6 +3989,7 @@ export default function XTraderPage() {
       deactivateMoneyBank();
       return;
     }
+    deactivateSpeedbot();
     setJackpotEnabled(false);
     deactivateCashGrab();
     stop();
@@ -4764,6 +4891,7 @@ export default function XTraderPage() {
       setDigitFlipRunning(false);
       return;
     }
+    deactivateSpeedbot();
     setJackpotEnabled(false);
     deactivateMoneyBank();
     deactivateCashGrab();
@@ -4870,6 +4998,7 @@ export default function XTraderPage() {
     }
     setTradeXEnabled(enabled);
     if (enabled) {
+      deactivateSpeedbot();
       setJackpotEnabled(false);
       deactivateMoneyBank();
       deactivateCashGrab();
@@ -4913,6 +5042,7 @@ export default function XTraderPage() {
     setJackpotEnabled(enabled);
     if (!enabled) return;
 
+    deactivateSpeedbot();
     deactivateMoneyBank();
     deactivateCashGrab();
     stop();
@@ -4947,6 +5077,7 @@ export default function XTraderPage() {
       setClockWorkAiStatus("Clock Work is stopped. Open contracts can continue to settle.");
       return;
     }
+    deactivateSpeedbot();
     setJackpotEnabled(false);
     deactivateMoneyBank();
     deactivateCashGrab();
@@ -4975,6 +5106,7 @@ export default function XTraderPage() {
     }
     setBulkTraderEnabled(enabled);
     if (!enabled) return;
+    deactivateSpeedbot();
     setJackpotEnabled(false);
     deactivateMoneyBank();
     deactivateCashGrab();
@@ -4991,6 +5123,257 @@ export default function XTraderPage() {
     autoSwitchRef.current = false;
     setAutoSwitch(false);
     void selectMarket(bulkTraderSymbol);
+  };
+
+  const getSpeedbotEntryBlockReason = () => {
+    if (!speedbotEnabled || !canUseSpeedbot) return "Enable Speedbot access before starting the scanner.";
+    if (!featureActionIsAvailable("speedbot", "start")) return "Speedbot start is unavailable in administrator settings.";
+    if (!isConnected || !currentAccount) return "Connect Deriv and select an account before starting Speedbot.";
+    if (isReal && !status.data?.live_trading_enabled) return "Live-account trading is disabled for this workspace.";
+    if (speedbotNeedsHistoryCheck || speedbotHistoryCheckLoading) return "Refresh Deriv order status before starting Speedbot again.";
+    if (speedbotActionLockRef.current || anyContractBuyPending) return "Another order request is still being confirmed.";
+    if (speedbotPendingContractIdsRef.current.size > 0) return "Wait for the current Speedbot contract to settle.";
+    if (tradeSlotBlocked) return tradeSlotMessage ?? "Wait for Deriv to confirm that all contracts have settled.";
+    if (!Number.isFinite(speedbotStake) || speedbotStake < 0.35) return "Speedbot stake must be at least 0.35.";
+    if (currentAccountBalance == null || currentAccountBalance < speedbotStake) return "Sync the account balance or lower the Speedbot stake.";
+    if (speedbotRunning && speedbotStopReason) return "A Speedbot session limit has been reached.";
+    return null;
+  };
+
+  const stopSpeedbot = (message = "Speedbot stopped. Any accepted contract will continue to settle.") => {
+    speedbotRunningRef.current = false;
+    setSpeedbotRunning(false);
+    setSpeedbotStatusMessage(message);
+  };
+
+  const startSpeedbot = () => {
+    const blockedReason = getSpeedbotEntryBlockReason();
+    if (blockedReason) {
+      setSpeedbotStatusMessage(blockedReason);
+      return;
+    }
+    if (!currentAccount) return;
+    speedbotRunAccountIdRef.current = String(currentAccount.id);
+    speedbotRunContractIdsRef.current.clear();
+    speedbotRunningRef.current = true;
+    setSpeedbotNeedsHistoryCheck(false);
+    setSpeedbotStatusMessage(null);
+    setSpeedbotRunning(true);
+  };
+
+  const toggleSpeedbot = (enabled: boolean) => {
+    if (enabled && !canUseSpeedbot) return;
+    if (enabled && !isConnected) {
+      setConnectionMessage({ kind: "error", text: "Connect Deriv before enabling Speedbot." });
+      return;
+    }
+    setSpeedbotEnabled(enabled);
+    if (!enabled) {
+      stopSpeedbot();
+      return;
+    }
+
+    speedbotRunningRef.current = false;
+    setSpeedbotRunning(false);
+    setSpeedbotStatusMessage("Speedbot is ready. Start the scanner when your settings are confirmed.");
+    setJackpotEnabled(false);
+    setJackpotAiEnabled(false);
+    deactivateMoneyBank();
+    deactivateCashGrab();
+    stop();
+    setXTraderEnabled(false);
+    setDigitFlipEnabled(false);
+    digitFlipRunningRef.current = false;
+    setDigitFlipRunning(false);
+    setTradeXEnabled(false);
+    setBulkTraderEnabled(false);
+    setClockWorkEnabled(false);
+    setClockWorkAiEnabled(false);
+    setClockWorkRunning(false);
+    runningRef.current = false;
+    setRunning(false);
+    autoSwitchRef.current = false;
+    setAutoSwitch(false);
+  };
+
+  const executeSpeedbotCandidate = async (candidate: AutoMagicCandidate) => {
+    if (!speedbotRunningRef.current || speedbotActionLockRef.current) return;
+    if (speedbotRunning && speedbotStopReason) {
+      stopSpeedbot(speedbotStopReason === "take-profit"
+        ? "Speedbot reached its session profit target. No new entries will be sent."
+        : "Speedbot reached its session loss limit. No new entries will be sent.");
+      return;
+    }
+    const blockedReason = getSpeedbotEntryBlockReason();
+    if (blockedReason) {
+      setSpeedbotStatusMessage(blockedReason);
+      return;
+    }
+    if (!currentAccount || candidate.symbol !== speedbotSymbol || candidate.observedWinRate <= 68) return;
+
+    speedbotActionLockRef.current = true;
+    speedbotPendingAttemptRef.current = {
+      accountId: String(currentAccount.id),
+      symbol: candidate.symbol,
+      barrier: candidate.barrier,
+      stake: roundTradeStakeToCents(speedbotStake),
+      duration: speedbotDuration,
+      startedAt: Date.now(),
+      knownIds: new Set(rows
+        .filter((trade) => String(trade.account_id) === String(currentAccount.id))
+        .map((trade) => String(trade.contract_id))),
+    };
+    setSpeedbotStatusMessage("A qualifying setup appeared. Sending one fresh order request.");
+
+    try {
+      const result = await speedbotBuyMutation.mutateAsync({
+        data: {
+          access_feature: "speedbot",
+          amount: roundTradeStakeToCents(speedbotStake),
+          duration: speedbotDuration,
+          duration_unit: "t",
+          contract_type: "DIGITDIFF",
+          barrier: candidate.barrier,
+          symbol: candidate.symbol,
+          automated: true,
+        },
+      });
+      const buy = result.buy;
+      if (!buy || buy.contract_id == null) {
+        throw new Error("Deriv did not return a Speedbot contract ID. Refresh account history before retrying.");
+      }
+      const contractId = String(buy.contract_id);
+      claimFeatureRows("speedbot", speedbotClaimedHistoryIdsRef.current, [contractId]);
+      speedbotRunContractIdsRef.current.add(contractId);
+      speedbotRunAccountIdRef.current = String(currentAccount.id);
+      speedbotPendingContractIdsRef.current.add(contractId);
+      setSpeedbotPendingContractIds([...speedbotPendingContractIdsRef.current]);
+      speedbotScanner.resetScan();
+      speedbotPendingAttemptRef.current = null;
+      setSpeedbotNeedsHistoryCheck(false);
+      setSpeedbotStatusMessage("Speedbot order confirmed. Waiting for Deriv to settle this contract.");
+      refreshTradeResults();
+    } catch (error) {
+      const candidateError = error && typeof error === "object"
+        ? error as { status?: unknown; data?: unknown }
+        : null;
+      const errorData = candidateError?.data && typeof candidateError.data === "object"
+        ? candidateError.data as { trade_outcome?: unknown }
+        : null;
+      const responseOutcome = errorData?.trade_outcome;
+      const uncertain = error instanceof ApiTransportError
+        ? error.tradeOutcomeUncertain
+        : responseOutcome === "uncertain"
+          || (responseOutcome !== "not_sent" && responseOutcome !== "rejected"
+            && !(typeof candidateError?.status === "number" && candidateError.status < 500));
+      if (isConfirmedNoContractRejection(error)) {
+        speedbotPendingAttemptRef.current = null;
+        speedbotScanner.resetScan();
+        setSpeedbotStatusMessage("Deriv did not accept that entry. Waiting for a new live setup.");
+      } else if (uncertain) {
+        speedbotRunningRef.current = false;
+        setSpeedbotRunning(false);
+        setSpeedbotNeedsHistoryCheck(true);
+        setSpeedbotStatusMessage("Order confirmation is unclear. Refresh Deriv history before restarting.");
+        refreshTradeResults();
+      } else {
+        speedbotPendingAttemptRef.current = null;
+        speedbotRunningRef.current = false;
+        setSpeedbotRunning(false);
+        setSpeedbotStatusMessage(errorMessage(error));
+      }
+    } finally {
+      speedbotActionLockRef.current = false;
+    }
+  };
+  speedbotCandidateHandlerRef.current = (candidate) => {
+    void executeSpeedbotCandidate(candidate);
+  };
+
+  const refreshSpeedbotOrderStatus = async () => {
+    if (speedbotHistoryCheckLoading) return;
+    const accountId = currentAccountRef.current?.id;
+    if (accountId == null) {
+      setSpeedbotStatusMessage("Select the account used for the last Speedbot order before refreshing its status.");
+      return;
+    }
+
+    setSpeedbotHistoryCheckLoading(true);
+    setSpeedbotStatusMessage("Refreshing Deriv account status and trade history.");
+    try {
+      const [freshStatus, freshHistory] = await Promise.all([
+        customFetch<{
+          open_contracts_ready?: boolean;
+          active_contract_count?: number;
+        }>("/api/deriv/status?refresh_open_contracts=true"),
+        customFetch<DerivHistoryRow[]>("/api/deriv/history?require_fresh=true"),
+      ]);
+      if (String(currentAccountRef.current?.id ?? "") !== String(accountId)) {
+        setSpeedbotStatusMessage("The selected account changed. Refresh Speedbot order status again.");
+        return;
+      }
+      queryClient.setQueryData(getGetDerivStatusQueryKey(), freshStatus);
+      queryClient.setQueryData(getGetDerivHistoryQueryKey(), freshHistory);
+
+      if (freshStatus.open_contracts_ready !== true || typeof freshStatus.active_contract_count !== "number") {
+        setSpeedbotStatusMessage("Deriv has not confirmed open-contract status yet. Refresh again shortly.");
+        return;
+      }
+
+      const accountHistory = freshHistory.filter((trade) => String(trade.account_id) === String(accountId));
+      const attempt = speedbotPendingAttemptRef.current;
+      const matchingRows = attempt && attempt.accountId === String(accountId)
+        ? accountHistory.filter((trade) => {
+          const buyTime = Number(trade.buy_time);
+          return trade.contract_type === "DIGITDIFF"
+            && trade.symbol === attempt.symbol
+            && Number(trade.barrier) === attempt.barrier
+            && Number(trade.duration) === attempt.duration
+            && Math.abs(Number(trade.buy_price) - attempt.stake) <= 0.01
+            && Number.isFinite(buyTime)
+            && buyTime >= Math.floor(attempt.startedAt / 1_000) - 20
+            && buyTime <= Math.floor(Date.now() / 1_000) + 10
+            && !attempt.knownIds.has(String(trade.contract_id));
+        })
+        : [];
+
+      if (matchingRows.length === 1) {
+        const contractId = String(matchingRows[0]!.contract_id);
+        claimFeatureRows("speedbot", speedbotClaimedHistoryIdsRef.current, [contractId]);
+        speedbotRunContractIdsRef.current.add(contractId);
+        speedbotRunAccountIdRef.current = String(accountId);
+        if (isDerivHistoryOpen(matchingRows[0]!.status)) {
+          speedbotPendingContractIdsRef.current.add(contractId);
+          setSpeedbotPendingContractIds([...speedbotPendingContractIdsRef.current]);
+        }
+        speedbotPendingAttemptRef.current = null;
+        setSpeedbotNeedsHistoryCheck(false);
+        setSpeedbotStatusMessage(isDerivHistoryOpen(matchingRows[0]!.status)
+          ? "Deriv history found the Speedbot order. It remains open until settlement."
+          : "Deriv history found the settled Speedbot order. Start again when ready.");
+        return;
+      }
+
+      if (matchingRows.length > 1) {
+        setSpeedbotStatusMessage("More than one recent order matches this attempt. Review Deriv history before restarting.");
+        return;
+      }
+      if (
+        freshStatus.active_contract_count > 0
+        || accountHistory.some((trade) => isDerivHistoryOpen(trade.status))
+      ) {
+        setSpeedbotStatusMessage("Deriv still reports an open contract. Speedbot remains paused until it is settled.");
+        return;
+      }
+
+      speedbotPendingAttemptRef.current = null;
+      setSpeedbotNeedsHistoryCheck(false);
+      setSpeedbotStatusMessage("Deriv confirmed no unresolved Speedbot order. Start again when ready.");
+    } catch {
+      setSpeedbotStatusMessage("Could not refresh Deriv order status yet. Try again shortly.");
+    } finally {
+      setSpeedbotHistoryCheckLoading(false);
+    }
   };
 
   const executeClockWorkOrder = async (contract: ClockWorkContractOrder) => {
@@ -5386,6 +5769,11 @@ export default function XTraderPage() {
     || digitFlipEnabled
     || bulkTraderEnabled
     || jackpotEnabled
+    || speedbotEnabled
+    || speedbotRunning
+    || speedbotNeedsHistoryCheck
+    || speedbotHistoryCheckLoading
+    || speedbotPendingContractIds.length > 0
     || jackpotBuyMutation.isPending
     || cashGrabRunning
     || cashGrabStopping
@@ -5665,14 +6053,14 @@ export default function XTraderPage() {
     }
     if (Date.now() < clockWorkAiAttemptAtRef.current) return;
     if (clockWorkActionLockRef.current || clockWorkBuyMutation.isPending) return;
+    if (clockWorkRunHasUnsettledResults) {
+      clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
+      setClockWorkAiStatus("Order submitted. Waiting for settlement before checking again.");
+      return;
+    }
     if (tradeSlotBlocked) {
       clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
       setClockWorkAiStatus(tradeSlotMessage ?? "Waiting for open contracts to settle.");
-      return;
-    }
-    if (clockWorkRunHasUnsettledResults) {
-      clockWorkAiConfirmationRef.current = createClockWorkAiConfirmationState(clockWorkLatestTickId);
-      setClockWorkAiStatus("Waiting for the previous Clock Work result to update session P/L.");
       return;
     }
     if (!clockWorkAiEnabled) {
@@ -5926,6 +6314,24 @@ export default function XTraderPage() {
           </div>
         )}
       <h2 className="xt-trading-strategies-heading">Trading Strategies</h2>
+
+      <section className={`xt-feature-card xt-feature-card-speedbot ${!canUseSpeedbot ? "xt-feature-card-restricted" : ""}`} id="speedbot-feature">
+        <div><Activity size={18} /><span><b>Speedbot</b><small>Fast, single-contract Digit Differs</small></span></div>
+        <div className="xt-feature-actions">
+          {!canUseSpeedbot && <span className="xt-feature-locked">RESTRICTED</span>}
+          <label className="xt-switch">
+            <input
+              type="checkbox"
+              data-feature-action="speedbot/feature-toggle"
+              checked={speedbotEnabled}
+              onChange={(event) => toggleSpeedbot(event.target.checked)}
+              aria-label="Toggle Speedbot"
+              disabled={!canUseSpeedbot || !isConnected}
+            />
+            <span />
+          </label>
+        </div>
+      </section>
 
       <section className={`xt-feature-card xt-feature-card-jackpot ${!canUseJackpot ? "xt-feature-card-restricted" : ""}`} id="jackpot-feature">
         <div><Zap size={18} /><span><b>Jackpot</b><small>Jackpot Analysis</small></span></div>
@@ -6506,6 +6912,54 @@ export default function XTraderPage() {
           onMoneyStart={(config) => void startCashGrab(config)}
           onMoneyStop={stopCashGrab}
           onClearHistory={() => void clearCashGrabHistory()}
+        />
+      )}
+
+      {canUseSpeedbot && (
+        speedbotEnabled
+        || speedbotNeedsHistoryCheck
+        || shouldShowFeatureHistoryWhenStopped(
+          false,
+          speedbotRows,
+          new Set(speedbotPendingContractIds),
+        )
+      ) && (
+        <SpeedbotPanel
+          featureEnabled={speedbotEnabled}
+          startAvailable={featureActionIsAvailable("speedbot", "start")}
+          symbol={speedbotSymbol}
+          symbols={markets.map(([value, label]) => ({ value, label }))}
+          duration={speedbotDuration}
+          stake={speedbotStake}
+          takeProfit={speedbotTakeProfit}
+          lossLimit={speedbotLossLimit}
+          currency={currentAccount?.currency ?? "USD"}
+          running={speedbotRunning}
+          busy={speedbotBuyMutation.isPending}
+          waitingForSettlement={speedbotPendingContractIds.length > 0 || tradeSlotBlocked}
+          blocked={getSpeedbotEntryBlockReason() !== null}
+          status={speedbotStatus}
+          quote={status.data?.market_signals
+            .find((signal) => signal.symbol === speedbotSymbol)
+            ?.recent_quotes.at(-1) ?? null}
+          lastDigit={speedbotScanner.lastDigit}
+          onSymbolChange={setSpeedbotSymbol}
+          onDurationChange={setSpeedbotDuration}
+          onStakeChange={(value) => setSpeedbotStake(roundTradeStakeToCents(Math.max(0, value)))}
+          onTakeProfitChange={(value) => setSpeedbotTakeProfit(Math.max(0, value))}
+          onLossLimitChange={(value) => setSpeedbotLossLimit(Math.max(0, value))}
+          onRunStop={() => {
+            if (speedbotRunningRef.current) stopSpeedbot();
+            else startSpeedbot();
+          }}
+          historyRows={speedbotRows}
+          sessionRows={speedbotVisibleRunRows}
+          clearArmed={speedbotHistoryClearArmed}
+          historyFading={historyFading}
+          onClearHistory={() => void clearSpeedbotHistory()}
+          historyCheckRequired={speedbotNeedsHistoryCheck}
+          historyCheckLoading={speedbotHistoryCheckLoading}
+          onRefreshOrderStatus={() => void refreshSpeedbotOrderStatus()}
         />
       )}
 

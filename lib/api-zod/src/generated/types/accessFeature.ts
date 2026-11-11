@@ -21,6 +21,7 @@ export const AccessFeature = {
   'jdy-ai-3': 'jdy-ai-3',
   'auto-trader': 'auto-trader',
   'auto-trader-2': 'auto-trader-2',
+  speedbot: 'speedbot',
   settings: 'settings',
   history: 'history',
   admin: 'admin',

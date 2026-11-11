@@ -4,7 +4,7 @@ import {
   chooseAutoMagicCandidate,
   type AutoMagicCandidate,
   type AutoMagicSignal,
-} from "./auto-magic-strategy";
+} from "./auto-magic-strategy.ts";
 
 export const SPEEDBOT_MIN_EXPIRY_SAMPLES = AUTO_MAGIC_MIN_SAMPLE;
 export const SPEEDBOT_MIN_OBSERVED_WIN_RATE = AUTO_MAGIC_MIN_OBSERVED_WIN_RATE;

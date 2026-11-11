@@ -30,6 +30,19 @@ test("Speedbot uses the same strict observed-rate gate as Auto Magic", () => {
   assert.ok(candidate.observedWinRate > 68);
 });
 
+test("Speedbot rejects a candidate at exactly 68 percent", () => {
+  const expiryDigits = Array.from({ length: 50 }, (_, index) => (
+    index < 16 ? 0 : index === 49 ? 5 : 6
+  ));
+  const candidate = chooseSpeedbotCandidate({
+    signal: signal([5, ...expiryDigits]),
+    latestDigit: 5,
+    scanFrequencies: [0, 1, 1, 1, 1, 0, 0, 0, 0, 0],
+    duration: 1,
+  });
+  assert.equal(candidate, null);
+});
+
 test("Speedbot selects an unseen opposite-half barrier from qualifying evidence", () => {
   const digits = Array.from({ length: 53 }, (_, index) => index % 10 === 0 || index === 52 ? 5 : 6);
   const candidate = chooseSpeedbotCandidate({

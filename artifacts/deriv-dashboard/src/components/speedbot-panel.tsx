@@ -9,6 +9,8 @@ export type SpeedbotMarketOption = {
 };
 
 type SpeedbotPanelProps = {
+  featureEnabled: boolean;
+  startAvailable: boolean;
   symbol: string;
   symbols: readonly SpeedbotMarketOption[];
   duration: number;
@@ -34,9 +36,14 @@ type SpeedbotPanelProps = {
   clearArmed: boolean;
   historyFading: boolean;
   onClearHistory: () => void;
+  historyCheckRequired: boolean;
+  historyCheckLoading: boolean;
+  onRefreshOrderStatus: () => void;
 };
 
 export default function SpeedbotPanel({
+  featureEnabled,
+  startAvailable,
   symbol,
   symbols,
   duration,
@@ -62,8 +69,11 @@ export default function SpeedbotPanel({
   clearArmed,
   historyFading,
   onClearHistory,
+  historyCheckRequired,
+  historyCheckLoading,
+  onRefreshOrderStatus,
 }: SpeedbotPanelProps) {
-  const controlsDisabled = running || busy;
+  const controlsDisabled = running || busy || waitingForSettlement || !featureEnabled;
 
   return (
     <section className="speedbot-panel xt-bottom-feature" data-testid="speedbot-panel">
@@ -77,7 +87,7 @@ export default function SpeedbotPanel({
           className={`speedbot-run-button${running ? " is-running" : ""}`}
           data-feature-action={`speedbot/${running ? "stop" : "start"}`}
           onClick={onRunStop}
-          disabled={busy || blocked}
+          disabled={busy || (running ? false : blocked || !featureEnabled || !startAvailable)}
           aria-label={running ? "Stop Speedbot" : "Start Speedbot"}
         >
           {running ? <Square size={15} /> : <Play size={15} />}
@@ -89,6 +99,20 @@ export default function SpeedbotPanel({
         <span className="speedbot-status-dot" />
         <span>{status}</span>
       </div>
+      {historyCheckRequired && (
+        <div className="speedbot-history-review" role="status">
+          <span>Speedbot stays paused until Deriv confirms the last order.</span>
+          <button
+            type="button"
+            data-feature-action="speedbot/refresh-order-status"
+            data-testid="button-speedbot-refresh-order-status"
+            onClick={onRefreshOrderStatus}
+            disabled={historyCheckLoading}
+          >
+            {historyCheckLoading ? "Refreshing…" : "Refresh order status"}
+          </button>
+        </div>
+      )}
 
       <div className="speedbot-settings">
         <label>

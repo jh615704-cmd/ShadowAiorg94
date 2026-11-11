@@ -19,7 +19,7 @@ const account = {
 const symbols = [
   "R_10", "R_25", "R_50", "R_75", "R_100",
   "JD10", "JD25", "JD50", "JD75", "JD100",
-  "1HZ10V", "1HZ25V", "1HZ50V", "1HZ75V", "1HZ100V",
+  "1HZ10V", "1HZ25V", "1HZ50V", "1HZ75V", "1HZ90V", "1HZ100V",
 ];
 const viewports = [
   { name: "phone", width: 390, height: 844 },
@@ -36,6 +36,7 @@ const fixtureFeatureIds = [
   "digit-flip",
   "trade-x",
   "bulk-trader",
+  "speedbot",
   "jackpot",
   "clock-work",
   "cash-grab",
@@ -745,6 +746,148 @@ function seedJackpotMarketHistory(state, overrides = {}) {
   };
 }
 
+test("Speedbot sits above Jackpot, enforces one active feature, and sends one live-tick order", async () => {
+  const state = createState(userSession(["speedbot", "jackpot"]));
+  state.hasToken = true;
+  state.allowFixtureTrades = true;
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/app`);
+    await page.getByRole("heading", { name: "Trading Strategies" }).waitFor();
+
+    const speedbotCard = page.locator("#speedbot-feature");
+    const jackpotCard = page.locator("#jackpot-feature");
+    assert.ok(
+      (await speedbotCard.boundingBox()).y < (await jackpotCard.boundingBox()).y,
+      "Speedbot should appear directly above Jackpot.",
+    );
+
+    const jackpotToggle = page.getByRole("checkbox", { name: "Toggle Jackpot" });
+    const speedbotToggle = page.getByRole("checkbox", { name: "Toggle Speedbot" });
+    await jackpotToggle.check();
+    await speedbotToggle.check();
+    assert.equal(await jackpotToggle.isChecked(), false, "Enabling Speedbot should disable Jackpot.");
+    assert.equal(await speedbotToggle.isChecked(), true);
+
+    const panel = page.getByTestId("speedbot-panel");
+    await panel.waitFor({ state: "visible" });
+    assert.equal(await panel.locator(".speedbot-history").count(), 1);
+    assert.equal(await panel.getByText(/68%/).count(), 0, "The internal entry filter should not appear in the UI.");
+    assert.equal(await panel.getByText(/guarantee/i).count(), 1, "The panel should not promise a win rate.");
+
+    await panel.getByRole("button", { name: "Start Speedbot" }).click();
+    await page.waitForFunction(() =>
+      window.__getDerivEventSourceUrls().some((url) => String(url).includes("market_ticks=true")),
+    );
+    const digits = Array.from({ length: 52 }, (_, index) => index === 51 ? 5 : 6);
+    await page.evaluate((recentDigits) => {
+      window.__dispatchDerivEvent("market-tick-snapshot", [{
+        symbol: "1HZ90V",
+        tick_sequence: 100,
+        recent_digits: recentDigits,
+        tick_epoch: Math.floor(Date.now() / 1_000),
+      }]);
+    }, digits);
+    await page.evaluate((recentDigits) => {
+      window.__dispatchDerivEvent("market-tick", {
+        symbol: "1HZ90V",
+        tick_sequence: 101,
+        recent_digits: recentDigits,
+        tick_epoch: Math.floor(Date.now() / 1_000),
+      });
+    }, digits);
+
+    await panel.getByText(/One Speedbot contract is awaiting Deriv settlement/).waitFor({ timeout: 5_000 });
+    assert.equal(state.tradeRequests.filter(({ path }) => path === "/api/deriv/buy").length, 1);
+    assert.deepEqual(state.tradeRequests[0].body, {
+      access_feature: "speedbot",
+      amount: 0.35,
+      duration: 1,
+      duration_unit: "t",
+      contract_type: "DIGITDIFF",
+      barrier: 0,
+      symbol: "1HZ90V",
+      automated: true,
+    });
+
+    await page.evaluate((recentDigits) => {
+      window.__dispatchDerivEvent("market-tick", {
+        symbol: "1HZ90V",
+        tick_sequence: 102,
+        recent_digits: recentDigits,
+        tick_epoch: Math.floor(Date.now() / 1_000),
+      });
+    }, digits);
+    await page.waitForTimeout(250);
+    assert.equal(
+      state.tradeRequests.filter(({ path }) => path === "/api/deriv/buy").length,
+      1,
+      "Speedbot must wait for the acknowledged contract to settle before another entry.",
+    );
+    await speedbotToggle.uncheck();
+    await panel.waitFor({ state: "visible" });
+    assert.equal(await panel.locator(".deriv-history-row").count(), 1, "Stopping keeps the open trade in Speedbot history.");
+    assert.deepEqual(state.unhandledApis, []);
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+});
+
+test("Speedbot pauses after an unclear buy and recovers only after fresh Deriv history", async () => {
+  const state = createState(userSession(["speedbot"]));
+  state.hasToken = true;
+  state.allowFixtureTrades = true;
+  state.buyTransportFailureAfterAcceptance = true;
+  state.fixtureBuyTime = Math.floor(Date.now() / 1_000);
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/app`);
+    await page.getByRole("heading", { name: "Trading Strategies" }).waitFor();
+    const speedbotToggle = page.getByRole("checkbox", { name: "Toggle Speedbot" });
+    await speedbotToggle.check();
+    const panel = page.getByTestId("speedbot-panel");
+    await panel.getByRole("button", { name: "Start Speedbot" }).click();
+    await page.waitForFunction(() =>
+      window.__getDerivEventSourceUrls().some((url) => String(url).includes("market_ticks=true")),
+    );
+    const digits = Array.from({ length: 52 }, (_, index) => index === 51 ? 5 : 6);
+    await page.evaluate((recentDigits) => {
+      window.__dispatchDerivEvent("market-tick-snapshot", [{
+        symbol: "1HZ90V",
+        tick_sequence: 100,
+        recent_digits: recentDigits,
+        tick_epoch: Math.floor(Date.now() / 1_000),
+      }]);
+      window.__dispatchDerivEvent("market-tick", {
+        symbol: "1HZ90V",
+        tick_sequence: 101,
+        recent_digits: recentDigits,
+        tick_epoch: Math.floor(Date.now() / 1_000),
+      });
+    }, digits);
+
+    const refreshButton = panel.getByTestId("button-speedbot-refresh-order-status");
+    await refreshButton.waitFor({ state: "visible", timeout: 5_000 });
+    assert.equal(state.tradeRequests.filter(({ path }) => path === "/api/deriv/buy").length, 1);
+    assert.equal(await panel.getByRole("button", { name: "Start Speedbot" }).isDisabled(), true);
+    await speedbotToggle.uncheck();
+    await panel.waitFor({ state: "visible" });
+    await refreshButton.waitFor({ state: "visible" });
+    await refreshButton.click();
+    await refreshButton.waitFor({ state: "hidden" });
+    const statusText = await panel.locator(".speedbot-status").innerText();
+    assert.match(statusText, /One Speedbot contract is awaiting Deriv settlement/, statusText);
+    assert.equal(await panel.locator(".speedbot-history .deriv-history-row").count(), 1);
+    assert.equal(await panel.getByRole("button", { name: "Start Speedbot" }).isDisabled(), true);
+    assert.equal(state.tradeRequests.filter(({ path }) => path === "/api/deriv/buy").length, 1);
+    assert.deepEqual(state.unhandledApis, []);
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+});
+
 test("Jackpot supports one-sided bulk batches, labels its run history, and excludes other features", async () => {
   const state = createState(userSession(["jackpot", "clock-work"]));
   state.hasToken = true;
@@ -1125,6 +1268,7 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
     "digit-flip",
     "trade-x",
     "bulk-trader",
+    "speedbot",
     "jackpot",
     "cash-grab",
     "clock-work",
@@ -1152,6 +1296,7 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
     { feature: "digit-flip", card: "digit-flip", selector: '[data-testid="digit-flip-panel"]', label: "DigitFlip" },
     { feature: "trade-x", card: "trade-x", selector: '[data-testid="trade-x-panel"]', label: "Trade X" },
     { feature: "bulk-trader", card: "bulk", selector: '[data-testid="panel-bulk-trader"]', label: "Bulk Trader" },
+    { feature: "speedbot", card: "speedbot", selector: '[data-testid="speedbot-panel"]', label: "Speedbot" },
     { feature: "jackpot", card: "jackpot", selector: '[data-testid="jackpot-panel"]', label: "Jackpot" },
     { feature: "cash-grab", card: "cash-grab", selector: '[data-testid="cash-grab-panel"]', label: "Cash Grab" },
     { feature: "clock-work", card: "clock-work", selector: '[data-testid="clock-work-panel"]', label: "Clock Work" },
@@ -1310,9 +1455,10 @@ test("clearing settled Clock Work history keeps Ai Clock and Start usable", asyn
     assert.equal(await aiSwitch.isChecked(), true);
     await panel.getByTestId("button-clock-start").click();
     try {
-      await panel.getByTestId("clock-ai-status")
-        .getByText(/Order submitted\. Waiting for settlement before checking again\./)
-        .waitFor({ timeout: 15_000 });
+      await page.waitForFunction(() => {
+        const status = document.querySelector('[data-testid="clock-ai-status"]');
+        return status?.textContent?.includes("Order submitted. Waiting for settlement before checking again.") ?? false;
+      }, undefined, { timeout: 15_000 });
     } catch (error) {
       console.error("Clock Work clear-history test diagnostics", {
         status: await panel.getByTestId("clock-ai-status").innerText(),
@@ -2741,6 +2887,8 @@ function createState(session) {
     loginSession: null,
     hasToken: false,
     allowFixtureTrades: false,
+    buyTransportFailureAfterAcceptance: false,
+    fixtureBuyTime: null,
     tradeSequence: 0,
     selectedSymbol: "R_75",
     knockoutScanTickSequence: 0,
@@ -3102,6 +3250,11 @@ async function mockApiRequest(route, state, pathname, method) {
       await new Promise((resolve) => setTimeout(resolve, state.buyResponseDelayMs));
     }
     const buy = fixtureBuy(state, order);
+    if (state.buyTransportFailureAfterAcceptance) {
+      state.buyTransportFailureAfterAcceptance = false;
+      await route.abort("connectionreset");
+      return;
+    }
     await fulfillJson(route, {
       ok: true,
       message: "Fixture buy confirmed.",
@@ -3272,6 +3425,8 @@ function fixtureBuy(state, order) {
     contract_id: contractId,
     contract_type: order.contract_type,
     symbol: order.symbol,
+    duration: order.duration ?? null,
+    duration_unit: order.duration_unit ?? null,
     account_type: "demo",
     currency: "USD",
     barrier: order.barrier ?? null,
@@ -3280,7 +3435,7 @@ function fixtureBuy(state, order) {
     payout: order.amount * 2,
     profit: 0,
     status: "open",
-    buy_time: 1_700_000_000 + state.tradeSequence,
+    buy_time: (state.fixtureBuyTime ?? 1_700_000_000) + state.tradeSequence,
     sell_time: null,
   };
   state.history = [row, ...(state.history ?? [])];

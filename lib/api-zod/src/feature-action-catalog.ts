@@ -237,6 +237,7 @@ addMany("speedbot", [
   ["duration", "Set Speedbot duration"],
   ["take-profit", "Set Speedbot take-profit limit"],
   ["loss-limit", "Set Speedbot loss limit"],
+  ["refresh-order-status", "Refresh Speedbot order status"],
 ]);
 
 addMany("edge", [

@@ -154,7 +154,7 @@ function tradeActionControlId(feature: string, path: string, body: Record<string
     const count = body.count;
     if (symbol && digit && (count === 3 || count === 6)) return `trade-${count}x-${symbol}-${digit}`;
   }
-  if (feature === "bulk-trader" || path === "/deriv/bulk-buy") {
+  if (feature === "bulk-trader") {
     if (contractType === "DIGITOVER") return "trade-over";
     if (contractType === "DIGITUNDER") return "trade-under";
     if (contractType === "DIGITEVEN") return "trade-even";

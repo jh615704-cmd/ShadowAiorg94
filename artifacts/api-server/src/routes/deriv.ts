@@ -528,6 +528,7 @@ router.post("/deriv/buy", requireTradeAccessFeature, async (req, res) => {
   ) {
     return res.status(400).json({ error: "Money Bank supports Accumulator contracts from 1 to 30 ticks." });
   }
+  const speedbotBarrier = parsed.data.barrier;
   if (
     parsed.data.access_feature === "speedbot"
     && (
@@ -535,9 +536,10 @@ router.post("/deriv/buy", requireTradeAccessFeature, async (req, res) => {
       || !Number.isInteger(parsed.data.duration)
       || parsed.data.duration < 1
       || parsed.data.duration > 5
-      || !Number.isInteger(parsed.data.barrier)
-      || parsed.data.barrier < 0
-      || parsed.data.barrier > 9
+      || typeof speedbotBarrier !== "number"
+      || !Number.isInteger(speedbotBarrier)
+      || speedbotBarrier < 0
+      || speedbotBarrier > 9
     )
   ) {
     return res.status(400).json({ error: "Speedbot only accepts Digit Differs contracts with a digit barrier and a 1–5 tick duration." });
