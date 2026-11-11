@@ -166,6 +166,116 @@ describe("customFetch transport recovery", () => {
     });
   });
 
+  it("marks an interrupted EDGE buy as uncertain without replaying it", async () => {
+    const events = new EventTarget();
+    let reported: unknown;
+    events.addEventListener("shadow-admin-diagnostic", (event) => {
+      reported = (event as CustomEvent).detail;
+    });
+    Object.defineProperty(globalThis, "window", { configurable: true, value: events });
+    const controller = new AbortController();
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      controller.abort();
+      throw new DOMException("The operation was aborted.", "AbortError");
+    }) as typeof fetch;
+
+    await assert.rejects(
+      customFetch("/api/deriv/bulk-buy", {
+        method: "POST",
+        body: JSON.stringify({ access_feature: "edge", amount: 1 }),
+        signal: controller.signal,
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof ApiTransportError);
+        assert.equal(error.tradeOutcomeUncertain, true);
+        assert.match(error.message, /contract may already be open/i);
+        assert.match(error.message, /open contracts and history/i);
+        assert.match(error.message, /do not resend/i);
+        return true;
+      },
+    );
+
+    assert.equal(calls, 1);
+    assert.deepEqual(reported, {
+      code: "trade_outcome_uncertain",
+      severity: "warning",
+      feature: "edge",
+      source: "transport",
+    });
+  });
+
+  it("marks an unparseable EDGE success response as uncertain", async () => {
+    const events = new EventTarget();
+    let reported: unknown;
+    events.addEventListener("shadow-admin-diagnostic", (event) => {
+      reported = (event as CustomEvent).detail;
+    });
+    Object.defineProperty(globalThis, "window", { configurable: true, value: events });
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      return new Response("not-json", {
+        status: 202,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+
+    await assert.rejects(
+      customFetch("/api/deriv/bulk-buy", {
+        method: "POST",
+        body: JSON.stringify({ access_feature: "edge", amount: 1 }),
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof ApiTransportError);
+        assert.equal(error.tradeOutcomeUncertain, true);
+        assert.match(error.message, /response did not confirm whether the trade was accepted/i);
+        assert.match(error.message, /open contracts and history/i);
+        assert.match(error.message, /do not resend/i);
+        return true;
+      },
+    );
+
+    assert.equal(calls, 1);
+    assert.deepEqual(reported, {
+      code: "trade_outcome_uncertain",
+      severity: "warning",
+      feature: "edge",
+      source: "transport",
+    });
+  });
+
+  it("does not call a pre-aborted EDGE request an uncertain trade", async () => {
+    const events = new EventTarget();
+    let reported: unknown;
+    events.addEventListener("shadow-admin-diagnostic", (event) => {
+      reported = (event as CustomEvent).detail;
+    });
+    Object.defineProperty(globalThis, "window", { configurable: true, value: events });
+    const controller = new AbortController();
+    controller.abort();
+    globalThis.fetch = (async (_input, init) => {
+      assert.equal(init?.signal?.aborted, true);
+      throw new DOMException("The operation was aborted.", "AbortError");
+    }) as typeof fetch;
+
+    await assert.rejects(
+      customFetch("/api/deriv/bulk-buy", {
+        method: "POST",
+        body: JSON.stringify({ access_feature: "edge", amount: 1 }),
+        signal: controller.signal,
+      }),
+      (error: unknown) => {
+        assert.ok(!(error instanceof ApiTransportError));
+        assert.equal((error as Error).name, "AbortError");
+        return true;
+      },
+    );
+
+    assert.equal(reported, undefined);
+  });
+
   it("reports partial trade acknowledgements from successful HTTP responses", async () => {
     const events = new EventTarget();
     let reported: unknown;
@@ -191,7 +301,7 @@ describe("customFetch transport recovery", () => {
     });
   });
 
-  it("attributes an explicit Deriv rejection separately from an uncertain acknowledgement", async () => {
+  it("attributes an explicit EDGE rejection separately from an uncertain acknowledgement", async () => {
     const events = new EventTarget();
     let reported: unknown;
     events.addEventListener("shadow-admin-diagnostic", (event) => {
@@ -209,13 +319,13 @@ describe("customFetch transport recovery", () => {
 
     await customFetch("/api/deriv/bulk-buy", {
       method: "POST",
-      body: JSON.stringify({ access_feature: "bulk-trader", contracts: [] }),
+      body: JSON.stringify({ access_feature: "edge", contracts: [] }),
     });
 
     assert.deepEqual(reported, {
       code: "api_server_error",
       severity: "error",
-      feature: "bulk-trader",
+      feature: "edge",
       source: "deriv",
     });
   });

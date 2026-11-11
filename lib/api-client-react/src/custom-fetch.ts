@@ -282,13 +282,18 @@ export class ApiTransportError extends Error {
     cause: unknown,
     requestInfo: { method: string; url: string },
     requestId: string,
+    failureKind: "network" | "response" = "network",
   ) {
     const pathname = getPathname(requestInfo.url);
     const tradeOutcomeUncertain = isTradeMutation(requestInfo.method, pathname);
     const recoveryMessage = tradeOutcomeUncertain
-      ? pathname.endsWith("/sell")
-        ? "The connection dropped before the server confirmed the close. The contract may already be closed; refresh order status before trying again."
-        : "The connection dropped before the server confirmed the trade. The contract may already be open; refresh order status before trying again."
+      ? failureKind === "response"
+        ? pathname.endsWith("/sell")
+          ? "The server response did not confirm whether the close completed. Check the selected Deriv account's open contracts and history before acting; do not retry until its status is clear."
+          : "The server response did not confirm whether the trade was accepted. Check the selected Deriv account's open contracts and history before acting; do not resend until its status is clear."
+        : pathname.endsWith("/sell")
+          ? "The connection dropped before the server confirmed the close. The contract may already be closed; refresh order status before trying again. Check the selected Deriv account's open contracts and history, and do not retry while its status is unclear."
+          : "The connection dropped before the server confirmed the trade. The contract may already be open; refresh order status before trying again. Check the selected Deriv account's open contracts and history, and do not resend while its status is unclear."
       : `The dashboard API could not be reached for ${requestInfo.method} ${pathname}. Check your connection and retry.`;
 
     super(`${recoveryMessage} Reference: ${requestId}`);
@@ -589,12 +594,19 @@ export async function customFetch<T = unknown>(
     // same-origin navigation.
     credentials: init.credentials ?? "same-origin",
   };
+  const signalAbortedBeforeFetch = requestInit.signal?.aborted === true;
 
   let response: Response;
   try {
     response = await fetch(input, requestInit);
   } catch (error) {
-    if (isAbortError(error, init.signal)) throw error;
+    if (isAbortError(error, requestInit.signal)) {
+      if (tradeFeature && !signalAbortedBeforeFetch) {
+        reportAdminDiagnostic("trade_outcome_uncertain", "warning", tradeFeature, "transport");
+        throw new ApiTransportError(error, requestInfo, requestId);
+      }
+      throw error;
+    }
 
     // Reads are safe to replay after a transient browser/proxy failure.
     // A trade mutation is deliberately never retried: the server may have
@@ -642,7 +654,14 @@ export async function customFetch<T = unknown>(
     throw new ApiError(response, errorData, requestInfo);
   }
 
-  const payload = await parseSuccessBody(response, responseType, requestInfo);
+  let payload: unknown;
+  try {
+    payload = await parseSuccessBody(response, responseType, requestInfo);
+  } catch (error) {
+    if (!tradeFeature) throw error;
+    reportAdminDiagnostic("trade_outcome_uncertain", "warning", tradeFeature, "transport");
+    throw new ApiTransportError(error, requestInfo, requestId, "response");
+  }
   if (tradeFeature && isUnconfirmedTradeResponse(payload)) {
     const failed = tradeFailureEntries(payload);
     const sources = failed.length
