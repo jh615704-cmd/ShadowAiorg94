@@ -125,6 +125,10 @@ export function featureActionControlIdFromTestId(feature: string, testId: string
     if (testId === "button-clock-stop") return "stop";
     if (testId === "switch-ai-clock") return "ai-clock";
   }
+  if (feature === "speedbot") {
+    if (testId === "input-speedbot-loss-multiplier") return "loss-multiplier";
+    if (testId === "button-speedbot-refresh-order-status") return "refresh-order-status";
+  }
   if (feature === "auto-trader") {
     const filter = testId.match(/^button-filter-(all|regular|jump|one-sec)$/)?.[1];
     if (filter) return `market-filter-${filter}`;
@@ -342,6 +346,21 @@ addMany("clock-work", [
   ["direction-lower", "Choose Lower"],
   ["start", "Start Clock Work"],
   ["stop", "Stop Clock Work"],
+]);
+
+addMany("speedbot", [
+  ["open-guide", "Open Speedbot guide"],
+  ["feature-toggle", "Enable or disable Speedbot"],
+  ["market", "Choose Speedbot market"],
+  ["stake", "Choose Speedbot base stake"],
+  ["duration", "Choose Speedbot duration"],
+  ["loss-multiplier", "Set Speedbot multiplier after loss"],
+  ["take-profit", "Set Speedbot take-profit limit"],
+  ["loss-limit", "Set Speedbot session loss limit"],
+  ["start", "Start Speedbot"],
+  ["stop", "Stop Speedbot"],
+  ["refresh-order-status", "Refresh Speedbot order status"],
+  ["clear-history", "Clear Speedbot history"],
 ]);
 
 addMany("money-bank", [

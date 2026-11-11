@@ -15,6 +15,9 @@ type SpeedbotPanelProps = {
   symbols: readonly SpeedbotMarketOption[];
   duration: number;
   stake: number;
+  lossMultiplier: number;
+  nextStake: number | null;
+  lastOrderLatencyMs: number | null;
   takeProfit: number;
   lossLimit: number;
   currency: string;
@@ -28,6 +31,7 @@ type SpeedbotPanelProps = {
   onSymbolChange: (value: string) => void;
   onDurationChange: (value: number) => void;
   onStakeChange: (value: number) => void;
+  onLossMultiplierChange: (value: number) => void;
   onTakeProfitChange: (value: number) => void;
   onLossLimitChange: (value: number) => void;
   onRunStop: () => void;
@@ -48,6 +52,9 @@ export default function SpeedbotPanel({
   symbols,
   duration,
   stake,
+  lossMultiplier,
+  nextStake,
+  lastOrderLatencyMs,
   takeProfit,
   lossLimit,
   currency,
@@ -61,6 +68,7 @@ export default function SpeedbotPanel({
   onSymbolChange,
   onDurationChange,
   onStakeChange,
+  onLossMultiplierChange,
   onTakeProfitChange,
   onLossLimitChange,
   onRunStop,
@@ -150,6 +158,22 @@ export default function SpeedbotPanel({
           </select>
         </label>
         <label>
+          <span>Multiplier after loss</span>
+          <input
+            data-feature-action="speedbot/loss-multiplier"
+            data-testid="input-speedbot-loss-multiplier"
+            type="number"
+            min="1"
+            max="10"
+            step="0.1"
+            value={lossMultiplier}
+            onChange={(event) => onLossMultiplierChange(Number(event.target.value))}
+            disabled={controlsDisabled}
+            aria-label="Speedbot multiplier after a loss"
+            title="A confirmed settled loss multiplies the next stake; a non-loss resets it to the base stake."
+          />
+        </label>
+        <label>
           <span>Take-profit limit</span>
           <input
             data-feature-action="speedbot/take-profit"
@@ -178,8 +202,10 @@ export default function SpeedbotPanel({
       <div className="speedbot-live-readout">
         <span><small>LIVE QUOTE</small><b>{quote == null ? "—" : quote.toFixed(2)}</b></span>
         <span><small>LAST DIGIT</small><b>{lastDigit == null ? "—" : lastDigit}</b></span>
+        <span><small>NEXT STAKE</small><b>{nextStake == null ? "Awaiting settlement" : `${currency} ${nextStake.toFixed(2)}`}</b></span>
         <span><small>ORDER FLOW</small><b>One at a time</b></span>
         <span><small>CURRENCY</small><b>{currency}</b></span>
+        <span title="Time from the order request until the dashboard received Deriv confirmation."><small>LAST ORDER ACK</small><b>{lastOrderLatencyMs == null ? "—" : `${lastOrderLatencyMs} ms`}</b></span>
       </div>
       <p className="speedbot-disclaimer">Historical market samples are not a guarantee of future results. Stop prevents new entries; accepted contracts still settle through Deriv.</p>
 

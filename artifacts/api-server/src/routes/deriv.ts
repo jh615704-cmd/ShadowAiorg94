@@ -510,7 +510,36 @@ router.post("/deriv/select-symbol", async (req, res) => {
 
 router.post("/deriv/buy", requireTradeAccessFeature, async (req, res) => {
   const parsed = BuyDerivContractBody.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Invalid trade request" });
+  if (!parsed.success) {
+    const isSpeedbotRequest = Boolean(
+      req.body
+      && typeof req.body === "object"
+      && "access_feature" in req.body
+      && req.body.access_feature === "speedbot",
+    );
+    if (isSpeedbotRequest) {
+      const issueCopy: Record<string, string> = {
+        access_feature: "the feature must be Speedbot",
+        amount: "the stake must be a positive amount",
+        duration: "duration must be a whole number from 1 to 5 ticks",
+        duration_unit: "duration must use ticks",
+        contract_type: "the contract type must be Digit Differs",
+        barrier: "the barrier must be a whole digit from 0 to 9",
+        symbol: "the selected market is invalid",
+        automated: "the automation setting is invalid",
+      };
+      const details = [...new Set(parsed.error.issues.map((issue) => {
+        const field = typeof issue.path[0] === "string" ? issue.path[0] : "";
+        return issueCopy[field] ?? "one or more values do not match Speedbot's trade settings";
+      }))];
+      return res.status(400).json({
+        error: `Invalid Speedbot trade request: ${details.join("; ")}. No order was sent.`,
+        diagnostic_source: "api_server",
+        trade_outcome: "not_sent",
+      });
+    }
+    return res.status(400).json({ error: "Invalid trade request" });
+  }
   if (
     parsed.data.access_feature === "cash-grab"
     && (!Number.isInteger(parsed.data.duration) || parsed.data.duration < 1 || parsed.data.duration > 5)
@@ -542,7 +571,11 @@ router.post("/deriv/buy", requireTradeAccessFeature, async (req, res) => {
       || speedbotBarrier > 9
     )
   ) {
-    return res.status(400).json({ error: "Speedbot only accepts Digit Differs contracts with a digit barrier and a 1–5 tick duration." });
+    return res.status(400).json({
+      error: "Speedbot only accepts Digit Differs contracts with a digit barrier and a 1–5 tick duration. No order was sent.",
+      diagnostic_source: "api_server",
+      trade_outcome: "not_sent",
+    });
   }
 
   try {

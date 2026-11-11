@@ -115,7 +115,7 @@ mock.module("drizzle-orm", {
 mock.module("../lib/access-keys", {
   namedExports: {
     AccessSessionRevokedError: MockAccessSessionRevokedError,
-    TRADING_ACCESS_FEATURES: ["edge", "digit-flip", "trade-x", "bulk-trader", "jackpot", "clock-work", "cash-grab", "money-bank", "jdy-ai-3", "auto-trader", "auto-trader-2"],
+    TRADING_ACCESS_FEATURES: ["edge", "digit-flip", "trade-x", "bulk-trader", "jackpot", "clock-work", "cash-grab", "money-bank", "jdy-ai-3", "auto-trader", "auto-trader-2", "speedbot"],
     findSessionByToken: async () => null,
     featureList: (features: string[] | null | undefined) => features ?? ["edge"],
     hashSecret: (value: string) => value,
@@ -323,7 +323,7 @@ app.use(express.json());
 app.use((req, res, next) => {
   Object.assign(req, { log: { error() {}, warn() {} } });
   res.locals.userId = sessionId;
-  res.locals.accessKey = { features: ["clock-work", "edge", "trade-x", "bulk-trader", "jackpot", "auto-trader", "money-bank"] };
+  res.locals.accessKey = { features: ["clock-work", "edge", "trade-x", "bulk-trader", "jackpot", "auto-trader", "money-bank", "speedbot"] };
   next();
 });
 app.use(derivRouter);
@@ -550,6 +550,44 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
     });
     assert.equal(validMoneyBankMaxDurationResponse.status, 202, JSON.stringify(await readJson(validMoneyBankMaxDurationResponse)));
 
+    const speedbotBuyCountBefore = buyInvocations;
+    const validSpeedbotResponse = await fetch(`${baseUrl}/deriv/buy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        access_feature: "speedbot",
+        amount: 0.35,
+        duration: 1,
+        duration_unit: "t",
+        contract_type: "DIGITDIFF",
+        barrier: 0,
+        symbol: "1HZ90V",
+        automated: true,
+      }),
+    });
+    assert.equal(validSpeedbotResponse.status, 202, JSON.stringify(await readJson(validSpeedbotResponse)));
+    assert.equal(buyInvocations, speedbotBuyCountBefore + 1, "Valid Speedbot payloads should pass schema validation and reach the buy handler.");
+
+    const invalidSpeedbotResponse = await fetch(`${baseUrl}/deriv/buy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        access_feature: "speedbot",
+        amount: 0.35,
+        duration: 1,
+        duration_unit: "t",
+        contract_type: "DIGITDIFF",
+        barrier: 10,
+        symbol: "1HZ90V",
+        automated: true,
+      }),
+    });
+    const invalidSpeedbotBody = await readJson(invalidSpeedbotResponse);
+    assert.equal(invalidSpeedbotResponse.status, 400);
+    assert.match(String(invalidSpeedbotBody.error), /barrier must be a whole digit from 0 to 9/);
+    assert.equal(invalidSpeedbotBody.trade_outcome, "not_sent");
+    assert.equal(buyInvocations, speedbotBuyCountBefore + 1, "Invalid Speedbot requests must not reach Deriv.");
+
     const buyResponse = await fetch(`${baseUrl}/deriv/buy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -669,7 +707,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
     const priorBulkTraderValidationInvocations = bulkBuyInvocations;
     const invalidBulkTraderRequests = [
       { duration: 6, contract_type: "DIGITDIFF", error: /1 to 5 ticks/ },
-      { duration: 1, contract_type: "CALL", error: /only accepts Digit Over, Digit Under, and Digit Differs/ },
+      { duration: 1, contract_type: "CALL", error: /trade action could not be matched/ },
     ] as const;
     for (const request of invalidBulkTraderRequests) {
       const response = await fetch(`${baseUrl}/deriv/bulk-buy`, {
@@ -726,7 +764,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
     });
     assert.equal(outOfRangeAutoTraderResponse.status, 400);
     assert.match(String((await readJson(outOfRangeAutoTraderResponse)).error), /1 to 5 ticks/);
-    assert.deepEqual(observedPats, Array.from({ length: 33 }, () => enteredPat));
+    assert.deepEqual(observedPats, Array.from({ length: 34 }, () => enteredPat));
 
     const priorBuyInvocations = buyInvocations;
     const priorBulkBuyInvocations = bulkBuyInvocations;

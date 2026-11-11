@@ -762,6 +762,14 @@ test("Speedbot sits above Jackpot, enforces one active feature, and sends one li
       "Speedbot should appear directly above Jackpot.",
     );
 
+    await speedbotCard.getByRole("button", { name: "Guide" }).click();
+    await page.getByText("Speedbot Guide", { exact: true }).waitFor();
+    await page.getByRole("heading", { name: "Welcome to Speedbot" }).waitFor();
+    await page.getByRole("button", { name: /Next/ }).click();
+    await page.getByRole("button", { name: /Next/ }).click();
+    await page.getByRole("heading", { name: "Multiplier after a loss" }).waitFor();
+    await page.getByRole("button", { name: "Close guide" }).click();
+
     const jackpotToggle = page.getByRole("checkbox", { name: "Toggle Jackpot" });
     const speedbotToggle = page.getByRole("checkbox", { name: "Toggle Speedbot" });
     await jackpotToggle.check();
@@ -774,6 +782,9 @@ test("Speedbot sits above Jackpot, enforces one active feature, and sends one li
     assert.equal(await panel.locator(".speedbot-history").count(), 1);
     assert.equal(await panel.getByText(/68%/).count(), 0, "The internal entry filter should not appear in the UI.");
     assert.equal(await panel.getByText(/guarantee/i).count(), 1, "The panel should not promise a win rate.");
+    const lossMultiplier = panel.getByTestId("input-speedbot-loss-multiplier");
+    await lossMultiplier.fill("2.5");
+    assert.equal(await lossMultiplier.inputValue(), "2.5");
 
     await panel.getByRole("button", { name: "Start Speedbot" }).click();
     await page.waitForFunction(() =>
@@ -798,6 +809,8 @@ test("Speedbot sits above Jackpot, enforces one active feature, and sends one li
     }, digits);
 
     await panel.getByText(/One Speedbot contract is awaiting Deriv settlement/).waitFor({ timeout: 5_000 });
+    await panel.getByText(/^\d+ ms$/).waitFor();
+    assert.equal(await panel.getByText("Awaiting settlement", { exact: true }).count(), 1, "Speedbot must not calculate a new stake while its contract is open.");
     assert.equal(state.tradeRequests.filter(({ path }) => path === "/api/deriv/buy").length, 1);
     assert.deepEqual(state.tradeRequests[0].body, {
       access_feature: "speedbot",
@@ -824,9 +837,47 @@ test("Speedbot sits above Jackpot, enforces one active feature, and sends one li
       1,
       "Speedbot must wait for the acknowledged contract to settle before another entry.",
     );
+    const firstSpeedbotTrade = state.history[0];
+    assert.ok(firstSpeedbotTrade, "The first confirmed Speedbot order should be in fixture history.");
+    state.history = state.history.map((trade) => trade.contract_id === firstSpeedbotTrade.contract_id
+      ? {
+          ...trade,
+          current_value: 0,
+          payout: 0,
+          profit: -trade.buy_price,
+          status: "lost",
+          sell_time: Math.floor(Date.now() / 1_000),
+        }
+      : trade);
+    state.activeContractCount = 0;
+
+    await panel.getByText("USD 0.88", { exact: true }).waitFor({ timeout: 15_000 });
+    const nextOrderDeadline = Date.now() + 15_000;
+    let nextTickSequence = 103;
+    while (
+      state.tradeRequests.filter(({ path }) => path === "/api/deriv/buy").length < 2
+      && Date.now() < nextOrderDeadline
+    ) {
+      await page.evaluate(({ sequence, recentDigits }) => {
+        window.__dispatchDerivEvent("market-tick", {
+          symbol: "1HZ90V",
+          tick_sequence: sequence,
+          recent_digits: recentDigits,
+          tick_epoch: Math.floor(Date.now() / 1_000),
+        });
+      }, { sequence: nextTickSequence++, recentDigits: digits });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    assert.equal(state.tradeRequests.filter(({ path }) => path === "/api/deriv/buy").length, 2);
+    assert.equal(
+      state.tradeRequests[1].body.amount,
+      0.88,
+      "Speedbot should apply the selected multiplier only after Deriv history confirms a settled loss.",
+    );
+
     await speedbotToggle.uncheck();
     await panel.waitFor({ state: "visible" });
-    assert.equal(await panel.locator(".deriv-history-row").count(), 1, "Stopping keeps the open trade in Speedbot history.");
+    assert.equal(await panel.locator(".deriv-history-row").count(), 2, "Stopping keeps settled and open Speedbot trades in history.");
     assert.deepEqual(state.unhandledApis, []);
     assert.deepEqual(pageErrors, []);
   } finally {

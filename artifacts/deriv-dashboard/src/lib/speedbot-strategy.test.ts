@@ -1,7 +1,36 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chooseSpeedbotCandidate, getSpeedbotSessionStopReason } from "./speedbot-strategy.ts";
+import {
+  chooseSpeedbotCandidate,
+  getSpeedbotNextStake,
+  getSpeedbotSessionStopReason,
+} from "./speedbot-strategy.ts";
 import type { AutoMagicSignal } from "./auto-magic-strategy.ts";
+import type { DerivHistoryRow } from "./deriv-history.ts";
+
+const speedbotRow = (
+  contractId: string,
+  status: string,
+  profit: number,
+  buyTime: number,
+  accountId = "account-1",
+): DerivHistoryRow => ({
+  contract_id: contractId,
+  account_id: accountId,
+  contract_type: "DIGITDIFF",
+  symbol: "1HZ10V",
+  account_type: "demo",
+  barrier: 5,
+  duration: 1,
+  duration_unit: "t",
+  buy_price: 0.35,
+  current_value: 0.35 + profit,
+  payout: 0.7,
+  profit,
+  status,
+  buy_time: buyTime,
+  sell_time: buyTime + 1,
+});
 
 function signal(digits: number[]): AutoMagicSignal {
   return { symbol: "1HZ10V", sample_count: digits.length, recent_digits: digits };
@@ -62,4 +91,41 @@ test("Speedbot stops entries at its configured session targets", () => {
   assert.equal(getSpeedbotSessionStopReason(-10, 10, 10), "loss-limit");
   assert.equal(getSpeedbotSessionStopReason(-2, 10, 10), null);
   assert.equal(getSpeedbotSessionStopReason(Number.NaN, 10, 10), "loss-limit");
+});
+
+test("Speedbot multiplies after settled losses and resets to base after a non-loss", () => {
+  const rows = [
+    speedbotRow("third", "lost", -0.7, 30),
+    speedbotRow("second", "won", 0.7, 20),
+    speedbotRow("first", "lost", -0.35, 10),
+  ];
+
+  assert.equal(
+    getSpeedbotNextStake(rows, "account-1", new Set(["first"]), 0.35, 2),
+    0.7,
+  );
+  assert.equal(
+    getSpeedbotNextStake(rows, "account-1", new Set(["first", "third"]), 0.35, 2),
+    1.4,
+  );
+  assert.equal(
+    getSpeedbotNextStake(rows, "account-1", new Set(["first", "second", "third"]), 0.35, 2),
+    0.7,
+    "A settled win resets the next stake before a later loss is applied.",
+  );
+  assert.equal(getSpeedbotNextStake([], "account-1", new Set(), 0.35, 2), 0.35);
+});
+
+test("Speedbot refuses to calculate a stake from missing, open, invalid, or other-account history", () => {
+  const rows = [
+    speedbotRow("open", "open", -0.35, 10),
+    speedbotRow("other-account", "lost", -0.35, 20, "account-2"),
+    speedbotRow("invalid-profit", "closed", Number.NaN, 30),
+  ];
+
+  assert.equal(getSpeedbotNextStake(rows, "account-1", new Set(["missing"]), 0.35, 2), null);
+  assert.equal(getSpeedbotNextStake(rows, "account-1", new Set(["open"]), 0.35, 2), null);
+  assert.equal(getSpeedbotNextStake(rows, "account-1", new Set(["invalid-profit"]), 0.35, 2), null);
+  assert.equal(getSpeedbotNextStake(rows, "account-1", new Set(["other-account"]), 0.35, 2), null);
+  assert.equal(getSpeedbotNextStake([], "account-1", new Set(), 0.35, 11), null);
 });

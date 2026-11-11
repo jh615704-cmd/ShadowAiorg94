@@ -133,7 +133,12 @@ import ClockWorkPanel from "../components/clock-work-panel";
 import SpeedbotPanel from "../components/speedbot-panel";
 import { useSpeedbotScanner } from "../hooks/use-speedbot-scanner";
 import type { AutoMagicCandidate } from "../lib/auto-magic-strategy";
-import { getSpeedbotSessionStopReason } from "../lib/speedbot-strategy";
+import {
+  getSpeedbotNextStake,
+  getSpeedbotSessionStopReason,
+  SPEEDBOT_MAX_LOSS_MULTIPLIER,
+  SPEEDBOT_MIN_STAKE,
+} from "../lib/speedbot-strategy";
 import DerivHistory from "../components/deriv-history";
 import type { DerivHistoryRow } from "../lib/deriv-history";
 import { getAccountBalance } from "../lib/account-balance";
@@ -306,6 +311,13 @@ const clockWorkGuidePages = [
   { title: "Choose a market and stake", body: "Select a supported market and set the stake for each entry.", points: ["The selected market is shown above the control.", "Auto Best is available as a market choice.", "Review your account balance before starting."] },
   { title: "Start and stop Clock Work", body: "Ai Clock uses a fixed entry filter: the observed historical rate must be at least 58% across at least six completed five-tick samples. Turn on Ai Clock, then press Start Clock Work when your account and settings are ready.", points: ["Stop prevents new entries.", "Accepted contracts settle through Deriv.", "An open or unsettled contract pauses the next entry."] },
   { title: "Stop and review history", body: "Stop Clock Work to prevent new entries. An order already accepted by Deriv is not canceled by Stop and must settle through Deriv.", points: ["Clock Work History shows entries and their reported results.", "Clearing history hides local rows only; it does not delete Deriv's account history.", "Check Deriv history before restarting after an uncertain order."] },
+] as const;
+
+const speedbotGuidePages = [
+  { title: "Welcome to Speedbot", body: "Speedbot watches the selected live market and can send one Digit Differs contract when its current scan finds an eligible setup.", points: ["Start with a demo account while learning.", "The scan describes recent observations and cannot guarantee the next result.", "Speedbot allows only one open contract at a time."] },
+  { title: "Choose your settings", body: "Choose a market, a 1–5 tick duration, and a base stake. Each new run starts at the base stake; wins and break-even settlements reset to it too.", points: ["Confirm the selected account and currency before starting.", "A real account still requires server permission and enough available balance.", "The screen shows the next stake that Speedbot would use."] },
+  { title: "Multiplier after a loss", body: "After a confirmed settled loss, Speedbot multiplies the next stake by the selected value. A win or break-even result resets it to the base stake.", points: ["Only confirmed settled Speedbot trades affect the next stake.", "An open, missing, or unverified result pauses the next entry.", "A higher multiplier can exceed your balance; it does not guarantee recovery."] },
+  { title: "Trade and settlement safety", body: "Speedbot sends one fresh order request, then waits for Deriv to confirm the contract and its settlement before another entry.", points: ["Stop prevents new entries; an accepted contract still settles through Deriv.", "If the response is unclear, refresh order status and do not resend the request.", "Session profit and loss limits stop later entries but cannot guarantee a maximum loss."] },
 ] as const;
 
 const jackpotGuidePages = [
@@ -669,10 +681,12 @@ export default function XTraderPage() {
   const [speedbotSymbol, setSpeedbotSymbol] = useState("1HZ90V");
   const [speedbotDuration, setSpeedbotDuration] = useState(1);
   const [speedbotStake, setSpeedbotStake] = useState(0.35);
+  const [speedbotLossMultiplier, setSpeedbotLossMultiplier] = useState(2);
   const [speedbotTakeProfit, setSpeedbotTakeProfit] = useState(10);
   const [speedbotLossLimit, setSpeedbotLossLimit] = useState(10);
   const [speedbotRunning, setSpeedbotRunning] = useState(false);
   const [speedbotStatusMessage, setSpeedbotStatusMessage] = useState<string | null>(null);
+  const [speedbotLastOrderLatencyMs, setSpeedbotLastOrderLatencyMs] = useState<number | null>(null);
   const [speedbotNeedsHistoryCheck, setSpeedbotNeedsHistoryCheck] = useState(false);
   const [speedbotHistoryCheckLoading, setSpeedbotHistoryCheckLoading] = useState(false);
   const [speedbotPendingContractIds, setSpeedbotPendingContractIds] = useState<string[]>([]);
@@ -727,7 +741,7 @@ export default function XTraderPage() {
   const [running, setRunning] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [guidePage, setGuidePage] = useState(0);
-  const [guideMode, setGuideMode] = useState<"edge" | "trade-x" | "digit-flip" | "bulk-trader" | "money-bank" | "cash-grab" | "jackpot" | "clock-work">("edge");
+  const [guideMode, setGuideMode] = useState<"edge" | "trade-x" | "digit-flip" | "bulk-trader" | "money-bank" | "cash-grab" | "jackpot" | "clock-work" | "speedbot">("edge");
   const [clearHistoryArmed, setClearHistoryArmed] = useState(false);
   const [historyFading, setHistoryFading] = useState(false);
   const [tradeXHistoryClearArmed, setTradeXHistoryClearArmed] = useState(false);
@@ -1170,6 +1184,19 @@ export default function XTraderPage() {
     && String(trade.account_id) === speedbotRunAccountIdRef.current
     && speedbotRunContractIdsRef.current.has(String(trade.contract_id))
   ));
+  const speedbotNextStake = speedbotNeedsHistoryCheck
+    || speedbotHistoryCheckLoading
+    || speedbotPendingContractIds.length > 0
+    ? null
+    : speedbotRunning
+      ? getSpeedbotNextStake(
+        rows,
+        speedbotRunAccountIdRef.current,
+        speedbotRunContractIdsRef.current,
+        speedbotStake,
+        speedbotLossMultiplier,
+      )
+      : roundTradeStakeToCents(speedbotStake);
   const speedbotVisibleRunRows = speedbotRunRows.filter(
     (trade) => !speedbotHiddenHistoryIds.has(String(trade.contract_id)),
   );
@@ -5134,8 +5161,15 @@ export default function XTraderPage() {
     if (speedbotActionLockRef.current || anyContractBuyPending) return "Another order request is still being confirmed.";
     if (speedbotPendingContractIdsRef.current.size > 0) return "Wait for the current Speedbot contract to settle.";
     if (tradeSlotBlocked) return tradeSlotMessage ?? "Wait for Deriv to confirm that all contracts have settled.";
-    if (!Number.isFinite(speedbotStake) || speedbotStake < 0.35) return "Speedbot stake must be at least 0.35.";
-    if (currentAccountBalance == null || currentAccountBalance < speedbotStake) return "Sync the account balance or lower the Speedbot stake.";
+    if (!Number.isFinite(speedbotStake) || speedbotStake < SPEEDBOT_MIN_STAKE) return `Speedbot stake must be at least ${SPEEDBOT_MIN_STAKE.toFixed(2)}.`;
+    if (
+      !Number.isFinite(speedbotNextStake)
+      || speedbotNextStake == null
+      || speedbotNextStake < SPEEDBOT_MIN_STAKE
+    ) return "Wait for Deriv to confirm the previous Speedbot result before calculating another stake.";
+    if (currentAccountBalance == null || currentAccountBalance < speedbotNextStake) {
+      return `The next Speedbot stake (${speedbotNextStake.toFixed(2)} ${currentAccount?.currency ?? "USD"}) exceeds the available balance. Lower the base stake or multiplier.`;
+    }
     if (speedbotRunning && speedbotStopReason) return "A Speedbot session limit has been reached.";
     return null;
   };
@@ -5210,13 +5244,19 @@ export default function XTraderPage() {
       return;
     }
     if (!currentAccount || candidate.symbol !== speedbotSymbol || candidate.observedWinRate <= 68) return;
+    const requestStake = speedbotNextStake;
+    if (requestStake == null || !Number.isFinite(requestStake) || requestStake < SPEEDBOT_MIN_STAKE) {
+      setSpeedbotStatusMessage("Speedbot is waiting for a verified next stake before sending another order.");
+      return;
+    }
 
     speedbotActionLockRef.current = true;
+    const requestStartedAt = Date.now();
     speedbotPendingAttemptRef.current = {
       accountId: String(currentAccount.id),
       symbol: candidate.symbol,
       barrier: candidate.barrier,
-      stake: roundTradeStakeToCents(speedbotStake),
+      stake: roundTradeStakeToCents(requestStake),
       duration: speedbotDuration,
       startedAt: Date.now(),
       knownIds: new Set(rows
@@ -5229,7 +5269,7 @@ export default function XTraderPage() {
       const result = await speedbotBuyMutation.mutateAsync({
         data: {
           access_feature: "speedbot",
-          amount: roundTradeStakeToCents(speedbotStake),
+          amount: roundTradeStakeToCents(requestStake),
           duration: speedbotDuration,
           duration_unit: "t",
           contract_type: "DIGITDIFF",
@@ -5251,7 +5291,8 @@ export default function XTraderPage() {
       speedbotScanner.resetScan();
       speedbotPendingAttemptRef.current = null;
       setSpeedbotNeedsHistoryCheck(false);
-      setSpeedbotStatusMessage("Speedbot order confirmed. Waiting for Deriv to settle this contract.");
+      setSpeedbotLastOrderLatencyMs(Math.max(0, Date.now() - requestStartedAt));
+      setSpeedbotStatusMessage(null);
       refreshTradeResults();
     } catch (error) {
       const candidateError = error && typeof error === "object"
@@ -5781,7 +5822,9 @@ export default function XTraderPage() {
     || moneyBankStarting
     || clockWorkRunning;
   const entryDigit = barrier;
-  const activeGuidePages = guideMode === "jackpot"
+  const activeGuidePages = guideMode === "speedbot"
+    ? speedbotGuidePages
+    : guideMode === "jackpot"
     ? jackpotGuidePages
     : guideMode === "trade-x"
     ? tradeXGuidePages
@@ -5796,7 +5839,9 @@ export default function XTraderPage() {
             : guideMode === "clock-work"
               ? clockWorkGuidePages
               : guidePages;
-  const canUseGuideFeature = guideMode === "jackpot"
+  const canUseGuideFeature = guideMode === "speedbot"
+    ? canUseSpeedbot
+    : guideMode === "jackpot"
     ? canUseJackpot
     : guideMode === "trade-x"
     ? canUseTradeX
@@ -6319,6 +6364,9 @@ export default function XTraderPage() {
         <div><Activity size={18} /><span><b>Speedbot</b><small>Fast, single-contract Digit Differs</small></span></div>
         <div className="xt-feature-actions">
           {!canUseSpeedbot && <span className="xt-feature-locked">RESTRICTED</span>}
+          <button className="xt-guide-button" data-feature-action="speedbot/open-guide" type="button" onClick={() => { setGuideMode("speedbot"); setGuidePage(0); setGuideOpen(true); }}>
+            <BookOpen size={14} />Guide
+          </button>
           <label className="xt-switch">
             <input
               type="checkbox"
@@ -6931,6 +6979,9 @@ export default function XTraderPage() {
           symbols={markets.map(([value, label]) => ({ value, label }))}
           duration={speedbotDuration}
           stake={speedbotStake}
+          lossMultiplier={speedbotLossMultiplier}
+          nextStake={speedbotNextStake}
+          lastOrderLatencyMs={speedbotLastOrderLatencyMs}
           takeProfit={speedbotTakeProfit}
           lossLimit={speedbotLossLimit}
           currency={currentAccount?.currency ?? "USD"}
@@ -6946,6 +6997,12 @@ export default function XTraderPage() {
           onSymbolChange={setSpeedbotSymbol}
           onDurationChange={setSpeedbotDuration}
           onStakeChange={(value) => setSpeedbotStake(roundTradeStakeToCents(Math.max(0, value)))}
+          onLossMultiplierChange={(value) => {
+            const multiplier = Number.isFinite(value) ? value : 1;
+            setSpeedbotLossMultiplier(
+              Math.max(1, Math.min(SPEEDBOT_MAX_LOSS_MULTIPLIER, Math.round(multiplier * 10) / 10)),
+            );
+          }}
           onTakeProfitChange={(value) => setSpeedbotTakeProfit(Math.max(0, value))}
           onLossLimitChange={(value) => setSpeedbotLossLimit(Math.max(0, value))}
           onRunStop={() => {
@@ -7152,12 +7209,12 @@ export default function XTraderPage() {
         <div className="xt-guide-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setGuideOpen(false); }}>
           <section className="xt-guide" role="dialog" aria-modal="true" aria-labelledby="xt-guide-title">
             <header className="xt-guide-header">
-              <div><BookOpen size={18} /><span><b>{guideMode === "jackpot" ? "Jackpot Guide" : guideMode === "trade-x" ? "Trade X Guide" : guideMode === "digit-flip" ? "DigitFlip Guide" : guideMode === "bulk-trader" ? "Bulk Trader Guide" : guideMode === "money-bank" ? "Money Bank Guide" : guideMode === "cash-grab" ? "Cash Grab Guide" : guideMode === "clock-work" ? "Clock Work Guide" : "EDGE Guide"}</b><small>Page {guidePage + 1} of {activeGuidePages.length}</small></span></div>
+              <div><BookOpen size={18} /><span><b>{guideMode === "speedbot" ? "Speedbot Guide" : guideMode === "jackpot" ? "Jackpot Guide" : guideMode === "trade-x" ? "Trade X Guide" : guideMode === "digit-flip" ? "DigitFlip Guide" : guideMode === "bulk-trader" ? "Bulk Trader Guide" : guideMode === "money-bank" ? "Money Bank Guide" : guideMode === "cash-grab" ? "Cash Grab Guide" : guideMode === "clock-work" ? "Clock Work Guide" : "EDGE Guide"}</b><small>Page {guidePage + 1} of {activeGuidePages.length}</small></span></div>
               <button type="button" aria-label="Close guide" onClick={() => setGuideOpen(false)}><X size={17} /></button>
             </header>
             <div className="xt-guide-progress"><span style={{ width: `${((guidePage + 1) / activeGuidePages.length) * 100}%` }} /></div>
             <article className="xt-guide-page">
-               <small className="xt-guide-kicker">{guideMode === "jackpot" ? "JACKPOT FIELD GUIDE" : guideMode === "trade-x" ? "TRADE X FIELD GUIDE" : guideMode === "digit-flip" ? "DIGITFLIP FIELD GUIDE" : guideMode === "bulk-trader" ? "BULK TRADER FIELD GUIDE" : guideMode === "money-bank" ? "MONEY BANK FIELD GUIDE" : guideMode === "cash-grab" ? "CASH GRAB FIELD GUIDE" : guideMode === "clock-work" ? "CLOCK WORK FIELD GUIDE" : "EDGE FIELD GUIDE"}</small>
+               <small className="xt-guide-kicker">{guideMode === "speedbot" ? "SPEEDBOT FIELD GUIDE" : guideMode === "jackpot" ? "JACKPOT FIELD GUIDE" : guideMode === "trade-x" ? "TRADE X FIELD GUIDE" : guideMode === "digit-flip" ? "DIGITFLIP FIELD GUIDE" : guideMode === "bulk-trader" ? "BULK TRADER FIELD GUIDE" : guideMode === "money-bank" ? "MONEY BANK FIELD GUIDE" : guideMode === "cash-grab" ? "CASH GRAB FIELD GUIDE" : guideMode === "clock-work" ? "CLOCK WORK FIELD GUIDE" : "EDGE FIELD GUIDE"}</small>
               <h2 id="xt-guide-title">{activeGuidePages[guidePage].title}</h2>
               <p>{activeGuidePages[guidePage].body}</p>
               <ul>{activeGuidePages[guidePage].points.map((point) => <li key={point}>{point}</li>)}</ul>
@@ -7169,7 +7226,7 @@ export default function XTraderPage() {
                 <button type="button" className="xt-guide-start" onClick={() => {
                   setGuideOpen(false);
                   if (!canUseGuideFeature) return;
-                  guideMode === "jackpot" ? toggleJackpot(true) : guideMode === "trade-x" ? toggleTradeX(true) : guideMode === "digit-flip" ? toggleDigitFlip(true) : guideMode === "bulk-trader" ? toggleBulkTrader(true) : guideMode === "money-bank" ? toggleMoneyBank(true) : guideMode === "cash-grab" ? toggleCashGrab(true) : guideMode === "clock-work" ? toggleClockWork(true) : toggleXTrader(true);
+                  guideMode === "speedbot" ? toggleSpeedbot(true) : guideMode === "jackpot" ? toggleJackpot(true) : guideMode === "trade-x" ? toggleTradeX(true) : guideMode === "digit-flip" ? toggleDigitFlip(true) : guideMode === "bulk-trader" ? toggleBulkTrader(true) : guideMode === "money-bank" ? toggleMoneyBank(true) : guideMode === "cash-grab" ? toggleCashGrab(true) : guideMode === "clock-work" ? toggleClockWork(true) : toggleXTrader(true);
                 }}>{canUseGuideFeature ? "Let's start trading" : "Close guide"}</button>
               ) : (
                 <button type="button" className="xt-guide-nav next" onClick={() => setGuidePage((page) => Math.min(activeGuidePages.length - 1, page + 1))}>Next<ChevronRight size={15} /></button>
