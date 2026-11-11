@@ -32,7 +32,7 @@ describe("customFetch transport recovery", () => {
     );
   });
 
-  it("hides upstream rate-limit and gateway wording from confirmed buy failures", async () => {
+  it("shows account-history recovery guidance for an ambiguous server buy failure", async () => {
     globalThis.fetch = (async () => new Response(
       JSON.stringify({ error: "HTTP 502 Bad Gateway: You have reached the rate limit for buy" }),
       { status: 502, statusText: "Bad Gateway", headers: { "content-type": "application/json" } },
@@ -42,13 +42,59 @@ describe("customFetch transport recovery", () => {
       customFetch("/api/deriv/bulk-buy", { method: "POST", body: JSON.stringify({ count: 2 }) }),
       (error: unknown) => {
         assert.ok(error instanceof Error);
-        assert.match(error.message, /has not confirmed this order/i);
-        assert.match(error.message, /refresh order status/i);
-        assert.doesNotMatch(error.message, /account history/i);
+        assert.match(error.message, /did not confirm whether every order/i);
+        assert.match(error.message, /selected Deriv account's open contracts and history/i);
+        assert.match(error.message, /do not resend/i);
         assert.doesNotMatch(error.message, /HTTP 502|Bad Gateway|rate limit for buy/i);
         return true;
       },
     );
+  });
+
+  it("treats an uncertain EDGE 429 batch as a history check, not routine throttling", async () => {
+    const events = new EventTarget();
+    let reported: unknown;
+    events.addEventListener("shadow-admin-diagnostic", (event) => {
+      reported = (event as CustomEvent).detail;
+    });
+    Object.defineProperty(globalThis, "window", { configurable: true, value: events });
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      return new Response(JSON.stringify({
+        code: "DERIV_BUY_RATE_LIMITED",
+        error: "Deriv temporarily limited new buys.",
+        trade_outcome: "uncertain",
+        diagnostic_source: "deriv",
+      }), {
+        status: 429,
+        statusText: "Too Many Requests",
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+
+    await assert.rejects(
+      customFetch("/api/deriv/dual-buy", {
+        method: "POST",
+        body: JSON.stringify({ access_feature: "edge", amount: 1 }),
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /did not confirm whether every order/i);
+        assert.match(error.message, /selected Deriv account's open contracts and history/i);
+        assert.match(error.message, /do not resend/i);
+        assert.doesNotMatch(error.message, /wait a moment before trying again/i);
+        return true;
+      },
+    );
+
+    assert.equal(calls, 1);
+    assert.deepEqual(reported, {
+      code: "trade_outcome_uncertain",
+      severity: "warning",
+      feature: "edge",
+      source: "deriv",
+    });
   });
 
   it("shows safe copy for an explicit exhausted Deriv buy-rate-limit response", async () => {
@@ -56,6 +102,7 @@ describe("customFetch transport recovery", () => {
       JSON.stringify({
         code: "DERIV_BUY_RATE_LIMITED",
         error: "Deriv temporarily limited new buys. Some earlier batch contracts may already be open.",
+        trade_outcome: "rejected",
       }),
       { status: 429, statusText: "Too Many Requests", headers: { "content-type": "application/json" } },
     )) as typeof fetch;

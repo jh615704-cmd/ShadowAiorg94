@@ -160,6 +160,29 @@ function buildErrorMessage(
     getStringField(data, "error");
   const tradeOutcome = getStringField(data, "trade_outcome");
 
+  if (
+    isTradeMutation(requestInfo.method, getPathname(requestInfo.url))
+    && (
+      tradeOutcome === "uncertain"
+      || ((response.status === 429 || response.status >= 500)
+        && tradeOutcome !== "not_sent"
+        && tradeOutcome !== "rejected")
+    )
+  ) {
+    const pathname = getPathname(requestInfo.url);
+    if (pathname.endsWith("/sell")) {
+      return "The server did not confirm whether the contract close completed. Check the selected Deriv account's open contracts and history; do not retry or alter the contract until its status is clear.";
+    }
+    if (
+      pathname.endsWith("/bulk-buy")
+      || pathname.endsWith("/dual-buy")
+      || pathname.endsWith("/clock-work/buy")
+    ) {
+      return "The server did not confirm whether every order in this request was accepted. Check the selected Deriv account's open contracts and history; do not resend until each order's status is clear.";
+    }
+    return "The server did not confirm whether the order was accepted. Check the selected Deriv account's open contracts and history; do not resend until its status is clear.";
+  }
+
   if (code === "DERIV_BUY_RATE_LIMITED") {
     return message
       ?? "Deriv temporarily limited new buys. The app retried confirmed rejections safely; check account history before repeating a batch.";
