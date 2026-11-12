@@ -235,6 +235,39 @@ mock.module("../lib/deriv", {
         market_matches: true,
       };
     },
+    getMoneyBankKnockoutStatistics: async (input: { symbol: string; amount: number; duration: number }) => {
+      observePat();
+      knockoutStatisticsInvocations += 1;
+      knockoutStatisticsInputs.push(input);
+      return {
+        symbol: input.symbol,
+        duration_ticks: input.duration,
+        quote_count: 200,
+        tick_sequence: 200,
+        window_start_epoch: 1_700_000_000,
+        window_end_epoch: 1_700_000_199,
+        captured_at_epoch: 1_700_000_200,
+        tick_age_seconds: 1,
+        freshness: "fresh",
+        confidence_level: 0.95,
+        rates: [1, 2, 3, 4, 5].map((growthRate) => ({
+          growth_rate: growthRate,
+          barrier: 0.00005,
+          status: "ready",
+          training_windows: 23,
+          training_knockouts: 3,
+          holdout_windows: 10,
+          observed_knockouts: 2,
+          estimated_knockouts: 1.3,
+          estimate_lower_count: 0.5,
+          estimate_upper_count: 3.2,
+          estimated_knockout_rate: 3 / 23,
+          observed_knockout_rate: 0.2,
+          holdout_gap_percentage_points: 6.95,
+          message: null,
+        })),
+      };
+    },
     buyContract: async () => {
       observePat();
       buyInvocations += 1;
@@ -326,7 +359,7 @@ app.use(express.json());
 app.use((req, res, next) => {
   Object.assign(req, { log: { error() {}, warn() {} } });
   res.locals.userId = sessionId;
-  res.locals.accessKey = { features: ["clock-work", "edge", "trade-x", "bulk-trader", "jackpot", "auto-trader", "money-bank", "speedbot"] };
+  res.locals.accessKey = { features: routeAccessFeatures };
   next();
 });
 app.use(derivRouter);
@@ -424,6 +457,30 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
     assert.equal(scanResponse.status, 200, JSON.stringify(scanResponseBody));
     assert.equal(scanResponseBody.required_knockouts, 5);
     assert.equal(knockoutScanInvocations, 1);
+
+    knockoutStatisticsInvocations = 0;
+    knockoutStatisticsInputs.length = 0;
+    const statisticsUrl = `${baseUrl}/deriv/accumulator-knockout-statistics?symbol=1HZ90V&amount=1.25&duration=5`;
+    const statisticsResponse = await fetch(statisticsUrl);
+    const statisticsBody = await readJson(statisticsResponse);
+    assert.equal(statisticsResponse.status, 200, JSON.stringify(statisticsBody));
+    assert.equal(statisticsResponse.headers.get("cache-control"), "no-store");
+    assert.deepEqual((statisticsBody.rates as Array<{ growth_rate: number }>).map((rate) => rate.growth_rate), [1, 2, 3, 4, 5]);
+    assert.deepEqual(knockoutStatisticsInputs, [{ symbol: "1HZ90V", amount: 1.25, duration: 5 }]);
+    assert.equal(knockoutStatisticsInvocations, 1);
+
+    const unsupportedStatisticsResponse = await fetch(
+      `${baseUrl}/deriv/accumulator-knockout-statistics?symbol=R_75&amount=1&duration=5`,
+    );
+    assert.equal(unsupportedStatisticsResponse.status, 400);
+    assert.equal(knockoutStatisticsInvocations, 1);
+
+    const grantedFeatures = routeAccessFeatures;
+    routeAccessFeatures = ["edge"];
+    const blockedStatisticsResponse = await fetch(statisticsUrl);
+    routeAccessFeatures = grantedFeatures;
+    assert.equal(blockedStatisticsResponse.status, 403);
+    assert.equal(knockoutStatisticsInvocations, 1);
 
     const invalidMoneyBankDurationResponse = await fetch(`${baseUrl}/deriv/buy`, {
       method: "POST",
@@ -767,7 +824,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
     });
     assert.equal(outOfRangeAutoTraderResponse.status, 400);
     assert.match(String((await readJson(outOfRangeAutoTraderResponse)).error), /1 to 5 ticks/);
-    assert.deepEqual(observedPats, Array.from({ length: 34 }, () => enteredPat));
+    assert.deepEqual(observedPats, Array.from({ length: 35 }, () => enteredPat));
 
     const priorBuyInvocations = buyInvocations;
     const priorBulkBuyInvocations = bulkBuyInvocations;

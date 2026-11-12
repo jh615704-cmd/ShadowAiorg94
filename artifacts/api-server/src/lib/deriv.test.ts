@@ -718,6 +718,55 @@ describe("Money Bank knockout statistics", { concurrency: false }, () => {
       assert.equal(socket.sent.some((message) => message.proposal || message.buy), false);
     });
   });
+
+  test("keeps stale quote windows out of the estimate and avoids unnecessary proposals", async () => {
+    await withSelectedAccount("money-bank-stale-knockout-statistics-user", async () => {
+      await deriv.selectSymbol("1HZ90V");
+      const socket = latestSocket();
+      const oldEpoch = Math.floor(Date.now() / 1000) - 20;
+      emitMessage(socket, {
+        msg_type: "tick",
+        tick: { symbol: "1HZ90V", quote: 75.5, epoch: oldEpoch, pip_size: 5 },
+      });
+      emitMessage(socket, {
+        msg_type: "tick",
+        tick: { symbol: "1HZ90V", quote: 75.5001, epoch: oldEpoch + 1, pip_size: 5 },
+      });
+
+      const result = await deriv.getMoneyBankKnockoutStatistics({
+        symbol: "1HZ90V",
+        amount: 1,
+        duration: 5,
+      });
+
+      assert.equal(result.freshness, "stale_data");
+      assert.ok(result.rates.every((rate) => rate.status === "stale_data"));
+      assert.equal(socket.sent.some((message) => message.proposal || message.buy), false);
+    });
+  });
+
+  test("shows later observed counts but withholds estimates when samples are too small", async () => {
+    await withSelectedAccount("money-bank-insufficient-knockout-statistics-user", async () => {
+      await deriv.selectSymbol("1HZ90V");
+      const socket = latestSocket();
+      const quotes = Array.from({ length: 200 }, (_, index) =>
+        index < 140 || index % 2 === 0 ? 75.5 : 75.5001,
+      );
+      emitAccumulatorTicks(socket, quotes);
+
+      const result = await deriv.getMoneyBankKnockoutStatistics({
+        symbol: "1HZ90V",
+        amount: 1,
+        duration: 20,
+      });
+
+      assert.ok(result.rates.every((rate) => rate.status === "insufficient_evidence"));
+      assert.ok(result.rates.every((rate) => rate.estimated_knockouts === null));
+      assert.ok(result.rates.every((rate) => rate.holdout_windows > 0 && rate.holdout_windows < 5));
+      assert.ok(result.rates.every((rate) => rate.observed_knockouts > 0));
+      assert.equal(socket.sent.some((message) => message.buy), false);
+    });
+  });
 });
 
 describe("Deriv buy acknowledgement safety", { concurrency: false }, () => {

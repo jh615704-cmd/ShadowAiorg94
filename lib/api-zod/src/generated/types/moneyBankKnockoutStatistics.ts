@@ -12,6 +12,7 @@ import type { MoneyBankKnockoutStatisticsRate } from './moneyBankKnockoutStatist
 export interface MoneyBankKnockoutStatistics {
   symbol: string;
   /**
+     * Selected Take Ticks value used as the quote-replay horizon, not as a contract expiry.
      * @minimum 1
      * @maximum 30
      */

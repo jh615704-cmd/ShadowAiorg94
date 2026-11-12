@@ -74,22 +74,13 @@ export function MoneyBankKnockoutStats({
     : Math.max(0, nowEpoch - data.window_end_epoch);
   const dataIsStale = Boolean(data && (
     query.isError
+    || !connected
+    || !accountId
+    || amount < 1
     || data.freshness !== "fresh"
-    || liveTickAge == null
-    || liveTickAge > 5
     || snapshotAge == null
     || snapshotAge > 65
   ));
-  const readyRates = data?.rates.filter((rate) => (
-    rate.status === "ready"
-    && rate.estimated_knockouts != null
-    && rate.estimate_lower_count != null
-    && rate.estimate_upper_count != null
-  )) ?? [];
-  const withinModelRange = readyRates.filter((rate) => (
-    rate.observed_knockouts >= rate.estimate_lower_count!
-    && rate.observed_knockouts <= rate.estimate_upper_count!
-  )).length;
 
   const freshnessMessage = !connected
     ? "Connect Deriv to collect live quotes."
@@ -97,12 +88,12 @@ export function MoneyBankKnockoutStats({
       ? "Select a Deriv account to request current rate barriers."
       : amount < 1
         ? "Set an Accumulator stake of at least $1."
-        : dataIsStale
-          ? `Stale sample · latest quote ${liveTickAge == null ? "unavailable" : `${liveTickAge}s old`}`
-          : data?.freshness === "waiting_for_quote"
-            ? "Waiting for live quotes from this market."
+        : data?.freshness === "waiting_for_quote"
+          ? "Waiting for live quotes from this market."
+          : dataIsStale
+            ? `Stale sample · latest sampled tick ${liveTickAge == null ? "unavailable" : `${liveTickAge}s old`}`
             : data
-              ? `${data.quote_count} recent quotes · latest tick ${liveTickAge ?? "—"}s ago`
+              ? `Captured ${snapshotAge ?? "—"}s ago · tick was ${data.tick_age_seconds ?? "—"}s old at capture`
               : query.isPending
                 ? "Loading current Deriv barriers…"
                 : "Statistics are not available.";
@@ -128,7 +119,7 @@ export function MoneyBankKnockoutStats({
 
       {data && (
         <p className="money-bank-knockout-window">
-          {symbol} · {duration} ticks · sample window {formatWindowTime(data.window_start_epoch)}–{formatWindowTime(data.window_end_epoch)}
+          {symbol} · {duration}-tick replay horizon · sample window {formatWindowTime(data.window_start_epoch)}–{formatWindowTime(data.window_end_epoch)}
           {snapshotAge != null && ` · updated ${snapshotAge}s ago`}
         </p>
       )}
@@ -173,7 +164,7 @@ export function MoneyBankKnockoutStats({
                   ))}
                 </tr>
                 <tr>
-                  <th scope="row">95% model range</th>
+                  <th scope="row">95% estimate interval</th>
                   {data.rates.map((rate) => (
                     <td key={rate.growth_rate}>
                       {rate.status === "ready"
@@ -210,12 +201,6 @@ export function MoneyBankKnockoutStats({
               </span>
             ))}
           </div>
-
-          {readyRates.length > 0 && (
-            <p className="money-bank-knockout-range-check">
-              Holdout range check: {withinModelRange}/{readyRates.length} observed counts fell inside the model range.
-            </p>
-          )}
         </>
       )}
 
@@ -224,7 +209,7 @@ export function MoneyBankKnockoutStats({
       )}
 
       <p className="money-bank-knockout-disclaimer">
-        Uses each current Deriv barrier with earlier live quotes for the estimate and later non-overlapping windows for the check. The 95% Wilson interval describes model uncertainty, not 95% accuracy or a future guarantee. These are quote replays, not actual contracts.
+        Read-only analysis using each current Deriv barrier with earlier live quotes for the estimate and later non-overlapping windows for the observed count. The 95% Wilson interval describes uncertainty in the estimated expected count, not 95% accuracy or a future guarantee. Quote replays do not model actual contract settlement or change your selected setup.
       </p>
     </section>
   );

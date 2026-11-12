@@ -794,6 +794,7 @@ paths:
             type: integer
             minimum: 1
             maximum: 30
+            description: Selected Money Bank Take Ticks value used as a hypothetical quote-replay horizon; it does not set an Accumulator expiry.
       responses:
         "200":
           description: Rate-specific model estimates and their later-sample observations
@@ -1881,6 +1882,7 @@ components:
           type: integer
           minimum: 1
           maximum: 30
+          description: Selected Take Ticks value used as the quote-replay horizon, not as a contract expiry.
         quote_count:
           type: integer
           minimum: 0

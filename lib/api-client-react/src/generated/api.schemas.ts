@@ -879,6 +879,7 @@ export const MoneyBankKnockoutStatisticsConfidenceLevel = {
 export interface MoneyBankKnockoutStatistics {
   symbol: string;
   /**
+     * Selected Take Ticks value used as the quote-replay horizon, not as a contract expiry.
      * @minimum 1
      * @maximum 30
      */
@@ -1423,6 +1424,7 @@ symbol: string;
  */
 amount: number;
 /**
+ * Selected Money Bank Take Ticks value used as a hypothetical quote-replay horizon; it does not set an Accumulator expiry.
  * @minimum 1
  * @maximum 30
  */

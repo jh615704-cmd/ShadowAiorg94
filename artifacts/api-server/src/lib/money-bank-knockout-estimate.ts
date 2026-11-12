@@ -27,14 +27,21 @@ function knockoutOutcomes(
 
   for (let start = 0; start + durationTicks < quotes.length; start += stride) {
     const entryQuote = quotes[start]!;
+    if (!Number.isFinite(entryQuote) || entryQuote <= 0) continue;
     let knockedOut = false;
+    let validWindow = true;
     for (let tick = start + 1; tick <= start + durationTicks; tick += 1) {
-      if (Math.abs(quotes[tick]! - entryQuote) >= barrier) {
+      const quote = quotes[tick]!;
+      if (!Number.isFinite(quote) || quote <= 0) {
+        validWindow = false;
+        break;
+      }
+      if (Math.abs(quote - entryQuote) >= barrier) {
         knockedOut = true;
         break;
       }
     }
-    outcomes.push(knockedOut);
+    if (validWindow) outcomes.push(knockedOut);
   }
 
   return outcomes;
@@ -79,7 +86,7 @@ export function estimateMoneyBankKnockouts(
     throw new RangeError("Accumulator sample duration must be from 1 to 30 ticks.");
   }
   const durationTicks = Math.floor(input.durationTicks);
-  const quotes = input.quotes.filter((quote) => Number.isFinite(quote) && quote > 0);
+  const quotes = input.quotes;
   const splitIndex = Math.floor(quotes.length * 0.7);
   const training = knockoutOutcomes(quotes.slice(0, splitIndex), input.barrier, durationTicks);
   const holdout = knockoutOutcomes(quotes.slice(splitIndex), input.barrier, durationTicks);

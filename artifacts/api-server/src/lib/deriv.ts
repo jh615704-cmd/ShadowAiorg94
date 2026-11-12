@@ -1614,9 +1614,10 @@ export async function getMoneyBankKnockoutStatistics(
     ? null
     : Math.max(0, Math.floor(Math.abs(Date.now() / 1000 - initialEpoch)));
   if (initialQuotes.length < 2 || initialEpoch == null || initialAge == null || initialAge > 5) {
-    const freshness: MoneyBankKnockoutStatistics["freshness"] = initialEpoch == null
-      ? "waiting_for_quote"
-      : "stale_data";
+    const freshness: MoneyBankKnockoutStatistics["freshness"] =
+      initialQuotes.length < 2 || initialEpoch == null || initialAge == null
+        ? "waiting_for_quote"
+        : "stale_data";
     const status: MoneyBankKnockoutStatisticsRate["status"] = freshness === "stale_data"
       ? "stale_data"
       : "waiting_for_quote";

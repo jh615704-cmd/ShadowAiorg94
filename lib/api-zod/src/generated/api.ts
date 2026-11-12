@@ -1028,7 +1028,7 @@ export const getMoneyBankKnockoutStatisticsResponseRatesMax = 5;
 
 export const GetMoneyBankKnockoutStatisticsResponse = zod.object({
   "symbol": zod.string(),
-  "duration_ticks": zod.number().int().min(1).max(getMoneyBankKnockoutStatisticsResponseDurationTicksMax),
+  "duration_ticks": zod.number().int().min(1).max(getMoneyBankKnockoutStatisticsResponseDurationTicksMax).describe('Selected Take Ticks value used as the quote-replay horizon, not as a contract expiry.'),
   "quote_count": zod.number().int().min(getMoneyBankKnockoutStatisticsResponseQuoteCountMin).max(getMoneyBankKnockoutStatisticsResponseQuoteCountMax),
   "tick_sequence": zod.number().int().min(getMoneyBankKnockoutStatisticsResponseTickSequenceMin),
   "window_start_epoch": zod.number().int().min(getMoneyBankKnockoutStatisticsResponseWindowStartEpochMin).nullable(),

@@ -620,7 +620,6 @@
 
 .money-bank-knockout-window,
 .money-bank-knockout-message,
-.money-bank-knockout-range-check,
 .money-bank-knockout-disclaimer {
   margin: 0;
   font-size: .57rem;
@@ -701,12 +700,6 @@
   display: block;
   margin-left: 4px;
   color: #8fa4c1;
-}
-
-.money-bank-knockout-range-check {
-  margin-top: 6px;
-  color: #c3d7f3;
-  font-weight: 700;
 }
 
 .money-bank-knockout-disclaimer {
