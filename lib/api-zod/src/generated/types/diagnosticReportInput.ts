@@ -7,6 +7,7 @@
  */
 import type { DiagnosticCode } from './diagnosticCode';
 import type { DiagnosticFeature } from './diagnosticFeature';
+import type { DiagnosticOperation } from './diagnosticOperation';
 import type { DiagnosticSeverity } from './diagnosticSeverity';
 import type { DiagnosticSource } from './diagnosticSource';
 
@@ -15,4 +16,5 @@ export interface DiagnosticReportInput {
   code: DiagnosticCode;
   severity: DiagnosticSeverity;
   source?: DiagnosticSource;
+  operation?: DiagnosticOperation;
 }

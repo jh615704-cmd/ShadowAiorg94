@@ -91,6 +91,7 @@ export * from './derivTokenTestResponse';
 export * from './derivTradeEventStream';
 export * from './diagnosticCode';
 export * from './diagnosticFeature';
+export * from './diagnosticOperation';
 export * from './diagnosticReportInput';
 export * from './diagnosticReportResponse';
 export * from './diagnosticResolutionStatus';

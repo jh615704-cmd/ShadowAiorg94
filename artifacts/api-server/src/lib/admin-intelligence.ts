@@ -4,6 +4,7 @@ import type {
   AdminIntelligenceScan,
   DiagnosticCode,
   DiagnosticFeature,
+  DiagnosticOperation,
   DiagnosticSource,
   DiagnosticReportInput,
 } from "@workspace/api-zod";
@@ -53,7 +54,7 @@ const scanCoverage = {
   reported_signal_categories: [
     "Browser runtime errors and unhandled rejections reported by connected dashboard sessions.",
     "API transport and server failures observed by the shared API client.",
-    "Uncertain trade responses from instrumented buy, sell, bulk, dual, Jackpot, and Clock Work requests.",
+    "Uncertain or partially confirmed trade responses from instrumented single, bulk, dual, sell, Jackpot, and Clock Work requests.",
     "Auto Trader 2.0 saved-state validation and browser-storage failures.",
   ],
   not_directly_scanned: [
@@ -61,13 +62,14 @@ const scanCoverage = {
     "Live market tick freshness or feature-specific history refresh freshness.",
     "Automation activity on user devices that has not submitted a diagnostic report.",
   ],
-  note: "Reports are aggregated for up to 30 minutes. No report means no signal was received; it is not proof that a feature or account is healthy. Review Deriv history and open contracts before acting on any uncertain order.",
+  note: "Reports are aggregated for up to 30 minutes. No report means no signal was received; it is not proof that a feature or account is healthy. Overlapping and uncertain trades require manual review in Deriv history and open contracts.",
 };
 
 interface DiagnosticRecord {
   id: string;
   feature: DiagnosticFeature;
   code: DiagnosticCode;
+  operation?: DiagnosticOperation;
   source: DiagnosticSource;
   severity: "warning" | "error";
   firstSeenAt: number;
@@ -84,7 +86,8 @@ export class AdminIntelligenceRegistry {
   report(input: DiagnosticReportInput, sessionId: string, now = Date.now()): void {
     this.prune(now);
     const source = input.source ?? "unknown";
-    const id = `${input.feature}:${input.code}:${source}`;
+    const operation = input.operation;
+    const id = `${input.feature}:${input.code}:${operation ?? "unspecified"}:${source}`;
     let record = this.records.get(id);
     const wasReviewed = record?.reviewedAt != null;
     if (!record) {
@@ -92,6 +95,7 @@ export class AdminIntelligenceRegistry {
         id,
         feature: input.feature,
         code: input.code,
+        ...(operation ? { operation } : {}),
         source,
         severity: input.severity,
         firstSeenAt: now,
@@ -158,10 +162,11 @@ export class AdminIntelligenceRegistry {
           id: record.id,
           feature: record.feature,
           code: record.code,
+          ...(record.operation ? { operation: record.operation } : {}),
           source: record.source,
           severity: record.severity,
           ...copy,
-          evidence: `${record.occurrences} sanitized report${record.occurrences === 1 ? "" : "s"} from ${affectedSessions} access session${affectedSessions === 1 ? "" : "s"}; reported source: ${record.source}.`,
+          evidence: `${record.occurrences} sanitized report${record.occurrences === 1 ? "" : "s"} from ${affectedSessions} access session${affectedSessions === 1 ? "" : "s"}${record.operation ? `; operation: ${record.operation}` : ""}; reported source: ${record.source}.`,
           resolution_status: record.reviewedAt != null
             ? "review_acknowledged" as const
             : record.code === "trade_outcome_uncertain" || record.code === "saved_state_invalid"

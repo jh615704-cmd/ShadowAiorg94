@@ -177,6 +177,7 @@ function buildErrorMessage(
       pathname.endsWith("/bulk-buy")
       || pathname.endsWith("/dual-buy")
       || pathname.endsWith("/clock-work/buy")
+      || pathname.endsWith("/jackpot/buy")
     ) {
       return "The server did not confirm whether every order in this request was accepted. Check the selected Deriv account's open contracts and history; do not resend until each order's status is clear.";
     }
@@ -378,7 +379,7 @@ function getPathname(url: string): string {
 }
 
 function isTradeMutation(method: string, pathname: string): boolean {
-  return method === "POST" && /^\/api\/deriv\/(?:buy|bulk-buy|dual-buy|sell|clock-work\/buy)$/.test(pathname);
+  return method === "POST" && /^\/api\/deriv\/(?:buy|bulk-buy|dual-buy|sell|clock-work\/buy|jackpot\/buy)$/.test(pathname);
 }
 
 const diagnosticTradeFeatures = new Set([
@@ -386,23 +387,39 @@ const diagnosticTradeFeatures = new Set([
   "digit-flip",
   "trade-x",
   "bulk-trader",
+  "jackpot",
   "clock-work",
   "cash-grab",
   "money-bank",
   "jdy-ai-3",
   "auto-trader",
   "auto-trader-2",
+  "speedbot",
 ]);
+
+type DiagnosticOperation = "buy" | "bulk_buy" | "dual_buy" | "sell" | "jackpot_batch" | "clock_work_batch";
+
+function tradeOperationForDiagnostic(pathname: string): DiagnosticOperation | undefined {
+  if (pathname.endsWith("/jackpot/buy")) return "jackpot_batch";
+  if (pathname.endsWith("/clock-work/buy")) return "clock_work_batch";
+  if (pathname.endsWith("/bulk-buy")) return "bulk_buy";
+  if (pathname.endsWith("/dual-buy")) return "dual_buy";
+  if (pathname.endsWith("/sell")) return "sell";
+  if (pathname.endsWith("/buy")) return "buy";
+  return undefined;
+}
 
 function tradeFeatureForDiagnostic(method: string, pathname: string, body: BodyInit | null | undefined): string | undefined {
   if (!isTradeMutation(method, pathname)) return undefined;
   if (pathname.endsWith("/clock-work/buy")) return "clock-work";
+  if (pathname.endsWith("/jackpot/buy")) return "jackpot";
 
   if (typeof body === "string") {
     try {
       const payload: unknown = JSON.parse(body);
-      if (payload && typeof payload === "object" && "access_feature" in payload) {
-        const feature = (payload as { access_feature?: unknown }).access_feature;
+      if (payload && typeof payload === "object") {
+        const fields = payload as { access_feature?: unknown; diagnostic_feature?: unknown };
+        const feature = pathname.endsWith("/sell") ? fields.diagnostic_feature : fields.access_feature;
         if (typeof feature === "string" && diagnosticTradeFeatures.has(feature)) return feature;
       }
     } catch {
@@ -410,13 +427,16 @@ function tradeFeatureForDiagnostic(method: string, pathname: string, body: BodyI
     }
   }
 
-  return pathname.endsWith("/dual-buy") || pathname.endsWith("/sell") ? "edge" : "trade-x";
+  if (pathname.endsWith("/sell")) return "dashboard";
+  return pathname.endsWith("/dual-buy") ? "edge" : "trade-x";
 }
 
 function isUnconfirmedTradeResponse(payload: unknown): boolean {
   if (!payload || typeof payload !== "object") return false;
   const result = payload as { ok?: unknown; message?: unknown };
+  const failed = tradeFailureEntries(payload);
   return result.ok === false
+    || failed.length > 0
     || (typeof result.message === "string" && /unconfirmed|uncertain|could not be confirmed/i.test(result.message));
 }
 
@@ -455,11 +475,18 @@ function reportAdminDiagnostic(
   severity: "warning" | "error",
   feature?: string,
   source: TradeDiagnosticSource = "unknown",
+  operation?: DiagnosticOperation,
 ) {
   if (typeof window === "undefined") return;
   try {
     window.dispatchEvent(new CustomEvent("shadow-admin-diagnostic", {
-      detail: { code, severity, source, ...(feature ? { feature } : {}) },
+      detail: {
+        code,
+        severity,
+        source,
+        ...(feature ? { feature } : {}),
+        ...(operation ? { operation } : {}),
+      },
     }));
   } catch {
     // Diagnostics must never interfere with the original request.
@@ -607,6 +634,7 @@ export async function customFetch<T = unknown>(
   const requestId = createRequestId();
   const requestPath = getPathname(requestInfo.url);
   const tradeFeature = tradeFeatureForDiagnostic(method, requestPath, init.body);
+  const tradeOperation = tradeOperationForDiagnostic(requestPath);
   headers.set("x-client-request-id", requestId);
   const requestInit: RequestInit = {
     ...init,
@@ -625,7 +653,7 @@ export async function customFetch<T = unknown>(
   } catch (error) {
     if (isAbortError(error, requestInit.signal)) {
       if (tradeFeature && !signalAbortedBeforeFetch) {
-        reportAdminDiagnostic("trade_outcome_uncertain", "warning", tradeFeature, "transport");
+        reportAdminDiagnostic("trade_outcome_uncertain", "warning", tradeFeature, "transport", tradeOperation);
         throw new ApiTransportError(error, requestInfo, requestId);
       }
       throw error;
@@ -640,6 +668,7 @@ export async function customFetch<T = unknown>(
         tradeFeature ? "warning" : "error",
         tradeFeature,
         "transport",
+        tradeOperation,
       );
       throw new ApiTransportError(error, requestInfo, requestId);
     }
@@ -672,6 +701,7 @@ export async function customFetch<T = unknown>(
         tradeOutcomeUncertain ? "warning" : "error",
         tradeFeature,
         source,
+        tradeOperation,
       );
     }
     throw new ApiError(response, errorData, requestInfo);
@@ -682,7 +712,7 @@ export async function customFetch<T = unknown>(
     payload = await parseSuccessBody(response, responseType, requestInfo);
   } catch (error) {
     if (!tradeFeature) throw error;
-    reportAdminDiagnostic("trade_outcome_uncertain", "warning", tradeFeature, "transport");
+    reportAdminDiagnostic("trade_outcome_uncertain", "warning", tradeFeature, "transport", tradeOperation);
     throw new ApiTransportError(error, requestInfo, requestId, "response");
   }
   if (tradeFeature && isUnconfirmedTradeResponse(payload)) {
@@ -698,6 +728,7 @@ export async function customFetch<T = unknown>(
         uncertain ? "warning" : "error",
         tradeFeature,
         source,
+        tradeOperation,
       );
     }
   }

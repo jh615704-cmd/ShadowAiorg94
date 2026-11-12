@@ -56,6 +56,18 @@ export const DiagnosticCode = {
   storage_unavailable: 'storage_unavailable',
 } as const;
 
+export type DiagnosticOperation = typeof DiagnosticOperation[keyof typeof DiagnosticOperation];
+
+
+export const DiagnosticOperation = {
+  buy: 'buy',
+  bulk_buy: 'bulk_buy',
+  dual_buy: 'dual_buy',
+  sell: 'sell',
+  jackpot_batch: 'jackpot_batch',
+  clock_work_batch: 'clock_work_batch',
+} as const;
+
 export type DiagnosticSeverity = typeof DiagnosticSeverity[keyof typeof DiagnosticSeverity];
 
 
@@ -123,6 +135,7 @@ export interface DiagnosticReportInput {
   code: DiagnosticCode;
   severity: DiagnosticSeverity;
   source?: DiagnosticSource;
+  operation?: DiagnosticOperation;
 }
 
 export interface AdminIntelligenceFindingReviewInput {
@@ -167,6 +180,7 @@ export interface AdminIntelligenceFinding {
   code: DiagnosticCode;
   severity: DiagnosticSeverity;
   source: DiagnosticSource;
+  operation?: DiagnosticOperation;
   summary: string;
   likely_cause: string;
   evidence: string;
@@ -1366,6 +1380,8 @@ export interface DerivBuyResponse {
 export interface DerivSellInput {
   /** @minLength 1 */
   contract_id: string;
+  /** Optional feature attribution for sanitized diagnostics only; it does not affect order routing. */
+  diagnostic_feature?: DiagnosticFeature;
 }
 
 export interface DerivSellResponse {

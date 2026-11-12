@@ -2515,7 +2515,9 @@ export default function XTraderPage() {
         let latestRows = await getDerivHistory();
         const openContractId = moneyBankOpenContractIdRef.current;
         if (openContractId && latestRows.some((trade) => trade.contract_id === openContractId && isDerivHistoryOpen(trade.status))) {
-          await moneyBankSellMutation.mutateAsync({ data: { contract_id: openContractId } });
+          await moneyBankSellMutation.mutateAsync({
+            data: { contract_id: openContractId, diagnostic_feature: "money-bank" },
+          });
         }
         await queryClient.refetchQueries({ queryKey: getGetDerivHistoryQueryKey(), type: "active" });
       } finally {
@@ -3493,7 +3495,9 @@ export default function XTraderPage() {
             }
             await Promise.all(refreshedOpenIds.map(async (contractId) => {
               try {
-                await cashGrabSellMutation.mutateAsync({ data: { contract_id: contractId } });
+                await cashGrabSellMutation.mutateAsync({
+                  data: { contract_id: contractId, diagnostic_feature: "cash-grab" },
+                });
               } catch {
                 // Settlement can win the race against a close request.
               }
@@ -3504,7 +3508,9 @@ export default function XTraderPage() {
 
           await Promise.all(openIds.map(async (contractId) => {
             try {
-              await cashGrabSellMutation.mutateAsync({ data: { contract_id: contractId } });
+              await cashGrabSellMutation.mutateAsync({
+                data: { contract_id: contractId, diagnostic_feature: "cash-grab" },
+              });
             } catch {
               // A contract can settle between the history read and the close
               // request. The next history sweep decides whether it still needs

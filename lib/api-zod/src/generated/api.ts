@@ -92,6 +92,7 @@ export const ScanAdminIntelligenceResponse = zod.object({
   "code": zod.enum(['client_runtime_error', 'client_unhandled_rejection', 'api_server_error', 'trade_outcome_uncertain', 'saved_state_invalid', 'storage_unavailable']),
   "severity": zod.enum(['warning', 'error']),
   "source": zod.enum(['browser_app', 'api_server', 'deriv', 'transport', 'unknown']),
+  "operation": zod.enum(['buy', 'bulk_buy', 'dual_buy', 'sell', 'jackpot_batch', 'clock_work_batch']).optional(),
   "summary": zod.string(),
   "likely_cause": zod.string(),
   "evidence": zod.string(),
@@ -202,7 +203,8 @@ export const ReportAccessDiagnosticBody = zod.object({
   "feature": zod.union([zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'jackpot', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'speedbot', 'settings', 'history', 'admin']),zod.enum(['dashboard'])]),
   "code": zod.enum(['client_runtime_error', 'client_unhandled_rejection', 'api_server_error', 'trade_outcome_uncertain', 'saved_state_invalid', 'storage_unavailable']),
   "severity": zod.enum(['warning', 'error']),
-  "source": zod.enum(['browser_app', 'api_server', 'deriv', 'transport', 'unknown']).optional()
+  "source": zod.enum(['browser_app', 'api_server', 'deriv', 'transport', 'unknown']).optional(),
+  "operation": zod.enum(['buy', 'bulk_buy', 'dual_buy', 'sell', 'jackpot_batch', 'clock_work_batch']).optional()
 })
 
 export const ReportAccessDiagnosticResponse = zod.object({
@@ -1676,7 +1678,8 @@ export const BuyClockWorkContractsResponse = zod.object({
 
 
 export const SellDerivContractBody = zod.object({
-  "contract_id": zod.string().min(1)
+  "contract_id": zod.string().min(1),
+  "diagnostic_feature": zod.union([zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'jackpot', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'speedbot', 'settings', 'history', 'admin']),zod.enum(['dashboard'])]).optional().describe('Optional feature attribution for sanitized diagnostics only; it does not affect order routing.')
 })
 
 export const SellDerivContractResponse = zod.object({

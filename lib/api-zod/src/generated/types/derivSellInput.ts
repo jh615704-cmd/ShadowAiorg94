@@ -5,8 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { DiagnosticFeature } from './diagnosticFeature';
 
 export interface DerivSellInput {
   /** @minLength 1 */
   contract_id: string;
+  /** Optional feature attribution for sanitized diagnostics only; it does not affect order routing. */
+  diagnostic_feature?: DiagnosticFeature;
 }

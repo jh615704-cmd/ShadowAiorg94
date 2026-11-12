@@ -94,6 +94,7 @@ describe("customFetch transport recovery", () => {
       severity: "warning",
       feature: "edge",
       source: "deriv",
+      operation: "dual_buy",
     });
   });
 
@@ -210,6 +211,7 @@ describe("customFetch transport recovery", () => {
       severity: "warning",
       feature: "digit-flip",
       source: "transport",
+      operation: "buy",
     });
   });
 
@@ -250,6 +252,7 @@ describe("customFetch transport recovery", () => {
       severity: "warning",
       feature: "edge",
       source: "transport",
+      operation: "bulk_buy",
     });
   });
 
@@ -290,6 +293,7 @@ describe("customFetch transport recovery", () => {
       severity: "warning",
       feature: "edge",
       source: "transport",
+      operation: "bulk_buy",
     });
   });
 
@@ -345,6 +349,114 @@ describe("customFetch transport recovery", () => {
       severity: "warning",
       feature: "bulk-trader",
       source: "unknown",
+      operation: "bulk_buy",
+    });
+  });
+
+  it("captures uncertain partial Jackpot batches with operation-level attribution", async () => {
+    const events = new EventTarget();
+    let reported: unknown;
+    events.addEventListener("shadow-admin-diagnostic", (event) => {
+      reported = (event as CustomEvent).detail;
+    });
+    Object.defineProperty(globalThis, "window", { configurable: true, value: events });
+    globalThis.fetch = (async () => new Response(
+      JSON.stringify({
+        ok: true,
+        message: "Some contracts were acknowledged.",
+        failed: [{ key: "higher-1", outcome: "uncertain", source: "deriv", error: "Not confirmed." }],
+      }),
+      { status: 202, headers: { "content-type": "application/json" } },
+    )) as typeof fetch;
+
+    await customFetch("/api/deriv/jackpot/buy", {
+      method: "POST",
+      body: JSON.stringify({ contract_types: ["CALL"] }),
+    });
+
+    assert.deepEqual(reported, {
+      code: "trade_outcome_uncertain",
+      severity: "warning",
+      feature: "jackpot",
+      source: "deriv",
+      operation: "jackpot_batch",
+    });
+  });
+
+  it("attributes shared contract-close uncertainty to the workspace, not a guessed feature", async () => {
+    const events = new EventTarget();
+    let reported: unknown;
+    events.addEventListener("shadow-admin-diagnostic", (event) => {
+      reported = (event as CustomEvent).detail;
+    });
+    Object.defineProperty(globalThis, "window", { configurable: true, value: events });
+    globalThis.fetch = (async () => new Response(
+      JSON.stringify({ error: "Close was not confirmed.", trade_outcome: "uncertain" }),
+      { status: 502, headers: { "content-type": "application/json" } },
+    )) as typeof fetch;
+
+    await assert.rejects(customFetch("/api/deriv/sell", {
+      method: "POST",
+      body: JSON.stringify({ contract_id: "private-contract-id" }),
+    }));
+
+    assert.deepEqual(reported, {
+      code: "trade_outcome_uncertain",
+      severity: "warning",
+      feature: "dashboard",
+      source: "unknown",
+      operation: "sell",
+    });
+  });
+
+  it("uses explicit feature context to attribute a Cash Grab close failure", async () => {
+    const events = new EventTarget();
+    let reported: unknown;
+    events.addEventListener("shadow-admin-diagnostic", (event) => {
+      reported = (event as CustomEvent).detail;
+    });
+    Object.defineProperty(globalThis, "window", { configurable: true, value: events });
+    globalThis.fetch = (async () => {
+      throw new TypeError("Connection lost");
+    }) as typeof fetch;
+
+    await assert.rejects(customFetch("/api/deriv/sell", {
+      method: "POST",
+      body: JSON.stringify({ contract_id: "private-contract-id", diagnostic_feature: "cash-grab" }),
+    }));
+
+    assert.deepEqual(reported, {
+      code: "trade_outcome_uncertain",
+      severity: "warning",
+      feature: "cash-grab",
+      source: "transport",
+      operation: "sell",
+    });
+    assert.doesNotMatch(JSON.stringify(reported), /private-contract-id/);
+  });
+
+  it("attributes Speedbot uncertain orders to Speedbot", async () => {
+    const events = new EventTarget();
+    let reported: unknown;
+    events.addEventListener("shadow-admin-diagnostic", (event) => {
+      reported = (event as CustomEvent).detail;
+    });
+    Object.defineProperty(globalThis, "window", { configurable: true, value: events });
+    globalThis.fetch = (async () => {
+      throw new TypeError("Connection lost");
+    }) as typeof fetch;
+
+    await assert.rejects(customFetch("/api/deriv/buy", {
+      method: "POST",
+      body: JSON.stringify({ access_feature: "speedbot", amount: 1 }),
+    }));
+
+    assert.deepEqual(reported, {
+      code: "trade_outcome_uncertain",
+      severity: "warning",
+      feature: "speedbot",
+      source: "transport",
+      operation: "buy",
     });
   });
 
@@ -374,6 +486,7 @@ describe("customFetch transport recovery", () => {
       severity: "error",
       feature: "edge",
       source: "deriv",
+      operation: "bulk_buy",
     });
   });
 
@@ -403,6 +516,7 @@ describe("customFetch transport recovery", () => {
       severity: "error",
       feature: "bulk-trader",
       source: "api_server",
+      operation: "bulk_buy",
     });
   });
 

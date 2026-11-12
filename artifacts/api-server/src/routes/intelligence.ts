@@ -1,5 +1,8 @@
 import { Router, type IRouter } from "express";
 import {
+  ReviewAdminIntelligenceFindingBody,
+  ReviewAdminIntelligenceFindingParams,
+  ReviewAdminIntelligenceFindingResponse,
   ReportAccessDiagnosticBody,
   ReportAccessDiagnosticResponse,
   ScanAdminIntelligenceResponse,
@@ -18,7 +21,9 @@ router.post("/access/diagnostics", requireAccess, (req, res): void => {
 
   const allowedFeatures = res.locals.accessKey?.features as string[] | undefined;
   const isAdminKey = res.locals.accessKey?.kind === "admin";
-  if (!isAdminKey && !allowedFeatures?.includes(parsed.data.feature)) {
+  const mayReportSharedDashboard = parsed.data.feature === "dashboard"
+    && Boolean(allowedFeatures?.some((feature) => feature !== "admin"));
+  if (!isAdminKey && !allowedFeatures?.includes(parsed.data.feature) && !mayReportSharedDashboard) {
     res.status(403).json({ error: "This access key cannot report that feature" });
     return;
   }
@@ -39,6 +44,27 @@ router.get(
   requireAccessAdmin,
   (_req, res): void => {
     res.json(ScanAdminIntelligenceResponse.parse(adminIntelligenceRegistry.scan()));
+  },
+);
+
+router.post(
+  "/admin/intelligence/findings/:id/review",
+  requireAccess,
+  requireAccessAdmin,
+  (req, res): void => {
+    const params = ReviewAdminIntelligenceFindingParams.safeParse({ id: req.params.id });
+    const body = ReviewAdminIntelligenceFindingBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: "Explicit review confirmation is required" });
+      return;
+    }
+
+    const result = adminIntelligenceRegistry.review(params.data.id);
+    if (!result) {
+      res.status(404).json({ error: "Diagnostic finding was not found" });
+      return;
+    }
+    res.json(ReviewAdminIntelligenceFindingResponse.parse(result));
   },
 );
 

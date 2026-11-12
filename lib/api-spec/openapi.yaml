@@ -1265,6 +1265,9 @@ components:
     DiagnosticCode:
       type: string
       enum: [client_runtime_error, client_unhandled_rejection, api_server_error, trade_outcome_uncertain, saved_state_invalid, storage_unavailable]
+    DiagnosticOperation:
+      type: string
+      enum: [buy, bulk_buy, dual_buy, sell, jackpot_batch, clock_work_batch]
     DiagnosticSeverity:
       type: string
       enum: [warning, error]
@@ -1294,6 +1297,8 @@ components:
           $ref: "#/components/schemas/DiagnosticSeverity"
         source:
           $ref: "#/components/schemas/DiagnosticSource"
+        operation:
+          $ref: "#/components/schemas/DiagnosticOperation"
     AdminIntelligenceFindingReviewInput:
       type: object
       required: [confirm_review]
@@ -1332,6 +1337,8 @@ components:
           $ref: "#/components/schemas/DiagnosticSeverity"
         source:
           $ref: "#/components/schemas/DiagnosticSource"
+        operation:
+          $ref: "#/components/schemas/DiagnosticOperation"
         summary: { type: string }
         likely_cause: { type: string }
         evidence: { type: string }
@@ -2322,6 +2329,10 @@ components:
         contract_id:
           type: string
           minLength: 1
+        diagnostic_feature:
+          allOf:
+            - $ref: "#/components/schemas/DiagnosticFeature"
+          description: Optional feature attribution for sanitized diagnostics only; it does not affect order routing.
     DerivSellResponse:
       type: object
       required: [ok, contract_id, sold_for]

@@ -7,6 +7,7 @@
  */
 import type { DiagnosticCode } from './diagnosticCode';
 import type { DiagnosticFeature } from './diagnosticFeature';
+import type { DiagnosticOperation } from './diagnosticOperation';
 import type { DiagnosticResolutionStatus } from './diagnosticResolutionStatus';
 import type { DiagnosticSeverity } from './diagnosticSeverity';
 import type { DiagnosticSource } from './diagnosticSource';
@@ -17,6 +18,7 @@ export interface AdminIntelligenceFinding {
   code: DiagnosticCode;
   severity: DiagnosticSeverity;
   source: DiagnosticSource;
+  operation?: DiagnosticOperation;
   summary: string;
   likely_cause: string;
   evidence: string;

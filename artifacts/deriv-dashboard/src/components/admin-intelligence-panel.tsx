@@ -1,8 +1,14 @@
-import { getScanAdminIntelligenceQueryKey, useScanAdminIntelligence } from "@workspace/api-client-react";
+import {
+  getScanAdminIntelligenceQueryKey,
+  useReviewAdminIntelligenceFinding,
+  useScanAdminIntelligence,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Activity, AlertTriangle, ArrowUpRight, Check, Clock3, LockKeyhole, MessageSquareText, RefreshCw, ShieldCheck } from "lucide-react";
 import "./admin-intelligence-panel.css";
 
 const featureLabels: Record<string, string> = {
+  dashboard: "Trading workspace",
   edge: "Edge",
   "digit-flip": "Digit Flip",
   "trade-x": "Trade X",
@@ -35,6 +41,15 @@ const sourceLabels: Record<string, string> = {
   deriv: "Deriv",
   transport: "Connection",
   unknown: "Unverified",
+};
+
+const operationLabels: Record<string, string> = {
+  buy: "Single buy",
+  bulk_buy: "Bulk buy",
+  dual_buy: "Dual buy",
+  sell: "Contract close",
+  jackpot_batch: "Jackpot batch",
+  clock_work_batch: "Clock Work batch",
 };
 
 function formatDate(value: string) {
@@ -75,7 +90,14 @@ function findingSafeguard(code: string, source: string) {
   return "No verified one-click repair is available. Review the feature and its service logs before making changes.";
 }
 
+function reviewStatusLabel(status: string) {
+  if (status === "review_acknowledged") return "Review acknowledged";
+  if (status === "review_required") return "Manual review required";
+  return "Recovery not confirmed";
+}
+
 export default function AdminIntelligencePanel() {
+  const queryClient = useQueryClient();
   const scan = useScanAdminIntelligence({
     query: {
       queryKey: getScanAdminIntelligenceQueryKey(),
@@ -83,11 +105,20 @@ export default function AdminIntelligencePanel() {
       refetchIntervalInBackground: true,
     },
   });
+  const reviewFinding = useReviewAdminIntelligenceFinding({
+    mutation: {
+      onSuccess: async () => {
+        await queryClient.invalidateQueries({ queryKey: getScanAdminIntelligenceQueryKey() });
+      },
+    },
+  });
   const data = scan.data;
   const features = data?.features ?? [];
   const findings = data?.findings ?? [];
-  const openCount = features.reduce((total, feature) => total + feature.open_findings, 0);
-  const issueCount = features.filter((feature) => feature.status === "issue").length;
+  const openFindings = findings.filter((finding) => finding.resolution_status !== "review_acknowledged");
+  const openCount = openFindings.length;
+  const openFeatures = new Set(openFindings.map((finding) => finding.feature));
+  const issueCount = openFeatures.size;
 
   return (
     <section className="intel-panel" aria-labelledby="intel-title">
@@ -129,18 +160,30 @@ export default function AdminIntelligencePanel() {
       ) : data ? (
         <>
           <div className="intel-overview">
-            <div className={`intel-health ${issueCount ? "has-issues" : "is-clear"}`}>
-              <span className="intel-health-icon">{issueCount ? <AlertTriangle size={17} /> : <ShieldCheck size={18} />}</span>
+            <div className={`intel-health ${issueCount ? "has-issues" : findings.length ? "has-reviewed" : "no-reports"}`}>
+              <span className="intel-health-icon">
+                {issueCount
+                  ? <AlertTriangle size={17} />
+                  : findings.length
+                    ? <Check size={18} />
+                    : <Activity size={18} />}
+              </span>
               <span className="intel-health-copy">
-                <strong>{issueCount ? `${issueCount} feature${issueCount === 1 ? "" : "s"} need attention` : "Systems clear"}</strong>
-                <small>{data.server_status === "healthy" ? "Diagnostic service healthy" : "Service status reported"}</small>
+                <strong>
+                  {openCount
+                    ? `${openCount} finding${openCount === 1 ? "" : "s"} need review`
+                    : findings.length
+                      ? "Recent findings are reviewed"
+                      : "No diagnostic reports received"}
+                </strong>
+                <small>{data.server_status === "healthy" ? "Report-based checks, not live account health" : "Service status reported"}</small>
               </span>
             </div>
             <div className="intel-metric">
               <strong>{features.length}</strong><span>features watched</span>
             </div>
             <div className="intel-metric">
-              <strong>{openCount}</strong><span>open findings</span>
+              <strong>{openCount}</strong><span>need review</span>
             </div>
             <div className="intel-updated">
               <Clock3 size={14} />
@@ -152,13 +195,53 @@ export default function AdminIntelligencePanel() {
             <div className="intel-section-label"><span>FEATURE STATUS</span><span>{features.length} monitored</span></div>
             <div className="intel-feature-list">
               {features.map((feature) => (
-                <div className={`intel-feature ${feature.status === "issue" ? "feature-issue" : "feature-clear"}`} key={feature.feature} data-testid={`status-feature-${feature.feature}`}>
-                  <span className="intel-feature-led">{feature.status === "issue" ? <AlertTriangle size={12} /> : <Check size={12} />}</span>
+                <div
+                  className={`intel-feature ${
+                    openFeatures.has(feature.feature)
+                      ? "feature-issue"
+                      : feature.recent_findings > 0
+                        ? "feature-reviewed"
+                        : "feature-no-signal"
+                  }`}
+                  key={feature.feature}
+                  data-testid={`status-feature-${feature.feature}`}
+                  title={feature.recent_findings > 0
+                    ? `${feature.recent_findings} recent diagnostic finding${feature.recent_findings === 1 ? "" : "s"}`
+                    : "No recent diagnostic report; feature health is unknown"}
+                >
+                  <span className="intel-feature-led">
+                    {openFeatures.has(feature.feature)
+                      ? <AlertTriangle size={12} />
+                      : feature.recent_findings > 0
+                        ? <Check size={12} />
+                        : <Activity size={12} />}
+                  </span>
                   <span className="intel-feature-name">{featureName(feature.feature)}</span>
-                  {feature.open_findings > 0 && <b>{feature.open_findings}</b>}
+                  {feature.recent_findings > 0 && <b>{feature.recent_findings}</b>}
                 </div>
               ))}
             </div>
+          </div>
+
+          <div className="intel-coverage" data-testid="panel-intelligence-coverage">
+            <div className="intel-coverage-heading">
+              <strong>Scan scope</strong>
+              <span>Read-only reports · no account inspection</span>
+            </div>
+            <p>{data.coverage.note}</p>
+            <details>
+              <summary>What this scan receives and does not inspect</summary>
+              <div className="intel-coverage-lists">
+                <div>
+                  <b>Reported signals</b>
+                  <ul>{data.coverage.reported_signal_categories.map((item) => <li key={item}>{item}</li>)}</ul>
+                </div>
+                <div>
+                  <b>Not scanned</b>
+                  <ul>{data.coverage.not_directly_scanned.map((item) => <li key={item}>{item}</li>)}</ul>
+                </div>
+              </div>
+            </details>
           </div>
 
           <div className="intel-feed-heading">
@@ -169,12 +252,15 @@ export default function AdminIntelligencePanel() {
           {scan.isError && (
             <div className="intel-stale-note" role="status">The latest refresh failed. Showing the last successful scan.</div>
           )}
+          {reviewFinding.isError && (
+            <div className="intel-stale-note" role="alert">The review acknowledgment was not saved. No trade or account state was changed.</div>
+          )}
 
           {findings.length === 0 ? (
             <div className="intel-empty" data-testid="state-intelligence-empty">
-              <span className="intel-empty-icon"><ShieldCheck size={21} /></span>
-              <strong>No feature issues reported</strong>
-              <p>All monitored features are clear. I’ll check again in five seconds while this admin panel is open.</p>
+              <span className="intel-empty-icon"><Activity size={21} /></span>
+              <strong>No diagnostic reports received</strong>
+              <p>No signal is not proof that a feature or account is healthy. The report-only scan will continue while this panel is open.</p>
             </div>
           ) : (
             <ol className="intel-chat-thread" aria-live="polite" data-testid="list-intelligence-findings">
@@ -189,10 +275,21 @@ export default function AdminIntelligencePanel() {
                           <span className="intel-feature-tag">{featureName(finding.feature)}</span>
                           <span className="intel-code">{codeLabels[finding.code] ?? finding.code.replaceAll("_", " ")}</span>
                           <span className={`intel-source-tag source-${finding.source}`}>{sourceLabels[finding.source] ?? "Unverified"}</span>
+                          {finding.operation && <span className="intel-operation-tag">{operationLabels[finding.operation] ?? finding.operation}</span>}
                         </div>
                         <time dateTime={finding.last_seen_at}>{formatDate(finding.last_seen_at)}</time>
                       </div>
                       <p className="intel-summary">{finding.summary}</p>
+                      <div className="intel-finding-details">
+                        <div>
+                          <strong>Likely cause</strong>
+                          <p>{finding.likely_cause}</p>
+                        </div>
+                        <div>
+                          <strong>Evidence</strong>
+                          <p>{finding.evidence}</p>
+                        </div>
+                      </div>
                       <div className="intel-guidance">
                         <span className="intel-guidance-label"><ArrowUpRight size={13} /> GUIDANCE</span>
                         <p>{finding.guidance}</p>
@@ -202,11 +299,29 @@ export default function AdminIntelligencePanel() {
                           <span><b>{finding.affected_sessions.toLocaleString()}</b> affected sessions</span>
                           <span><b>{finding.occurrences.toLocaleString()}</b> occurrences</span>
                           <span>First seen {formatDate(finding.first_seen_at)}</span>
+                          <span className={`intel-review-status ${finding.resolution_status}`}>
+                            {reviewStatusLabel(finding.resolution_status)}
+                            {finding.reviewed_at && ` · ${formatDate(finding.reviewed_at)}`}
+                          </span>
                         </div>
                         <div className="intel-fix-wrap">
-                          <button className="intel-fix-button is-disabled" disabled title="No verified safe repair is available." aria-describedby={`safeguard-${finding.id}`} data-testid={`button-fix-finding-${finding.id}`}>
-                            <LockKeyhole size={13} /> Fix it now
-                          </button>
+                          {finding.resolution_status === "review_acknowledged" ? (
+                            <span className="intel-reviewed-label"><Check size={13} /> Review recorded</span>
+                          ) : (
+                            <button
+                              className="intel-review-button"
+                              disabled={reviewFinding.isPending}
+                              onClick={() => reviewFinding.mutate({
+                                id: finding.id,
+                                data: { confirm_review: true },
+                              })}
+                              title="Records review acknowledgment only; does not resolve or alter any trade."
+                              data-testid={`button-review-finding-${finding.id}`}
+                            >
+                              <LockKeyhole size={13} />
+                              {reviewFinding.isPending && reviewFinding.variables?.id === finding.id ? "Saving review…" : "Mark reviewed"}
+                            </button>
+                          )}
                           <small id={`safeguard-${finding.id}`}>{findingSafeguard(finding.code, finding.source)}</small>
                         </div>
                       </div>

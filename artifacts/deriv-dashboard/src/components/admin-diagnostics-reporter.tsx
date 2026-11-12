@@ -9,6 +9,7 @@ type DiagnosticCode =
   | "storage_unavailable";
 
 type DiagnosticFeature =
+  | "dashboard"
   | "edge"
   | "digit-flip"
   | "trade-x"
@@ -20,12 +21,15 @@ type DiagnosticFeature =
   | "jdy-ai-3"
   | "auto-trader"
   | "auto-trader-2"
+  | "speedbot"
   | "settings"
   | "history";
 
 type DiagnosticSource = "browser_app" | "api_server" | "deriv" | "transport" | "unknown";
+type DiagnosticOperation = "buy" | "bulk_buy" | "dual_buy" | "sell" | "jackpot_batch" | "clock_work_batch";
 
 const allowedFeatures = new Set<DiagnosticFeature>([
+  "dashboard",
   "edge",
   "digit-flip",
   "trade-x",
@@ -37,8 +41,17 @@ const allowedFeatures = new Set<DiagnosticFeature>([
   "jdy-ai-3",
   "auto-trader",
   "auto-trader-2",
+  "speedbot",
   "settings",
   "history",
+]);
+const allowedOperations = new Set<DiagnosticOperation>([
+  "buy",
+  "bulk_buy",
+  "dual_buy",
+  "sell",
+  "jackpot_batch",
+  "clock_work_batch",
 ]);
 
 const diagnosticWindow = window as Window & {
@@ -49,9 +62,10 @@ function featureForCurrentRoute(): DiagnosticFeature | null {
   const path = window.location.pathname.replace(/\/+$/, "") || "/";
   if (path.startsWith("/auto-trader-2")) return "auto-trader-2";
   if (path.startsWith("/auto-trader")) return "auto-trader";
-  if (path.startsWith("/settings") || path.startsWith("/dashboard")) return "settings";
+  if (path.startsWith("/settings")) return "settings";
+  if (path.startsWith("/history")) return "history";
   if (path.startsWith("/admin") || path.startsWith("/sign-in")) return null;
-  return "trade-x";
+  return "dashboard";
 }
 
 function sendDiagnostic(
@@ -59,9 +73,10 @@ function sendDiagnostic(
   code: DiagnosticCode,
   severity: "warning" | "error",
   source: DiagnosticSource,
+  operation?: DiagnosticOperation,
 ) {
   const now = Date.now();
-  const key = `${feature}:${code}:${source}`;
+  const key = `${feature}:${code}:${source}:${operation ?? "unspecified"}`;
   const lastSent = diagnosticWindow.__shadowDiagnosticLastSent ?? new Map<string, number>();
   diagnosticWindow.__shadowDiagnosticLastSent = lastSent;
   if (now - (lastSent.get(key) ?? 0) < 30_000) return;
@@ -71,7 +86,7 @@ function sendDiagnostic(
     method: "POST",
     credentials: "same-origin",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ feature, code, severity, source }),
+    body: JSON.stringify({ feature, code, severity, source, operation }),
   }).catch(() => undefined);
 }
 
@@ -82,10 +97,11 @@ export function AdminDiagnosticsReporter() {
       severity: "warning" | "error",
       feature?: DiagnosticFeature,
       source: DiagnosticSource = "browser_app",
+      operation?: DiagnosticOperation,
     ) => {
       const resolvedFeature = feature ?? featureForCurrentRoute();
       if (!resolvedFeature || !allowedFeatures.has(resolvedFeature)) return;
-      sendDiagnostic(resolvedFeature, code, severity, source);
+      sendDiagnostic(resolvedFeature, code, severity, source, operation);
     };
 
     const onError = () => report("client_runtime_error", "error");
@@ -96,6 +112,7 @@ export function AdminDiagnosticsReporter() {
         code?: unknown;
         severity?: unknown;
         source?: unknown;
+        operation?: unknown;
       }>).detail;
       if (!detail || typeof detail !== "object") return;
       if (
@@ -107,7 +124,10 @@ export function AdminDiagnosticsReporter() {
       const source = ["browser_app", "api_server", "deriv", "transport", "unknown"].includes(String(detail.source))
         ? detail.source as DiagnosticSource
         : "unknown";
-      report(detail.code as DiagnosticCode, detail.severity, detail.feature as DiagnosticFeature, source);
+      const operation = typeof detail.operation === "string" && allowedOperations.has(detail.operation as DiagnosticOperation)
+        ? detail.operation as DiagnosticOperation
+        : undefined;
+      report(detail.code as DiagnosticCode, detail.severity, detail.feature as DiagnosticFeature, source, operation);
     };
 
     window.addEventListener("error", onError);
