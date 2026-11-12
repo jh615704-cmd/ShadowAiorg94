@@ -10,6 +10,6 @@ export type AdminIntelligenceFeatureStatusStatus = typeof AdminIntelligenceFeatu
 
 
 export const AdminIntelligenceFeatureStatusStatus = {
-  clear: 'clear',
-  issue: 'issue',
+  no_reports: 'no_reports',
+  reports_received: 'reports_received',
 } as const;

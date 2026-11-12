@@ -28,6 +28,8 @@ import type {
   AccessSession,
   AdminFeatureSettings,
   AdminFeatureSettingsUpdate,
+  AdminIntelligenceFindingReviewInput,
+  AdminIntelligenceFindingReviewResponse,
   AdminIntelligenceScan,
   AdminUserInput,
   ApprovedUser,
@@ -414,7 +416,7 @@ export const getScanAdminIntelligenceUrl = () => {
 }
 
 /**
- * Returns sanitized, aggregated client diagnostics without account credentials, account IDs, trade payloads, or raw exception messages.
+ * Returns sanitized, aggregated client reports. It does not inspect live Deriv contracts, market-data freshness, or account history.
  * @summary Get the latest cross-feature diagnostic scan
  */
 export const scanAdminIntelligence = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminIntelligenceScan> => {
@@ -482,6 +484,79 @@ export function useScanAdminIntelligence<TData = Awaited<ReturnType<typeof scanA
 
 
 
+
+export const getReviewAdminIntelligenceFindingUrl = (id: string,) => {
+
+
+
+
+  return `/api/admin/intelligence/findings/${id}/review`
+}
+
+/**
+ * Records an administrator review acknowledgment only. It does not resolve the finding or change trade, account, or saved-session state.
+ * @summary Acknowledge review of a diagnostic finding
+ */
+export const reviewAdminIntelligenceFinding = async (id: string,
+    adminIntelligenceFindingReviewInput: AdminIntelligenceFindingReviewInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminIntelligenceFindingReviewResponse> => {
+
+  return customFetch<AdminIntelligenceFindingReviewResponse>(getReviewAdminIntelligenceFindingUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminIntelligenceFindingReviewInput)
+  }
+);}
+
+
+
+
+
+export const getReviewAdminIntelligenceFindingMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewAdminIntelligenceFinding>>, TError,{id: string;data: BodyType<AdminIntelligenceFindingReviewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reviewAdminIntelligenceFinding>>, TError,{id: string;data: BodyType<AdminIntelligenceFindingReviewInput>}, TContext> => {
+
+const mutationKey = ['reviewAdminIntelligenceFinding'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reviewAdminIntelligenceFinding>>, {id: string;data: BodyType<AdminIntelligenceFindingReviewInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reviewAdminIntelligenceFinding(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReviewAdminIntelligenceFindingMutationResult = NonNullable<Awaited<ReturnType<typeof reviewAdminIntelligenceFinding>>>
+    export type ReviewAdminIntelligenceFindingMutationBody = BodyType<AdminIntelligenceFindingReviewInput>
+    export type ReviewAdminIntelligenceFindingMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Acknowledge review of a diagnostic finding
+ */
+export const useReviewAdminIntelligenceFinding = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewAdminIntelligenceFinding>>, TError,{id: string;data: BodyType<AdminIntelligenceFindingReviewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reviewAdminIntelligenceFinding>>,
+        TError,
+        {id: string;data: BodyType<AdminIntelligenceFindingReviewInput>},
+        TContext
+      > => {
+      return useMutation(getReviewAdminIntelligenceFindingMutationOptions(options));
+    }
 
 export const getLoginAccessKeyUrl = () => {
 

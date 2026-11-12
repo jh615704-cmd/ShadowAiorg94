@@ -75,15 +75,6 @@ export const DiagnosticSource = {
   unknown: 'unknown',
 } as const;
 
-export type TradeBuyFailureOutcome = typeof TradeBuyFailureOutcome[keyof typeof TradeBuyFailureOutcome];
-
-
-export const TradeBuyFailureOutcome = {
-  rejected: 'rejected',
-  uncertain: 'uncertain',
-  not_sent: 'not_sent',
-} as const;
-
 export type AccessFeature = typeof AccessFeature[keyof typeof AccessFeature];
 
 
@@ -105,11 +96,50 @@ export const AccessFeature = {
   admin: 'admin',
 } as const;
 
+export const DiagnosticFeature = {...AccessFeature,  dashboard: 'dashboard',
+} as const
+export type DiagnosticFeature = typeof DiagnosticFeature[keyof typeof DiagnosticFeature];
+
+export type DiagnosticResolutionStatus = typeof DiagnosticResolutionStatus[keyof typeof DiagnosticResolutionStatus];
+
+
+export const DiagnosticResolutionStatus = {
+  recovery_unconfirmed: 'recovery_unconfirmed',
+  review_required: 'review_required',
+  review_acknowledged: 'review_acknowledged',
+} as const;
+
+export type TradeBuyFailureOutcome = typeof TradeBuyFailureOutcome[keyof typeof TradeBuyFailureOutcome];
+
+
+export const TradeBuyFailureOutcome = {
+  rejected: 'rejected',
+  uncertain: 'uncertain',
+  not_sent: 'not_sent',
+} as const;
+
 export interface DiagnosticReportInput {
-  feature: AccessFeature;
+  feature: DiagnosticFeature;
   code: DiagnosticCode;
   severity: DiagnosticSeverity;
   source?: DiagnosticSource;
+}
+
+export interface AdminIntelligenceFindingReviewInput {
+  confirm_review: true;
+}
+
+export type AdminIntelligenceFindingReviewResponseReviewedBy = typeof AdminIntelligenceFindingReviewResponseReviewedBy[keyof typeof AdminIntelligenceFindingReviewResponseReviewedBy];
+
+
+export const AdminIntelligenceFindingReviewResponseReviewedBy = {
+  administrator: 'administrator',
+} as const;
+
+export interface AdminIntelligenceFindingReviewResponse {
+  id: string;
+  reviewed_at: string;
+  reviewed_by: AdminIntelligenceFindingReviewResponseReviewedBy;
 }
 
 export interface DiagnosticReportResponse {
@@ -120,25 +150,32 @@ export type AdminIntelligenceFeatureStatusStatus = typeof AdminIntelligenceFeatu
 
 
 export const AdminIntelligenceFeatureStatusStatus = {
-  clear: 'clear',
-  issue: 'issue',
+  no_reports: 'no_reports',
+  reports_received: 'reports_received',
 } as const;
 
 export interface AdminIntelligenceFeatureStatus {
-  feature: AccessFeature;
+  feature: DiagnosticFeature;
   status: AdminIntelligenceFeatureStatusStatus;
   /** @minimum 0 */
-  open_findings: number;
+  recent_findings: number;
 }
 
 export interface AdminIntelligenceFinding {
   id: string;
-  feature: AccessFeature;
+  feature: DiagnosticFeature;
   code: DiagnosticCode;
   severity: DiagnosticSeverity;
   source: DiagnosticSource;
   summary: string;
+  likely_cause: string;
+  evidence: string;
   guidance: string;
+  resolution_status: DiagnosticResolutionStatus;
+  /** @nullable */
+  reviewed_at: string | null;
+  /** @nullable */
+  reviewed_by: string | null;
   first_seen_at: string;
   last_seen_at: string;
   /** @minimum 1 */
@@ -146,6 +183,20 @@ export interface AdminIntelligenceFinding {
   /** @minimum 1 */
   affected_sessions: number;
   fix_available: boolean;
+}
+
+export type AdminIntelligenceScanCoverageMode = typeof AdminIntelligenceScanCoverageMode[keyof typeof AdminIntelligenceScanCoverageMode];
+
+
+export const AdminIntelligenceScanCoverageMode = {
+  reported_client_signals: 'reported_client_signals',
+} as const;
+
+export interface AdminIntelligenceScanCoverage {
+  mode: AdminIntelligenceScanCoverageMode;
+  reported_signal_categories: string[];
+  not_directly_scanned: string[];
+  note: string;
 }
 
 export type AdminIntelligenceScanServerStatus = typeof AdminIntelligenceScanServerStatus[keyof typeof AdminIntelligenceScanServerStatus];
@@ -158,6 +209,7 @@ export const AdminIntelligenceScanServerStatus = {
 export interface AdminIntelligenceScan {
   scanned_at: string;
   server_status: AdminIntelligenceScanServerStatus;
+  coverage: AdminIntelligenceScanCoverage;
   features: AdminIntelligenceFeatureStatus[];
   findings: AdminIntelligenceFinding[];
 }

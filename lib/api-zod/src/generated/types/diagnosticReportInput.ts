@@ -5,13 +5,13 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { AccessFeature } from './accessFeature';
 import type { DiagnosticCode } from './diagnosticCode';
+import type { DiagnosticFeature } from './diagnosticFeature';
 import type { DiagnosticSeverity } from './diagnosticSeverity';
 import type { DiagnosticSource } from './diagnosticSource';
 
 export interface DiagnosticReportInput {
-  feature: AccessFeature;
+  feature: DiagnosticFeature;
   code: DiagnosticCode;
   severity: DiagnosticSeverity;
   source?: DiagnosticSource;

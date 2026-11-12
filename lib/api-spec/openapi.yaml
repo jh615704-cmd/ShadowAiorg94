@@ -113,20 +113,64 @@ paths:
   /admin/intelligence/scan:
     get:
       security:
-        - clerkSession: []
+        - accessSession: []
       operationId: scanAdminIntelligence
       tags: [admin]
       summary: Get the latest cross-feature diagnostic scan
-      description: Returns sanitized, aggregated client diagnostics without account credentials, account IDs, trade payloads, or raw exception messages.
+      description: Returns sanitized, aggregated client reports. It does not inspect live Deriv contracts, market-data freshness, or account history.
       responses:
         "200":
-          description: Current scan of all trading features
+          description: Current report-only scan across the monitored features
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminIntelligenceScan"
         "403":
           description: Administrator access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/intelligence/findings/{id}/review:
+    post:
+      security:
+        - accessSession: []
+      operationId: reviewAdminIntelligenceFinding
+      tags: [admin]
+      summary: Acknowledge review of a diagnostic finding
+      description: Records an administrator review acknowledgment only. It does not resolve the finding or change trade, account, or saved-session state.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 200 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminIntelligenceFindingReviewInput"
+      responses:
+        "200":
+          description: Review acknowledgment recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminIntelligenceFindingReviewResponse"
+        "400":
+          description: Explicit review confirmation is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Administrator access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Finding no longer exists
           content:
             application/json:
               schema:
@@ -1227,6 +1271,14 @@ components:
     DiagnosticSource:
       type: string
       enum: [browser_app, api_server, deriv, transport, unknown]
+    DiagnosticFeature:
+      oneOf:
+        - $ref: "#/components/schemas/AccessFeature"
+        - type: string
+          enum: [dashboard]
+    DiagnosticResolutionStatus:
+      type: string
+      enum: [recovery_unconfirmed, review_required, review_acknowledged]
     TradeBuyFailureOutcome:
       type: string
       enum: [rejected, uncertain, not_sent]
@@ -1235,13 +1287,25 @@ components:
       required: [feature, code, severity]
       properties:
         feature:
-          $ref: "#/components/schemas/AccessFeature"
+          $ref: "#/components/schemas/DiagnosticFeature"
         code:
           $ref: "#/components/schemas/DiagnosticCode"
         severity:
           $ref: "#/components/schemas/DiagnosticSeverity"
         source:
           $ref: "#/components/schemas/DiagnosticSource"
+    AdminIntelligenceFindingReviewInput:
+      type: object
+      required: [confirm_review]
+      properties:
+        confirm_review: { type: boolean, enum: [true] }
+    AdminIntelligenceFindingReviewResponse:
+      type: object
+      required: [id, reviewed_at, reviewed_by]
+      properties:
+        id: { type: string }
+        reviewed_at: { type: string, format: date-time }
+        reviewed_by: { type: string, enum: [administrator] }
     DiagnosticReportResponse:
       type: object
       required: [accepted]
@@ -1249,19 +1313,19 @@ components:
         accepted: { type: boolean }
     AdminIntelligenceFeatureStatus:
       type: object
-      required: [feature, status, open_findings]
+      required: [feature, status, recent_findings]
       properties:
         feature:
-          $ref: "#/components/schemas/AccessFeature"
-        status: { type: string, enum: [clear, issue] }
-        open_findings: { type: integer, minimum: 0 }
+          $ref: "#/components/schemas/DiagnosticFeature"
+        status: { type: string, enum: [no_reports, reports_received] }
+        recent_findings: { type: integer, minimum: 0 }
     AdminIntelligenceFinding:
       type: object
-      required: [id, feature, code, severity, source, summary, guidance, first_seen_at, last_seen_at, occurrences, affected_sessions, fix_available]
+      required: [id, feature, code, severity, source, summary, likely_cause, evidence, guidance, resolution_status, reviewed_at, reviewed_by, first_seen_at, last_seen_at, occurrences, affected_sessions, fix_available]
       properties:
         id: { type: string }
         feature:
-          $ref: "#/components/schemas/AccessFeature"
+          $ref: "#/components/schemas/DiagnosticFeature"
         code:
           $ref: "#/components/schemas/DiagnosticCode"
         severity:
@@ -1269,18 +1333,38 @@ components:
         source:
           $ref: "#/components/schemas/DiagnosticSource"
         summary: { type: string }
+        likely_cause: { type: string }
+        evidence: { type: string }
         guidance: { type: string }
+        resolution_status:
+          $ref: "#/components/schemas/DiagnosticResolutionStatus"
+        reviewed_at: { type: ["string", "null"], format: date-time }
+        reviewed_by: { type: ["string", "null"] }
         first_seen_at: { type: string, format: date-time }
         last_seen_at: { type: string, format: date-time }
         occurrences: { type: integer, minimum: 1 }
         affected_sessions: { type: integer, minimum: 1 }
         fix_available: { type: boolean }
+    AdminIntelligenceScanCoverage:
+      type: object
+      required: [mode, reported_signal_categories, not_directly_scanned, note]
+      properties:
+        mode: { type: string, enum: [reported_client_signals] }
+        reported_signal_categories:
+          type: array
+          items: { type: string }
+        not_directly_scanned:
+          type: array
+          items: { type: string }
+        note: { type: string }
     AdminIntelligenceScan:
       type: object
-      required: [scanned_at, server_status, features, findings]
+      required: [scanned_at, server_status, coverage, features, findings]
       properties:
         scanned_at: { type: string, format: date-time }
         server_status: { type: string, enum: [healthy] }
+        coverage:
+          $ref: "#/components/schemas/AdminIntelligenceScanCoverage"
         features:
           type: array
           items:

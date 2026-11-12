@@ -63,10 +63,10 @@ export const CreateAdminUserResponse = zod.object({
 
 
 /**
- * Returns sanitized, aggregated client diagnostics without account credentials, account IDs, trade payloads, or raw exception messages.
+ * Returns sanitized, aggregated client reports. It does not inspect live Deriv contracts, market-data freshness, or account history.
  * @summary Get the latest cross-feature diagnostic scan
  */
-export const scanAdminIntelligenceResponseFeaturesItemOpenFindingsMin = 0;
+export const scanAdminIntelligenceResponseFeaturesItemRecentFindingsMin = 0;
 
 
 
@@ -75,25 +75,59 @@ export const scanAdminIntelligenceResponseFeaturesItemOpenFindingsMin = 0;
 export const ScanAdminIntelligenceResponse = zod.object({
   "scanned_at": zod.coerce.date(),
   "server_status": zod.enum(['healthy']),
+  "coverage": zod.object({
+  "mode": zod.enum(['reported_client_signals']),
+  "reported_signal_categories": zod.array(zod.string()),
+  "not_directly_scanned": zod.array(zod.string()),
+  "note": zod.string()
+}),
   "features": zod.array(zod.object({
-  "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'jackpot', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'speedbot', 'settings', 'history', 'admin']),
-  "status": zod.enum(['clear', 'issue']),
-  "open_findings": zod.number().int().min(scanAdminIntelligenceResponseFeaturesItemOpenFindingsMin)
+  "feature": zod.union([zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'jackpot', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'speedbot', 'settings', 'history', 'admin']),zod.enum(['dashboard'])]),
+  "status": zod.enum(['no_reports', 'reports_received']),
+  "recent_findings": zod.number().int().min(scanAdminIntelligenceResponseFeaturesItemRecentFindingsMin)
 })),
   "findings": zod.array(zod.object({
   "id": zod.string(),
-  "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'jackpot', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'speedbot', 'settings', 'history', 'admin']),
+  "feature": zod.union([zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'jackpot', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'speedbot', 'settings', 'history', 'admin']),zod.enum(['dashboard'])]),
   "code": zod.enum(['client_runtime_error', 'client_unhandled_rejection', 'api_server_error', 'trade_outcome_uncertain', 'saved_state_invalid', 'storage_unavailable']),
   "severity": zod.enum(['warning', 'error']),
   "source": zod.enum(['browser_app', 'api_server', 'deriv', 'transport', 'unknown']),
   "summary": zod.string(),
+  "likely_cause": zod.string(),
+  "evidence": zod.string(),
   "guidance": zod.string(),
+  "resolution_status": zod.enum(['recovery_unconfirmed', 'review_required', 'review_acknowledged']),
+  "reviewed_at": zod.coerce.date().nullable(),
+  "reviewed_by": zod.string().nullable(),
   "first_seen_at": zod.coerce.date(),
   "last_seen_at": zod.coerce.date(),
   "occurrences": zod.number().int().min(1),
   "affected_sessions": zod.number().int().min(1),
   "fix_available": zod.boolean()
 }))
+})
+
+
+/**
+ * Records an administrator review acknowledgment only. It does not resolve the finding or change trade, account, or saved-session state.
+ * @summary Acknowledge review of a diagnostic finding
+ */
+export const reviewAdminIntelligenceFindingPathIdMax = 200;
+
+
+
+export const ReviewAdminIntelligenceFindingParams = zod.object({
+  "id": zod.coerce.string().min(1).max(reviewAdminIntelligenceFindingPathIdMax)
+})
+
+export const ReviewAdminIntelligenceFindingBody = zod.object({
+  "confirm_review": zod.literal(true)
+})
+
+export const ReviewAdminIntelligenceFindingResponse = zod.object({
+  "id": zod.string(),
+  "reviewed_at": zod.coerce.date(),
+  "reviewed_by": zod.enum(['administrator'])
 })
 
 
@@ -165,7 +199,7 @@ export const LogoutAccessSessionResponse = zod.object({
  * @summary Report a sanitized feature diagnostic
  */
 export const ReportAccessDiagnosticBody = zod.object({
-  "feature": zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'jackpot', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'speedbot', 'settings', 'history', 'admin']),
+  "feature": zod.union([zod.enum(['edge', 'digit-flip', 'trade-x', 'bulk-trader', 'jackpot', 'clock-work', 'cash-grab', 'money-bank', 'jdy-ai-3', 'auto-trader', 'auto-trader-2', 'speedbot', 'settings', 'history', 'admin']),zod.enum(['dashboard'])]),
   "code": zod.enum(['client_runtime_error', 'client_unhandled_rejection', 'api_server_error', 'trade_outcome_uncertain', 'saved_state_invalid', 'storage_unavailable']),
   "severity": zod.enum(['warning', 'error']),
   "source": zod.enum(['browser_app', 'api_server', 'deriv', 'transport', 'unknown']).optional()

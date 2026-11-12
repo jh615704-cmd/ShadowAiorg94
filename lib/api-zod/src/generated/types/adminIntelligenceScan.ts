@@ -7,11 +7,13 @@
  */
 import type { AdminIntelligenceFeatureStatus } from './adminIntelligenceFeatureStatus';
 import type { AdminIntelligenceFinding } from './adminIntelligenceFinding';
+import type { AdminIntelligenceScanCoverage } from './adminIntelligenceScanCoverage';
 import type { AdminIntelligenceScanServerStatus } from './adminIntelligenceScanServerStatus';
 
 export interface AdminIntelligenceScan {
   scanned_at: Date;
   server_status: AdminIntelligenceScanServerStatus;
+  coverage: AdminIntelligenceScanCoverage;
   features: AdminIntelligenceFeatureStatus[];
   findings: AdminIntelligenceFinding[];
 }

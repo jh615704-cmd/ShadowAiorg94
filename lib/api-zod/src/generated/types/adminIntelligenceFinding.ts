@@ -5,19 +5,27 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { AccessFeature } from './accessFeature';
 import type { DiagnosticCode } from './diagnosticCode';
+import type { DiagnosticFeature } from './diagnosticFeature';
+import type { DiagnosticResolutionStatus } from './diagnosticResolutionStatus';
 import type { DiagnosticSeverity } from './diagnosticSeverity';
 import type { DiagnosticSource } from './diagnosticSource';
 
 export interface AdminIntelligenceFinding {
   id: string;
-  feature: AccessFeature;
+  feature: DiagnosticFeature;
   code: DiagnosticCode;
   severity: DiagnosticSeverity;
   source: DiagnosticSource;
   summary: string;
+  likely_cause: string;
+  evidence: string;
   guidance: string;
+  resolution_status: DiagnosticResolutionStatus;
+  /** @nullable */
+  reviewed_at: Date | null;
+  /** @nullable */
+  reviewed_by: string | null;
   first_seen_at: Date;
   last_seen_at: Date;
   /** @minimum 1 */

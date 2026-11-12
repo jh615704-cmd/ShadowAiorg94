@@ -5,12 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { AccessFeature } from './accessFeature';
 import type { AdminIntelligenceFeatureStatusStatus } from './adminIntelligenceFeatureStatusStatus';
+import type { DiagnosticFeature } from './diagnosticFeature';
 
 export interface AdminIntelligenceFeatureStatus {
-  feature: AccessFeature;
+  feature: DiagnosticFeature;
   status: AdminIntelligenceFeatureStatusStatus;
   /** @minimum 0 */
-  open_findings: number;
+  recent_findings: number;
 }
