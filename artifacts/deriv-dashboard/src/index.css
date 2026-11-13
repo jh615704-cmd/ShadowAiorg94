@@ -683,6 +683,32 @@ body {
   background: var(--paper);
 }
 
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 76px;
+}
+
+.deriv-history-list,
+.history-table-wrap,
+.bulk-trader-market-list,
+.xt-history,
+.bulk-trader-history,
+.df-recent,
+.at-market-list,
+.at-history-list,
+.money-bank-history-rows,
+.edge-ref-history,
+.admin-feature-user-list,
+.xt-guide-backdrop,
+.xt-guide,
+.access-gate {
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
 button, input, select {
   font: inherit;
 }
@@ -3132,6 +3158,20 @@ body { overflow-x: hidden; }
   font-size: 16px;
   line-height: 1.6;
 }
+.feature-availability-panel button {
+  min-height: 36px;
+  margin: 12px 0 0;
+  padding: 0 13px;
+  border: 1px solid rgba(117, 177, 225, .45);
+  border-radius: 8px;
+  color: #e6f0ff;
+  background: rgba(35, 86, 130, .55);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.feature-availability-panel button:hover:not(:disabled) { background: rgba(45, 109, 163, .7); }
+.feature-availability-panel button:disabled { cursor: wait; opacity: .65; }
 .admin-feature-control-card { margin-bottom: 18px; }
 .admin-feature-control-grid { display: grid; gap: 10px; }
 .admin-feature-control-row {

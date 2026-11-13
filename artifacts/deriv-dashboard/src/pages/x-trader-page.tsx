@@ -40,6 +40,7 @@ import { NotificationCenter } from "@/components/notification-center";
 import { useAccessSessionLogout } from "@/hooks/use-access-session-logout";
 import { useAccountNotifications } from "@/hooks/use-account-notifications";
 import { isOpenContractSettlementWaitMessage } from "@/lib/account-notifications";
+import { ACCESS_SESSION_QUERY_RETRY } from "@/lib/access-session-query";
 import {
   Activity, BookOpen, Bot, ChevronDown, ChevronLeft, ChevronRight, Gauge, Loader2, LockKeyhole,
   Clock3, LogOut, Pause, Play, Power, RefreshCw, RotateCcw, Settings, ShieldAlert, ShieldCheck, X, Zap,
@@ -428,7 +429,9 @@ type CashGrabAutoSwitchRecommendation = {
 };
 
 export default function XTraderPage() {
-  const accessSession = useGetAccessSession({ query: { retry: false, queryKey: getGetAccessSessionQueryKey() } });
+  const accessSession = useGetAccessSession({
+    query: { ...ACCESS_SESSION_QUERY_RETRY, queryKey: getGetAccessSessionQueryKey() },
+  });
   const adminFeatureSettings = useGetAdminFeatureSettings({
     query: { retry: false, refetchInterval: 5_000, queryKey: getGetAdminFeatureSettingsQueryKey() },
   });

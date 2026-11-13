@@ -31,6 +31,7 @@ import AutoTrader2Panel from "@/components/auto-trader-2-panel";
 import type { DerivHistoryRow } from "@/components/deriv-history";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getAccountBalance } from "@/lib/account-balance";
+import { ACCESS_SESSION_QUERY_RETRY } from "@/lib/access-session-query";
 import { DERIV_STATUS_QUERY_RECOVERY_OPTIONS } from "@/lib/deriv-status-query";
 import { reportAdminDiagnostic } from "@/lib/admin-diagnostics";
 import {
@@ -140,7 +141,9 @@ function amountLabel(value: number, currency: string) {
 
 function AutoTrader2Content() {
   const queryClient = useQueryClient();
-  const access = useGetAccessSession({ query: { queryKey: getGetAccessSessionQueryKey(), retry: false } });
+  const access = useGetAccessSession({
+    query: { ...ACCESS_SESSION_QUERY_RETRY, queryKey: getGetAccessSessionQueryKey() },
+  });
   const featureSettings = useGetAdminFeatureSettings({
     query: { queryKey: getGetAdminFeatureSettingsQueryKey(), retry: false, refetchInterval: 10_000 },
   });
@@ -1295,8 +1298,8 @@ function AutoTrader2Content() {
   if (access.isLoading) {
     return <AppShell title="AUTO TRADER 2.0"><main className="auto-trader-2-page"><div className="at2-page-loading" aria-label="Loading Auto Trader 2.0" /></main></AppShell>;
   }
-  if (access.isError) {
-    return <AppShell title="AUTO TRADER 2.0"><main className="auto-trader-2-page"><div className="at2-page-notice error" role="alert"><AlertCircle size={16} />Unable to confirm feature access. Refresh or sign in again before using this feature.</div></main></AppShell>;
+  if (access.isError && !access.data) {
+    return <AppShell title="AUTO TRADER 2.0"><main className="auto-trader-2-page"><div className="at2-page-notice error" role="alert"><AlertCircle size={16} /><span>Access could not be refreshed. Check your connection, then retry. You do not need to sign in again unless your session has expired.</span><button type="button" onClick={() => void access.refetch()} disabled={access.isFetching}>{access.isFetching ? "Retrying…" : "Retry"}</button></div></main></AppShell>;
   }
   if (!hasAccess) {
     return <AppShell title="AUTO TRADER 2.0"><main className="auto-trader-2-page"><div className="at2-page-notice error" role="status"><ShieldAlert size={16} />Auto Trader 2.0 access is required for this feature.</div></main></AppShell>;
@@ -1305,6 +1308,15 @@ function AutoTrader2Content() {
   return (
     <AppShell title="AUTO TRADER 2.0">
       <main className="auto-trader-2-page">
+        {access.isError && access.data && (
+          <div className="at2-page-notice error" role="status">
+            <AlertCircle size={16} />
+            <span>Access refresh delayed. Showing your last confirmed access; the server still verifies every trade.</span>
+            <button type="button" onClick={() => void access.refetch()} disabled={access.isFetching}>
+              {access.isFetching ? "Retrying…" : "Retry"}
+            </button>
+          </div>
+        )}
         <section className="at2-page-heading">
           <div>
             <div className="at2-page-kicker"><span /> AUTO TRADER / AUTOMATION</div>

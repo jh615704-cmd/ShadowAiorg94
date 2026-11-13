@@ -27,6 +27,7 @@ import { useTheme } from '@/components/theme-provider';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { DerivAccountSwitcher } from '@/components/deriv-account-switcher';
 import { useAccessSessionLogout } from '@/hooks/use-access-session-logout';
+import { ACCESS_SESSION_QUERY_RETRY } from '@/lib/access-session-query';
 import { BrandWordmark } from '@/components/brand-wordmark';
 import { FeatureStatusText } from '@/components/feature-status';
 import { GlobalFeatureAnnouncement } from '@/components/layout/global-feature-announcement';
@@ -44,7 +45,9 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
   const [location, setLocation] = useLocation();
   const { theme, setTheme } = useTheme();
   const { user } = useUser();
-  const accessSession = useGetAccessSession({ query: { retry: false, queryKey: getGetAccessSessionQueryKey() } });
+  const accessSession = useGetAccessSession({
+    query: { ...ACCESS_SESSION_QUERY_RETRY, queryKey: getGetAccessSessionQueryKey() },
+  });
   const featureSettings = useGetAdminFeatureSettings({
     query: { retry: false, refetchInterval: 10_000, queryKey: getGetAdminFeatureSettingsQueryKey() },
   });
@@ -192,7 +195,7 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
     ? featureSettings.data?.features.find((item) => item.feature === routeFeature)
     : undefined;
   const featureUnavailable = !isAdmin && routeFeature !== null && (
-    featureSettings.isError
+    (featureSettings.isError && !featureSettings.data)
     || (routeControl !== undefined && routeControl.mode !== "available")
   );
   const announcementEnabled = Boolean(
@@ -331,9 +334,20 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
         <div className="content-wrap">
           {featureUnavailable ? (
             <section className="feature-availability-panel" role="status">
-              {featureSettings.isError
-                ? "Feature availability could not be loaded. Refresh the page before using this feature."
-                : <FeatureStatusText control={routeControl} isAdmin={isAdmin} fallback="This feature is temporarily unavailable." />}
+              {featureSettings.isError && !featureSettings.data ? (
+                <>
+                  <span>Feature availability could not be loaded. Retry before using this feature.</span>
+                  <button
+                    type="button"
+                    onClick={() => void featureSettings.refetch()}
+                    disabled={featureSettings.isFetching}
+                  >
+                    {featureSettings.isFetching ? "Retrying…" : "Retry"}
+                  </button>
+                </>
+              ) : (
+                <FeatureStatusText control={routeControl} isAdmin={isAdmin} fallback="This feature is temporarily unavailable." />
+              )}
             </section>
           ) : children}
         </div>

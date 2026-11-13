@@ -6,6 +6,7 @@ import {
   useGetAdminFeatureSettings,
 } from "@workspace/api-client-react";
 import { featureActionAttributes } from "@workspace/api-zod";
+import { ACCESS_SESSION_QUERY_RETRY } from "@/lib/access-session-query";
 
 type Props = {
   onScan: () => Promise<string>;
@@ -25,7 +26,7 @@ export default function AiScannerAction({
   messageAutoDismissMs = 3_000,
 }: Props) {
   const accessSession = useGetAccessSession({
-    query: { retry: false, queryKey: getGetAccessSessionQueryKey() },
+    query: { ...ACCESS_SESSION_QUERY_RETRY, queryKey: getGetAccessSessionQueryKey() },
   });
   const featureSettings = useGetAdminFeatureSettings({
     query: { retry: false, queryKey: getGetAdminFeatureSettingsQueryKey() },

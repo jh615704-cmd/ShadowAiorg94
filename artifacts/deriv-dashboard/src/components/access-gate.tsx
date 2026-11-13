@@ -40,6 +40,7 @@ import {
   markAccessActivity,
   isAccessSessionStillLocked,
 } from "@/lib/access-lock";
+import { ACCESS_SESSION_QUERY_RETRY } from "@/lib/access-session-query";
 import "./access-gate-reference.css";
 
 const DEVICE_STORAGE_KEY = "jdy-edge-device-id";
@@ -99,7 +100,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
   const lastPersistedActivityAtRef = useRef(0);
   const accessSession = useGetAccessSession({
     query: {
-      retry: false,
+      ...ACCESS_SESSION_QUERY_RETRY,
       enabled: !accessRejected,
       refetchOnWindowFocus: true,
       refetchInterval: (query) => query.state.data && !accessRejected ? 2_000 : false,

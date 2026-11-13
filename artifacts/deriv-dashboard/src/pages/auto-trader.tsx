@@ -28,6 +28,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { DerivAccountSwitcher } from "@/components/deriv-account-switcher";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getAccountBalance } from "@/lib/account-balance";
+import { ACCESS_SESSION_QUERY_RETRY } from "@/lib/access-session-query";
 import { DERIV_STATUS_QUERY_RECOVERY_OPTIONS } from "@/lib/deriv-status-query";
 import { formatSignedDerivProfit, getDerivOpenLiveProfit, isDerivHistoryOpen, summarizeDerivWinLoss, uniqueDerivHistoryRows } from "@/lib/deriv-history";
 import { validateAutoTraderBatch } from "@/lib/trade-entry-guards";
@@ -108,7 +109,9 @@ function todayStart() {
 
 function AutoTraderContent() {
   const queryClient = useQueryClient();
-  const access = useGetAccessSession({ query: { queryKey: getGetAccessSessionQueryKey(), retry: false } });
+  const access = useGetAccessSession({
+    query: { ...ACCESS_SESSION_QUERY_RETRY, queryKey: getGetAccessSessionQueryKey() },
+  });
   const featureSettings = useGetAdminFeatureSettings({
     query: { queryKey: getGetAdminFeatureSettingsQueryKey(), retry: false, refetchInterval: 10_000 },
   });
@@ -814,12 +817,16 @@ function AutoTraderContent() {
     );
   }
 
-  if (access.isError) {
+  if (access.isError && !access.data) {
     return (
       <AppShell title="AUTO TRADER">
         <main className="auto-trader-page">
           <div className="at-connection-note error" role="alert">
-            <AlertCircle size={17} /><div><strong>Unable to confirm feature access</strong><span>Refresh the page or sign in again before using Auto Trader.</span></div>
+            <AlertCircle size={17} />
+            <div><strong>Access could not be refreshed</strong><span>Check your connection, then retry. You do not need to sign in again unless your session has expired.</span></div>
+            <button type="button" onClick={() => void access.refetch()} disabled={access.isFetching}>
+              {access.isFetching ? "Retrying…" : "Retry"}
+            </button>
           </div>
         </main>
       </AppShell>
@@ -842,6 +849,15 @@ function AutoTraderContent() {
   return (
     <AppShell title="AUTO TRADER">
       <main className="auto-trader-page" data-feature-scope="auto-trader">
+        {access.isError && access.data && (
+          <div className="at-connection-note error" role="status">
+            <AlertCircle size={17} />
+            <div><strong>Access refresh delayed</strong><span>Showing your last confirmed access. The server still verifies every trade.</span></div>
+            <button type="button" onClick={() => void access.refetch()} disabled={access.isFetching}>
+              {access.isFetching ? "Retrying…" : "Retry"}
+            </button>
+          </div>
+        )}
         <section className="at-heading">
           <div className="at-heading-copy">
             <div className="at-kicker"><span className="at-icon"><Radar size={18} /></span> DERIV SYNTHETIC INDICES <span className="at-kicker-line" /></div>
