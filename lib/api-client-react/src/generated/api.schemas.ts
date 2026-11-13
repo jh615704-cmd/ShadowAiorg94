@@ -100,6 +100,7 @@ export const AccessFeature = {
   'jdy-ai-3': 'jdy-ai-3',
   'auto-trader': 'auto-trader',
   'auto-trader-2': 'auto-trader-2',
+  matrix: 'matrix',
   speedbot: 'speedbot',
   settings: 'settings',
   history: 'history',
@@ -392,6 +393,7 @@ export const FeatureControlFeature = {
   'jdy-ai-3': 'jdy-ai-3',
   'auto-trader': 'auto-trader',
   'auto-trader-2': 'auto-trader-2',
+  matrix: 'matrix',
   speedbot: 'speedbot',
   settings: 'settings',
   history: 'history',
@@ -1140,6 +1142,55 @@ export interface DerivBulkBuyInput {
   count: number;
 }
 
+export type MatrixBuyInputAccessFeature = typeof MatrixBuyInputAccessFeature[keyof typeof MatrixBuyInputAccessFeature];
+
+
+export const MatrixBuyInputAccessFeature = {
+  matrix: 'matrix',
+} as const;
+
+export type MatrixBuyInputDurationUnit = typeof MatrixBuyInputDurationUnit[keyof typeof MatrixBuyInputDurationUnit];
+
+
+export const MatrixBuyInputDurationUnit = {
+  t: 't',
+  m: 'm',
+} as const;
+
+export type MatrixBuyInputContractType = typeof MatrixBuyInputContractType[keyof typeof MatrixBuyInputContractType];
+
+
+export const MatrixBuyInputContractType = {
+  HIGHER: 'HIGHER',
+  LOWER: 'LOWER',
+} as const;
+
+export interface MatrixBuyInput {
+  access_feature: MatrixBuyInputAccessFeature;
+  /** @minimum 1 */
+  amount: number;
+  /**
+     * @minimum 1
+     * @maximum 60
+     */
+  duration: number;
+  duration_unit: MatrixBuyInputDurationUnit;
+  contract_type: MatrixBuyInputContractType;
+  /**
+     * @minimum 1
+     * @maximum 10
+     */
+  count: number;
+  /** @minLength 1 */
+  symbol: string;
+  /** @minimum 0 */
+  take_profit_per_trade?: number;
+  /** @nullable */
+  take_profit_price?: number | null;
+  /** @nullable */
+  stop_loss_price?: number | null;
+}
+
 /**
  * Clock Work contracts always expire after five ticks.
  */
@@ -1383,7 +1434,7 @@ export interface DerivHistoryItem {
 export type DerivHistoryResponse = DerivHistoryItem[];
 
 /**
- * SSE frames use history-snapshot with a DerivHistoryResponse payload and trade-update with a DerivHistoryItem payload. When market_ticks=true, market-tick-snapshot carries an array of {symbol, tick_sequence, recent_digits, tick_epoch} signals, followed by market-tick frames with one signal each.
+ * SSE frames use history-snapshot with a DerivHistoryResponse payload and trade-update with a DerivHistoryItem payload. When market_ticks=true, market-tick-snapshot carries {symbol, tick_sequence, recent_digits, tick_epoch, quote, recent_quotes} signals, followed by live updates with each symbol's latest quote and quote history.
  */
 export type DerivTradeEventStream = string;
 

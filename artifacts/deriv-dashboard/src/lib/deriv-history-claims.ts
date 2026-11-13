@@ -8,6 +8,7 @@ export const DERIV_HISTORY_FEATURES = [
   "cash-grab",
   "clock-work",
   "money-bank",
+  "matrix",
   "speedbot",
 ] as const satisfies readonly DerivHistoryFeature[];
 
@@ -26,6 +27,7 @@ function emptyClaims(): DerivHistoryClaims {
     "cash-grab": [],
     "clock-work": [],
     "money-bank": [],
+    matrix: [],
     speedbot: [],
   };
 }

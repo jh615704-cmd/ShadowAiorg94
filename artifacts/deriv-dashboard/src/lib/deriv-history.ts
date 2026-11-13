@@ -113,6 +113,7 @@ export type DerivHistoryFeature =
   | "cash-grab"
   | "clock-work"
   | "money-bank"
+  | "matrix"
   | "speedbot";
 
 export function claimDerivHistoryFeatureContractIds(

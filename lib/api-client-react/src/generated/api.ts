@@ -66,6 +66,7 @@ import type {
   GetDerivStatusParams,
   GetMoneyBankKnockoutStatisticsParams,
   HealthStatus,
+  MatrixBuyInput,
   MoneyBankKnockoutScannerInput,
   MoneyBankKnockoutScannerResponse,
   MoneyBankKnockoutStatistics,
@@ -1975,7 +1976,7 @@ export const getStreamDerivTradeUpdatesUrl = (params?: StreamDerivTradeUpdatesPa
 }
 
 /**
- * Sends an account-scoped history snapshot followed by trade-update events over Server-Sent Events. Set market_ticks=true to also receive a market-tick-snapshot followed by live market-tick events for the Auto Trader scanner.
+ * Sends an account-scoped history snapshot followed by trade-update events over Server-Sent Events. Set market_ticks=true to also receive quote history snapshots and live price updates for Matrix and other live scanners.
  * @summary Stream account history, live trades, and optional market ticks
  */
 export const streamDerivTradeUpdates = async (params?: StreamDerivTradeUpdatesParams, options?: Parameters<typeof customFetch>[1]): Promise<DerivTradeEventStream> => {
@@ -2697,6 +2698,78 @@ export const useBulkBuyDerivContracts = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getBulkBuyDerivContractsMutationOptions(options));
+    }
+
+export const getBuyMatrixContractsUrl = () => {
+
+
+
+
+  return `/api/deriv/matrix/buy`
+}
+
+/**
+ * Requests fresh quotes for 1 to 10 Matrix contracts, then sends the batch together. Only Matrix Boom, Crash, Bull, and Bear markets and its listed durations are accepted. The total stake must fit the selected account balance.
+ * @summary Buy a Matrix batch of Higher or Lower contracts
+ */
+export const buyMatrixContracts = async (matrixBuyInput: MatrixBuyInput, options?: Parameters<typeof customFetch>[1]): Promise<DerivBulkBuyResponse> => {
+
+  return customFetch<DerivBulkBuyResponse>(getBuyMatrixContractsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(matrixBuyInput)
+  }
+);}
+
+
+
+
+
+export const getBuyMatrixContractsMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof buyMatrixContracts>>, TError,{data: BodyType<MatrixBuyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof buyMatrixContracts>>, TError,{data: BodyType<MatrixBuyInput>}, TContext> => {
+
+const mutationKey = ['buyMatrixContracts'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof buyMatrixContracts>>, {data: BodyType<MatrixBuyInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  buyMatrixContracts(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BuyMatrixContractsMutationResult = NonNullable<Awaited<ReturnType<typeof buyMatrixContracts>>>
+    export type BuyMatrixContractsMutationBody = BodyType<MatrixBuyInput>
+    export type BuyMatrixContractsMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Buy a Matrix batch of Higher or Lower contracts
+ */
+export const useBuyMatrixContracts = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof buyMatrixContracts>>, TError,{data: BodyType<MatrixBuyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof buyMatrixContracts>>,
+        TError,
+        {data: BodyType<MatrixBuyInput>},
+        TContext
+      > => {
+      return useMutation(getBuyMatrixContractsMutationOptions(options));
     }
 
 export const getQuoteClockWorkContractsUrl = () => {

@@ -108,6 +108,12 @@ export function featureActionControlIdFromTestId(feature: string, testId: string
     if (testId === "input-speedbot-loss-multiplier") return "loss-multiplier";
     if (testId === "button-speedbot-refresh-order-status") return "refresh-order-status";
   }
+  if (feature === "matrix") {
+    const duration = testId.match(/^matrix-duration-(.+)$/)?.[1];
+    if (duration) return `duration-${duration}`;
+    if (testId === "matrix-ai-scanner") return "ai-scanner";
+    if (testId === "matrix-place-trade") return "place-trade";
+  }
   if (feature === "auto-trader") {
     const filter = testId.match(/^button-filter-(all|regular|jump|one-sec)$/)?.[1];
     if (filter) return `market-filter-${filter}`;
@@ -187,6 +193,7 @@ const historyFeatures: AccessFeature[] = [
   "clock-work",
   "cash-grab",
   "money-bank",
+  "matrix",
   "auto-trader-2",
   "speedbot",
 ];
@@ -200,7 +207,7 @@ for (const feature of historyFeatures) {
   ]);
 }
 
-for (const feature of ["edge", "digit-flip", "trade-x", "bulk-trader", "clock-work", "cash-grab", "money-bank", "speedbot"] as const) {
+for (const feature of ["edge", "digit-flip", "trade-x", "bulk-trader", "clock-work", "cash-grab", "money-bank", "matrix", "speedbot"] as const) {
   addMany(feature, [
     ["feature-toggle", "Show or hide feature"],
     ["open-guide", "Open feature guide"],
@@ -221,6 +228,45 @@ addMany("speedbot", [
   ["loss-limit", "Set Speedbot loss limit"],
   ["refresh-order-status", "Refresh Speedbot order status"],
 ]);
+
+const matrixMarkets = [
+  ["BOOM300", "Boom 300"],
+  ["BOOM500", "Boom 500"],
+  ["BOOM600", "Boom 600"],
+  ["BOOM900", "Boom 900"],
+  ["BOOM1000", "Boom 1000"],
+  ["CRASH300", "Crash 300"],
+  ["CRASH500", "Crash 500"],
+  ["CRASH600", "Crash 600"],
+  ["CRASH900", "Crash 900"],
+  ["CRASH1000", "Crash 1000"],
+  ["RDBULL", "Bull Market"],
+  ["RDBEAR", "Bear Market"],
+] as const;
+addMany("matrix", [
+  ["chart-type-line", "Show Matrix line chart"],
+  ["chart-type-candles", "Show Matrix candlestick chart"],
+  ["direction-higher", "Choose Matrix Higher"],
+  ["direction-lower", "Choose Matrix Lower"],
+  ["duration-10t", "Choose Matrix duration: 10 ticks"],
+  ["duration-20t", "Choose Matrix duration: 20 ticks"],
+  ["duration-1m", "Choose Matrix duration: 1 minute"],
+  ["duration-3m", "Choose Matrix duration: 3 minutes"],
+  ["duration-5m", "Choose Matrix duration: 5 minutes"],
+  ["duration-10m", "Choose Matrix duration: 10 minutes"],
+  ["duration-30m", "Choose Matrix duration: 30 minutes"],
+  ["duration-1h", "Choose Matrix duration: 1 hour"],
+  ["stake", "Set Matrix stake"],
+  ["trade-count", "Set Matrix trade count"],
+  ["take-profit-per-trade", "Set Matrix take profit per trade"],
+  ["level-mode-take-profit", "Set Matrix chart take-profit line"],
+  ["level-mode-stop-loss", "Set Matrix chart stop-loss line"],
+  ["clear-chart-levels", "Clear Matrix chart exit levels"],
+  ["ai-scanner", "Matrix AI Scanner switch"],
+  ["place-trade", "Place Matrix trades"],
+  ["close-contract", "Close Matrix contract"],
+]);
+addMarketOptions("matrix", matrixMarkets);
 
 addMany("edge", [
   ["ai-scanner", "AI Scanner"],

@@ -22,6 +22,7 @@ export const TRADING_ACCESS_FEATURES = [
   "jdy-ai-3",
   "auto-trader",
   "auto-trader-2",
+  "matrix",
   "speedbot",
 ] as const satisfies readonly AccessFeature[];
 export type AccessKeyStatus = "active" | "paused" | "blocked" | "banned" | "deleted";

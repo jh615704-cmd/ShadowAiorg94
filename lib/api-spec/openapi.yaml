@@ -669,7 +669,7 @@ paths:
       operationId: streamDerivTradeUpdates
       tags: [deriv]
       summary: Stream account history, live trades, and optional market ticks
-      description: Sends an account-scoped history snapshot followed by trade-update events over Server-Sent Events. Set market_ticks=true to also receive a market-tick-snapshot followed by live market-tick events for the Auto Trader scanner.
+      description: Sends an account-scoped history snapshot followed by trade-update events over Server-Sent Events. Set market_ticks=true to also receive quote history snapshots and live price updates for Matrix and other live scanners.
       parameters:
         - name: market_ticks
           in: query
@@ -994,6 +994,49 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "504":
           description: Deriv did not return a proposal after connection recovery attempts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /deriv/matrix/buy:
+    post:
+      operationId: buyMatrixContracts
+      tags: [deriv]
+      summary: Buy a Matrix batch of Higher or Lower contracts
+      description: Requests fresh quotes for 1 to 10 Matrix contracts, then sends the batch together. Only Matrix Boom, Crash, Bull, and Bear markets and its listed durations are accepted. The total stake must fit the selected account balance.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MatrixBuyInput"
+      responses:
+        "202":
+          description: Matrix buy batch accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DerivBulkBuyResponse"
+        "400":
+          description: Invalid Matrix trade settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Matrix access or live-account trading is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Existing contract settlement or account protection blocks this batch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Deriv could not return a complete fresh quote set
           content:
             application/json:
               schema:
@@ -1375,7 +1418,7 @@ components:
             $ref: "#/components/schemas/AccessFeature"
     AccessFeature:
       type: string
-      enum: [edge, digit-flip, trade-x, bulk-trader, clock-work, cash-grab, money-bank, jdy-ai-3, auto-trader, auto-trader-2, speedbot, settings, history, admin]
+      enum: [edge, digit-flip, trade-x, bulk-trader, clock-work, cash-grab, money-bank, jdy-ai-3, auto-trader, auto-trader-2, matrix, speedbot, settings, history, admin]
     AccessSession:
       type: object
       required: [key_id, key_prefix, label, kind, is_admin, status, max_devices, features, online, last_seen_at]
@@ -1448,7 +1491,7 @@ components:
       properties:
         feature:
           type: string
-          enum: [edge, digit-flip, trade-x, bulk-trader, clock-work, cash-grab, money-bank, jdy-ai-3, auto-trader, auto-trader-2, speedbot, settings, history]
+          enum: [edge, digit-flip, trade-x, bulk-trader, clock-work, cash-grab, money-bank, jdy-ai-3, auto-trader, auto-trader-2, matrix, speedbot, settings, history]
         mode:
           type: string
           enum: [available, restricted, coming_soon, under_construction]
@@ -2068,6 +2111,41 @@ components:
           type: integer
           minimum: 1
           maximum: 6
+    MatrixBuyInput:
+      type: object
+      required: [access_feature, amount, duration, duration_unit, contract_type, count, symbol]
+      properties:
+        access_feature:
+          type: string
+          enum: [matrix]
+        amount:
+          type: number
+          minimum: 1
+        duration:
+          type: integer
+          minimum: 1
+          maximum: 60
+        duration_unit:
+          type: string
+          enum: [t, m]
+        contract_type:
+          type: string
+          enum: [HIGHER, LOWER]
+        count:
+          type: integer
+          minimum: 1
+          maximum: 10
+        symbol:
+          type: string
+          minLength: 1
+        take_profit_per_trade:
+          type: number
+          minimum: 0
+          default: 0
+        take_profit_price:
+          type: ["number", "null"]
+        stop_loss_price:
+          type: ["number", "null"]
     ClockWorkContractOrder:
       type: object
       required: [key, amount, duration, duration_unit, contract_type, barrier, symbol]
@@ -2371,7 +2449,7 @@ components:
         $ref: "#/components/schemas/DerivHistoryItem"
     DerivTradeEventStream:
       type: string
-      description: "SSE frames use history-snapshot with a DerivHistoryResponse payload and trade-update with a DerivHistoryItem payload. When market_ticks=true, market-tick-snapshot carries an array of {symbol, tick_sequence, recent_digits, tick_epoch} signals, followed by market-tick frames with one signal each."
+      description: "SSE frames use history-snapshot with a DerivHistoryResponse payload and trade-update with a DerivHistoryItem payload. When market_ticks=true, market-tick-snapshot carries {symbol, tick_sequence, recent_digits, tick_epoch, quote, recent_quotes} signals, followed by live updates with each symbol's latest quote and quote history."
     DerivHistoryClearResponse:
       type: object
       required: [ok, message]

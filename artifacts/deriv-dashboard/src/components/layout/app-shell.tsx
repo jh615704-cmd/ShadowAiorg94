@@ -180,9 +180,10 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
   const canUseClockWork = isAdmin || features.includes("clock-work");
   const canUseCashGrab = isAdmin || features.includes("cash-grab");
   const canUseMoneyBank = isAdmin || features.includes("money-bank");
+  const canUseMatrix = isAdmin || features.includes("matrix");
   const canUseAutoTrader = isAdmin || features.includes("auto-trader");
   const canUseAutoTrader2 = isAdmin || features.includes("auto-trader-2");
-  const canUseTrading = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseClockWork || canUseCashGrab || canUseMoneyBank || canUseAutoTrader || canUseAutoTrader2;
+  const canUseTrading = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseClockWork || canUseCashGrab || canUseMoneyBank || canUseMatrix || canUseAutoTrader || canUseAutoTrader2;
   const canUseSettings = isAdmin || features.includes("settings");
   const routeFeature = location === "/auto-trader"
     ? "auto-trader"

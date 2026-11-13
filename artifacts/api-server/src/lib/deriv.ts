@@ -30,7 +30,14 @@ const supportedSymbols = new Set([
   "R_10", "R_25", "R_50", "R_75", "R_100",
   "1HZ10V", "1HZ15V", "1HZ25V", "1HZ30V", "1HZ50V", "1HZ75V", "1HZ90V", "1HZ100V",
   "JD10", "JD25", "JD50", "JD75", "JD100",
+  "BOOM300", "BOOM500", "BOOM600", "BOOM900", "BOOM1000",
+  "CRASH300", "CRASH500", "CRASH600", "CRASH900", "CRASH1000",
   "RDBEAR", "RDBEAR10", "RDBEAR25", "RDBULL", "RDBULL10", "RDBULL25",
+]);
+const matrixSymbols = new Set([
+  "BOOM300", "BOOM500", "BOOM600", "BOOM900", "BOOM1000",
+  "CRASH300", "CRASH500", "CRASH600", "CRASH900", "CRASH1000",
+  "RDBULL", "RDBEAR",
 ]);
 type DigitContractType = "DIGITEVEN" | "DIGITODD" | "DIGITOVER" | "DIGITUNDER" | "DIGITDIFF" | "DIGITMATCH" | "CALL" | "PUT" | "HIGHER" | "LOWER" | "ACCU";
 
@@ -199,6 +206,19 @@ export type DerivMarketTickUpdate = {
   tick_sequence: number;
   recent_digits: number[];
   tick_epoch: number;
+  quote: number | null;
+  recent_quotes: Array<{ quote: number; epoch: number; sequence: number }>;
+};
+
+type MatrixExitPlan = {
+  contractId: string;
+  accountId: string;
+  symbol: string;
+  contractType: "HIGHER" | "LOWER";
+  takeProfitPerTrade: number;
+  takeProfitPrice: number | null;
+  stopLossPrice: number | null;
+  closeAttempted: boolean;
 };
 
 type ProposalInput = {
@@ -219,9 +239,22 @@ type BuyInput = {
   barrier?: number;
   growth_rate?: number;
   symbol?: string;
+  access_feature?: string;
   /** Require server-confirmed live knockout progress for a Money Bank buy. */
   auto_knockout?: boolean;
   auto_knockout_target?: number;
+};
+
+type MatrixBuyInput = {
+  amount: number;
+  duration: number;
+  duration_unit: "t" | "m";
+  contract_type: "HIGHER" | "LOWER";
+  count: number;
+  symbol: string;
+  take_profit_per_trade?: number;
+  take_profit_price?: number | null;
+  stop_loss_price?: number | null;
 };
 
 export type SellResult = {
@@ -398,6 +431,7 @@ return {
     cleanupTimer?: NodeJS.Timeout;
   }>(),
   contractInputs: new Map<string, ProposalInput>(),
+  matrixExitPlans: new Map<string, MatrixExitPlan>(),
   digitEvenCount: 0,
   digitOddCount: 0,
   digitHistory: [] as number[],
@@ -927,7 +961,14 @@ function recordMarketTick(symbol: string, quote: unknown, epoch: number, pipSize
     tick_sequence: market.tickSequence,
     recent_digits: market.digitHistory.slice(-100),
     tick_epoch: epoch,
+    quote: market.quote,
+    recent_quotes: market.quoteHistory.slice(-200).map((tick) => ({
+      quote: tick.quote,
+      epoch: tick.epoch,
+      sequence: tick.sequence ?? 0,
+    })),
   };
+  evaluateMatrixExitPlans(symbol, nextQuote);
   for (const listener of runtime.marketTickListeners) {
     try {
       listener(tickUpdate);
@@ -986,12 +1027,21 @@ function getMarketSignals() {
 }
 
 export function getMarketTickSnapshot(): DerivMarketTickUpdate[] {
-  return getMarketSignals().map(({ symbol, tick_sequence, recent_digits, tick_epoch }) => ({
-    symbol,
-    tick_sequence,
-    recent_digits,
-    tick_epoch,
-  }));
+  return Array.from(supportedSymbols, (symbol) => {
+    const market = getState().marketHistory.get(symbol);
+    return {
+      symbol,
+      tick_sequence: market?.tickSequence ?? 0,
+      recent_digits: (market?.digitHistory ?? []).slice(-100),
+      tick_epoch: market?.epoch ?? 0,
+      quote: market?.quote ?? null,
+      recent_quotes: (market?.quoteHistory ?? []).slice(-200).map((tick) => ({
+        quote: tick.quote,
+        epoch: tick.epoch,
+        sequence: tick.sequence ?? 0,
+      })),
+    };
+  });
 }
 
 function getDigitPercentages() {
@@ -2111,7 +2161,21 @@ async function connectInternal() {
             contract_type: getState().contractInputs.get(contractId)?.contract_type ?? getState().lastProposalContractType,
             underlying_symbol: getState().contractInputs.get(contractId)?.symbol ?? getState().lastProposalSymbol,
           }, isSold ? "closed" : "open");
-          if (historyItem) upsertHistory(historyItem);
+          if (historyItem) {
+            upsertHistory(historyItem);
+            const exitPlan = getState().matrixExitPlans.get(contractId);
+            if (!isOpenContractStatus(normalizedStatus)) {
+              getState().matrixExitPlans.delete(contractId);
+            } else if (
+              exitPlan
+              && !exitPlan.closeAttempted
+              && exitPlan.takeProfitPerTrade > 0
+              && Number.isFinite(Number(contract.profit))
+              && Number(contract.profit) >= exitPlan.takeProfitPerTrade
+            ) {
+              requestMatrixExit(exitPlan, "take-profit per trade");
+            }
+          }
         }
       } else if (message.msg_type === "profit_table") {
         const reqId = Number(message.req_id ?? message.echo_req?.req_id);
@@ -2608,6 +2672,7 @@ export async function sellContract(contractId: string) {
     payout: result.sold_for,
     profit: settledProfit,
   });
+  getState().matrixExitPlans.delete(normalizedContractId);
   if (getState().lastContract?.contract_id === normalizedContractId) {
     getState().lastContract = {
       ...getState().lastContract,
@@ -2618,6 +2683,182 @@ export async function sellContract(contractId: string) {
     };
   }
   return { ok: true, ...result };
+}
+
+function matrixExitReason(plan: MatrixExitPlan, quote: number): string | null {
+  if (plan.contractType === "HIGHER") {
+    if (plan.takeProfitPrice != null && quote >= plan.takeProfitPrice) return "take-profit price";
+    if (plan.stopLossPrice != null && quote <= plan.stopLossPrice) return "stop-loss price";
+    return null;
+  }
+  if (plan.takeProfitPrice != null && quote <= plan.takeProfitPrice) return "take-profit price";
+  if (plan.stopLossPrice != null && quote >= plan.stopLossPrice) return "stop-loss price";
+  return null;
+}
+
+function requestMatrixExit(plan: MatrixExitPlan, reason: string) {
+  if (plan.closeAttempted) return;
+  plan.closeAttempted = true;
+  void sellContract(plan.contractId).then(() => {
+    logger.info(
+      { accountId: plan.accountId, symbol: plan.symbol, contractId: plan.contractId, reason },
+      "Matrix automatically closed a contract at its configured exit",
+    );
+  }).catch((error) => {
+    const latest = getState().history.find((row: DerivHistoryItem) => row.contract_id === plan.contractId);
+    if (latest && !isOpenContractStatus(latest.status)) {
+      getState().matrixExitPlans.delete(plan.contractId);
+      return;
+    }
+    logger.error(
+      { err: error, accountId: plan.accountId, symbol: plan.symbol, contractId: plan.contractId, reason },
+      "Matrix automatic close could not be confirmed; the request will not be replayed",
+    );
+  });
+}
+
+function evaluateMatrixExitPlans(symbol: string, quote: number) {
+  if (!Number.isFinite(quote)) return;
+  const runtime = getState();
+  for (const plan of runtime.matrixExitPlans.values()) {
+    if (plan.symbol !== symbol || plan.accountId !== runtime.account?.id) continue;
+    const reason = matrixExitReason(plan, quote);
+    if (reason) requestMatrixExit(plan, reason);
+  }
+}
+
+function validateMatrixExitLevels(
+  contractType: "HIGHER" | "LOWER",
+  spot: number,
+  takeProfitPrice: number | null,
+  stopLossPrice: number | null,
+) {
+  if (!Number.isFinite(spot) || spot <= 0) {
+    throw new Error("Deriv did not return a usable Matrix entry quote.");
+  }
+  if (takeProfitPrice != null && (
+    !Number.isFinite(takeProfitPrice)
+    || (contractType === "HIGHER" ? takeProfitPrice <= spot : takeProfitPrice >= spot)
+  )) {
+    throw new Error(`Set the take-profit line ${contractType === "HIGHER" ? "above" : "below"} the fresh entry quote.`);
+  }
+  if (stopLossPrice != null && (
+    !Number.isFinite(stopLossPrice)
+    || (contractType === "HIGHER" ? stopLossPrice >= spot : stopLossPrice <= spot)
+  )) {
+    throw new Error(`Set the stop-loss line ${contractType === "HIGHER" ? "below" : "above"} the fresh entry quote.`);
+  }
+}
+
+export async function buyMatrixContracts(
+  input: MatrixBuyInput,
+  assertAuthorized?: TradeAuthorizationCheck,
+) {
+  await assertAuthorized?.();
+  const amount = roundCents(input.amount);
+  const takeProfitPerTrade = Number(input.take_profit_per_trade ?? 0);
+  const takeProfitPrice = input.take_profit_price ?? null;
+  const stopLossPrice = input.stop_loss_price ?? null;
+  const supportedDuration = input.duration_unit === "t"
+    ? input.duration === 10 || input.duration === 20
+    : [1, 3, 5, 10, 30, 60].includes(input.duration);
+  if (
+    !Number.isFinite(amount)
+    || amount < 1
+    || !Number.isInteger(input.count)
+    || input.count < 1
+    || input.count > 10
+    || !supportedDuration
+    || !matrixSymbols.has(input.symbol)
+    || (input.contract_type !== "HIGHER" && input.contract_type !== "LOWER")
+    || !Number.isFinite(takeProfitPerTrade)
+    || takeProfitPerTrade < 0
+  ) {
+    throw new Error("Matrix requires a supported market, $1 minimum stake, 1–10 contracts, and one of its listed durations.");
+  }
+  if (!getState().account) throw new Error("Select a Deriv account before placing Matrix trades.");
+  const account = getState().account!;
+  if (account.type === "real" && !liveTradingEnabled) {
+    throw new Error("Live trading is disabled on this server.");
+  }
+  if (amount * input.count > account.balance) {
+    throw new Error("The total Matrix batch stake exceeds the selected account balance.");
+  }
+
+  const proposalInput: ProposalInput = {
+    amount,
+    duration: input.duration,
+    duration_unit: input.duration_unit,
+    contract_type: input.contract_type,
+    barrier: input.contract_type === "HIGHER" ? "+0" : "-0",
+    symbol: input.symbol,
+  };
+  validateProposalInput(proposalInput);
+  const prepared = await runBeforeBuy(async () => {
+    assertTradingProtection(await getTradingProtectionSettings(), getStatus(), proposalInput);
+    await refreshOpenContracts();
+    assertNoActiveContract(true);
+    const proposals = await Promise.all(
+      Array.from({ length: input.count }, () => requestFreshProposal(proposalInput)),
+    );
+    for (const proposal of proposals) {
+      validateMatrixExitLevels(input.contract_type, proposal.spot, takeProfitPrice, stopLossPrice);
+    }
+    await assertAuthorized?.();
+    if (!await connect()) throw new Error("Deriv WebSocket is not ready.");
+    await assertAuthorized?.();
+    if (getState().account?.id !== account.id) {
+      throw new Error("The selected Deriv account changed before the Matrix batch was sent.");
+    }
+    return proposals;
+  });
+
+  const buyResults = await sendBatchBuysTogether(
+    prepared,
+    (proposal) => sendDirectBuyWithRateLimitRetry(proposal, proposalInput),
+  );
+  const buys: DerivBuy[] = [];
+  const failed: Array<{ index: number; outcome: "rejected" | "uncertain" | "not_sent"; source: TradeDiagnosticSource; error: string }> = [];
+  buyResults.forEach((result, index) => {
+    if (result.status === "fulfilled") {
+      const buy = result.value;
+      buys.push(buy);
+      const contractId = String(buy.contract_id);
+      if (contractId && (takeProfitPerTrade > 0 || takeProfitPrice != null || stopLossPrice != null)) {
+        getState().matrixExitPlans.set(contractId, {
+          contractId,
+          accountId: account.id,
+          symbol: input.symbol,
+          contractType: input.contract_type,
+          takeProfitPerTrade,
+          takeProfitPrice,
+          stopLossPrice,
+          closeAttempted: false,
+        });
+        const latestQuote = getState().marketHistory.get(input.symbol)?.quote;
+        if (latestQuote != null) evaluateMatrixExitPlans(input.symbol, latestQuote);
+      }
+      return;
+    }
+    const classification = classifyBuyFailure(result.reason);
+    failed.push({
+      index,
+      outcome: classification.outcome,
+      source: classification.source,
+      error: safeBuyFailureMessage(result.reason),
+    });
+  });
+  const ok = failed.length === 0;
+  return {
+    ok,
+    message: ok
+      ? `${buys.length} Matrix ${account.type} contract${buys.length === 1 ? "" : "s"} sent to Deriv. Contracts settle independently; configured exits are monitored while the Deriv session is active.`
+      : `${buys.length} of ${input.count} Matrix contracts were confirmed. Check Deriv history before resubmitting any unconfirmed order.`,
+    count: buys.length,
+    proposals: prepared,
+    buys,
+    failed,
+  };
 }
 
 export async function bulkBuyContracts(input: {
@@ -2949,8 +3190,11 @@ function validateProposalInput(input: ProposalInput) {
   if (!Number.isInteger(input.duration) || input.duration < 1) {
     throw new Error("A whole-number duration of at least 1 tick is required.");
   }
-  if (input.duration_unit !== "t") {
-    throw new Error("Only tick durations are supported.");
+  if (
+    input.duration_unit !== "t"
+    && !(input.duration_unit === "m" && (input.contract_type === "HIGHER" || input.contract_type === "LOWER"))
+  ) {
+    throw new Error("Only tick durations and Matrix Higher/Lower minute durations are supported.");
   }
   if (input.symbol != null && !supportedSymbols.has(input.symbol)) {
     throw new Error("That market is not supported.");
