@@ -153,6 +153,17 @@
   letter-spacing: .025em;
 }
 
+.access-gate-wordmark {
+  font-size: 15px;
+}
+
+.access-gate-title-brand {
+  color: transparent;
+  background: linear-gradient(105deg, #43e9ee 0%, #70c9ff 44%, #b09bff 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+
 .access-gate-version {
   padding: 3px 7px;
   border: 1px solid rgba(57, 210, 221, .2);

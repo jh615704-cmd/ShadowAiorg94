@@ -14,6 +14,5 @@ export const DiagnosticOperation = {
   bulk_buy: 'bulk_buy',
   dual_buy: 'dual_buy',
   sell: 'sell',
-  jackpot_batch: 'jackpot_batch',
   clock_work_batch: 'clock_work_batch',
 } as const;

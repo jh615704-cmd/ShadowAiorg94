@@ -147,7 +147,6 @@ function tradeActionControlId(feature: string, path: string, body: Record<string
   ) return "ai-scanner";
   if (feature === "auto-trader" && body.automated === true) return "auto-magic";
   if (path === "/deriv/dual-buy") return "trade-dual";
-  if (path === "/deriv/jackpot/buy") return "place-batch";
   if (feature === "auto-trader" && path === "/deriv/bulk-buy") {
     const symbol = typeof body.symbol === "string" ? body.symbol.toLowerCase().replaceAll("_", "-") : "";
     const digit = typeof body.barrier === "number" ? String(body.barrier) : "";
@@ -169,7 +168,6 @@ function tradeActionControlId(feature: string, path: string, body: Record<string
   if (feature === "digit-flip") return "start-stop";
   if (feature === "trade-x") return "place-differs";
   if (feature === "cash-grab") return "start";
-  if (feature === "jackpot") return "place-batch";
   if (feature === "clock-work") return "start";
   if (feature === "money-bank") return "start-stop";
   if (feature === "auto-trader-2") return "start";

@@ -34,16 +34,14 @@ export default function DerivHistory({ title, strategy, className, rows, session
       ? "trade-x"
       : normalizedTitle.includes("bulk trader")
         ? "bulk-trader"
-        : normalizedTitle.includes("jackpot")
-          ? "jackpot"
-          : normalizedTitle.includes("clock work")
-            ? "clock-work"
-            : normalizedTitle.includes("cash grab")
-              ? "cash-grab"
-              : normalizedTitle.includes("money bank")
-                ? "money-bank"
-                : normalizedTitle.includes("speedbot")
-                  ? "speedbot"
+        : normalizedTitle.includes("clock work")
+          ? "clock-work"
+          : normalizedTitle.includes("cash grab")
+            ? "cash-grab"
+            : normalizedTitle.includes("money bank")
+              ? "money-bank"
+              : normalizedTitle.includes("speedbot")
+                ? "speedbot"
                 : normalizedTitle.includes("auto trader 2")
                   ? "auto-trader-2"
                   : normalizedTitle.includes("edge")

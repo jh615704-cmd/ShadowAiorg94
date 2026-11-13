@@ -177,7 +177,6 @@ function buildErrorMessage(
       pathname.endsWith("/bulk-buy")
       || pathname.endsWith("/dual-buy")
       || pathname.endsWith("/clock-work/buy")
-      || pathname.endsWith("/jackpot/buy")
     ) {
       return "The server did not confirm whether every order in this request was accepted. Check the selected Deriv account's open contracts and history; do not resend until each order's status is clear.";
     }
@@ -379,7 +378,7 @@ function getPathname(url: string): string {
 }
 
 function isTradeMutation(method: string, pathname: string): boolean {
-  return method === "POST" && /^\/api\/deriv\/(?:buy|bulk-buy|dual-buy|sell|clock-work\/buy|jackpot\/buy)$/.test(pathname);
+  return method === "POST" && /^\/api\/deriv\/(?:buy|bulk-buy|dual-buy|sell|clock-work\/buy)$/.test(pathname);
 }
 
 const diagnosticTradeFeatures = new Set([
@@ -387,7 +386,6 @@ const diagnosticTradeFeatures = new Set([
   "digit-flip",
   "trade-x",
   "bulk-trader",
-  "jackpot",
   "clock-work",
   "cash-grab",
   "money-bank",
@@ -397,10 +395,9 @@ const diagnosticTradeFeatures = new Set([
   "speedbot",
 ]);
 
-type DiagnosticOperation = "buy" | "bulk_buy" | "dual_buy" | "sell" | "jackpot_batch" | "clock_work_batch";
+type DiagnosticOperation = "buy" | "bulk_buy" | "dual_buy" | "sell" | "clock_work_batch";
 
 function tradeOperationForDiagnostic(pathname: string): DiagnosticOperation | undefined {
-  if (pathname.endsWith("/jackpot/buy")) return "jackpot_batch";
   if (pathname.endsWith("/clock-work/buy")) return "clock_work_batch";
   if (pathname.endsWith("/bulk-buy")) return "bulk_buy";
   if (pathname.endsWith("/dual-buy")) return "dual_buy";
@@ -412,7 +409,6 @@ function tradeOperationForDiagnostic(pathname: string): DiagnosticOperation | un
 function tradeFeatureForDiagnostic(method: string, pathname: string, body: BodyInit | null | undefined): string | undefined {
   if (!isTradeMutation(method, pathname)) return undefined;
   if (pathname.endsWith("/clock-work/buy")) return "clock-work";
-  if (pathname.endsWith("/jackpot/buy")) return "jackpot";
 
   if (typeof body === "string") {
     try {

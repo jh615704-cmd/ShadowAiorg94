@@ -23,6 +23,7 @@ import {
   Shield,
   ShieldCheck,
 } from "lucide-react";
+import { BrandWordmark } from "@/components/brand-wordmark";
 import {
   ACCESS_AWAY_LOCK_MS,
   ACCESS_AWAY_STARTED,
@@ -543,8 +544,8 @@ export function AccessGate({ children }: { children: ReactNode }) {
         <div className="brand-lockup access-gate-brand">
           <span className="access-gate-brand-icon" aria-hidden="true"><Shield size={23} strokeWidth={2.5} /></span>
           <span className="access-brand-copy">
-            <strong>Shadow AI <span className="access-gate-version">v4.8</span></strong>
-            <small>AUTONOMOUS ALGORITHMIC TRADING</small>
+            <strong><BrandWordmark className="access-gate-wordmark" /></strong>
+            <small>PRIVATE DERIV TRADING WORKSPACE</small>
           </span>
         </div>
         <div className="access-gate-risk">
@@ -559,7 +560,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
           </div>
         </div>
         <div className="access-gate-lock" aria-hidden="true"><Fingerprint size={26} strokeWidth={1.8} /></div>
-        <h1>Login to Shadow AI</h1>
+        <h1>Login to <span className="access-gate-title-brand">Shadow Matrix</span></h1>
         <p className="access-gate-intro">Authenticate with your private access key to initialize workspace</p>
         {lockReason && <div className="access-gate-locked-note" role="status">{lockReason}</div>}
         <a className="access-message-link" href="https://t.me/JDY_HATED" target="_blank" rel="noreferrer">
@@ -596,7 +597,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
             <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} disabled={login.isPending} />
             <span>
               I acknowledge and agree to the algorithmic trading terms, automated
-              risk protocols, and privacy policies of Shadow AI Trading.
+              risk protocols, and privacy policies of Shadow Matrix.
             </span>
           </label>
           <button type="submit" disabled={login.isPending || logoutPending || !accessKey.trim() || !termsAccepted}>

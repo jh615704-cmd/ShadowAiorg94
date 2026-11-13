@@ -13,7 +13,6 @@ const featureLabels: Record<string, string> = {
   "digit-flip": "Digit Flip",
   "trade-x": "Trade X",
   "bulk-trader": "Bulk Trader",
-  jackpot: "Jackpot",
   "clock-work": "Clock Work",
   "cash-grab": "Cash Grab",
   "money-bank": "Money Bank",
@@ -48,7 +47,6 @@ const operationLabels: Record<string, string> = {
   bulk_buy: "Bulk buy",
   dual_buy: "Dual buy",
   sell: "Contract close",
-  jackpot_batch: "Jackpot batch",
   clock_work_batch: "Clock Work batch",
 };
 

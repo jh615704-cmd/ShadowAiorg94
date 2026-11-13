@@ -60,14 +60,14 @@ export function VideoMatch() {
         </g>
       </svg>
 
-      <section className="reference-login-card" aria-label="Shadow AI access-key login">
+      <section className="reference-login-card" aria-label="Shadow Matrix access-key login">
         <header className="reference-brand">
           <span className="reference-brand-mark" aria-hidden="true">
             <Shield size={24} strokeWidth={2.5} />
           </span>
           <span className="reference-brand-copy">
             <span className="reference-brand-title">
-              Shadow AI
+              Shadow Matrix
               <span className="reference-version">v4.8</span>
             </span>
             <small>AUTONOMOUS ALGORITHMIC TRADING</small>
@@ -89,7 +89,7 @@ export function VideoMatch() {
         <div className="reference-auth-mark" aria-hidden="true">
           <Fingerprint size={26} strokeWidth={1.8} />
         </div>
-        <h1>Login to Shadow AI</h1>
+        <h1>Login to Shadow Matrix</h1>
         <p className="reference-intro">Authenticate with your private access key to initialize workspace</p>
 
         <a className="reference-support" href="https://t.me/JDY_HATED">
@@ -125,7 +125,7 @@ export function VideoMatch() {
             <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
             <span>
               I acknowledge and agree to the algorithmic trading terms, automated
-              risk protocols, and privacy policies of Shadow AI Trading.
+              risk protocols, and privacy policies of Shadow Matrix.
             </span>
           </label>
           <button className="reference-submit" type="submit" disabled={!key.trim() || !accepted}>

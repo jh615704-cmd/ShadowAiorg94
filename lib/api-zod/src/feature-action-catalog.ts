@@ -99,27 +99,6 @@ export function featureActionControlIdFromTestId(feature: string, testId: string
     const duration = testId.match(/^cash-grab-duration-(\d+)$/)?.[1];
     if (duration) return `duration-${duration}`;
   }
-  if (feature === "jackpot") {
-    const group = testId.match(/^button-jackpot-group-(bear|bull|volatility|jump)$/)?.[1];
-    if (group) return `market-group-${group}`;
-    if (testId === "switch-jackpot-auto-best") return "auto-market";
-    if (testId === "switch-jackpot-rise-fall") return "enable-rise-fall";
-    if (testId === "switch-jackpot-even-odd") return "enable-even-odd";
-    if (testId === "button-jackpot-direction-call") return "rise-fall-call";
-    if (testId === "button-jackpot-direction-put") return "rise-fall-put";
-    if (testId === "button-jackpot-direction-auto") return "rise-fall-auto";
-    if (testId === "button-jackpot-parity-digiteven") return "even-odd-even";
-    if (testId === "button-jackpot-parity-digitodd") return "even-odd-odd";
-    if (testId === "button-jackpot-parity-auto") return "even-odd-auto";
-    if (testId === "switch-jackpot-multiply") return "multiply-after-loss";
-    if (testId === "switch-jackpot-ai") return "jackpot-ai";
-    if (testId === "button-jackpot-place-batch") return "place-batch";
-    if (testId === "button-jackpot-refresh-order-status") return "refresh-order-status";
-    const count = testId.match(/^button-jackpot-count-(\d+)$/)?.[1];
-    if (count) return `contract-count-${count}`;
-    const duration = testId.match(/^button-jackpot-duration-(\d+)$/)?.[1];
-    if (duration) return `duration-${duration}`;
-  }
   if (feature === "clock-work") {
     if (testId === "button-clock-start") return "start";
     if (testId === "button-clock-stop") return "stop";
@@ -205,7 +184,6 @@ const historyFeatures: AccessFeature[] = [
   "digit-flip",
   "trade-x",
   "bulk-trader",
-  "jackpot",
   "clock-work",
   "cash-grab",
   "money-bank",
@@ -222,7 +200,7 @@ for (const feature of historyFeatures) {
   ]);
 }
 
-for (const feature of ["edge", "digit-flip", "trade-x", "bulk-trader", "jackpot", "clock-work", "cash-grab", "money-bank", "speedbot"] as const) {
+for (const feature of ["edge", "digit-flip", "trade-x", "bulk-trader", "clock-work", "cash-grab", "money-bank", "speedbot"] as const) {
   addMany(feature, [
     ["feature-toggle", "Show or hide feature"],
     ["open-guide", "Open feature guide"],
@@ -320,25 +298,6 @@ addMany("cash-grab", [
 ]);
 addMarketOptions("cash-grab", markets);
 addOptions("cash-grab", "duration", "Choose duration", durations);
-
-addMany("jackpot", [
-  ["auto-market", "Auto Best market switch"],
-  ["enable-rise-fall", "Enable Rise/Fall contracts"],
-  ["enable-even-odd", "Enable Even/Odd contracts"],
-  ["rise-fall-call", "Choose Rise"],
-  ["rise-fall-put", "Choose Fall"],
-  ["rise-fall-auto", "Choose automatic Rise/Fall"],
-  ["even-odd-even", "Choose Even"],
-  ["even-odd-odd", "Choose Odd"],
-  ["even-odd-auto", "Choose automatic Even/Odd"],
-  ["multiply-after-loss", "Multiply stake after a loss"],
-  ["jackpot-ai", "Jackpot AI switch"],
-  ["place-batch", "Place Jackpot batch"],
-  ["refresh-order-status", "Refresh order status"],
-]);
-addOptions("jackpot", "market-group", "Choose market group", ["Bear", "Bull", "Volatility", "Jump"]);
-addOptions("jackpot", "contract-count", "Choose contract count", Array.from({ length: 20 }, (_, i) => String(i + 1)));
-addOptions("jackpot", "duration", "Choose duration", durations);
 
 addMany("clock-work", [
   ["ai-clock", "AI Clock switch"],

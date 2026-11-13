@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useSignIn, useAuth } from '@clerk/react';
 import { useLocation } from 'wouter';
 import { RefreshCw, LockKeyhole, Mail, KeyRound } from 'lucide-react';
+import { BrandWordmark } from '@/components/brand-wordmark';
 
 export default function SignInPage() {
   const { signIn } = useSignIn();
@@ -53,12 +54,10 @@ export default function SignInPage() {
       <div className="w-full max-w-md panel p-8 rounded-2xl border border-[var(--line)] shadow-xl bg-[var(--paper)] dark:bg-[#102f38] dark:border-[#31545a]">
         <div className="flex justify-center mb-8">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl rounded-tr-sm bg-[#1bb59f] flex items-center justify-center text-[#0d2a32] text-xl font-black tracking-tighter">
-              S
+            <div aria-hidden="true" className="w-10 h-10 rounded-xl rounded-tr-sm bg-gradient-to-br from-[#39e4ed] to-[#8c9dff] flex items-center justify-center text-[#071827] text-sm font-black tracking-[-0.12em] shadow-[0_0_28px_rgba(68,197,255,0.24)]">
+              S<span className="-ml-0.5">M</span>
             </div>
-            <span className="font-bold tracking-wide text-sm text-[#102f38] dark:text-[#f3fbf9]">
-              Shadow Ai Trading <span className="text-[#18a894] dark:text-[#35d6b6]">AI Trading</span>
-            </span>
+            <BrandWordmark className="text-sm text-[#102f38] dark:text-[#f3fbf9]" />
           </div>
         </div>
         

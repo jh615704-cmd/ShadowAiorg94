@@ -63,40 +63,6 @@ test("diagnostics keep distinct failure sources visible without storing raw erro
   assert.ok(findings.every((finding) => !("raw_error" in finding)));
 });
 
-test("diagnostics distinguish operation-level failures without collecting trade payloads", () => {
-  const registry = new AdminIntelligenceRegistry();
-  registry.report({
-    feature: "jackpot",
-    code: "trade_outcome_uncertain",
-    severity: "warning",
-    source: "transport",
-    operation: "jackpot_batch",
-  }, "session-1", 10_000);
-  registry.report({
-    feature: "jackpot",
-    code: "trade_outcome_uncertain",
-    severity: "warning",
-    source: "transport",
-    operation: "jackpot_batch",
-  }, "session-2", 11_000);
-  registry.report({
-    feature: "jackpot",
-    code: "trade_outcome_uncertain",
-    severity: "warning",
-    source: "transport",
-    operation: "buy",
-  }, "session-3", 12_000);
-
-  const findings = registry.scan(13_000).findings;
-  assert.equal(findings.length, 2);
-  const jackpotBatch = findings.find((finding) => finding.operation === "jackpot_batch");
-  assert.equal(jackpotBatch?.occurrences, 2);
-  assert.equal(jackpotBatch?.affected_sessions, 2);
-  assert.match(jackpotBatch?.evidence ?? "", /operation: jackpot_batch/);
-  assert.ok(findings.every((finding) => !("contract_id" in finding)));
-  assert.ok(findings.every((finding) => !("account_id" in finding)));
-});
-
 test("review acknowledgment is visible but a fresh report reopens the finding", () => {
   const registry = new AdminIntelligenceRegistry();
   const input = {

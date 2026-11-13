@@ -14,7 +14,6 @@ type DiagnosticFeature =
   | "digit-flip"
   | "trade-x"
   | "bulk-trader"
-  | "jackpot"
   | "clock-work"
   | "cash-grab"
   | "money-bank"
@@ -26,7 +25,7 @@ type DiagnosticFeature =
   | "history";
 
 type DiagnosticSource = "browser_app" | "api_server" | "deriv" | "transport" | "unknown";
-type DiagnosticOperation = "buy" | "bulk_buy" | "dual_buy" | "sell" | "jackpot_batch" | "clock_work_batch";
+type DiagnosticOperation = "buy" | "bulk_buy" | "dual_buy" | "sell" | "clock_work_batch";
 
 const allowedFeatures = new Set<DiagnosticFeature>([
   "dashboard",
@@ -34,7 +33,6 @@ const allowedFeatures = new Set<DiagnosticFeature>([
   "digit-flip",
   "trade-x",
   "bulk-trader",
-  "jackpot",
   "clock-work",
   "cash-grab",
   "money-bank",
@@ -50,7 +48,6 @@ const allowedOperations = new Set<DiagnosticOperation>([
   "bulk_buy",
   "dual_buy",
   "sell",
-  "jackpot_batch",
   "clock_work_batch",
 ]);
 

@@ -54,7 +54,7 @@ const scanCoverage = {
   reported_signal_categories: [
     "Browser runtime errors and unhandled rejections reported by connected dashboard sessions.",
     "API transport and server failures observed by the shared API client.",
-    "Uncertain or partially confirmed trade responses from instrumented single, bulk, dual, sell, Jackpot, and Clock Work requests.",
+    "Uncertain or partially confirmed trade responses from instrumented single, bulk, dual, sell, and Clock Work requests.",
     "Auto Trader 2.0 saved-state validation and browser-storage failures.",
   ],
   not_directly_scanned: [

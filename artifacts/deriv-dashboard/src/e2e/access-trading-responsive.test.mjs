@@ -37,7 +37,6 @@ const fixtureFeatureIds = [
   "trade-x",
   "bulk-trader",
   "speedbot",
-  "jackpot",
   "clock-work",
   "cash-grab",
   "money-bank",
@@ -241,7 +240,7 @@ test("the workspace stays unlocked briefly and shows the access countdown after 
 
     await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
 
-    assert.equal(await page.getByRole("heading", { name: "Login to Shadow Ai" }).count(), 0, "A brief departure should not lock the workspace.");
+    assert.equal(await page.getByRole("heading", { name: "Login to Shadow Matrix" }).count(), 0, "A brief departure should not lock the workspace.");
     assert.equal(state.logoutCount, 0, "A brief departure should keep the access session active.");
     await page.evaluate(() => {
       localStorage.setItem("shadow-access-away-started", String(Date.now() - 3 * 60 * 60 * 1_000 - 1));
@@ -252,12 +251,12 @@ test("the workspace stays unlocked briefly and shows the access countdown after 
     assert.match(await page.getByTestId("access-exit-countdown").innerText(), /^[1-5]$/);
     await page.getByTestId("access-exit-progress").waitFor();
     await assertNoHorizontalOverflow(page, viewports[0], "phone idle-lock transition");
-    assert.equal(await page.getByRole("heading", { name: "Login to Shadow Ai" }).count(), 0);
+    assert.equal(await page.getByRole("heading", { name: "Login to Shadow Matrix" }).count(), 0);
     assert.equal(state.logoutCount, 1, "Returning after three hours away should end the active access session.");
-    await page.getByRole("heading", { name: "Login to Shadow Ai" }).waitFor({ timeout: 8_000 });
+    await page.getByRole("heading", { name: "Login to Shadow Matrix" }).waitFor({ timeout: 8_000 });
     await page.getByText(/Workspace locked after three hours away/).waitFor();
     await page.reload();
-    await page.getByRole("heading", { name: "Login to Shadow Ai" }).waitFor();
+    await page.getByRole("heading", { name: "Login to Shadow Matrix" }).waitFor();
     assert.ok(state.sessionRevoked, "Returning to the app should not restore the previous session.");
     assert.deepEqual(pageErrors, [], "The away lock should not cause browser errors.");
     assert.deepEqual(state.unhandledApis, []);
@@ -274,7 +273,7 @@ test("the workspace does not lock just because the bot browser window loses focu
     await page.locator(".xt-feature-card-restricted").first().waitFor();
     await page.evaluate(() => window.dispatchEvent(new Event("blur")));
 
-    assert.equal(await page.getByRole("heading", { name: "Login to Shadow Ai" }).count(), 0, "Losing focus for a short time should not lock the workspace.");
+    assert.equal(await page.getByRole("heading", { name: "Login to Shadow Matrix" }).count(), 0, "Losing focus for a short time should not lock the workspace.");
     assert.equal(state.logoutCount, 0, "A short focus change should not end the active access session.");
     assert.deepEqual(pageErrors, [], "A short focus change should not cause browser errors.");
   } finally {
@@ -295,8 +294,8 @@ test("the workspace shows a five-second lock countdown after three idle hours", 
 
     await page.getByTestId("access-exit-transition").waitFor({ timeout: 5_000 });
     assert.match(await page.getByTestId("access-exit-countdown").innerText(), /^[1-5]$/);
-    assert.equal(await page.getByRole("heading", { name: "Login to Shadow Ai" }).count(), 0);
-    await page.getByRole("heading", { name: "Login to Shadow Ai" }).waitFor({ timeout: 8_000 });
+    assert.equal(await page.getByRole("heading", { name: "Login to Shadow Matrix" }).count(), 0);
+    await page.getByRole("heading", { name: "Login to Shadow Matrix" }).waitFor({ timeout: 8_000 });
     await page.getByText(/Workspace locked after three hours without activity/).waitFor();
     assert.equal(state.logoutCount, 1, "Three hours without interaction should end the active session.");
     assert.deepEqual(pageErrors, [], "The idle lock should not cause browser errors.");
@@ -322,7 +321,7 @@ test("manual logout shows a two-second countdown before access-key login", async
     assert.equal(await page.getByTestId("access-exit-countdown").innerText(), "2");
     await page.getByTestId("access-exit-progress").waitFor();
     await assertNoHorizontalOverflow(page, viewports[0], "phone logout transition");
-    assert.equal(await page.getByRole("heading", { name: "Login to Shadow Ai" }).count(), 0);
+    assert.equal(await page.getByRole("heading", { name: "Login to Shadow Matrix" }).count(), 0);
     assert.equal(state.logoutCount, 1);
     const accessKeyInput = page.locator("#edge-access-key");
     await accessKeyInput.waitFor({ timeout: 5_000 });
@@ -386,7 +385,7 @@ test("real user interaction refreshes the inactivity timer", async () => {
 
     const refreshedActivityAt = Number(await page.evaluate(() => localStorage.getItem("shadow-access-last-activity")));
     assert.ok(refreshedActivityAt > oldActivityAt, "Pointer activity should refresh the stored timestamp.");
-    assert.equal(await page.getByRole("heading", { name: "Login to Shadow Ai" }).count(), 0);
+    assert.equal(await page.getByRole("heading", { name: "Login to Shadow Matrix" }).count(), 0);
     assert.deepEqual(pageErrors, [], "User activity should not cause browser errors.");
   } finally {
     await context.close();
@@ -482,8 +481,6 @@ test("administrators do not see status labels or red card glows", async () => {
     assert.equal(await page.getByText("Chrome 128", { exact: true }).count(), 0);
     assert.equal(await page.getByText(/iOS 17\.5/).count(), 0);
     const managedActions = [
-      ["Jackpot", "Auto Best Market"],
-      ["Jackpot", "Jackpot AI"],
       ["Clock Work", "AI Clock switch"],
       ["Cash Grab", "Auto-switch Safeguard"],
       ["Cash Grab", "Auto Direction switch"],
@@ -504,30 +501,6 @@ test("administrators do not see status labels or red card glows", async () => {
       await statusSelect.waitFor();
       assert.equal(await statusSelect.locator("option").count(), 4, `${featureName} / ${actionLabel} must support all four statuses`);
     }
-    const jackpotRow = page.locator(".admin-feature-control-row").filter({ hasText: "Jackpot" });
-    const jackpotAi = jackpotRow.locator(".admin-feature-action-controls label").filter({ hasText: "Jackpot AI" }).locator("select");
-    await jackpotAi.selectOption("coming_soon");
-    const actionSave = page.waitForResponse((response) =>
-      response.url().includes("/api/access/feature-settings") && response.request().method() === "PATCH",
-    );
-    await jackpotRow.getByRole("button", { name: "Save" }).click();
-    const actionSaveResponse = await actionSave;
-    const actionRequestBody = actionSaveResponse.request().postData() ?? "";
-    assert.ok(Buffer.byteLength(actionRequestBody) < 32 * 1024, "Action saves must stay under the API's 32 KB request limit.");
-    const submittedActionSettings = JSON.parse(actionRequestBody);
-    assert.equal(submittedActionSettings.features.length, 1, "Only the changed feature should be sent.");
-    assert.ok(submittedActionSettings.action_controls.length <= 2, "A save must include no more than the visible Jackpot switches.");
-    assert.ok(
-      submittedActionSettings.action_controls.every((action) =>
-        action.feature === "jackpot" && ["auto-market", "jackpot-ai"].includes(action.control_id),
-      ),
-      "A save must not resend hidden Jackpot controls.",
-    );
-    const savedActions = await actionSaveResponse.json();
-    assert.equal(
-      savedActions.action_controls.find((action) => action.feature === "jackpot" && action.control_id === "jackpot-ai")?.mode,
-      "coming_soon",
-    );
     for (const viewport of [
       { name: "laptop", width: 1440, height: 900 },
       { name: "compact laptop", width: 1280, height: 800 },
@@ -729,37 +702,21 @@ test("DigitFlip history stays visible after switching the feature off", async ()
   }
 });
 
-function seedJackpotMarketHistory(state, overrides = {}) {
-  state.statusVersion = 6;
-  state.marketSignalOverrides = {
-    ...(state.marketSignalOverrides ?? {}),
-    R_75: {
-      tick_sequence: 6,
-      tick_epoch: Math.floor(Date.now() / 1000),
-      sample_count: 6,
-      rise_percentage: 66.7,
-      fall_percentage: 33.3,
-      digit_even_percentage: 66.7,
-      digit_odd_percentage: 33.3,
-      ...overrides,
-    },
-  };
-}
-
-test("Speedbot sits above Jackpot, enforces one active feature, and sends one live-tick order", async () => {
-  const state = createState(userSession(["speedbot", "jackpot"]));
+test("Speedbot remains available with other features and sends one live-tick order", async () => {
+  const state = createState(userSession(["speedbot", "clock-work"]));
   state.hasToken = true;
   state.allowFixtureTrades = true;
   const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
   try {
     await page.goto(`${baseUrl}/app`);
     await page.getByRole("heading", { name: "Trading Strategies" }).waitFor();
+    await page.getByRole("img", { name: "Shadow Matrix" }).first().waitFor();
 
     const speedbotCard = page.locator("#speedbot-feature");
-    const jackpotCard = page.locator("#jackpot-feature");
+    const clockWorkCard = page.locator("#clock-work-feature");
     assert.ok(
-      (await speedbotCard.boundingBox()).y < (await jackpotCard.boundingBox()).y,
-      "Speedbot should appear directly above Jackpot.",
+      (await speedbotCard.boundingBox()).y < (await clockWorkCard.boundingBox()).y,
+      "Speedbot should appear above Clock Work.",
     );
 
     await speedbotCard.getByRole("button", { name: "Guide" }).click();
@@ -770,11 +727,8 @@ test("Speedbot sits above Jackpot, enforces one active feature, and sends one li
     await page.getByRole("heading", { name: "Multiplier after a loss" }).waitFor();
     await page.getByRole("button", { name: "Close guide" }).click();
 
-    const jackpotToggle = page.getByRole("checkbox", { name: "Toggle Jackpot" });
     const speedbotToggle = page.getByRole("checkbox", { name: "Toggle Speedbot" });
-    await jackpotToggle.check();
     await speedbotToggle.check();
-    assert.equal(await jackpotToggle.isChecked(), false, "Enabling Speedbot should disable Jackpot.");
     assert.equal(await speedbotToggle.isChecked(), true);
 
     const panel = page.getByTestId("speedbot-panel");
@@ -939,7 +893,22 @@ test("Speedbot pauses after an unclear buy and recovers only after fresh Deriv h
   }
 });
 
-test("Jackpot supports one-sided bulk batches, labels its run history, and excludes other features", async () => {
+test("Jackpot is absent from the trading workspace", async () => {
+  const state = createState(userSession(["clock-work"]));
+  state.hasToken = true;
+  const { context, page, pageErrors } = await createMockPage(state, viewports[0]);
+  try {
+    await page.goto(`${baseUrl}/app`);
+    await page.getByRole("heading", { name: "Trading Strategies" }).waitFor();
+    assert.equal(await page.locator("#jackpot-feature").count(), 0);
+    assert.equal(await page.getByTestId("jackpot-panel").count(), 0);
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+});
+
+test.skip("Jackpot supports one-sided bulk batches, labels its run history, and excludes other features", async () => {
   const state = createState(userSession(["jackpot", "clock-work"]));
   state.hasToken = true;
   state.allowFixtureTrades = true;
@@ -1002,7 +971,7 @@ test("Jackpot supports one-sided bulk batches, labels its run history, and exclu
   }
 });
 
-test("Jackpot keeps an uncertain batch blocked until order status is refreshed", async () => {
+test.skip("Jackpot keeps an uncertain batch blocked until order status is refreshed", async () => {
   const state = createState(userSession(["jackpot"]));
   state.hasToken = true;
   seedJackpotMarketHistory(state);
@@ -1040,7 +1009,7 @@ test("Jackpot keeps an uncertain batch blocked until order status is refreshed",
   }
 });
 
-test("Jackpot manual count sends exactly four Rise/Fall contracts in one batch", async () => {
+test.skip("Jackpot manual count sends exactly four Rise/Fall contracts in one batch", async () => {
   const state = createState(userSession(["jackpot"]));
   state.hasToken = true;
   state.allowFixtureTrades = true;
@@ -1070,7 +1039,7 @@ test("Jackpot manual count sends exactly four Rise/Fall contracts in one batch",
   }
 });
 
-test("Jackpot loss runway updates after a losing batch and resets stake progression after a win", async () => {
+test.skip("Jackpot loss runway updates after a losing batch and resets stake progression after a win", async () => {
   const state = createState(userSession(["jackpot"]));
   state.hasToken = true;
   state.allowFixtureTrades = true;
@@ -1140,7 +1109,7 @@ test("Jackpot loss runway updates after a losing batch and resets stake progress
   }
 });
 
-test("clearing Jackpot session resets settled loss-limit P/L without deleting Deriv history", async () => {
+test.skip("clearing Jackpot session resets settled loss-limit P/L without deleting Deriv history", async () => {
   const state = createState(userSession(["jackpot"]));
   state.hasToken = true;
   state.allowFixtureTrades = true;
@@ -1187,7 +1156,7 @@ test("clearing Jackpot session resets settled loss-limit P/L without deleting De
   }
 });
 
-test("Jackpot place button re-enables after Deriv confirms settlement", async () => {
+test.skip("Jackpot place button re-enables after Deriv confirms settlement", async () => {
   const state = createState(userSession(["jackpot"]));
   state.hasToken = true;
   state.allowFixtureTrades = true;
@@ -1275,7 +1244,7 @@ test("Jackpot place button re-enables after Deriv confirms settlement", async ()
   }
 });
 
-test("Jackpot AI reuses fresh market history, sends one batch, and switches off", async () => {
+test.skip("Jackpot AI reuses fresh market history, sends one batch, and switches off", async () => {
   const state = createState(userSession(["jackpot"]));
   state.hasToken = true;
   state.allowFixtureTrades = true;
@@ -1320,7 +1289,6 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
     "trade-x",
     "bulk-trader",
     "speedbot",
-    "jackpot",
     "cash-grab",
     "clock-work",
     "money-bank",
@@ -1348,7 +1316,6 @@ test("all active trading panels fit phone, tablet, laptop, and 4K widths", async
     { feature: "trade-x", card: "trade-x", selector: '[data-testid="trade-x-panel"]', label: "Trade X" },
     { feature: "bulk-trader", card: "bulk", selector: '[data-testid="panel-bulk-trader"]', label: "Bulk Trader" },
     { feature: "speedbot", card: "speedbot", selector: '[data-testid="speedbot-panel"]', label: "Speedbot" },
-    { feature: "jackpot", card: "jackpot", selector: '[data-testid="jackpot-panel"]', label: "Jackpot" },
     { feature: "cash-grab", card: "cash-grab", selector: '[data-testid="cash-grab-panel"]', label: "Cash Grab" },
     { feature: "clock-work", card: "clock-work", selector: '[data-testid="clock-work-panel"]', label: "Clock Work" },
     { feature: "money-bank", card: "edge2", selector: ".money-bank-panel", label: "Money Bank" },
@@ -2205,7 +2172,7 @@ test("trading routes keep status polling and live feeds active in the background
   const routes = [
     {
       path: "/app",
-      features: ["edge", "digit-flip", "trade-x", "bulk-trader", "jackpot", "clock-work", "cash-grab", "money-bank"],
+      features: ["edge", "digit-flip", "trade-x", "bulk-trader", "clock-work", "cash-grab", "money-bank"],
       checkAccounts: true,
       checkHistory: true,
     },
@@ -3143,6 +3110,12 @@ async function mockApiRequest(route, state, pathname, method) {
     await fulfillJson(route, {
       scanned_at: new Date().toISOString(),
       server_status: "healthy",
+      coverage: {
+        mode: "reported_client_signals",
+        reported_signal_categories: [],
+        not_directly_scanned: [],
+        note: "No report means no signal was received; it is not proof that a feature or account is healthy.",
+      },
       features: [],
       findings: [],
     });
@@ -3342,39 +3315,6 @@ async function mockApiRequest(route, state, pathname, method) {
     }, 202);
     return;
   }
-  if (pathname === "/api/deriv/jackpot/buy" && method === "POST" && state.allowFixtureTrades) {
-    const order = request.postDataJSON();
-    state.tradeRequests.push({ path: pathname, method, body: order });
-    const contractTypes = order.contract_types ?? Array.from({ length: order.pair_count }, () => [
-      order.rise_fall_type,
-      order.parity_type,
-    ]).flat();
-    const buys = contractTypes.map((contract_type) => {
-      const row = fixtureBuy(state, { ...order, contract_type });
-      return {
-        contract_id: row.contract_id,
-        buy_price: row.buy_price,
-        payout: row.payout,
-        start_time: row.buy_time,
-      };
-    });
-    state.activeContractCount = buys.length;
-    await fulfillJson(route, {
-      ok: true,
-      count: buys.length,
-      message: "Fixture Jackpot batch confirmed.",
-      proposals: contractTypes.map(() => ({
-        id: "fixture-proposal",
-        ask_price: order.amount,
-        payout: order.amount * 2,
-        spot: 100_000,
-        longcode: "Fixture quote",
-      })),
-      buys,
-      failed: [],
-    }, 202);
-    return;
-  }
   if (pathname === "/api/deriv/sell" && method === "POST" && state.allowFixtureTrades) {
     state.tradeRequests.push({ path: pathname, method });
     const { contract_id } = request.postDataJSON();
@@ -3399,7 +3339,7 @@ async function mockApiRequest(route, state, pathname, method) {
     await fulfillJson(route, { symbol: state.selectedSymbol });
     return;
   }
-  if (/^\/api\/deriv\/(buy|bulk-buy|dual-buy|sell|jackpot\/buy)(\/|$)/.test(pathname)) {
+  if (/^\/api\/deriv\/(buy|bulk-buy|dual-buy|sell)(\/|$)/.test(pathname)) {
     state.tradeRequests.push({ path: pathname, method });
     await fulfillJson(route, { error: "Live trade endpoints are disabled in browser tests." }, 501);
     return;

@@ -13,7 +13,6 @@ import {
   SellDerivContractResponse,
   BulkBuyDerivContractsBody,
   BulkBuyDerivContractsResponse,
-  BuyJackpotPairsBody,
   DualBuyDerivContractsBody,
   QuoteClockWorkContractsBody,
   QuoteClockWorkContractsResponse,
@@ -47,7 +46,6 @@ import {
   buyContract,
   sellContract,
   bulkBuyContracts,
-  buyJackpotPairContracts,
   dualBuyContracts,
   quoteClockWorkContracts,
   buyClockWorkContracts,
@@ -822,7 +820,7 @@ router.post("/deriv/dual-buy", requireTradeAccessFeature, async (req, res) => {
       ? 403
       : message.includes("still settling") || message.includes("account status is being refreshed") || message.includes("safety timeout") || message.toLowerCase().includes("global trading protection")
         ? 409
-              : message.includes("Jackpot supports") || message.includes("not available") || message.includes("balance") || message.includes("confirmation") || message.includes("offers no return")
+              : message.includes("not available") || message.includes("balance") || message.includes("confirmation") || message.includes("offers no return")
         ? 400
         : message.includes("did not return a proposal") || message.includes("WebSocket is not ready")
           ? 504
@@ -832,82 +830,6 @@ router.post("/deriv/dual-buy", requireTradeAccessFeature, async (req, res) => {
        diagnostic_source: tradeErrorSourceForRoute(error, status),
        trade_outcome: tradeOutcomeForRouteError(error, status),
      });
-  }
-});
-
-router.post("/deriv/jackpot/buy", requireTradeAccessFeature, async (req, res) => {
-  const parsed = BuyJackpotPairsBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Invalid Jackpot batch buy request" });
-    return;
-  }
-  const {
-    contract_types: contractTypes,
-    pair_count: pairCount,
-    rise_fall_type: riseFallType,
-    parity_type: parityType,
-  } = parsed.data;
-  const hasLegacyPairInput = pairCount != null && riseFallType != null && parityType != null;
-  const hasLegacyPairFields = pairCount != null || riseFallType != null || parityType != null;
-  if (
-    (contractTypes && (hasLegacyPairFields || contractTypes.length < 1 || contractTypes.length > 20))
-    || (!contractTypes && !hasLegacyPairInput)
-  ) {
-    res.status(400).json({ error: "Choose either 1–20 contracts or a complete legacy pair request." });
-    return;
-  }
-
-  try {
-    const result = BulkBuyDerivContractsResponse.parse(
-      await withCredential(res.locals.userId, async () => {
-        const assertAuthorized = () => assertAccessSessionActive(res.locals.accessSessionId, res.locals.accessKeyId);
-        await assertAuthorized();
-        return buyJackpotPairContracts(parsed.data, assertAuthorized);
-      }, true),
-    );
-    res.status(202).json(result);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Jackpot buy request failed";
-    req.log?.error({ err: error }, "Deriv Jackpot pair buy request failed");
-    if (isDerivBuyRateLimitError(error)) {
-      res.status(429).json({
-        error: tradeOutcomeForRouteError(error, 429) === "uncertain"
-          ? "Deriv did not confirm every Jackpot order. Refresh order status before placing another batch."
-          : "Deriv temporarily limited the Jackpot batch. No additional orders were sent.",
-        code: "DERIV_BUY_RATE_LIMITED",
-        diagnostic_source: "deriv",
-        trade_outcome: tradeOutcomeForRouteError(error, 429),
-      });
-      return;
-    }
-    const status = isCapacityError(error)
-      ? 503
-      : isCredentialError(error)
-        ? credentialHttpStatus(error)
-        : error instanceof AccessSessionRevokedError
-          ? 403
-          : message.includes("disabled") || message.includes("real account")
-            ? 403
-            : message.includes("still settling")
-              || message.includes("account status is being refreshed")
-              || message.includes("safety timeout")
-              || message.toLowerCase().includes("global trading protection")
-              ? 409
-              : message.includes("not available")
-                || message.includes("balance")
-                || message.includes("confirmation")
-                || message.includes("duration")
-                || message.includes("stake")
-                || message.includes("pairs")
-                ? 400
-                : message.includes("did not return a proposal") || message.includes("WebSocket is not ready")
-                  ? 504
-                  : 502;
-    res.status(status).json({
-      error: message,
-      diagnostic_source: tradeErrorSourceForRoute(error, status),
-      trade_outcome: tradeOutcomeForRouteError(error, status),
-    });
   }
 });
 

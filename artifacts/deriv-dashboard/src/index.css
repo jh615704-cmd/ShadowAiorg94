@@ -447,7 +447,7 @@
   --coral: #d75046;
 }
 
-/* Shadow Ai Trading — blue live-market cockpit */
+/* Shadow Matrix — blue live-market cockpit */
 :root {
   --background: 215 72% 10%;
   --foreground: 210 50% 94%;
@@ -498,6 +498,31 @@
   --teal: #16c7e8;
   --teal-deep: #009ed2;
   --teal-soft: #103c60;
+}
+
+.shadow-matrix-wordmark {
+  display: inline-flex;
+  align-items: baseline;
+  gap: .34em;
+  font-family: var(--app-font-sans), sans-serif;
+  font-size: inherit;
+  font-weight: 900;
+  letter-spacing: .115em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.shadow-matrix-wordmark__shadow {
+  color: currentColor;
+}
+
+.shadow-matrix-wordmark__matrix {
+  background: linear-gradient(105deg, #43e9ee 0%, #70c9ff 44%, #b09bff 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 10px rgba(77, 199, 255, .18));
 }
 
 body, .app-frame { background: #071b35; color: #e8f3ff; }

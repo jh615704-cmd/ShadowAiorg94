@@ -13,7 +13,7 @@ export function Current() {
         <div className="current-brand">
           <span className="current-brand-mark">S</span>
           <span className="current-brand-copy">
-            <strong>Shadow Ai Trading</strong>
+            <strong>Shadow Matrix</strong>
             <small>AI Trading</small>
           </span>
         </div>
@@ -30,7 +30,7 @@ export function Current() {
         <div className="current-lock" aria-hidden="true">
           <ShieldCheck size={25} />
         </div>
-        <h1>Login to Shadow Ai</h1>
+        <h1>Login to Shadow Matrix</h1>
         <p className="current-intro">Use your access key to open your private trading workspace.</p>
 
         <a className="current-support" href="https://t.me/JDY_HATED">
@@ -52,7 +52,7 @@ export function Current() {
           </div>
           <label className="current-terms">
             <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
-            <span>I acknowledge and agree to the terms and conditions of Shadow Ai Trading.</span>
+            <span>I acknowledge and agree to the terms and conditions of Shadow Matrix.</span>
           </label>
           <button className="current-submit" type="submit" disabled={!key.trim() || !accepted}>
             Unlock workspace
@@ -60,7 +60,7 @@ export function Current() {
         </form>
 
         <footer className="current-footer">
-          <span>Shadow AI Trading</span>
+          <span>Shadow Matrix</span>
           <span>Access key required</span>
         </footer>
       </section>

@@ -29,19 +29,9 @@ let buyInvocations = 0;
 let bulkBuyInvocations = 0;
 const bulkBuyDurations: number[] = [];
 let dualBuyInvocations = 0;
-let jackpotBuyInvocations = 0;
 let knockoutStatisticsInvocations = 0;
 const knockoutStatisticsInputs: Array<{ symbol: string; amount: number; duration: number }> = [];
-let routeAccessFeatures = ["clock-work", "edge", "trade-x", "bulk-trader", "jackpot", "auto-trader", "money-bank", "speedbot"];
-const jackpotBuyInputs: Array<{
-  amount: number;
-  duration: number;
-  symbol: string;
-  rise_fall_type?: string;
-  parity_type?: string;
-  pair_count?: number;
-  contract_types?: string[];
-}> = [];
+let routeAccessFeatures = ["clock-work", "edge", "trade-x", "bulk-trader", "auto-trader", "money-bank", "speedbot"];
 let knockoutScanInvocations = 0;
 const marketTickListeners = new Set<(tick: {
   symbol: string;
@@ -118,7 +108,7 @@ mock.module("drizzle-orm", {
 mock.module("../lib/access-keys", {
   namedExports: {
     AccessSessionRevokedError: MockAccessSessionRevokedError,
-    TRADING_ACCESS_FEATURES: ["edge", "digit-flip", "trade-x", "bulk-trader", "jackpot", "clock-work", "cash-grab", "money-bank", "jdy-ai-3", "auto-trader", "auto-trader-2", "speedbot"],
+    TRADING_ACCESS_FEATURES: ["edge", "digit-flip", "trade-x", "bulk-trader", "clock-work", "cash-grab", "money-bank", "jdy-ai-3", "auto-trader", "auto-trader-2", "speedbot"],
     findSessionByToken: async () => null,
     featureList: (features: string[] | null | undefined) => features ?? ["edge"],
     hashSecret: (value: string) => value,
@@ -290,29 +280,6 @@ mock.module("../lib/deriv", {
       observePat();
       dualBuyInvocations += 1;
       return { ok: true, message: "contracts bought", count: 2, proposals: [], buys: [], failed: [] };
-    },
-    buyJackpotPairContracts: async (input: {
-      amount: number;
-      duration: number;
-      symbol: string;
-      rise_fall_type?: string;
-      parity_type?: string;
-      pair_count?: number;
-      contract_types?: string[];
-    }) => {
-      observePat();
-      jackpotBuyInvocations += 1;
-      jackpotBuyInputs.push(input);
-      return {
-        ok: true,
-        message: input.contract_types
-          ? `${input.contract_types.length} Jackpot contracts sent`
-          : `${input.pair_count} Jackpot pairs sent`,
-        count: input.contract_types?.length ?? (input.pair_count ?? 0) * 2,
-        proposals: [],
-        buys: [],
-        failed: [],
-      };
     },
     quoteClockWorkContracts: async () => {
       observePat();
@@ -544,56 +511,12 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
     });
     assert.equal(validMoneyBankBuyResponse.status, 202, JSON.stringify(await readJson(validMoneyBankBuyResponse)));
 
-    const jackpotBuyCountBefore = jackpotBuyInvocations;
-    const jackpotBuyResponse = await fetch(`${baseUrl}/deriv/jackpot/buy`, {
+    const removedJackpotRoute = await fetch(`${baseUrl}/deriv/jackpot/buy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        access_feature: "jackpot",
-        amount: 0.5,
-        duration: 2,
-        duration_unit: "t",
-        symbol: "R_75",
-        rise_fall_type: "PUT",
-        parity_type: "DIGITODD",
-        pair_count: 3,
-      }),
+      body: JSON.stringify({ access_feature: "jackpot" }),
     });
-    assert.equal(jackpotBuyResponse.status, 202, JSON.stringify(await readJson(jackpotBuyResponse)));
-    assert.equal(jackpotBuyInvocations, jackpotBuyCountBefore + 1);
-    assert.deepEqual(jackpotBuyInputs.at(-1), {
-      access_feature: "jackpot",
-      amount: 0.5,
-      duration: 2,
-      duration_unit: "t",
-      symbol: "R_75",
-      rise_fall_type: "PUT",
-      parity_type: "DIGITODD",
-      pair_count: 3,
-    });
-
-    const jackpotBulkTypes = ["CALL", "DIGITEVEN", "PUT"] as const;
-    const jackpotBulkResponse = await fetch(`${baseUrl}/deriv/jackpot/buy`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        access_feature: "jackpot",
-        amount: 0.5,
-        duration: 2,
-        duration_unit: "t",
-        symbol: "R_75",
-        contract_types: jackpotBulkTypes,
-      }),
-    });
-    assert.equal(jackpotBulkResponse.status, 202, JSON.stringify(await readJson(jackpotBulkResponse)));
-    assert.deepEqual(jackpotBuyInputs.at(-1), {
-      access_feature: "jackpot",
-      amount: 0.5,
-      duration: 2,
-      duration_unit: "t",
-      symbol: "R_75",
-      contract_types: jackpotBulkTypes,
-    });
+    assert.equal(removedJackpotRoute.status, 404);
 
     const validMoneyBankMaxDurationResponse = await fetch(`${baseUrl}/deriv/buy`, {
       method: "POST",
@@ -824,7 +747,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
     });
     assert.equal(outOfRangeAutoTraderResponse.status, 400);
     assert.match(String((await readJson(outOfRangeAutoTraderResponse)).error), /1 to 5 ticks/);
-    assert.deepEqual(observedPats, Array.from({ length: 35 }, () => enteredPat));
+    assert.deepEqual(observedPats, Array.from({ length: 33 }, () => enteredPat));
 
     const priorBuyInvocations = buyInvocations;
     const priorBulkBuyInvocations = bulkBuyInvocations;

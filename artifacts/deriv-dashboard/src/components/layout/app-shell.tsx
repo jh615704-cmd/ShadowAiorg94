@@ -27,6 +27,7 @@ import { useTheme } from '@/components/theme-provider';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { DerivAccountSwitcher } from '@/components/deriv-account-switcher';
 import { useAccessSessionLogout } from '@/hooks/use-access-session-logout';
+import { BrandWordmark } from '@/components/brand-wordmark';
 import { FeatureStatusText } from '@/components/feature-status';
 import { GlobalFeatureAnnouncement } from '@/components/layout/global-feature-announcement';
 import './feature-action-controls.css';
@@ -173,13 +174,12 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
   const canUseDigitFlip = isAdmin || features.includes("digit-flip");
   const canUseTradeX = isAdmin || features.includes("trade-x");
   const canUseBulkTrader = isAdmin || features.includes("bulk-trader");
-  const canUseJackpot = isAdmin || features.includes("jackpot");
   const canUseClockWork = isAdmin || features.includes("clock-work");
   const canUseCashGrab = isAdmin || features.includes("cash-grab");
   const canUseMoneyBank = isAdmin || features.includes("money-bank");
   const canUseAutoTrader = isAdmin || features.includes("auto-trader");
   const canUseAutoTrader2 = isAdmin || features.includes("auto-trader-2");
-  const canUseTrading = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseJackpot || canUseClockWork || canUseCashGrab || canUseMoneyBank || canUseAutoTrader || canUseAutoTrader2;
+  const canUseTrading = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseClockWork || canUseCashGrab || canUseMoneyBank || canUseAutoTrader || canUseAutoTrader2;
   const canUseSettings = isAdmin || features.includes("settings");
   const routeFeature = location === "/auto-trader"
     ? "auto-trader"
@@ -217,7 +217,7 @@ export function AppShell({ children, title, onRefresh, headerContent }: AppShell
         <div>
           <div className="brand-lockup">
             <span className="brand-mark">S</span>
-            <span>Shadow Ai Trading <b>AI Trading</b></span>
+            <BrandWordmark className="text-[11px] text-[#f3fbf9]" />
           </div>
           <p className="sidebar-kicker">Connection center</p>
           <nav className="sidebar-nav" aria-label="Primary navigation">

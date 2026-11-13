@@ -2,6 +2,7 @@ import { Link } from 'wouter';
 import { ArrowRight, ShieldCheck, Zap, LockKeyhole } from 'lucide-react';
 import { useTheme } from '@/components/theme-provider';
 import { useEffect } from 'react';
+import { BrandWordmark } from '@/components/brand-wordmark';
 
 export default function Landing() {
   const { setTheme } = useTheme();
@@ -15,12 +16,11 @@ export default function Landing() {
     <div className="min-h-[100dvh] bg-[#0b1a20] text-[#e7f6f2] flex flex-col font-sans selection:bg-[#18a894] selection:text-white">
       <header className="flex items-center justify-between px-6 py-8 md:px-12 md:py-10 max-w-7xl mx-auto w-full">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl rounded-tr-sm bg-[#1bb59f] flex items-center justify-center text-[#0d2a32] text-xl font-black tracking-tighter">
+          <div aria-hidden="true" className="w-10 h-10 rounded-xl rounded-tr-sm bg-gradient-to-br from-[#39e4ed] to-[#8c9dff] flex items-center justify-center text-[#071827] text-sm font-black tracking-[-0.12em] shadow-[0_0_28px_rgba(68,197,255,0.24)]">
             S
+            <span className="-ml-0.5">M</span>
           </div>
-          <span className="font-bold tracking-widest text-sm text-[#f3fbf9]">
-            Shadow <span className="text-[#35d6b6]">Ai Trading</span>
-          </span>
+          <BrandWordmark className="text-sm text-[#f3fbf9]" />
         </div>
         
         <div className="flex items-center gap-4">
@@ -37,13 +37,14 @@ export default function Landing() {
         </div>
 
         <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight leading-[1.05] mb-6">
-          Trade options with <br className="hidden md:block" />
-          <em className="text-[#18a894] not-italic">absolute precision.</em>
+          See the market clearly. <br className="hidden md:block" />
+          <em className="bg-gradient-to-r from-[#42e8ee] via-[#77c7ff] to-[#ae9cff] bg-clip-text text-transparent not-italic">Trade with a plan.</em>
         </h1>
 
         <p className="text-[#8ba1a2] text-lg md:text-xl max-w-2xl mx-auto leading-relaxed mb-12">
-          Shadow Ai Trading is a multi-user trading terminal designed for speed.
-          Each user connects their own Personal Access Token to execute trades, monitor live telemetry, and analyze history in an isolated, high-density environment.
+          Shadow Matrix is a private Deriv workspace for live market analysis,
+          feature-specific trade controls, and account-isolated history. Signals
+          describe observed data; they cannot guarantee a trading outcome.
         </p>
 
         <Link href="/sign-in" className="inline-flex items-center justify-center gap-3 bg-[#18a894] text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-[#087d70] hover:-translate-y-1 transition-all shadow-[0_8px_24px_rgba(24,168,148,0.3)] mb-20 group">

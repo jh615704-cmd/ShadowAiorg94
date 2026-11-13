@@ -274,7 +274,6 @@ test("feature setting patches merge only the supplied feature and action control
     settings: {
       features: [
         { feature: "edge", mode: "restricted", audience: "all", user_ids: [], countdown_at: null, notice: "Keep EDGE restricted" },
-        { feature: "jackpot", mode: "available", audience: "all", user_ids: [], countdown_at: null, notice: "" },
       ],
       action_controls: [
         { feature: "edge", control_id: "history-clear", label: "Clear feature history", mode: "restricted" },
@@ -327,7 +326,6 @@ test("feature setting patches merge only the supplied feature and action control
     assert.equal(settings.features.find((item) => item.feature === "edge")?.mode, "coming_soon");
     assert.equal(settings.features.find((item) => item.feature === "edge")?.notice, "EDGE is being updated");
     const persistedFeatures = (storedAdminSettings[0].settings as Record<string, unknown>).features as Array<{ feature: string; mode: string }>;
-    assert.equal(persistedFeatures.find((item) => item.feature === "jackpot")?.mode, "available", "Untouched feature settings must remain stored.");
     assert.equal(settings.action_controls.find((item) => item.feature === "edge" && item.control_id === "history-filter-all")?.mode, "coming_soon");
     assert.equal(settings.action_controls.find((item) => item.feature === "edge" && item.control_id === "history-clear")?.mode, "restricted");
     assert.equal(settings.action_controls.find((item) => item.feature === "edge" && item.control_id === "history-filter-win")?.mode, "under_construction");

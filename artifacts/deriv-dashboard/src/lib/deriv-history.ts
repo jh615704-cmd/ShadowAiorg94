@@ -112,7 +112,6 @@ export type DerivHistoryFeature =
   | "bulk-trader"
   | "cash-grab"
   | "clock-work"
-  | "jackpot"
   | "money-bank"
   | "speedbot";
 

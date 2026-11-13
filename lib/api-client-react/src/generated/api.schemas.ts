@@ -64,7 +64,6 @@ export const DiagnosticOperation = {
   bulk_buy: 'bulk_buy',
   dual_buy: 'dual_buy',
   sell: 'sell',
-  jackpot_batch: 'jackpot_batch',
   clock_work_batch: 'clock_work_batch',
 } as const;
 
@@ -95,7 +94,6 @@ export const AccessFeature = {
   'digit-flip': 'digit-flip',
   'trade-x': 'trade-x',
   'bulk-trader': 'bulk-trader',
-  jackpot: 'jackpot',
   'clock-work': 'clock-work',
   'cash-grab': 'cash-grab',
   'money-bank': 'money-bank',
@@ -388,7 +386,6 @@ export const FeatureControlFeature = {
   'digit-flip': 'digit-flip',
   'trade-x': 'trade-x',
   'bulk-trader': 'bulk-trader',
-  jackpot: 'jackpot',
   'clock-work': 'clock-work',
   'cash-grab': 'cash-grab',
   'money-bank': 'money-bank',
@@ -1141,74 +1138,6 @@ export interface DerivBulkBuyInput {
      * @maximum 6
      */
   count: number;
-}
-
-export type JackpotPairBuyInputAccessFeature = typeof JackpotPairBuyInputAccessFeature[keyof typeof JackpotPairBuyInputAccessFeature];
-
-
-export const JackpotPairBuyInputAccessFeature = {
-  jackpot: 'jackpot',
-} as const;
-
-export type JackpotPairBuyInputDurationUnit = typeof JackpotPairBuyInputDurationUnit[keyof typeof JackpotPairBuyInputDurationUnit];
-
-
-export const JackpotPairBuyInputDurationUnit = {
-  t: 't',
-} as const;
-
-export type JackpotPairBuyInputRiseFallType = typeof JackpotPairBuyInputRiseFallType[keyof typeof JackpotPairBuyInputRiseFallType];
-
-
-export const JackpotPairBuyInputRiseFallType = {
-  CALL: 'CALL',
-  PUT: 'PUT',
-} as const;
-
-export type JackpotPairBuyInputParityType = typeof JackpotPairBuyInputParityType[keyof typeof JackpotPairBuyInputParityType];
-
-
-export const JackpotPairBuyInputParityType = {
-  DIGITEVEN: 'DIGITEVEN',
-  DIGITODD: 'DIGITODD',
-} as const;
-
-export type JackpotPairBuyInputContractTypesItem = typeof JackpotPairBuyInputContractTypesItem[keyof typeof JackpotPairBuyInputContractTypesItem];
-
-
-export const JackpotPairBuyInputContractTypesItem = {
-  CALL: 'CALL',
-  PUT: 'PUT',
-  DIGITEVEN: 'DIGITEVEN',
-  DIGITODD: 'DIGITODD',
-} as const;
-
-export interface JackpotPairBuyInput {
-  access_feature: JackpotPairBuyInputAccessFeature;
-  /** @minimum 0.35 */
-  amount: number;
-  /**
-     * @minimum 1
-     * @maximum 5
-     */
-  duration: number;
-  duration_unit: JackpotPairBuyInputDurationUnit;
-  /** @minLength 1 */
-  symbol: string;
-  rise_fall_type?: JackpotPairBuyInputRiseFallType;
-  parity_type?: JackpotPairBuyInputParityType;
-  /**
-     * Legacy count of complete dual pairs.
-     * @minimum 1
-     * @maximum 9
-     */
-  pair_count?: number;
-  /**
-     * Exact ordered contract list for the batch; array length is the total trade count.
-     * @minItems 1
-     * @maxItems 20
-     */
-  contract_types?: JackpotPairBuyInputContractTypesItem[];
 }
 
 /**

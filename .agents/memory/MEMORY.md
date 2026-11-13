@@ -49,7 +49,6 @@
 - [Workspace idle lock](workspace-idle-lock.md) — require the access key after one hour without interaction, including time away; keep revocation exits separate.
 - [Vite preview cache isolation](vite-preview-cache-isolation.md) — keep isolated E2E Vite caches separate from the live dashboard server to prevent stale-chunk 504s.
 - [Clock Work evidence and risk](clock-work-evidence-risk.md) — require six completed five-tick samples and at least 58%; history clearing must not disrupt run settlement tracking.
-- [Jackpot entry evidence](jackpot-entry-evidence.md) — every placed side needs six fresh samples and at least 58% observed; do not imply guaranteed outcomes.
 - [Non-Auto-Trader entry thresholds](non-auto-trader-entry-thresholds.md) — keep the 50% floor scoped to its features; Jackpot and Clock Work have separate 58% rules.
 - [EDGE AI Scanner Martingale](edge-ai-scanner-martingale.md) — keep scanner Martingale opt-in and separate from the regular EDGE multiplier; reset to base after a settled win.
 - [Auto Magic entry policy](auto-magic-entry-policy.md) — >68% on 50+ expiry samples; hidden 3/6 sizing uses an 80% cutoff; one settled batch per scan.

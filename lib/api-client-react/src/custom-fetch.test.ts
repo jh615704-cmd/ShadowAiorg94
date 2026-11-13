@@ -353,36 +353,6 @@ describe("customFetch transport recovery", () => {
     });
   });
 
-  it("captures uncertain partial Jackpot batches with operation-level attribution", async () => {
-    const events = new EventTarget();
-    let reported: unknown;
-    events.addEventListener("shadow-admin-diagnostic", (event) => {
-      reported = (event as CustomEvent).detail;
-    });
-    Object.defineProperty(globalThis, "window", { configurable: true, value: events });
-    globalThis.fetch = (async () => new Response(
-      JSON.stringify({
-        ok: true,
-        message: "Some contracts were acknowledged.",
-        failed: [{ key: "higher-1", outcome: "uncertain", source: "deriv", error: "Not confirmed." }],
-      }),
-      { status: 202, headers: { "content-type": "application/json" } },
-    )) as typeof fetch;
-
-    await customFetch("/api/deriv/jackpot/buy", {
-      method: "POST",
-      body: JSON.stringify({ contract_types: ["CALL"] }),
-    });
-
-    assert.deepEqual(reported, {
-      code: "trade_outcome_uncertain",
-      severity: "warning",
-      feature: "jackpot",
-      source: "deriv",
-      operation: "jackpot_batch",
-    });
-  });
-
   it("attributes shared contract-close uncertainty to the workspace, not a guessed feature", async () => {
     const events = new EventTarget();
     let reported: unknown;

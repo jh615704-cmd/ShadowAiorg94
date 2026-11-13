@@ -49,7 +49,6 @@ const featureLabels: Partial<Record<AccessFeatureValue, string>> = {
   "digit-flip": "DigitFlip",
   "trade-x": "Trade X",
   "bulk-trader": "Bulk Trader",
-  jackpot: "Jackpot",
   "clock-work": "Clock Work",
   "cash-grab": "Cash Grab",
   "money-bank": "Money Bank",
@@ -65,7 +64,6 @@ const featureDescriptions: Partial<Record<AccessFeatureValue, string>> = {
   "digit-flip": "Even / Odd parity trading and automation",
   "trade-x": "Digit Differs trading and automation",
   "bulk-trader": "Send 1–6 contracts across four trade types",
-  jackpot: "Send 1–9 Rise/Fall and Even/Odd dual pairs",
   "clock-work": "Five-tick Higher and Lower analysis and trading",
   "cash-grab": "Controlled batch trading with risk gates",
   "money-bank": "Accumulator automation with recovery controls",
@@ -89,7 +87,6 @@ const featureOptions = Object.values(AccessFeature)
 
 const featureActionCatalog = FEATURE_ACTION_CATALOG;
 const adminManagedActionIds: Partial<Record<FeatureControl["feature"], readonly string[]>> = {
-  jackpot: ["auto-market", "jackpot-ai"],
   "clock-work": ["ai-clock"],
   "cash-grab": ["auto-switch-safe-markets", "auto-direction", "ai-scanner"],
   "bulk-trader": ["ai-scanner"],
@@ -98,8 +95,6 @@ const adminManagedActionIds: Partial<Record<FeatureControl["feature"], readonly 
   edge: ["sniper-over-under", "ai-scanner"],
 };
 const adminActionLabels: Record<string, string> = {
-  "jackpot/auto-market": "Auto Best Market",
-  "jackpot/jackpot-ai": "Jackpot AI",
   "clock-work/ai-clock": "AI Clock switch",
   "cash-grab/auto-switch-safe-markets": "Auto-switch Safeguard",
   "digit-flip/assault-switch": "Flip switch",
@@ -831,7 +826,7 @@ export default function AdminUsersPage() {
               <button type="submit" className="primary-button admin-create-submit" disabled={!canCreate}><KeyRound size={16} />{createKey.isPending ? "Generating…" : `Generate ${kind === "admin" ? "admin" : "user"} key`}</button>
             </form>
           </div>
-            <div className="admin-safety-note admin-key-features-note"><div className="admin-safety-icon"><KeyRound size={20} /></div><h3>Key features</h3><ul><li>Grant EDGE, DigitFlip, Trade X, Bulk Trader, Jackpot, Clock Work, Cash Grab, Money Bank, Auto Trader, Auto Trader 2.0, Settings, or History independently.</li><li>Set each feature and its actual listed switches or trade actions to Available, Restricted, Coming soon, or Under construction.</li><li>If a feature or action is unavailable to a user, it cannot be opened or used.</li><li>Edit access later to unlock a feature without issuing a replacement key.</li><li>Delete permanently revokes the key. Its name can be reused, but the old key can never sign in again.</li></ul></div>
+            <div className="admin-safety-note admin-key-features-note"><div className="admin-safety-icon"><KeyRound size={20} /></div><h3>Key features</h3><ul><li>Grant EDGE, DigitFlip, Trade X, Bulk Trader, Clock Work, Cash Grab, Money Bank, Auto Trader, Auto Trader 2.0, Settings, or History independently.</li><li>Set each feature and its actual listed switches or trade actions to Available, Restricted, Coming soon, or Under construction.</li><li>If a feature or action is unavailable to a user, it cannot be opened or used.</li><li>Edit access later to unlock a feature without issuing a replacement key.</li><li>Delete permanently revokes the key. Its name can be reused, but the old key can never sign in again.</li></ul></div>
         </section>
 
         <section className="panel admin-directory">
