@@ -775,6 +775,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /deriv/matrix/duration-availability:
+    post:
+      operationId: getMatrixDurationAvailability
+      tags: [deriv]
+      summary: Check which Matrix durations Deriv currently quotes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MatrixDurationAvailabilityInput"
+      responses:
+        "200":
+          description: Durations that returned a current Deriv proposal; no trade is placed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MatrixDurationAvailability"
+        "400":
+          description: Invalid Matrix duration availability request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Deriv availability check failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /deriv/accumulator-knockout-scan:
     post:
       operationId: scanDerivAccumulatorKnockout
@@ -1857,6 +1887,22 @@ components:
         symbol:
           type: string
           minLength: 1
+    MatrixDurationAvailabilityInput:
+      type: object
+      required: [access_feature, amount, contract_type, symbol]
+      properties:
+        access_feature:
+          type: string
+          enum: [matrix]
+        amount:
+          type: number
+          minimum: 1
+        contract_type:
+          type: string
+          enum: [HIGHER, LOWER]
+        symbol:
+          type: string
+          enum: [BOOM300, BOOM500, BOOM600, BOOM900, BOOM1000, CRASH300, CRASH500, CRASH600, CRASH900, CRASH1000, RDBULL, RDBEAR]
     MoneyBankKnockoutScannerInput:
       type: object
       required: [action, amount, duration, duration_unit, contract_type, growth_rate, symbol, required_knockouts]
@@ -2023,6 +2069,15 @@ components:
             type: integer
             minimum: 1
             maximum: 5
+    MatrixDurationAvailability:
+      type: object
+      required: [supported_durations]
+      properties:
+        supported_durations:
+          type: array
+          items:
+            type: string
+            enum: [10t, 20t, 1m, 3m, 5m, 10m, 30m, 1h]
     DerivAccountSelection:
       type: object
       required: [account_id]

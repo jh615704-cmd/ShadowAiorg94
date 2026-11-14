@@ -31,6 +31,7 @@ const bulkBuyDurations: number[] = [];
 let dualBuyInvocations = 0;
 let knockoutStatisticsInvocations = 0;
 const knockoutStatisticsInputs: Array<{ symbol: string; amount: number; duration: number }> = [];
+const matrixDurationAvailabilityInputs: Array<{ amount: number; contract_type: "HIGHER" | "LOWER"; symbol: string }> = [];
 let routeAccessFeatures = ["clock-work", "edge", "trade-x", "bulk-trader", "auto-trader", "money-bank", "matrix", "speedbot"];
 let knockoutScanInvocations = 0;
 const marketTickListeners = new Set<(tick: {
@@ -209,6 +210,11 @@ mock.module("../lib/deriv", {
     getEdgeAvailableDurations: async () => {
       observePat();
       return { supported_durations: [1, 3, 4, 5] };
+    },
+    getMatrixDurationAvailability: async (input: { amount: number; contract_type: "HIGHER" | "LOWER"; symbol: string }) => {
+      observePat();
+      matrixDurationAvailabilityInputs.push(input);
+      return { supported_durations: ["20t", "1m", "3m"] };
     },
     scanAccumulatorKnockout: async () => {
       observePat();
@@ -409,6 +415,28 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
     assert.deepEqual(await readJson(edgeDurationsResponse), {
       supported_durations: [1, 3, 4, 5],
     });
+
+    matrixDurationAvailabilityInputs.length = 0;
+    const matrixDurationsResponse = await fetch(`${baseUrl}/deriv/matrix/duration-availability`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        access_feature: "matrix",
+        amount: 1,
+        contract_type: "HIGHER",
+        symbol: "BOOM500",
+      }),
+    });
+    assert.equal(matrixDurationsResponse.status, 200);
+    assert.equal(matrixDurationsResponse.headers.get("cache-control"), "no-store");
+    assert.deepEqual(await readJson(matrixDurationsResponse), {
+      supported_durations: ["20t", "1m", "3m"],
+    });
+    assert.deepEqual(matrixDurationAvailabilityInputs, [{
+      amount: 1,
+      contract_type: "HIGHER",
+      symbol: "BOOM500",
+    }]);
 
     const scanResponse = await fetch(`${baseUrl}/deriv/accumulator-knockout-scan`, {
       method: "POST",
@@ -751,7 +779,7 @@ test("admin Deriv routes require the session PAT and forget it on disconnect", a
     });
     assert.equal(outOfRangeAutoTraderResponse.status, 400);
     assert.match(String((await readJson(outOfRangeAutoTraderResponse)).error), /1 to 5 ticks/);
-    assert.deepEqual(observedPats, Array.from({ length: 33 }, () => enteredPat));
+    assert.deepEqual(observedPats, Array.from({ length: 34 }, () => enteredPat));
 
     const priorBuyInvocations = buyInvocations;
     const priorBulkBuyInvocations = bulkBuyInvocations;

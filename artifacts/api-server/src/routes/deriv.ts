@@ -7,6 +7,8 @@ import {
   RequestDerivProposalResponse,
   GetEdgeAvailableDurationsBody,
   GetEdgeAvailableDurationsResponse,
+  GetMatrixDurationAvailabilityBody,
+  GetMatrixDurationAvailabilityResponse,
   BuyDerivContractBody,
   BuyDerivContractResponse,
   SellDerivContractBody,
@@ -43,6 +45,7 @@ import {
   clearHistory,
   requestProposal,
   getEdgeAvailableDurations,
+  getMatrixDurationAvailability,
   getMoneyBankKnockoutStatistics,
   scanAccumulatorKnockout,
   buyContract,
@@ -438,6 +441,38 @@ router.post("/deriv/edge-available-durations", requireAccessFeature("edge"), asy
     }
     return res.status(502).json({
       error: error instanceof Error ? error.message : "EDGE duration availability check failed",
+    });
+  }
+});
+
+router.post("/deriv/matrix/duration-availability", requireAccessFeature("matrix"), async (req, res) => {
+  const parsed = GetMatrixDurationAvailabilityBody.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid Matrix duration availability request" });
+  }
+
+  try {
+    const result = GetMatrixDurationAvailabilityResponse.parse(await withCredential(
+      res.locals.userId,
+      () => getMatrixDurationAvailability({
+        amount: parsed.data.amount,
+        contract_type: parsed.data.contract_type,
+        symbol: parsed.data.symbol,
+      }),
+      true,
+    ));
+    res.set("Cache-Control", "no-store");
+    return res.json(result);
+  } catch (error) {
+    req.log.error({ err: error }, "Matrix duration availability check failed");
+    if (isCapacityError(error)) {
+      return res.status(503).json({ error: error.message });
+    }
+    if (isCredentialError(error)) {
+      return res.status(credentialHttpStatus(error)).json({ error: error.message });
+    }
+    return res.status(502).json({
+      error: error instanceof Error ? error.message : "Matrix duration availability check failed",
     });
   }
 });

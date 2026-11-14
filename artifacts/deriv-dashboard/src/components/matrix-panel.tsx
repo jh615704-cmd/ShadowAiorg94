@@ -61,6 +61,12 @@ type MatrixPanelProps = {
   onDirectionChange: (value: MatrixDirection) => void;
   duration: MatrixDuration;
   onDurationChange: (value: MatrixDuration) => void;
+  durationAvailability: {
+    status: "checking" | "ready" | "error";
+    supported: readonly MatrixDuration[];
+    message?: string;
+  };
+  onRefreshDurations: () => void;
   stake: number;
   onStakeChange: (value: number) => void;
   tradeCount: number;
@@ -107,10 +113,28 @@ const priceFormat = (value: number) =>
   value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 5 });
 const action = (name: string) => ({ "data-feature-scope": "matrix", "data-feature-action": `matrix/${name}` });
 
+function smoothPath(points: readonly { x: number; y: number }[]) {
+  if (points.length < 2) return "";
+  let path = `M${points[0].x},${points[0].y}`;
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const previous = points[Math.max(0, index - 1)];
+    const current = points[index];
+    const next = points[index + 1];
+    const afterNext = points[Math.min(points.length - 1, index + 2)];
+    const firstControlX = current.x + (next.x - previous.x) / 6;
+    const firstControlY = current.y + (next.y - previous.y) / 6;
+    const secondControlX = next.x - (afterNext.x - current.x) / 6;
+    const secondControlY = next.y - (afterNext.y - current.y) / 6;
+    path += ` C${firstControlX},${firstControlY} ${secondControlX},${secondControlY} ${next.x},${next.y}`;
+  }
+  return path;
+}
+
 export function MatrixPanel(props: MatrixPanelProps) {
   const {
     markets, marketSignals, selectedSymbol, onSelectMarket, chartType, onChartTypeChange,
-    direction, onDirectionChange, duration, onDurationChange, stake, onStakeChange,
+    direction, onDirectionChange, duration, onDurationChange, durationAvailability,
+    onRefreshDurations, stake, onStakeChange,
     tradeCount, onTradeCountChange, takeProfitPerTrade, onTakeProfitPerTradeChange,
     takeProfitPrice, stopLossPrice, onSetChartLevel, levelMode, onLevelModeChange,
     scannerEnabled, onScannerEnabledChange, scannerBusy, scannerStatus, scannerRecommendation,
@@ -131,22 +155,24 @@ export function MatrixPanel(props: MatrixPanelProps) {
     const low = min - pad;
     const high = max + pad;
     const points = ticks.map((tick, index) => ({
-      x: 10 + index * (780 / Math.max(1, ticks.length - 1)),
-      y: 12 + ((high - tick.quote) / (high - low)) * 214,
+      x: 14 + index * (758 / Math.max(1, ticks.length - 1)),
+      y: 22 + ((high - tick.quote) / (high - low)) * 256,
       quote: tick.quote,
     }));
-    return { path: points.map((point, index) => `${index ? "L" : "M"}${point.x},${point.y}`).join(" "), points, min: low, max: high };
+    return { path: smoothPath(points), points, min: low, max: high };
   }, [ticks]);
   const latest = quote ?? ticks.at(-1)?.quote ?? null;
   const canSubmit = connected && canTrade && !tradeBusy && stake >= 1 && tradeCount >= 1;
   const candles = useMemo(() => {
     const groups: MatrixChartTick[][] = [];
-    ticks.forEach((tick, index) => {
-      const groupIndex = Math.floor(index / Math.max(1, Math.ceil(ticks.length / 22)));
-      (groups[groupIndex] ??= []).push(tick);
-    });
+    const groupSize = Math.max(1, Math.ceil(ticks.length / 30));
+    for (let index = 0; index < ticks.length; index += groupSize) {
+      groups.push(ticks.slice(index, index + groupSize));
+    }
+    const spacing = 760 / Math.max(1, groups.length);
     return groups.map((group, index) => ({
-      x: 14 + index * (770 / Math.max(1, groups.length)),
+      x: 20 + (index + 0.5) * spacing,
+      width: Math.min(22, spacing * 0.68),
       open: group[0].quote,
       close: group[group.length - 1].quote,
       high: Math.max(...group.map((tick) => tick.quote)),
@@ -158,9 +184,9 @@ export function MatrixPanel(props: MatrixPanelProps) {
     if (!levelMode || !chart.points.length) return;
     const bounds = event.currentTarget.getBoundingClientRect();
     const svgX = ((event.clientX - bounds.left) / bounds.width) * 800;
-    const svgY = ((event.clientY - bounds.top) / bounds.height) * 240;
-    if (svgX > 786 || svgY < 10 || svgY > 230) return;
-    const price = chart.max - ((svgY - 12) / 214) * (chart.max - chart.min);
+    const svgY = ((event.clientY - bounds.top) / bounds.height) * 300;
+    if (svgX > 786 || svgY < 22 || svgY > 278) return;
+    const price = chart.max - ((svgY - 22) / 256) * (chart.max - chart.min);
     onSetChartLevel(levelMode, Number(price.toPrecision(8)));
     onLevelModeChange(null);
   };
@@ -224,34 +250,40 @@ export function MatrixPanel(props: MatrixPanelProps) {
 
             <div className="matrix-chart-plot-wrap">
               <div className="matrix-chart-canvas" data-testid="matrix-chart-area">
-                <svg className={`matrix-chart-svg ${levelMode ? "placing-level" : ""}`} viewBox="0 0 800 240" preserveAspectRatio="none"
+                <svg className={`matrix-chart-svg ${levelMode ? "placing-level" : ""}`} viewBox="0 0 800 300" preserveAspectRatio="none"
                   role="img" aria-label={`${market?.label ?? selectedSymbol} live ${chartType} chart`}
                   data-feature-scope="matrix" data-feature-action="matrix/chart-level-placement"
                   onPointerDown={setLevelFromPointer} onTouchStart={(event) => { if (levelMode) event.preventDefault(); }}>
-                  <defs><linearGradient id="matrix-chart-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#55d7bc" stopOpacity=".22" /><stop offset="100%" stopColor="#55d7bc" stopOpacity="0" /></linearGradient></defs>
-                  {[0, 1, 2, 3, 4].map((line) => <line key={line} x1="0" x2="800" y1={18 + line * 48} y2={18 + line * 48} className="matrix-grid-line" />)}
-                  {[0, 1, 2, 3, 4, 5].map((line) => <line key={`v${line}`} x1={line * 160} x2={line * 160} y1="0" y2="240" className="matrix-grid-line vertical" />)}
+                  <defs>
+                    <linearGradient id="matrix-chart-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#55d7bc" stopOpacity=".2" /><stop offset="100%" stopColor="#55d7bc" stopOpacity="0" /></linearGradient>
+                    <linearGradient id="matrix-candle-up-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#8af0be" /><stop offset="100%" stopColor="#38b985" /></linearGradient>
+                    <linearGradient id="matrix-candle-down-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#ff9da7" /><stop offset="100%" stopColor="#dc5e72" /></linearGradient>
+                  </defs>
+                  {[0, 1, 2, 3, 4].map((line) => <line key={line} x1="0" x2="800" y1={20 + line * 65} y2={20 + line * 65} className="matrix-grid-line" />)}
+                  {[0, 1, 2, 3, 4, 5].map((line) => <line key={`v${line}`} x1={line * 160} x2={line * 160} y1="0" y2="300" className="matrix-grid-line vertical" />)}
                   {chartType === "line" && chart.points.length > 1 && <>
-                    <path d={`${chart.path} L${chart.points.at(-1)?.x},240 L${chart.points[0].x},240 Z`} fill="url(#matrix-chart-fill)" />
+                    <path d={`${chart.path} L${chart.points.at(-1)?.x},298 L${chart.points[0].x},298 Z`} fill="url(#matrix-chart-fill)" />
+                    <path d={chart.path} className="matrix-line-glow" />
                     <path d={chart.path} className="matrix-line-path" />
-                    <circle cx={chart.points.at(-1)?.x} cy={chart.points.at(-1)?.y} r="4" className="matrix-live-point" />
+                    <circle cx={chart.points.at(-1)?.x} cy={chart.points.at(-1)?.y} r="8" className="matrix-live-point-halo" />
+                    <circle cx={chart.points.at(-1)?.x} cy={chart.points.at(-1)?.y} r="3.5" className="matrix-live-point" />
                   </>}
                   {chartType === "candles" && candles.map((candle, index) => {
-                    const y = (value: number) => 12 + ((chart.max - value) / (chart.max - chart.min || 1)) * 214;
+                    const y = (value: number) => 22 + ((chart.max - value) / (chart.max - chart.min || 1)) * 256;
                     const rising = candle.close >= candle.open;
                     const bodyTop = Math.min(y(candle.open), y(candle.close));
                     return <g key={index} className={rising ? "matrix-candle-up" : "matrix-candle-down"}>
                       <line x1={candle.x} x2={candle.x} y1={y(candle.high)} y2={y(candle.low)} />
-                      <rect x={candle.x - 4.4} y={bodyTop} width="8.8" height={Math.max(2, Math.abs(y(candle.close) - y(candle.open)))} rx="1" />
+                      <rect x={candle.x - candle.width / 2} y={bodyTop} width={candle.width} height={Math.max(4, Math.abs(y(candle.close) - y(candle.open)))} rx="2" fill={rising ? "url(#matrix-candle-up-fill)" : "url(#matrix-candle-down-fill)"} />
                     </g>;
                   })}
                   {takeProfitPrice != null && chart.max > chart.min && <g className="matrix-level-tp">
-                    <line x1="0" x2="800" y1={12 + ((chart.max - takeProfitPrice) / (chart.max - chart.min)) * 214} y2={12 + ((chart.max - takeProfitPrice) / (chart.max - chart.min)) * 214} />
+                    <line x1="0" x2="800" y1={22 + ((chart.max - takeProfitPrice) / (chart.max - chart.min)) * 256} y2={22 + ((chart.max - takeProfitPrice) / (chart.max - chart.min)) * 256} />
                   </g>}
                   {stopLossPrice != null && chart.max > chart.min && <g className="matrix-level-sl">
-                    <line x1="0" x2="800" y1={12 + ((chart.max - stopLossPrice) / (chart.max - chart.min)) * 214} y2={12 + ((chart.max - stopLossPrice) / (chart.max - chart.min)) * 214} />
+                    <line x1="0" x2="800" y1={22 + ((chart.max - stopLossPrice) / (chart.max - chart.min)) * 256} y2={22 + ((chart.max - stopLossPrice) / (chart.max - chart.min)) * 256} />
                   </g>}
-                  {chart.points.length < 2 && <text x="400" y="122" textAnchor="middle" className="matrix-chart-empty">{connected && streamConnected ? "Waiting for market ticks" : connected ? "Waiting for live stream" : "Connect Deriv for live prices"}</text>}
+                  {chart.points.length < 2 && <text x="400" y="152" textAnchor="middle" className="matrix-chart-empty">{connected && streamConnected ? "Waiting for market ticks" : connected ? "Waiting for live stream" : "Connect Deriv for live prices"}</text>}
                 </svg>
                 <div className="matrix-price-axis" aria-hidden="true">
                   {[0, 1, 2, 3, 4].map((line) => {
@@ -306,8 +338,37 @@ export function MatrixPanel(props: MatrixPanelProps) {
 
           <div className="matrix-setup-fields">
             <fieldset className="matrix-duration-field"><legend>DURATION</legend><div className="matrix-duration-grid">
-              {durations.map((item) => <button type="button" key={item} {...action(`duration-${item}`)} data-testid={`matrix-duration-${item}`} onClick={() => onDurationChange(item)} className={duration === item ? "active" : ""} aria-pressed={duration === item}>{item}</button>)}
-            </div></fieldset>
+              {durations.map((item) => {
+                const available = durationAvailability.status === "ready"
+                  && durationAvailability.supported.includes(item);
+                return <button
+                  type="button"
+                  key={item}
+                  {...action(`duration-${item}`)}
+                  data-testid={`matrix-duration-${item}`}
+                  onClick={() => onDurationChange(item)}
+                  className={`${duration === item ? "active" : ""}${available ? "" : " unavailable"}`}
+                  aria-pressed={duration === item}
+                  disabled={!available}
+                  title={available ? undefined : "Deriv is not currently offering this duration for this setup."}
+                >{item}</button>;
+              })}
+            </div>
+              <div className={`matrix-duration-feedback ${durationAvailability.status === "error" ? "error" : ""}`} role="status" data-testid="matrix-duration-status">
+                <span>{durationAvailability.status === "checking"
+                  ? "Checking live offers for this market and direction…"
+                  : durationAvailability.status === "error"
+                    ? durationAvailability.message ?? "Could not check currently offered durations."
+                    : durationAvailability.supported.length === 0
+                      ? `No Matrix durations are currently offered for ${selectedSymbol} ${direction}.`
+                      : durationAvailability.supported.includes(duration)
+                        ? `Live Deriv offers checked for ${selectedSymbol} ${direction}.`
+                        : `Deriv is not offering ${duration} for ${selectedSymbol} ${direction}. Choose an enabled duration.`}</span>
+                {(durationAvailability.status === "error" || (durationAvailability.status === "ready" && durationAvailability.supported.length === 0)) && (
+                  <button type="button" {...action("duration-refresh")} data-testid="matrix-duration-refresh" onClick={onRefreshDurations}>Refresh</button>
+                )}
+              </div>
+            </fieldset>
             <div className="matrix-input-grid">
               <label><span>STAKE <small>MIN {money(1, currency)}</small></span><div className="matrix-money-input"><b>{currency === "USD" ? "$" : currency}</b><input type="number" min="1" step="0.01" value={stake} data-testid="matrix-stake-input" {...action("stake-input")} onChange={(event) => onStakeChange(Math.max(1, Number(event.target.value) || 1))} aria-label={`Stake in ${currency}`} /></div></label>
               <label><span>CONTRACTS <small>1–10</small></span><div className="matrix-count-input"><button type="button" {...action("trade-count-decrease")} data-testid="matrix-trade-count-decrease" onClick={() => onTradeCountChange(Math.max(1, tradeCount - 1))} aria-label="Decrease contract count" disabled={tradeCount <= 1}><Minus size={14} /></button><output data-testid="matrix-trade-count">{tradeCount}</output><button type="button" {...action("trade-count-increase")} data-testid="matrix-trade-count-increase" onClick={() => onTradeCountChange(Math.min(10, tradeCount + 1))} aria-label="Increase contract count" disabled={tradeCount >= 10}><span>+</span></button></div></label>

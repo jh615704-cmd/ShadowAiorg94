@@ -39,6 +39,16 @@ const matrixSymbols = new Set([
   "CRASH300", "CRASH500", "CRASH600", "CRASH900", "CRASH1000",
   "RDBULL", "RDBEAR",
 ]);
+const matrixDurations = [
+  { value: "10t", duration: 10, duration_unit: "t" },
+  { value: "20t", duration: 20, duration_unit: "t" },
+  { value: "1m", duration: 1, duration_unit: "m" },
+  { value: "3m", duration: 3, duration_unit: "m" },
+  { value: "5m", duration: 5, duration_unit: "m" },
+  { value: "10m", duration: 10, duration_unit: "m" },
+  { value: "30m", duration: 30, duration_unit: "m" },
+  { value: "1h", duration: 60, duration_unit: "m" },
+] as const;
 type DigitContractType = "DIGITEVEN" | "DIGITODD" | "DIGITOVER" | "DIGITUNDER" | "DIGITDIFF" | "DIGITMATCH" | "CALL" | "PUT" | "HIGHER" | "LOWER" | "ACCU";
 
 export type DerivAccount = {
@@ -2520,6 +2530,40 @@ export async function getEdgeAvailableDurations(input: {
       if (isDerivProposalUnavailableError(error)) {
         continue;
       }
+      throw error;
+    }
+  }
+  return { supported_durations: supportedDurations };
+}
+
+export async function getMatrixDurationAvailability(input: {
+  amount: number;
+  contract_type: "HIGHER" | "LOWER";
+  symbol: string;
+}) {
+  if (
+    !Number.isFinite(input.amount)
+    || input.amount < 1
+    || !matrixSymbols.has(input.symbol)
+    || (input.contract_type !== "HIGHER" && input.contract_type !== "LOWER")
+  ) {
+    throw new Error("Choose a supported Matrix market, direction, and stake.");
+  }
+
+  const supportedDurations: Array<(typeof matrixDurations)[number]["value"]> = [];
+  for (const option of matrixDurations) {
+    try {
+      await requestFreshProposal({
+        amount: roundCents(input.amount),
+        duration: option.duration,
+        duration_unit: option.duration_unit,
+        contract_type: input.contract_type,
+        barrier: input.contract_type === "HIGHER" ? "+0" : "-0",
+        symbol: input.symbol,
+      }, { trackLatest: false });
+      supportedDurations.push(option.value);
+    } catch (error) {
+      if (isDerivProposalUnavailableError(error)) continue;
       throw error;
     }
   }

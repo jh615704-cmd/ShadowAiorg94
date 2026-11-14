@@ -775,6 +775,47 @@ export interface EdgeDurationAvailabilityInput {
   symbol: string;
 }
 
+export type MatrixDurationAvailabilityInputAccessFeature = typeof MatrixDurationAvailabilityInputAccessFeature[keyof typeof MatrixDurationAvailabilityInputAccessFeature];
+
+
+export const MatrixDurationAvailabilityInputAccessFeature = {
+  matrix: 'matrix',
+} as const;
+
+export type MatrixDurationAvailabilityInputContractType = typeof MatrixDurationAvailabilityInputContractType[keyof typeof MatrixDurationAvailabilityInputContractType];
+
+
+export const MatrixDurationAvailabilityInputContractType = {
+  HIGHER: 'HIGHER',
+  LOWER: 'LOWER',
+} as const;
+
+export type MatrixDurationAvailabilityInputSymbol = typeof MatrixDurationAvailabilityInputSymbol[keyof typeof MatrixDurationAvailabilityInputSymbol];
+
+
+export const MatrixDurationAvailabilityInputSymbol = {
+  BOOM300: 'BOOM300',
+  BOOM500: 'BOOM500',
+  BOOM600: 'BOOM600',
+  BOOM900: 'BOOM900',
+  BOOM1000: 'BOOM1000',
+  CRASH300: 'CRASH300',
+  CRASH500: 'CRASH500',
+  CRASH600: 'CRASH600',
+  CRASH900: 'CRASH900',
+  CRASH1000: 'CRASH1000',
+  RDBULL: 'RDBULL',
+  RDBEAR: 'RDBEAR',
+} as const;
+
+export interface MatrixDurationAvailabilityInput {
+  access_feature: MatrixDurationAvailabilityInputAccessFeature;
+  /** @minimum 1 */
+  amount: number;
+  contract_type: MatrixDurationAvailabilityInputContractType;
+  symbol: MatrixDurationAvailabilityInputSymbol;
+}
+
 export type MoneyBankKnockoutScannerInputAction = typeof MoneyBankKnockoutScannerInputAction[keyof typeof MoneyBankKnockoutScannerInputAction];
 
 
@@ -993,6 +1034,24 @@ export interface EdgeDurationAvailability {
      * @items.maximum 5
      */
   supported_durations: number[];
+}
+
+export type MatrixDurationAvailabilitySupportedDurationsItem = typeof MatrixDurationAvailabilitySupportedDurationsItem[keyof typeof MatrixDurationAvailabilitySupportedDurationsItem];
+
+
+export const MatrixDurationAvailabilitySupportedDurationsItem = {
+  '10t': '10t',
+  '20t': '20t',
+  '1m': '1m',
+  '3m': '3m',
+  '5m': '5m',
+  '10m': '10m',
+  '30m': '30m',
+  '1h': '1h',
+} as const;
+
+export interface MatrixDurationAvailability {
+  supported_durations: MatrixDurationAvailabilitySupportedDurationsItem[];
 }
 
 export interface DerivAccountSelection {

@@ -955,6 +955,24 @@ export const GetEdgeAvailableDurationsResponse = zod.object({
 
 
 /**
+ * @summary Check which Matrix durations Deriv currently quotes
+ */
+
+
+
+export const GetMatrixDurationAvailabilityBody = zod.object({
+  "access_feature": zod.enum(['matrix']),
+  "amount": zod.number().min(1),
+  "contract_type": zod.enum(['HIGHER', 'LOWER']),
+  "symbol": zod.enum(['BOOM300', 'BOOM500', 'BOOM600', 'BOOM900', 'BOOM1000', 'CRASH300', 'CRASH500', 'CRASH600', 'CRASH900', 'CRASH1000', 'RDBULL', 'RDBEAR'])
+})
+
+export const GetMatrixDurationAvailabilityResponse = zod.object({
+  "supported_durations": zod.array(zod.enum(['10t', '20t', '1m', '3m', '5m', '10m', '30m', '1h']))
+})
+
+
+/**
  * @summary Start or check the live Money Bank knockout scanner
  */
 export const scanDerivAccumulatorKnockoutBodyAmountExclusiveMin = 0;

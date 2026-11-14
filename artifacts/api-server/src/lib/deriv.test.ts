@@ -437,6 +437,54 @@ describe("EDGE duration availability", { concurrency: false }, () => {
   });
 });
 
+describe("Matrix duration availability", { concurrency: false }, () => {
+  test("offers only currently quoted Matrix durations for the selected market and direction", async () => {
+    unavailableProposalDurations.add(10);
+
+    const result = await withSelectedAccount("matrix-duration-availability-user", () =>
+      deriv.getMatrixDurationAvailability({
+        amount: 1,
+        contract_type: "LOWER",
+        symbol: "BOOM500",
+      }),
+    );
+
+    assert.deepEqual(result.supported_durations, [
+      "20t", "1m", "3m", "5m", "30m", "1h",
+    ]);
+    const proposals = latestSocket().sent.filter((message) => message.proposal);
+    assert.deepEqual(
+      proposals.map((message) => [message.duration, message.duration_unit]),
+      [[10, "t"], [20, "t"], [1, "m"], [3, "m"], [5, "m"], [10, "m"], [30, "m"], [60, "m"]],
+    );
+    assert.ok(proposals.every((message) =>
+      message.contract_type === "LOWER"
+      && message.barrier === "-0"
+      && message.underlying_symbol === "BOOM500",
+    ));
+    assert.equal(latestSocket().sent.some((message) => message.buy), false);
+  });
+
+  test("sends the selected Matrix minute duration unchanged to Deriv", async () => {
+    await withSelectedAccount("matrix-minute-buy-user", () => deriv.buyMatrixContracts({
+      amount: 1,
+      duration: 3,
+      duration_unit: "m",
+      contract_type: "HIGHER",
+      count: 1,
+      symbol: "BOOM500",
+    }));
+
+    const socket = latestSocket();
+    const proposal = socket.sent.find((message) => message.proposal);
+    const buy = socket.sent.find((message) => message.buy);
+    assert.equal(proposal?.duration, 3);
+    assert.equal(proposal?.duration_unit, "m");
+    assert.equal(buy?.parameters?.duration, 3);
+    assert.equal(buy?.parameters?.duration_unit, "m");
+  });
+});
+
 after(() => {
   deriv.stopDeriv();
 });

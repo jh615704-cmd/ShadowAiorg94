@@ -8,6 +8,7 @@ import {
   customFetch,
   type ClockWorkContractOrder,
   type MatrixBuyInput,
+  type MatrixDurationAvailabilityInput,
   useBuyClockWorkContracts,
   useBuyMatrixContracts,
   useGetAccessSession,
@@ -27,6 +28,7 @@ import {
   useTestDerivToken,
   useRequestDerivProposal,
   useGetEdgeAvailableDurations,
+  useGetMatrixDurationAvailability,
   getGetDerivTokenStatusQueryKey,
   getGetDerivAccountsQueryKey,
   getGetDerivStatusQueryKey,
@@ -537,6 +539,7 @@ export default function XTraderPage() {
   const cashGrabSellMutation = useSellDerivContract();
   const clockWorkBuyMutation = useBuyClockWorkContracts();
   const matrixBuyMutation = useBuyMatrixContracts();
+  const { mutateAsync: checkMatrixDurationAvailability } = useGetMatrixDurationAvailability();
   const anyContractBuyPending = bulkBuyMutation.isPending
     || dualBuyMutation.isPending
     || digitFlipBuyMutation.isPending
@@ -645,6 +648,13 @@ export default function XTraderPage() {
   const [matrixSelectedSymbol, setMatrixSelectedSymbol] = useState("BOOM500");
   const [matrixDirection, setMatrixDirection] = useState<MatrixDirection>("HIGHER");
   const [matrixDuration, setMatrixDuration] = useState<MatrixDuration>("10t");
+  const [matrixDurationAvailability, setMatrixDurationAvailability] = useState<{
+    key: string;
+    status: "checking" | "ready" | "error";
+    supported: MatrixDuration[];
+    message?: string;
+  } | null>(null);
+  const [matrixDurationRefreshVersion, setMatrixDurationRefreshVersion] = useState(0);
   const [matrixStake, setMatrixStake] = useState(1);
   const [matrixTradeCount, setMatrixTradeCount] = useState(1);
   const [matrixTakeProfitPerTrade, setMatrixTakeProfitPerTrade] = useState(0);
@@ -870,6 +880,60 @@ export default function XTraderPage() {
     onCandidate: (candidate) => speedbotCandidateHandlerRef.current(candidate),
   });
   const matrixMarketFeed = useMatrixMarketFeed(matrixEnabled && canUseMatrix && isConnected);
+  const matrixDurationAvailabilityKey = JSON.stringify([
+    currentAccountId,
+    matrixSelectedSymbol,
+    matrixDirection,
+    matrixStake,
+  ]);
+  useEffect(() => {
+    if (!matrixEnabled || !canUseMatrix || !isConnected || !currentAccountId) {
+      setMatrixDurationAvailability(null);
+      return;
+    }
+
+    let current = true;
+    const key = matrixDurationAvailabilityKey;
+    setMatrixDurationAvailability({ key, status: "checking", supported: [] });
+    void checkMatrixDurationAvailability({
+      data: {
+        access_feature: "matrix",
+        amount: matrixStake,
+        contract_type: matrixDirection,
+        symbol: matrixSelectedSymbol as MatrixDurationAvailabilityInput["symbol"],
+      },
+    }).then((result) => {
+      if (!current) return;
+      setMatrixDurationAvailability({
+        key,
+        status: "ready",
+        supported: result.supported_durations,
+      });
+    }).catch((error: unknown) => {
+      if (!current) return;
+      setMatrixDurationAvailability({
+        key,
+        status: "error",
+        supported: [],
+        message: getUserFacingErrorMessage(error),
+      });
+    });
+
+    return () => {
+      current = false;
+    };
+  }, [
+    matrixEnabled,
+    canUseMatrix,
+    isConnected,
+    currentAccountId,
+    matrixDurationAvailabilityKey,
+    matrixStake,
+    matrixDirection,
+    matrixSelectedSymbol,
+    matrixDurationRefreshVersion,
+    checkMatrixDurationAvailability,
+  ]);
   const accessKeyId = accessSession.data?.key_id;
   const {
     notifications,
@@ -4912,6 +4976,14 @@ export default function XTraderPage() {
     if (matrixStake < 1 || !Number.isFinite(matrixStake)) return "Matrix stake must be at least $1 per trade.";
     if (!Number.isInteger(matrixTradeCount) || matrixTradeCount < 1 || matrixTradeCount > 10) return "Matrix supports 1 to 10 trades per batch.";
     if (currentAccountBalance == null || matrixStake * matrixTradeCount > currentAccountBalance) return "The total Matrix batch stake exceeds the available account balance.";
+    const availability = matrixDurationAvailability?.key === matrixDurationAvailabilityKey
+      ? matrixDurationAvailability
+      : null;
+    if (!availability || availability.status === "checking") return "Checking which durations Deriv offers for this market and direction.";
+    if (availability.status === "error") return "Could not confirm which Matrix durations Deriv currently offers. Refresh the duration check before trading.";
+    if (!availability.supported.includes(matrixDuration)) {
+      return `Deriv does not currently offer ${matrixDuration} for ${matrixSelectedSymbol} ${matrixDirection}. Choose an enabled duration.`;
+    }
     return null;
   };
 
@@ -4942,7 +5014,13 @@ export default function XTraderPage() {
       setMatrixStatusMessage(result.message);
       refreshTradeResults();
     } catch (error) {
-      setMatrixStatusMessage(getUserFacingErrorMessage(error));
+      const message = getUserFacingErrorMessage(error);
+      if (/Trading is not offered for this duration|duration is not allowed/i.test(message)) {
+        setMatrixStatusMessage("Deriv's available durations changed. Refreshing the current offers; no order was sent.");
+        setMatrixDurationRefreshVersion((version) => version + 1);
+      } else {
+        setMatrixStatusMessage(message);
+      }
     }
   };
 
@@ -5910,70 +5988,6 @@ export default function XTraderPage() {
         </div>
       </section>
 
-      {matrixEnabled && (
-        <MatrixPanel
-          markets={MATRIX_MARKETS}
-          marketSignals={matrixMarketFeed.signals}
-          selectedSymbol={matrixSelectedSymbol}
-          onSelectMarket={(nextSymbol) => {
-            setMatrixSelectedSymbol(nextSymbol);
-            setMatrixTakeProfitPrice(null);
-            setMatrixStopLossPrice(null);
-            setMatrixLevelMode(null);
-          }}
-          chartType={matrixChartType}
-          onChartTypeChange={setMatrixChartType}
-          direction={matrixDirection}
-          onDirectionChange={setMatrixDirection}
-          duration={matrixDuration}
-          onDurationChange={setMatrixDuration}
-          stake={matrixStake}
-          onStakeChange={(value) => setMatrixStake(Number.isFinite(value) ? Math.max(1, value) : 1)}
-          tradeCount={matrixTradeCount}
-          onTradeCountChange={(value) => setMatrixTradeCount(Number.isFinite(value) ? Math.max(1, Math.min(10, Math.round(value))) : 1)}
-          takeProfitPerTrade={matrixTakeProfitPerTrade}
-          onTakeProfitPerTradeChange={(value) => setMatrixTakeProfitPerTrade(Number.isFinite(value) ? Math.max(0, value) : 0)}
-          takeProfitPrice={matrixTakeProfitPrice}
-          stopLossPrice={matrixStopLossPrice}
-          onSetChartLevel={(kind, price) => {
-            if (kind === "take-profit") setMatrixTakeProfitPrice(price);
-            else setMatrixStopLossPrice(price);
-          }}
-          levelMode={matrixLevelMode}
-          onLevelModeChange={setMatrixLevelMode}
-          scannerEnabled={matrixScannerEnabled}
-          onScannerEnabledChange={(enabled) => {
-            if (enabled && !featureActionIsAvailable("matrix", "scanner-switch")) {
-              setMatrixStatusMessage("The Matrix scanner switch is unavailable in administrator settings.");
-              return;
-            }
-            setMatrixScannerEnabled(enabled);
-          }}
-          scannerBusy={matrixScannerEnabled && (!matrixMarketFeed.connected || !matrixMarketFeed.recommendation)}
-          scannerStatus={!matrixScannerEnabled
-            ? "Switch on to review recent movement. Nothing is submitted automatically."
-            : matrixMarketFeed.recommendation
-              ? "Suggestion ready. Review it and click Place Trade yourself."
-              : matrixMarketFeed.status}
-          scannerRecommendation={matrixScannerEnabled ? matrixMarketFeed.recommendation : null}
-          connected={isConnected}
-          streamConnected={matrixMarketFeed.connected}
-          accountLabel={currentAccount ? `${currentAccount.id} · ${currentAccount.type.toUpperCase()}` : "No account"}
-          currency={currentAccount?.currency ?? "USD"}
-          quote={matrixMarketFeed.signals.find((signal) => signal.symbol === matrixSelectedSymbol)?.quotes.at(-1)?.quote ?? null}
-          tradeBusy={matrixBuyMutation.isPending}
-          canTrade={getMatrixTradeBlockReason() == null}
-          statusMessage={matrixStatusMessage ?? getMatrixTradeBlockReason()}
-          onPlaceTrade={() => void placeMatrixTrade()}
-          historyRows={matrixRows}
-          sessionRows={matrixSessionRows}
-          openTrades={matrixOpenTrades}
-          onClearHistory={() => void clearMatrixHistory()}
-          clearArmed={matrixHistoryClearArmed}
-          historyFading={historyFading}
-        />
-      )}
-
       <section className={`xt-feature-card xt-feature-card-speedbot ${!canUseSpeedbot ? "xt-feature-card-restricted" : ""}`} id="speedbot-feature">
         <div><Activity size={18} /><span><b>Speedbot</b><small>Fast, single-contract Digit Differs</small></span></div>
         <div className="xt-feature-actions">
@@ -6707,6 +6721,74 @@ export default function XTraderPage() {
             />
           )}
         </section>
+      )}
+
+      {matrixEnabled && (
+        <MatrixPanel
+          markets={MATRIX_MARKETS}
+          marketSignals={matrixMarketFeed.signals}
+          selectedSymbol={matrixSelectedSymbol}
+          onSelectMarket={(nextSymbol) => {
+            setMatrixSelectedSymbol(nextSymbol);
+            setMatrixTakeProfitPrice(null);
+            setMatrixStopLossPrice(null);
+            setMatrixLevelMode(null);
+          }}
+          chartType={matrixChartType}
+          onChartTypeChange={setMatrixChartType}
+          direction={matrixDirection}
+          onDirectionChange={setMatrixDirection}
+          duration={matrixDuration}
+          onDurationChange={setMatrixDuration}
+          durationAvailability={matrixDurationAvailability?.key === matrixDurationAvailabilityKey
+            ? matrixDurationAvailability
+            : { status: "checking", supported: [] }}
+          onRefreshDurations={() => setMatrixDurationRefreshVersion((version) => version + 1)}
+          stake={matrixStake}
+          onStakeChange={(value) => setMatrixStake(Number.isFinite(value) ? Math.max(1, value) : 1)}
+          tradeCount={matrixTradeCount}
+          onTradeCountChange={(value) => setMatrixTradeCount(Number.isFinite(value) ? Math.max(1, Math.min(10, Math.round(value))) : 1)}
+          takeProfitPerTrade={matrixTakeProfitPerTrade}
+          onTakeProfitPerTradeChange={(value) => setMatrixTakeProfitPerTrade(Number.isFinite(value) ? Math.max(0, value) : 0)}
+          takeProfitPrice={matrixTakeProfitPrice}
+          stopLossPrice={matrixStopLossPrice}
+          onSetChartLevel={(kind, price) => {
+            if (kind === "take-profit") setMatrixTakeProfitPrice(price);
+            else setMatrixStopLossPrice(price);
+          }}
+          levelMode={matrixLevelMode}
+          onLevelModeChange={setMatrixLevelMode}
+          scannerEnabled={matrixScannerEnabled}
+          onScannerEnabledChange={(enabled) => {
+            if (enabled && !featureActionIsAvailable("matrix", "scanner-switch")) {
+              setMatrixStatusMessage("The Matrix scanner switch is unavailable in administrator settings.");
+              return;
+            }
+            setMatrixScannerEnabled(enabled);
+          }}
+          scannerBusy={matrixScannerEnabled && (!matrixMarketFeed.connected || !matrixMarketFeed.recommendation)}
+          scannerStatus={!matrixScannerEnabled
+            ? "Switch on to review recent movement. Nothing is submitted automatically."
+            : matrixMarketFeed.recommendation
+              ? "Suggestion ready. Review it and click Place Trade yourself."
+              : matrixMarketFeed.status}
+          scannerRecommendation={matrixScannerEnabled ? matrixMarketFeed.recommendation : null}
+          connected={isConnected}
+          streamConnected={matrixMarketFeed.connected}
+          accountLabel={currentAccount ? `${currentAccount.id} · ${currentAccount.type.toUpperCase()}` : "No account"}
+          currency={currentAccount?.currency ?? "USD"}
+          quote={matrixMarketFeed.signals.find((signal) => signal.symbol === matrixSelectedSymbol)?.quotes.at(-1)?.quote ?? null}
+          tradeBusy={matrixBuyMutation.isPending}
+          canTrade={getMatrixTradeBlockReason() == null}
+          statusMessage={getMatrixTradeBlockReason() ?? matrixStatusMessage}
+          onPlaceTrade={() => void placeMatrixTrade()}
+          historyRows={matrixRows}
+          sessionRows={matrixSessionRows}
+          openTrades={matrixOpenTrades}
+          onClearHistory={() => void clearMatrixHistory()}
+          clearArmed={matrixHistoryClearArmed}
+          historyFading={historyFading}
+        />
       )}
 
       {guideOpen && (

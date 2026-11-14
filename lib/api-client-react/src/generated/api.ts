@@ -67,6 +67,8 @@ import type {
   GetMoneyBankKnockoutStatisticsParams,
   HealthStatus,
   MatrixBuyInput,
+  MatrixDurationAvailability,
+  MatrixDurationAvailabilityInput,
   MoneyBankKnockoutScannerInput,
   MoneyBankKnockoutScannerResponse,
   MoneyBankKnockoutStatistics,
@@ -2256,6 +2258,77 @@ export const useGetEdgeAvailableDurations = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getGetEdgeAvailableDurationsMutationOptions(options));
+    }
+
+export const getGetMatrixDurationAvailabilityUrl = () => {
+
+
+
+
+  return `/api/deriv/matrix/duration-availability`
+}
+
+/**
+ * @summary Check which Matrix durations Deriv currently quotes
+ */
+export const getMatrixDurationAvailability = async (matrixDurationAvailabilityInput: MatrixDurationAvailabilityInput, options?: Parameters<typeof customFetch>[1]): Promise<MatrixDurationAvailability> => {
+
+  return customFetch<MatrixDurationAvailability>(getGetMatrixDurationAvailabilityUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(matrixDurationAvailabilityInput)
+  }
+);}
+
+
+
+
+
+export const getGetMatrixDurationAvailabilityMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getMatrixDurationAvailability>>, TError,{data: BodyType<MatrixDurationAvailabilityInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof getMatrixDurationAvailability>>, TError,{data: BodyType<MatrixDurationAvailabilityInput>}, TContext> => {
+
+const mutationKey = ['getMatrixDurationAvailability'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getMatrixDurationAvailability>>, {data: BodyType<MatrixDurationAvailabilityInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  getMatrixDurationAvailability(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GetMatrixDurationAvailabilityMutationResult = NonNullable<Awaited<ReturnType<typeof getMatrixDurationAvailability>>>
+    export type GetMatrixDurationAvailabilityMutationBody = BodyType<MatrixDurationAvailabilityInput>
+    export type GetMatrixDurationAvailabilityMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Check which Matrix durations Deriv currently quotes
+ */
+export const useGetMatrixDurationAvailability = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getMatrixDurationAvailability>>, TError,{data: BodyType<MatrixDurationAvailabilityInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof getMatrixDurationAvailability>>,
+        TError,
+        {data: BodyType<MatrixDurationAvailabilityInput>},
+        TContext
+      > => {
+      return useMutation(getGetMatrixDurationAvailabilityMutationOptions(options));
     }
 
 export const getScanDerivAccumulatorKnockoutUrl = () => {

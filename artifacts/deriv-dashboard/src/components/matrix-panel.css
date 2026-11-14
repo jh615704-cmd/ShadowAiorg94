@@ -99,17 +99,21 @@
 .matrix-chart-switch button { display: inline-flex; align-items: center; gap: 5px; min-height: 29px; padding: 0 7px; border: 0; border-radius: 6px; color: #86aa9c; background: transparent; cursor: pointer; font-size: .59rem; font-weight: 800; }
 .matrix-chart-switch button.active { color: #e5fff3; background: #164638; box-shadow: inset 0 0 0 1px rgba(101, 223, 178, .19); }
 .matrix-chart-plot-wrap { padding: 8px 9px 0; }
-.matrix-chart-canvas { position: relative; height: clamp(190px, 28vw, 278px); overflow: hidden; border: 1px solid rgba(115, 191, 166, .12); border-radius: 8px; background: radial-gradient(ellipse at 50% 0%, rgba(23, 77, 65, .32), transparent 65%), #061b19; }
+.matrix-chart-canvas { position: relative; height: clamp(250px, 32vw, 340px); overflow: hidden; border: 1px solid rgba(115, 191, 166, .17); border-radius: 10px; background: radial-gradient(ellipse at 50% 0%, rgba(23, 77, 65, .3), transparent 66%), linear-gradient(180deg, #071e1c, #061917); box-shadow: inset 0 1px rgba(215, 255, 236, .025); }
 .matrix-chart-svg { width: 100%; height: 100%; display: block; overflow: visible; touch-action: manipulation; }
 .matrix-chart-svg.placing-level { cursor: crosshair; touch-action: none; }
-.matrix-grid-line { stroke: rgba(135, 189, 165, .12); stroke-width: 1; vector-effect: non-scaling-stroke; }
-.matrix-grid-line.vertical { stroke: rgba(135, 189, 165, .075); }
-.matrix-line-path { fill: none; stroke: #69ddbb; stroke-width: 2.1; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
-.matrix-live-point { fill: #c6ffe8; stroke: rgba(90, 225, 178, .33); stroke-width: 7; vector-effect: non-scaling-stroke; }
-.matrix-candle-up line, .matrix-candle-up rect { stroke: #62d8a7; fill: #46c68d; stroke-width: 1.1; vector-effect: non-scaling-stroke; }
-.matrix-candle-down line, .matrix-candle-down rect { stroke: #f27d88; fill: #d85d70; stroke-width: 1.1; vector-effect: non-scaling-stroke; }
+.matrix-grid-line { stroke: rgba(135, 189, 165, .14); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.matrix-grid-line.vertical { stroke: rgba(135, 189, 165, .065); }
+.matrix-line-glow { fill: none; stroke: #47d9b5; stroke-width: 9; stroke-opacity: .12; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
+.matrix-line-path { fill: none; stroke: #78f0cd; stroke-width: 3.2; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
+.matrix-live-point-halo { fill: rgba(101, 232, 190, .15); stroke: rgba(90, 225, 178, .18); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.matrix-live-point { fill: #e3fff3; stroke: #4cdbb0; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.matrix-candle-up line { stroke: #7be8b4; stroke-width: 1.8; vector-effect: non-scaling-stroke; }
+.matrix-candle-up rect { stroke: #7be8b4; fill: #46c68d; stroke-width: 1.1; vector-effect: non-scaling-stroke; }
+.matrix-candle-down line { stroke: #ff929d; stroke-width: 1.8; vector-effect: non-scaling-stroke; }
+.matrix-candle-down rect { stroke: #ff929d; fill: #d85d70; stroke-width: 1.1; vector-effect: non-scaling-stroke; }
 .matrix-chart-empty { fill: #73978b; font: 600 14px var(--app-font-sans, sans-serif); }
-.matrix-price-axis { position: absolute; inset: 11px 5px 11px auto; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
+.matrix-price-axis { position: absolute; inset: 18px 5px 18px auto; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
 .matrix-price-axis span { padding: 2px 4px; border-radius: 3px; color: #91b4a7; background: rgba(5, 24, 21, .74); font: 500 .52rem var(--app-font-mono, monospace); text-align: right; }
 .matrix-level-tp line { stroke: #6de2b1; stroke-width: 1.5; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; }
 .matrix-level-sl line { stroke: #f27989; stroke-width: 1.5; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; }
@@ -177,6 +181,11 @@
 .matrix-duration-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
 .matrix-duration-grid button { min-height: 32px; border: 1px solid rgba(114, 189, 160, .17); border-radius: 6px; color: #9ab8aa; background: rgba(5, 25, 21, .7); cursor: pointer; font: 700 .61rem var(--app-font-mono, monospace); }
 .matrix-duration-grid button.active { border-color: rgba(93, 218, 165, .65); color: #e3fff0; background: rgba(31, 128, 81, .35); box-shadow: inset 0 0 0 1px rgba(93, 218, 165, .1); }
+.matrix-duration-grid button:disabled { cursor: not-allowed; opacity: .38; }
+.matrix-duration-grid button.active:disabled { border-color: rgba(237, 201, 125, .5); color: #f2d89c; background: rgba(121, 91, 35, .2); box-shadow: none; }
+.matrix-duration-feedback { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-top: 7px; color: #7eaa96; font-size: .55rem; line-height: 1.45; }
+.matrix-duration-feedback.error { color: #e5bd7e; }
+.matrix-duration-feedback button { flex: 0 0 auto; padding: 3px 7px; border: 1px solid rgba(112, 207, 170, .25); border-radius: 5px; color: #b7e8d0; background: rgba(23, 77, 56, .3); cursor: pointer; font-size: .53rem; font-weight: 800; }
 .matrix-input-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
 .matrix-input-grid label, .matrix-tp-amount { display: grid; gap: 0; min-width: 0; }
 .matrix-input-grid label > span, .matrix-tp-amount > span { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
@@ -276,7 +285,7 @@
   .matrix-quote-block { flex: 0 0 auto; }
   .matrix-chart-switch { flex: 1 1 100%; }
   .matrix-chart-switch button { flex: 1; justify-content: center; }
-  .matrix-chart-canvas { height: 210px; }
+  .matrix-chart-canvas { height: 260px; }
   .matrix-price-axis span { font-size: .45rem; }
   .matrix-level-tools { align-items: flex-start; flex-direction: column; }
   .matrix-level-buttons { width: 100%; }
