@@ -31,7 +31,7 @@ const bulkBuyDurations: number[] = [];
 let dualBuyInvocations = 0;
 let knockoutStatisticsInvocations = 0;
 const knockoutStatisticsInputs: Array<{ symbol: string; amount: number; duration: number }> = [];
-let routeAccessFeatures = ["clock-work", "edge", "trade-x", "bulk-trader", "auto-trader", "money-bank", "speedbot"];
+let routeAccessFeatures = ["clock-work", "edge", "trade-x", "bulk-trader", "auto-trader", "money-bank", "matrix", "speedbot"];
 let knockoutScanInvocations = 0;
 const marketTickListeners = new Set<(tick: {
   symbol: string;
@@ -266,6 +266,10 @@ mock.module("../lib/deriv", {
     sellContract: async () => {
       observePat();
       return { ok: true, contract_id: "contract-1", sold_for: 1 };
+    },
+    buyMatrixContracts: async () => {
+      observePat();
+      return { ok: true, message: "Matrix batch accepted", count: 0, proposals: [], buys: [], failed: [] };
     },
     bulkBuyContracts: async (input: { duration: number; contract_type: string }) => {
       observePat();

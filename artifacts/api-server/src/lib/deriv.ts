@@ -218,6 +218,7 @@ type MatrixExitPlan = {
   takeProfitPerTrade: number;
   takeProfitPrice: number | null;
   stopLossPrice: number | null;
+  confirmedOpen: boolean;
   closeAttempted: boolean;
 };
 
@@ -962,7 +963,7 @@ function recordMarketTick(symbol: string, quote: unknown, epoch: number, pipSize
     recent_digits: market.digitHistory.slice(-100),
     tick_epoch: epoch,
     quote: market.quote,
-    recent_quotes: market.quoteHistory.slice(-200).map((tick) => ({
+    recent_quotes: market.quoteHistory.slice(-200).map((tick: { quote: number; epoch: number; sequence?: number }) => ({
       quote: tick.quote,
       epoch: tick.epoch,
       sequence: tick.sequence ?? 0,
@@ -1035,7 +1036,7 @@ export function getMarketTickSnapshot(): DerivMarketTickUpdate[] {
       recent_digits: (market?.digitHistory ?? []).slice(-100),
       tick_epoch: market?.epoch ?? 0,
       quote: market?.quote ?? null,
-      recent_quotes: (market?.quoteHistory ?? []).slice(-200).map((tick) => ({
+      recent_quotes: (market?.quoteHistory ?? []).slice(-200).map((tick: { quote: number; epoch: number; sequence?: number }) => ({
         quote: tick.quote,
         epoch: tick.epoch,
         sequence: tick.sequence ?? 0,
@@ -2166,14 +2167,20 @@ async function connectInternal() {
             const exitPlan = getState().matrixExitPlans.get(contractId);
             if (!isOpenContractStatus(normalizedStatus)) {
               getState().matrixExitPlans.delete(contractId);
-            } else if (
-              exitPlan
-              && !exitPlan.closeAttempted
-              && exitPlan.takeProfitPerTrade > 0
-              && Number.isFinite(Number(contract.profit))
-              && Number(contract.profit) >= exitPlan.takeProfitPerTrade
-            ) {
-              requestMatrixExit(exitPlan, "take-profit per trade");
+            } else if (exitPlan) {
+              exitPlan.confirmedOpen = true;
+              const currentSpot = Number(contract.current_spot);
+              if (Number.isFinite(currentSpot) && currentSpot > 0) {
+                evaluateMatrixExitPlans(exitPlan.symbol, currentSpot);
+              }
+              if (
+                !exitPlan.closeAttempted
+                && exitPlan.takeProfitPerTrade > 0
+                && Number.isFinite(Number(contract.profit))
+                && Number(contract.profit) >= exitPlan.takeProfitPerTrade
+              ) {
+                requestMatrixExit(exitPlan, "take-profit per trade");
+              }
             }
           }
         }
@@ -2721,7 +2728,7 @@ function evaluateMatrixExitPlans(symbol: string, quote: number) {
   if (!Number.isFinite(quote)) return;
   const runtime = getState();
   for (const plan of runtime.matrixExitPlans.values()) {
-    if (plan.symbol !== symbol || plan.accountId !== runtime.account?.id) continue;
+    if (!plan.confirmedOpen || plan.symbol !== symbol || plan.accountId !== runtime.account?.id) continue;
     const reason = matrixExitReason(plan, quote);
     if (reason) requestMatrixExit(plan, reason);
   }
@@ -2795,7 +2802,10 @@ export async function buyMatrixContracts(
   };
   validateProposalInput(proposalInput);
   const prepared = await runBeforeBuy(async () => {
-    assertTradingProtection(await getTradingProtectionSettings(), getStatus(), proposalInput);
+    assertTradingProtection(await getTradingProtectionSettings(), getStatus(), {
+      contract_type: proposalInput.contract_type,
+      symbol: proposalInput.symbol,
+    });
     await refreshOpenContracts();
     assertNoActiveContract(true);
     const proposals = await Promise.all(
@@ -2833,10 +2843,9 @@ export async function buyMatrixContracts(
           takeProfitPerTrade,
           takeProfitPrice,
           stopLossPrice,
+          confirmedOpen: false,
           closeAttempted: false,
         });
-        const latestQuote = getState().marketHistory.get(input.symbol)?.quote;
-        if (latestQuote != null) evaluateMatrixExitPlans(input.symbol, latestQuote);
       }
       return;
     }

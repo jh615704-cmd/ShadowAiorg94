@@ -84,6 +84,7 @@ type MatrixPanelProps = {
     sampleCount: number;
   } | null;
   connected: boolean;
+  streamConnected?: boolean;
   accountLabel: string;
   currency: string;
   quote: number | null;
@@ -113,7 +114,7 @@ export function MatrixPanel(props: MatrixPanelProps) {
     tradeCount, onTradeCountChange, takeProfitPerTrade, onTakeProfitPerTradeChange,
     takeProfitPrice, stopLossPrice, onSetChartLevel, levelMode, onLevelModeChange,
     scannerEnabled, onScannerEnabledChange, scannerBusy, scannerStatus, scannerRecommendation,
-    connected, accountLabel, currency, quote, tradeBusy, canTrade, statusMessage, onPlaceTrade,
+    connected, streamConnected = connected, accountLabel, currency, quote, tradeBusy, canTrade, statusMessage, onPlaceTrade,
     historyRows, sessionRows, openTrades, onClearHistory, clearArmed, historyFading,
   } = props;
   const [guideOpen, setGuideOpen] = useState(false);
@@ -182,7 +183,7 @@ export function MatrixPanel(props: MatrixPanelProps) {
           </div>
         </div>
         <div className={`matrix-connection ${connected ? "is-connected" : ""}`} data-testid="matrix-connection-status">
-          <i />{connected ? "STREAM CONNECTED" : "OFFLINE"}
+          <i />{connected ? "ACCOUNT CONNECTED" : "OFFLINE"}
           <span>{accountLabel || "No account"}</span>
         </div>
       </header>
@@ -250,7 +251,7 @@ export function MatrixPanel(props: MatrixPanelProps) {
                   {stopLossPrice != null && chart.max > chart.min && <g className="matrix-level-sl">
                     <line x1="0" x2="800" y1={12 + ((chart.max - stopLossPrice) / (chart.max - chart.min)) * 214} y2={12 + ((chart.max - stopLossPrice) / (chart.max - chart.min)) * 214} />
                   </g>}
-                  {chart.points.length < 2 && <text x="400" y="122" textAnchor="middle" className="matrix-chart-empty">{connected ? "Waiting for market ticks" : "Connect to stream live prices"}</text>}
+                  {chart.points.length < 2 && <text x="400" y="122" textAnchor="middle" className="matrix-chart-empty">{connected && streamConnected ? "Waiting for market ticks" : connected ? "Waiting for live stream" : "Connect Deriv for live prices"}</text>}
                 </svg>
                 <div className="matrix-price-axis" aria-hidden="true">
                   {[0, 1, 2, 3, 4].map((line) => {
@@ -260,7 +261,7 @@ export function MatrixPanel(props: MatrixPanelProps) {
                 </div>
                 {levelMode && <div className="matrix-chart-instruction"><Crosshair size={14} />Tap chart to place {levelMode === "take-profit" ? "take-profit" : "stop-loss"} level <button type="button" {...action("level-cancel")} data-testid="matrix-level-cancel" onClick={() => onLevelModeChange(null)} aria-label="Cancel chart level placement"><X size={14} /></button></div>}
               </div>
-              <div className="matrix-chart-footer"><span><i className={connected ? "live" : ""} />{connected ? "LIVE" : "PAUSED"}</span><span>{signal?.sampleCount ?? 0} ticks sampled</span><span>{ticks.at(-1)?.epoch ? new Date(ticks.at(-1)!.epoch * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—"}</span></div>
+              <div className="matrix-chart-footer"><span><i className={streamConnected ? "live" : ""} />{streamConnected ? "LIVE" : "PAUSED"}</span><span>{signal?.sampleCount ?? 0} ticks sampled</span><span>{ticks.at(-1)?.epoch ? new Date(ticks.at(-1)!.epoch * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—"}</span></div>
             </div>
 
             <div className="matrix-level-tools">

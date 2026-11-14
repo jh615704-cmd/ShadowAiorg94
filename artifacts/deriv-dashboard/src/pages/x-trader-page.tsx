@@ -7,7 +7,9 @@ import {
   ApiTransportError,
   customFetch,
   type ClockWorkContractOrder,
+  type MatrixBuyInput,
   useBuyClockWorkContracts,
+  useBuyMatrixContracts,
   useGetAccessSession,
   useGetAdminFeatureSettings,
   useDeleteDerivToken,
@@ -126,6 +128,13 @@ import CashGrabPanel, {
 } from "../components/cash-grab-panel";
 import ClockWorkPanel from "../components/clock-work-panel";
 import SpeedbotPanel from "../components/speedbot-panel";
+import MatrixPanel, {
+  type MatrixChartType,
+  type MatrixDirection,
+  type MatrixDuration,
+  type MatrixOpenTradeView,
+} from "../components/matrix-panel";
+import { MATRIX_MARKETS, useMatrixMarketFeed } from "../hooks/use-matrix-market-feed";
 import { useSpeedbotScanner } from "../hooks/use-speedbot-scanner";
 import type { AutoMagicCandidate } from "../lib/auto-magic-strategy";
 import {
@@ -279,6 +288,17 @@ const clockWorkGuidePages = [
   { title: "Choose a market and stake", body: "Select a supported market and set the stake for each entry.", points: ["The selected market is shown above the control.", "Auto Best is available as a market choice.", "Review your account balance before starting."] },
   { title: "Start and stop Clock Work", body: "Ai Clock uses a fixed entry filter: the observed historical rate must be at least 58% across at least six completed five-tick samples. Turn on Ai Clock, then press Start Clock Work when your account and settings are ready.", points: ["Stop prevents new entries.", "Accepted contracts settle through Deriv.", "An open or unsettled contract pauses the next entry."] },
   { title: "Stop and review history", body: "Stop Clock Work to prevent new entries. An order already accepted by Deriv is not canceled by Stop and must settle through Deriv.", points: ["Clock Work History shows entries and their reported results.", "Clearing history hides local rows only; it does not delete Deriv's account history.", "Check Deriv history before restarting after an uncertain order."] },
+] as const;
+
+const matrixGuidePages = [
+  { title: "Welcome to Matrix", body: "Matrix is a manual Higher/Lower trading panel for Boom, Crash, Bull, and Bear synthetic markets. Use the live chart and selected Deriv account to review each setup.", points: ["Start on a demo account while learning.", "Only one trading feature can be active at a time.", "No market signal or scanner can guarantee an outcome."] },
+  { title: "Read the live chart", body: "The chart streams recent quotes and lets you switch between line and candlestick views. Percentages show recent upward and downward movement, not a win rate or a forecast.", points: ["Wait for fresh samples before comparing markets.", "Tap a chart level button, then tap the chart to place its price.", "Changing markets clears the old chart levels."] },
+  { title: "Choose the Higher or Lower contract", body: "Select a market, Higher or Lower, and one of the listed tick or minute durations. Matrix uses a zero-offset entry barrier so the selected direction is compared with the contract entry quote.", points: ["10 and 20 ticks are available.", "Minute durations are 1, 3, 5, 10, 30, or 60 minutes.", "Deriv determines the final contract result."] },
+  { title: "Stake and batch size", body: "Each Matrix order has a minimum $1 stake. Choose 1 to 10 contracts and review the total amount at risk before placing the batch.", points: ["The server checks the selected account balance.", "Open contracts must settle before another Matrix batch is accepted.", "A batch can be partially acknowledged; check history before any retry."] },
+  { title: "Take-profit and stop-loss exits", body: "Take Profit per Trade closes an open contract when its reported profit reaches your amount. Chart TP and SL lines ask the server to close at the configured market price.", points: ["Higher TP is above entry and Higher SL is below entry; Lower is the reverse.", "Automatic exits depend on the server and live Deriv connection staying active.", "A close request that cannot be confirmed is never replayed automatically."] },
+  { title: "Use the scanner safely", body: "The Matrix scanner compares recent observed market movement and suggests a market, direction, and duration. It never places an order.", points: ["Use Setup applies the suggestion to the controls.", "You must review it and click Place Trade yourself.", "Observed movement is not a prediction or a guarantee."] },
+  { title: "Review open contracts and history", body: "Matrix history is limited to contracts placed from Matrix. Open rows show a countdown estimate and update from Deriv; the account's authoritative history is not deleted when you clear local rows.", points: ["Wait for Deriv to confirm settlement.", "An estimated countdown is not a guarantee of the exact close time.", "Check Deriv history before repeating an uncertain order."] },
+  { title: "Before placing a trade", body: "Confirm your demo or real account, market, direction, duration, stake, count, and exit levels before clicking Place Trade.", points: ["Real-account orders remain subject to server live-trading controls.", "Only risk money you can afford to lose.", "No strategy makes trading quick or guaranteed income."] },
 ] as const;
 
 const speedbotGuidePages = [
@@ -464,11 +484,12 @@ export default function XTraderPage() {
   const canUseClockWork = hasFeature("clock-work") && featureIsAvailable("clock-work");
   const canUseCashGrab = hasFeature("cash-grab") && featureIsAvailable("cash-grab");
   const canUseMoneyBank = hasFeature("money-bank") && featureIsAvailable("money-bank");
+  const canUseMatrix = hasFeature("matrix") && featureIsAvailable("matrix");
   const canUseSpeedbot = hasFeature("speedbot") && featureIsAvailable("speedbot");
   const canUseAutoTrader = hasFeature("auto-trader") && featureIsAvailable("auto-trader");
   const canUseAutoTrader2 = hasFeature("auto-trader-2") && featureIsAvailable("auto-trader-2");
   const canUseSettings = hasFeature("settings") && featureIsAvailable("settings");
-  const canUseDeriv = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseClockWork || canUseCashGrab || canUseMoneyBank || canUseSpeedbot || canUseAutoTrader || canUseAutoTrader2;
+  const canUseDeriv = canUseEdge || canUseDigitFlip || canUseTradeX || canUseBulkTrader || canUseClockWork || canUseCashGrab || canUseMoneyBank || canUseMatrix || canUseSpeedbot || canUseAutoTrader || canUseAutoTrader2;
   const canViewHistory = canUseDeriv || (hasFeature("history") && featureIsAvailable("history"));
   const tokenStatus = useGetDerivTokenStatus({ query: { enabled: canUseDeriv, retry: false, queryKey: getGetDerivTokenStatusQueryKey() } });
   const connectedToken = Boolean(tokenStatus.data?.has_token);
@@ -515,12 +536,14 @@ export default function XTraderPage() {
   const moneyBankSellMutation = useSellDerivContract();
   const cashGrabSellMutation = useSellDerivContract();
   const clockWorkBuyMutation = useBuyClockWorkContracts();
+  const matrixBuyMutation = useBuyMatrixContracts();
   const anyContractBuyPending = bulkBuyMutation.isPending
     || dualBuyMutation.isPending
     || digitFlipBuyMutation.isPending
     || moneyBankBuyMutation.isPending
     || speedbotBuyMutation.isPending
     || clockWorkBuyMutation.isPending
+    || matrixBuyMutation.isPending
     || clockWorkBuyMutation.isPending;
 
   const [pat, setPat] = useState("");
@@ -618,6 +641,22 @@ export default function XTraderPage() {
   const [speedbotPendingContractIds, setSpeedbotPendingContractIds] = useState<string[]>([]);
   const [speedbotHistoryClearArmed, setSpeedbotHistoryClearArmed] = useState(false);
   const [speedbotHiddenHistoryIds, setSpeedbotHiddenHistoryIds] = useState<Set<string>>(new Set());
+  const [matrixEnabled, setMatrixEnabled] = useState(false);
+  const [matrixSelectedSymbol, setMatrixSelectedSymbol] = useState("BOOM500");
+  const [matrixDirection, setMatrixDirection] = useState<MatrixDirection>("HIGHER");
+  const [matrixDuration, setMatrixDuration] = useState<MatrixDuration>("10t");
+  const [matrixStake, setMatrixStake] = useState(1);
+  const [matrixTradeCount, setMatrixTradeCount] = useState(1);
+  const [matrixTakeProfitPerTrade, setMatrixTakeProfitPerTrade] = useState(0);
+  const [matrixChartType, setMatrixChartType] = useState<MatrixChartType>("line");
+  const [matrixTakeProfitPrice, setMatrixTakeProfitPrice] = useState<number | null>(null);
+  const [matrixStopLossPrice, setMatrixStopLossPrice] = useState<number | null>(null);
+  const [matrixLevelMode, setMatrixLevelMode] = useState<"take-profit" | "stop-loss" | null>(null);
+  const [matrixScannerEnabled, setMatrixScannerEnabled] = useState(false);
+  const [matrixStatusMessage, setMatrixStatusMessage] = useState<string | null>(null);
+  const [matrixHistoryClearArmed, setMatrixHistoryClearArmed] = useState(false);
+  const [matrixHiddenHistoryIds, setMatrixHiddenHistoryIds] = useState<Set<string>>(new Set());
+  const [matrixNow, setMatrixNow] = useState(() => Date.now());
   const [cashGrabDirection, setCashGrabDirection] = useState<CashGrabDirection>("CALL");
   const [cashGrabSymbol, setCashGrabSymbol] = useState("R_75");
   const [cashGrabStake, setCashGrabStake] = useState(.35);
@@ -667,7 +706,7 @@ export default function XTraderPage() {
   const [running, setRunning] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [guidePage, setGuidePage] = useState(0);
-  const [guideMode, setGuideMode] = useState<"edge" | "trade-x" | "digit-flip" | "bulk-trader" | "money-bank" | "cash-grab" | "clock-work" | "speedbot">("edge");
+  const [guideMode, setGuideMode] = useState<"edge" | "trade-x" | "digit-flip" | "bulk-trader" | "money-bank" | "cash-grab" | "clock-work" | "matrix" | "speedbot">("edge");
   const [clearHistoryArmed, setClearHistoryArmed] = useState(false);
   const [historyFading, setHistoryFading] = useState(false);
   const [tradeXHistoryClearArmed, setTradeXHistoryClearArmed] = useState(false);
@@ -763,6 +802,7 @@ export default function XTraderPage() {
   const bulkClaimedHistoryIdsRef = useRef(new Set<string>());
   const cashGrabClaimedHistoryIdsRef = useRef(new Set<string>());
   const clockWorkClaimedHistoryIdsRef = useRef(new Set<string>());
+  const matrixClaimedHistoryIdsRef = useRef(new Set<string>());
   const speedbotClaimedHistoryIdsRef = useRef(new Set<string>());
   const speedbotRunningRef = useRef(false);
   const speedbotActionLockRef = useRef(false);
@@ -829,6 +869,7 @@ export default function XTraderPage() {
     duration: speedbotDuration,
     onCandidate: (candidate) => speedbotCandidateHandlerRef.current(candidate),
   });
+  const matrixMarketFeed = useMatrixMarketFeed(matrixEnabled && canUseMatrix && isConnected);
   const accessKeyId = accessSession.data?.key_id;
   const {
     notifications,
@@ -1102,6 +1143,55 @@ export default function XTraderPage() {
     && String(trade.account_id) === String(currentAccount?.id ?? "")
   ));
   const speedbotRows = speedbotAllRows.filter((trade) => !speedbotHiddenHistoryIds.has(String(trade.contract_id)));
+  const matrixSessionRows = rows.filter((trade) => (
+    String(trade.account_id) === String(currentAccount?.id ?? "")
+    && matrixClaimedHistoryIdsRef.current.has(String(trade.contract_id))
+  ));
+  const matrixRows = matrixSessionRows.filter((trade) => !matrixHiddenHistoryIds.has(String(trade.contract_id)));
+  const matrixOpenTrades: MatrixOpenTradeView[] = matrixRows
+    .filter((trade) => isDerivHistoryOpen(trade.status))
+    .map((trade) => {
+      const duration = trade.duration ?? 0;
+      const tickDuration = trade.duration_unit === "t";
+      const remainingTicks = Math.max(0, duration - (trade.tick_passed ?? 0));
+      const expiryAt = trade.buy_time == null
+        ? null
+        : trade.buy_time + duration * (trade.duration_unit === "m" ? 60 : 1);
+      const remainingSeconds = expiryAt == null
+        ? null
+        : Math.max(0, expiryAt - Math.floor(matrixNow / 1000));
+      const hours = remainingSeconds == null ? 0 : Math.floor(remainingSeconds / 3600);
+      const minutes = remainingSeconds == null ? 0 : Math.floor((remainingSeconds % 3600) / 60);
+      const seconds = remainingSeconds == null ? 0 : remainingSeconds % 60;
+      const countdown = tickDuration
+        ? `${remainingTicks} tick${remainingTicks === 1 ? "" : "s"}`
+        : remainingSeconds == null
+          ? "Syncing"
+          : `${hours ? `${hours}:` : ""}${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+      const elapsedSeconds = trade.buy_time == null
+        ? null
+        : Math.max(0, Math.floor(matrixNow / 1000) - trade.buy_time);
+      return {
+        contractId: String(trade.contract_id),
+        symbol: trade.symbol,
+        direction: trade.contract_type === "LOWER" ? "LOWER" : "HIGHER",
+        stake: trade.buy_price,
+        payout: trade.payout,
+        profit: trade.profit,
+        status: trade.status,
+        countdown,
+        elapsed: tickDuration
+          ? `${Math.max(0, trade.tick_passed ?? 0)} ticks elapsed`
+          : elapsedSeconds == null
+            ? "Elapsed time syncing"
+            : `${Math.floor(elapsedSeconds / 60)}:${String(elapsedSeconds % 60).padStart(2, "0")} elapsed`,
+      };
+    });
+  useEffect(() => {
+    if (!matrixEnabled || matrixOpenTrades.length === 0) return;
+    const timer = window.setInterval(() => setMatrixNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [matrixEnabled, matrixOpenTrades.length]);
   const speedbotRunRows = rows.filter((trade) => (
     speedbotRunAccountIdRef.current != null
     && String(trade.account_id) === speedbotRunAccountIdRef.current
@@ -1363,6 +1453,15 @@ export default function XTraderPage() {
     cashGrabClaimedHistoryIdsRef.current.clear();
     clockWorkClaimedHistoryIdsRef.current.clear();
     speedbotClaimedHistoryIdsRef.current.clear();
+    matrixClaimedHistoryIdsRef.current.clear();
+    setMatrixEnabled(false);
+    setMatrixScannerEnabled(false);
+    setMatrixStatusMessage(null);
+    setMatrixHistoryClearArmed(false);
+    setMatrixHiddenHistoryIds(new Set());
+    setMatrixTakeProfitPrice(null);
+    setMatrixStopLossPrice(null);
+    setMatrixLevelMode(null);
     speedbotPendingContractIdsRef.current.clear();
     speedbotRunContractIdsRef.current.clear();
     speedbotRunAccountIdRef.current = currentAccount?.id == null ? null : String(currentAccount.id);
@@ -1394,6 +1493,7 @@ export default function XTraderPage() {
       ["bulk-trader", bulkClaimedHistoryIdsRef.current, savedFeatureClaims["bulk-trader"]],
       ["cash-grab", cashGrabClaimedHistoryIdsRef.current, savedFeatureClaims["cash-grab"]],
       ["clock-work", clockWorkClaimedHistoryIdsRef.current, savedFeatureClaims["clock-work"]],
+      ["matrix", matrixClaimedHistoryIdsRef.current, savedFeatureClaims.matrix],
       ["speedbot", speedbotClaimedHistoryIdsRef.current, savedFeatureClaims.speedbot],
       ["money-bank", moneyBankClaimedHistoryIdsRef.current, savedMoneyBankContractIds],
     ] as const satisfies readonly [DerivHistoryFeature, Set<string>, readonly string[]][];
@@ -1418,6 +1518,7 @@ export default function XTraderPage() {
     setBulkTraderHiddenHistoryIds(new Set());
     setCashGrabHiddenHistoryIds(new Set());
     setClockWorkHiddenHistoryIds(new Set());
+    setMatrixHiddenHistoryIds(new Set());
     setEdgeAccountBalance(currentAccountBalance == null ? "" : currentAccountBalance.toFixed(2));
     setDigitFlipAccountBalance(currentAccountBalance == null ? "" : currentAccountBalance.toFixed(2));
   }, [currentAccount?.id]);
@@ -3468,6 +3569,12 @@ export default function XTraderPage() {
     setSpeedbotRunning(false);
   };
 
+  const deactivateMatrix = () => {
+    setMatrixEnabled(false);
+    setMatrixScannerEnabled(false);
+    setMatrixLevelMode(null);
+  };
+
   const toggleCashGrab = (enabled: boolean) => {
     if (enabled && !isConnected) {
       setConnectionMessage({ kind: "error", text: "Connect Deriv before enabling Cash Grab." });
@@ -3478,6 +3585,7 @@ export default function XTraderPage() {
       stopCashGrab();
       return;
     }
+    deactivateMatrix();
     deactivateSpeedbot();
     deactivateMoneyBank();
     stop();
@@ -3532,6 +3640,25 @@ export default function XTraderPage() {
     setHistoryFading(false);
   };
 
+  const clearMatrixHistory = async () => {
+    if (!matrixHistoryClearArmed) {
+      setMatrixHistoryClearArmed(true);
+      window.setTimeout(() => setMatrixHistoryClearArmed(false), 2_500);
+      return;
+    }
+    setMatrixHistoryClearArmed(false);
+    setHistoryFading(true);
+    await sleep(260);
+    const settledRows = matrixRows.filter((trade) => !isDerivHistoryOpen(trade.status));
+    removeSettledFeatureClaims("matrix", matrixClaimedHistoryIdsRef.current, settledRows);
+    setMatrixHiddenHistoryIds((current) => {
+      const next = new Set(current);
+      settledRows.forEach((trade) => next.add(String(trade.contract_id)));
+      return next;
+    });
+    setHistoryFading(false);
+  };
+
   const deactivateMoneyBank = () => {
     setEdge2Enabled(false);
     stopMoneyBank();
@@ -3547,6 +3674,7 @@ export default function XTraderPage() {
       stop();
       return;
     }
+    deactivateMatrix();
     deactivateSpeedbot();
     deactivateMoneyBank();
     deactivateCashGrab();
@@ -3572,6 +3700,7 @@ export default function XTraderPage() {
       deactivateMoneyBank();
       return;
     }
+    deactivateMatrix();
     deactivateSpeedbot();
     deactivateCashGrab();
     stop();
@@ -3604,6 +3733,7 @@ export default function XTraderPage() {
 
   const toggleAutoBestDigit = (enabled: boolean) => {
     if (enabled) {
+      deactivateMatrix();
       if (!isConnected) {
         setConnectionMessage({ kind: "error", text: "Connect Deriv before enabling Auto Best Digit." });
         return;
@@ -3620,6 +3750,7 @@ export default function XTraderPage() {
 
   const toggleEdgePercentageMode = (enabled: boolean) => {
     if (enabled) {
+      deactivateMatrix();
       if (!isConnected) {
         setConnectionMessage({ kind: "error", text: "Connect Deriv before enabling Percentage Scan." });
         return;
@@ -4473,6 +4604,7 @@ export default function XTraderPage() {
       setDigitFlipRunning(false);
       return;
     }
+    deactivateMatrix();
     deactivateSpeedbot();
     deactivateMoneyBank();
     deactivateCashGrab();
@@ -4579,6 +4711,7 @@ export default function XTraderPage() {
     }
     setTradeXEnabled(enabled);
     if (enabled) {
+      deactivateMatrix();
       deactivateSpeedbot();
       deactivateMoneyBank();
       deactivateCashGrab();
@@ -4611,6 +4744,7 @@ export default function XTraderPage() {
       setClockWorkAiStatus("Clock Work is stopped. Open contracts can continue to settle.");
       return;
     }
+    deactivateMatrix();
     deactivateSpeedbot();
     deactivateMoneyBank();
     deactivateCashGrab();
@@ -4639,6 +4773,7 @@ export default function XTraderPage() {
     }
     setBulkTraderEnabled(enabled);
     if (!enabled) return;
+    deactivateMatrix();
     deactivateSpeedbot();
     deactivateMoneyBank();
     deactivateCashGrab();
@@ -4712,6 +4847,7 @@ export default function XTraderPage() {
       return;
     }
 
+    deactivateMatrix();
     speedbotRunningRef.current = false;
     setSpeedbotRunning(false);
     setSpeedbotStatusMessage("Speedbot is ready. Start the scanner when your settings are confirmed.");
@@ -4731,6 +4867,83 @@ export default function XTraderPage() {
     setRunning(false);
     autoSwitchRef.current = false;
     setAutoSwitch(false);
+  };
+
+  const toggleMatrix = (enabled: boolean) => {
+    if (enabled && !canUseMatrix) return;
+    if (enabled && !isConnected) {
+      setConnectionMessage({ kind: "error", text: "Connect Deriv before enabling Matrix." });
+      return;
+    }
+    setMatrixEnabled(enabled);
+    if (!enabled) {
+      setMatrixScannerEnabled(false);
+      setMatrixLevelMode(null);
+      setMatrixStatusMessage("Matrix is paused. Accepted contracts continue to settle through Deriv.");
+      return;
+    }
+    setMatrixStatusMessage("Matrix is ready. Review the account and setup before placing a trade.");
+    deactivateSpeedbot();
+    deactivateMoneyBank();
+    deactivateCashGrab();
+    stop();
+    setXTraderEnabled(false);
+    setDigitFlipEnabled(false);
+    digitFlipRunningRef.current = false;
+    setDigitFlipRunning(false);
+    setTradeXEnabled(false);
+    setBulkTraderEnabled(false);
+    setClockWorkEnabled(false);
+    setClockWorkAiEnabled(false);
+    setClockWorkRunning(false);
+    runningRef.current = false;
+    setRunning(false);
+    autoSwitchRef.current = false;
+    setAutoSwitch(false);
+  };
+
+  const getMatrixTradeBlockReason = () => {
+    if (!matrixEnabled || !canUseMatrix) return "Enable Matrix access before placing a trade.";
+    if (!featureActionIsAvailable("matrix", "place-trade")) return "Matrix trading is unavailable in administrator settings.";
+    if (!isConnected || !currentAccount) return "Connect Deriv and select an account before placing Matrix trades.";
+    if (isReal && !status.data?.live_trading_enabled) return "Live-account trading is disabled for this workspace.";
+    if (anyContractBuyPending) return "Another trade request is still being confirmed.";
+    if (tradeSlotBlocked) return tradeSlotMessage ?? "Wait for Deriv to confirm all open contracts have settled.";
+    if (matrixStake < 1 || !Number.isFinite(matrixStake)) return "Matrix stake must be at least $1 per trade.";
+    if (!Number.isInteger(matrixTradeCount) || matrixTradeCount < 1 || matrixTradeCount > 10) return "Matrix supports 1 to 10 trades per batch.";
+    if (currentAccountBalance == null || matrixStake * matrixTradeCount > currentAccountBalance) return "The total Matrix batch stake exceeds the available account balance.";
+    return null;
+  };
+
+  const placeMatrixTrade = async () => {
+    const blockedReason = getMatrixTradeBlockReason();
+    if (blockedReason) {
+      setMatrixStatusMessage(blockedReason);
+      return;
+    }
+    const durationUnit = matrixDuration.endsWith("t") ? "t" : "m";
+    const duration = Number.parseInt(matrixDuration.replace(/[tmh]/g, ""), 10) * (matrixDuration === "1h" ? 60 : 1);
+    const request: MatrixBuyInput = {
+      access_feature: "matrix",
+      amount: matrixStake,
+      duration,
+      duration_unit: durationUnit,
+      contract_type: matrixDirection,
+      count: matrixTradeCount,
+      symbol: matrixSelectedSymbol,
+      take_profit_per_trade: matrixTakeProfitPerTrade,
+      take_profit_price: matrixTakeProfitPrice,
+      stop_loss_price: matrixStopLossPrice,
+    };
+    setMatrixStatusMessage("Requesting fresh Deriv quotes. No order is sent until the batch is confirmed.");
+    try {
+      const result = await matrixBuyMutation.mutateAsync({ data: request });
+      claimFeatureRows("matrix", matrixClaimedHistoryIdsRef.current, result.buys.map((buy) => String(buy.contract_id)));
+      setMatrixStatusMessage(result.message);
+      refreshTradeResults();
+    } catch (error) {
+      setMatrixStatusMessage(getUserFacingErrorMessage(error));
+    }
   };
 
   const executeSpeedbotCandidate = async (candidate: AutoMagicCandidate) => {
@@ -5312,6 +5525,7 @@ export default function XTraderPage() {
     || tradeXEnabled
     || digitFlipEnabled
     || bulkTraderEnabled
+    || matrixEnabled
     || speedbotEnabled
     || speedbotRunning
     || speedbotNeedsHistoryCheck
@@ -5323,7 +5537,9 @@ export default function XTraderPage() {
     || moneyBankStarting
     || clockWorkRunning;
   const entryDigit = barrier;
-  const activeGuidePages = guideMode === "speedbot"
+  const activeGuidePages = guideMode === "matrix"
+    ? matrixGuidePages
+    : guideMode === "speedbot"
     ? speedbotGuidePages
     : guideMode === "trade-x"
     ? tradeXGuidePages
@@ -5338,7 +5554,9 @@ export default function XTraderPage() {
             : guideMode === "clock-work"
               ? clockWorkGuidePages
               : guidePages;
-  const canUseGuideFeature = guideMode === "speedbot"
+  const canUseGuideFeature = guideMode === "matrix"
+    ? canUseMatrix
+    : guideMode === "speedbot"
     ? canUseSpeedbot
     : guideMode === "trade-x"
     ? canUseTradeX
@@ -5669,6 +5887,92 @@ export default function XTraderPage() {
           </div>
         )}
       <h2 className="xt-trading-strategies-heading">Trading Strategies</h2>
+
+      <section className={`xt-feature-card xt-feature-card-matrix ${!canUseMatrix ? "xt-feature-card-restricted" : ""}`} id="matrix-feature">
+        <div><Activity size={18} /><span><b>Matrix</b><small><FeatureStatusText control={featureControl("matrix")} isAdmin={isAdmin} fallback={canUseMatrix ? "Boom · Crash · Bull · Bear Higher/Lower" : "Restricted — admin access only"} /></small></span></div>
+        <div className="xt-feature-actions">
+          {!canUseMatrix && <span className="xt-feature-locked">RESTRICTED</span>}
+          <button className="xt-guide-button" data-feature-action="matrix/open-guide" type="button" onClick={() => { setGuideMode("matrix"); setGuidePage(0); setGuideOpen(true); }}>
+            <BookOpen size={14} />Guide
+          </button>
+          <label className="xt-switch">
+            <input
+              type="checkbox"
+              data-feature-action="matrix/feature-toggle"
+              data-testid="matrix-feature-toggle"
+              checked={matrixEnabled}
+              onChange={(event) => toggleMatrix(event.target.checked)}
+              aria-label="Toggle Matrix"
+              disabled={!canUseMatrix || !isConnected}
+            />
+            <span />
+          </label>
+        </div>
+      </section>
+
+      {matrixEnabled && (
+        <MatrixPanel
+          markets={MATRIX_MARKETS}
+          marketSignals={matrixMarketFeed.signals}
+          selectedSymbol={matrixSelectedSymbol}
+          onSelectMarket={(nextSymbol) => {
+            setMatrixSelectedSymbol(nextSymbol);
+            setMatrixTakeProfitPrice(null);
+            setMatrixStopLossPrice(null);
+            setMatrixLevelMode(null);
+          }}
+          chartType={matrixChartType}
+          onChartTypeChange={setMatrixChartType}
+          direction={matrixDirection}
+          onDirectionChange={setMatrixDirection}
+          duration={matrixDuration}
+          onDurationChange={setMatrixDuration}
+          stake={matrixStake}
+          onStakeChange={(value) => setMatrixStake(Number.isFinite(value) ? Math.max(1, value) : 1)}
+          tradeCount={matrixTradeCount}
+          onTradeCountChange={(value) => setMatrixTradeCount(Number.isFinite(value) ? Math.max(1, Math.min(10, Math.round(value))) : 1)}
+          takeProfitPerTrade={matrixTakeProfitPerTrade}
+          onTakeProfitPerTradeChange={(value) => setMatrixTakeProfitPerTrade(Number.isFinite(value) ? Math.max(0, value) : 0)}
+          takeProfitPrice={matrixTakeProfitPrice}
+          stopLossPrice={matrixStopLossPrice}
+          onSetChartLevel={(kind, price) => {
+            if (kind === "take-profit") setMatrixTakeProfitPrice(price);
+            else setMatrixStopLossPrice(price);
+          }}
+          levelMode={matrixLevelMode}
+          onLevelModeChange={setMatrixLevelMode}
+          scannerEnabled={matrixScannerEnabled}
+          onScannerEnabledChange={(enabled) => {
+            if (enabled && !featureActionIsAvailable("matrix", "scanner-switch")) {
+              setMatrixStatusMessage("The Matrix scanner switch is unavailable in administrator settings.");
+              return;
+            }
+            setMatrixScannerEnabled(enabled);
+          }}
+          scannerBusy={matrixScannerEnabled && (!matrixMarketFeed.connected || !matrixMarketFeed.recommendation)}
+          scannerStatus={!matrixScannerEnabled
+            ? "Switch on to review recent movement. Nothing is submitted automatically."
+            : matrixMarketFeed.recommendation
+              ? "Suggestion ready. Review it and click Place Trade yourself."
+              : matrixMarketFeed.status}
+          scannerRecommendation={matrixScannerEnabled ? matrixMarketFeed.recommendation : null}
+          connected={isConnected}
+          streamConnected={matrixMarketFeed.connected}
+          accountLabel={currentAccount ? `${currentAccount.id} · ${currentAccount.type.toUpperCase()}` : "No account"}
+          currency={currentAccount?.currency ?? "USD"}
+          quote={matrixMarketFeed.signals.find((signal) => signal.symbol === matrixSelectedSymbol)?.quotes.at(-1)?.quote ?? null}
+          tradeBusy={matrixBuyMutation.isPending}
+          canTrade={getMatrixTradeBlockReason() == null}
+          statusMessage={matrixStatusMessage ?? getMatrixTradeBlockReason()}
+          onPlaceTrade={() => void placeMatrixTrade()}
+          historyRows={matrixRows}
+          sessionRows={matrixSessionRows}
+          openTrades={matrixOpenTrades}
+          onClearHistory={() => void clearMatrixHistory()}
+          clearArmed={matrixHistoryClearArmed}
+          historyFading={historyFading}
+        />
+      )}
 
       <section className={`xt-feature-card xt-feature-card-speedbot ${!canUseSpeedbot ? "xt-feature-card-restricted" : ""}`} id="speedbot-feature">
         <div><Activity size={18} /><span><b>Speedbot</b><small>Fast, single-contract Digit Differs</small></span></div>
@@ -6409,12 +6713,12 @@ export default function XTraderPage() {
         <div className="xt-guide-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setGuideOpen(false); }}>
           <section className="xt-guide" role="dialog" aria-modal="true" aria-labelledby="xt-guide-title">
             <header className="xt-guide-header">
-              <div><BookOpen size={18} /><span><b>{guideMode === "speedbot" ? "Speedbot Guide" : guideMode === "trade-x" ? "Trade X Guide" : guideMode === "digit-flip" ? "DigitFlip Guide" : guideMode === "bulk-trader" ? "Bulk Trader Guide" : guideMode === "money-bank" ? "Money Bank Guide" : guideMode === "cash-grab" ? "Cash Grab Guide" : guideMode === "clock-work" ? "Clock Work Guide" : "EDGE Guide"}</b><small>Page {guidePage + 1} of {activeGuidePages.length}</small></span></div>
+              <div><BookOpen size={18} /><span><b>{guideMode === "matrix" ? "Matrix Guide" : guideMode === "speedbot" ? "Speedbot Guide" : guideMode === "trade-x" ? "Trade X Guide" : guideMode === "digit-flip" ? "DigitFlip Guide" : guideMode === "bulk-trader" ? "Bulk Trader Guide" : guideMode === "money-bank" ? "Money Bank Guide" : guideMode === "cash-grab" ? "Cash Grab Guide" : guideMode === "clock-work" ? "Clock Work Guide" : "EDGE Guide"}</b><small>Page {guidePage + 1} of {activeGuidePages.length}</small></span></div>
               <button type="button" aria-label="Close guide" onClick={() => setGuideOpen(false)}><X size={17} /></button>
             </header>
             <div className="xt-guide-progress"><span style={{ width: `${((guidePage + 1) / activeGuidePages.length) * 100}%` }} /></div>
             <article className="xt-guide-page">
-               <small className="xt-guide-kicker">{guideMode === "speedbot" ? "SPEEDBOT FIELD GUIDE" : guideMode === "trade-x" ? "TRADE X FIELD GUIDE" : guideMode === "digit-flip" ? "DIGITFLIP FIELD GUIDE" : guideMode === "bulk-trader" ? "BULK TRADER FIELD GUIDE" : guideMode === "money-bank" ? "MONEY BANK FIELD GUIDE" : guideMode === "cash-grab" ? "CASH GRAB FIELD GUIDE" : guideMode === "clock-work" ? "CLOCK WORK FIELD GUIDE" : "EDGE FIELD GUIDE"}</small>
+               <small className="xt-guide-kicker">{guideMode === "matrix" ? "MATRIX FIELD GUIDE" : guideMode === "speedbot" ? "SPEEDBOT FIELD GUIDE" : guideMode === "trade-x" ? "TRADE X FIELD GUIDE" : guideMode === "digit-flip" ? "DIGITFLIP FIELD GUIDE" : guideMode === "bulk-trader" ? "BULK TRADER FIELD GUIDE" : guideMode === "money-bank" ? "MONEY BANK FIELD GUIDE" : guideMode === "cash-grab" ? "CASH GRAB FIELD GUIDE" : guideMode === "clock-work" ? "CLOCK WORK FIELD GUIDE" : "EDGE FIELD GUIDE"}</small>
               <h2 id="xt-guide-title">{activeGuidePages[guidePage].title}</h2>
               <p>{activeGuidePages[guidePage].body}</p>
               <ul>{activeGuidePages[guidePage].points.map((point) => <li key={point}>{point}</li>)}</ul>
@@ -6426,7 +6730,7 @@ export default function XTraderPage() {
                 <button type="button" className="xt-guide-start" onClick={() => {
                   setGuideOpen(false);
                   if (!canUseGuideFeature) return;
-                  guideMode === "speedbot" ? toggleSpeedbot(true) : guideMode === "trade-x" ? toggleTradeX(true) : guideMode === "digit-flip" ? toggleDigitFlip(true) : guideMode === "bulk-trader" ? toggleBulkTrader(true) : guideMode === "money-bank" ? toggleMoneyBank(true) : guideMode === "cash-grab" ? toggleCashGrab(true) : guideMode === "clock-work" ? toggleClockWork(true) : toggleXTrader(true);
+                  guideMode === "matrix" ? toggleMatrix(true) : guideMode === "speedbot" ? toggleSpeedbot(true) : guideMode === "trade-x" ? toggleTradeX(true) : guideMode === "digit-flip" ? toggleDigitFlip(true) : guideMode === "bulk-trader" ? toggleBulkTrader(true) : guideMode === "money-bank" ? toggleMoneyBank(true) : guideMode === "cash-grab" ? toggleCashGrab(true) : guideMode === "clock-work" ? toggleClockWork(true) : toggleXTrader(true);
                 }}>{canUseGuideFeature ? "Let's start trading" : "Close guide"}</button>
               ) : (
                 <button type="button" className="xt-guide-nav next" onClick={() => setGuidePage((page) => Math.min(activeGuidePages.length - 1, page + 1))}>Next<ChevronRight size={15} /></button>

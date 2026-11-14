@@ -111,7 +111,7 @@ export function featureActionControlIdFromTestId(feature: string, testId: string
   if (feature === "matrix") {
     const duration = testId.match(/^matrix-duration-(.+)$/)?.[1];
     if (duration) return `duration-${duration}`;
-    if (testId === "matrix-ai-scanner") return "ai-scanner";
+    if (testId === "matrix-scanner-toggle") return "scanner-switch";
     if (testId === "matrix-place-trade") return "place-trade";
   }
   if (feature === "auto-trader") {
@@ -244,8 +244,15 @@ const matrixMarkets = [
   ["RDBEAR", "Bear Market"],
 ] as const;
 addMany("matrix", [
-  ["chart-type-line", "Show Matrix line chart"],
-  ["chart-type-candles", "Show Matrix candlestick chart"],
+  ["market-picker", "Open Matrix market picker"],
+  ["chart-line", "Show Matrix line chart"],
+  ["chart-candles", "Show Matrix candlestick chart"],
+  ["chart-level-placement", "Place a Matrix chart exit level"],
+  ["level-cancel", "Cancel Matrix chart level placement"],
+  ["level-take-profit", "Set Matrix chart take-profit line"],
+  ["clear-take-profit", "Clear Matrix chart take-profit line"],
+  ["level-stop-loss", "Set Matrix chart stop-loss line"],
+  ["clear-stop-loss", "Clear Matrix chart stop-loss line"],
   ["direction-higher", "Choose Matrix Higher"],
   ["direction-lower", "Choose Matrix Lower"],
   ["duration-10t", "Choose Matrix duration: 10 ticks"],
@@ -256,15 +263,14 @@ addMany("matrix", [
   ["duration-10m", "Choose Matrix duration: 10 minutes"],
   ["duration-30m", "Choose Matrix duration: 30 minutes"],
   ["duration-1h", "Choose Matrix duration: 1 hour"],
-  ["stake", "Set Matrix stake"],
-  ["trade-count", "Set Matrix trade count"],
+  ["stake-input", "Set Matrix stake"],
+  ["trade-count-decrease", "Reduce Matrix trade count"],
+  ["trade-count-increase", "Increase Matrix trade count"],
   ["take-profit-per-trade", "Set Matrix take profit per trade"],
-  ["level-mode-take-profit", "Set Matrix chart take-profit line"],
-  ["level-mode-stop-loss", "Set Matrix chart stop-loss line"],
-  ["clear-chart-levels", "Clear Matrix chart exit levels"],
-  ["ai-scanner", "Matrix AI Scanner switch"],
+  ["scanner-switch", "Matrix AI Scanner switch"],
+  ["scanner-apply", "Apply Matrix scanner suggestion"],
   ["place-trade", "Place Matrix trades"],
-  ["close-contract", "Close Matrix contract"],
+  ["guide-toggle", "Open Matrix panel guide"],
 ]);
 addMarketOptions("matrix", matrixMarkets);
 

@@ -13,6 +13,8 @@ import {
   SellDerivContractResponse,
   BulkBuyDerivContractsBody,
   BulkBuyDerivContractsResponse,
+  BuyMatrixContractsBody,
+  BuyMatrixContractsResponse,
   DualBuyDerivContractsBody,
   QuoteClockWorkContractsBody,
   QuoteClockWorkContractsResponse,
@@ -46,6 +48,7 @@ import {
   buyContract,
   sellContract,
   bulkBuyContracts,
+  buyMatrixContracts,
   dualBuyContracts,
   quoteClockWorkContracts,
   buyClockWorkContracts,
@@ -783,6 +786,53 @@ router.post("/deriv/bulk-buy", requireTradeAccessFeature, async (req, res) => {
        diagnostic_source: tradeErrorSourceForRoute(error, status),
        trade_outcome: tradeOutcomeForRouteError(error, status),
      });
+  }
+});
+
+router.post("/deriv/matrix/buy", requireTradeAccessFeature, async (req, res) => {
+  const parsed = BuyMatrixContractsBody.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid Matrix trade request" });
+  try {
+    const result = BuyMatrixContractsResponse.parse(
+      await withCredential(res.locals.userId, async () => {
+        const assertAuthorized = () =>
+          assertAccessSessionActive(res.locals.accessSessionId, res.locals.accessKeyId);
+        await assertAuthorized();
+        return buyMatrixContracts(parsed.data, assertAuthorized);
+      }, true),
+    );
+    return res.status(202).json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Matrix trade request failed";
+    req.log?.error({ err: error }, "Deriv Matrix trade request failed");
+    if (isDerivBuyRateLimitError(error)) {
+      return res.status(429).json({
+        error: "Deriv temporarily limited new buys. Check account history before resubmitting the Matrix batch.",
+        code: "DERIV_BUY_RATE_LIMITED",
+        diagnostic_source: "deriv",
+        trade_outcome: tradeOutcomeForRouteError(error, 429),
+      });
+    }
+    const status = isCapacityError(error)
+      ? 503
+      : isCredentialError(error)
+        ? credentialHttpStatus(error)
+        : error instanceof AccessSessionRevokedError
+          ? 403
+          : /disabled|real account|not authorized/i.test(message)
+            ? 403
+            : /still reports an open contract|status is being refreshed|protection|settling/i.test(message)
+              ? 409
+              : /stake|balance|duration|market|Matrix requires|entry quote|Set the (take-profit|stop-loss)/i.test(message)
+                ? 400
+                : /did not return a proposal|WebSocket is not ready/i.test(message)
+                  ? 504
+                  : 502;
+    return res.status(status).json({
+      error: message,
+      diagnostic_source: tradeErrorSourceForRoute(error, status),
+      trade_outcome: tradeOutcomeForRouteError(error, status),
+    });
   }
 });
 

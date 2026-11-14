@@ -89,7 +89,7 @@ const featureOptions = Object.values(AccessFeature)
 
 const featureActionCatalog = FEATURE_ACTION_CATALOG;
 const adminManagedActionIds: Partial<Record<FeatureControl["feature"], readonly string[]>> = {
-  matrix: ["ai-scanner"],
+  matrix: ["scanner-switch"],
   "clock-work": ["ai-clock"],
   "cash-grab": ["auto-switch-safe-markets", "auto-direction", "ai-scanner"],
   "bulk-trader": ["ai-scanner"],

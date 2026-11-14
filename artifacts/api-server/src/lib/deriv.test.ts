@@ -532,6 +532,8 @@ describe("Deriv market subscriptions", { concurrency: false }, () => {
       "R_10", "R_25", "R_50", "R_75", "R_100",
       "1HZ10V", "1HZ15V", "1HZ25V", "1HZ30V", "1HZ50V", "1HZ75V", "1HZ90V", "1HZ100V",
       "JD10", "JD25", "JD50", "JD75", "JD100",
+      "BOOM300", "BOOM500", "BOOM600", "BOOM900", "BOOM1000",
+      "CRASH300", "CRASH500", "CRASH600", "CRASH900", "CRASH1000",
       "RDBEAR", "RDBEAR10", "RDBEAR25", "RDBULL", "RDBULL10", "RDBULL25",
     ].sort();
 
@@ -641,6 +643,8 @@ describe("Deriv market subscriptions", { concurrency: false }, () => {
         tick_sequence: number;
         recent_digits: number[];
         tick_epoch: number;
+        quote: number | null;
+        recent_quotes: Array<{ quote: number; epoch: number; sequence: number }>;
       }> = [];
       const unsubscribe = deriv.subscribeDerivMarketTickUpdates((update) => updates.push(update));
       const socket = latestSocket();
@@ -655,6 +659,8 @@ describe("Deriv market subscriptions", { concurrency: false }, () => {
         tick_sequence: 1,
         recent_digits: [6],
         tick_epoch: 1_700_000_001,
+        quote: 1234.56,
+        recent_quotes: [{ quote: 1234.56, epoch: 1_700_000_001, sequence: 1 }],
       }]);
       assert.deepEqual(
         deriv.getMarketTickSnapshot().find((signal: { symbol: string }) => signal.symbol === "R_75"),
