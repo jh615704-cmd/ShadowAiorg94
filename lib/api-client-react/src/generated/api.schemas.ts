@@ -100,6 +100,7 @@ export const AccessFeature = {
   'jdy-ai-3': 'jdy-ai-3',
   'auto-trader': 'auto-trader',
   'auto-trader-2': 'auto-trader-2',
+  roulette: 'roulette',
   matrix: 'matrix',
   speedbot: 'speedbot',
   settings: 'settings',
@@ -393,6 +394,7 @@ export const FeatureControlFeature = {
   'jdy-ai-3': 'jdy-ai-3',
   'auto-trader': 'auto-trader',
   'auto-trader-2': 'auto-trader-2',
+  roulette: 'roulette',
   matrix: 'matrix',
   speedbot: 'speedbot',
   settings: 'settings',
@@ -1148,6 +1150,7 @@ export const DerivBulkBuyInputAccessFeature = {
   'jdy-ai-3': 'jdy-ai-3',
   'auto-trader': 'auto-trader',
   'auto-trader-2': 'auto-trader-2',
+  roulette: 'roulette',
 } as const;
 
 export type DerivBulkBuyInputDurationUnit = typeof DerivBulkBuyInputDurationUnit[keyof typeof DerivBulkBuyInputDurationUnit];
@@ -1488,6 +1491,12 @@ export interface DerivHistoryItem {
   buy_time?: number | null;
   /** @nullable */
   sell_time?: number | null;
+  /**
+     * @minimum 0
+     * @maximum 9
+     * @nullable
+     */
+  exit_digit?: number | null;
 }
 
 export type DerivHistoryResponse = DerivHistoryItem[];

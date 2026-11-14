@@ -41,4 +41,10 @@ export interface DerivHistoryItem {
   buy_time?: number | null;
   /** @nullable */
   sell_time?: number | null;
+  /**
+     * @minimum 0
+     * @maximum 9
+     * @nullable
+     */
+  exit_digit?: number | null;
 }
